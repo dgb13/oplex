@@ -211,9 +211,38 @@ model PlatformSettings {
   id             String   @id @default("global")
   bnaSyncEnabled Boolean  @default(true)
   bnaSyncHour    Int      @default(9)
+  // Sync diario de "Índices de Inflación" (IPC) - mismo criterio que
+  // bnaSync* de arriba, ver PriceIndexScheduler.
+  ipcSyncEnabled Boolean  @default(true)
+  ipcSyncHour    Int      @default(10)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+enum PriceIndexSource {
+  API_ARGENTINADATOS
+  MANUAL
+}
+
+// Global, SIN tenantId/RLS - mismo criterio que PlatformSettings arriba: el
+// IPC es un único dato nacional, igual para todos los tenants (a diferencia
+// de ExchangeRateHistory, que sí es tenant-scoped porque Currency lo es).
+// Usado por InflationAdjustmentService (RT6/NC39) para reexpresar saldos
+// monetarios. monthlyVariationPct es el dato crudo (cargado a mano o
+// sincronizado); indexValue es un nivel encadenado, calculado - nunca se
+// escribe directo, ver PriceIndexService.recomputeChainFrom.
+model PriceIndexEntry {
+  id                  String            @id @default(uuid())
+  period              DateTime          // primer día del mes, ej 2026-08-01
+  monthlyVariationPct Decimal           @db.Decimal(8, 4)
+  indexValue          Decimal           @db.Decimal(30, 6)
+  source              PriceIndexSource
+  updatedByUserId     String?
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([period])
+  @@map("price_index_entries")
 }
 
 // Una por tenant (mismo patrón 1:1 que TenantSettings) - a diferencia de
@@ -1390,6 +1419,12 @@ model AccountingAccount {
   code     String
   name     String
   type     AccountType
+  // Ajuste por Inflación (RT6/NC39) - sólo ASSET/LIABILITY/EQUITY participan
+  // del cálculo de posición monetaria neta (InflationAdjustmentService); en
+  // INCOME/EXPENSE este flag queda inerte por diseño. Default true (la
+  // mayoría de las cuentas hoy son monetarias) - la única cuenta hardcodeada
+  // no monetaria es Mercaderías (bien de cambio), corregida en la migración.
+  isMonetary Boolean @default(true)
 
   lines JournalEntryLine[]
 

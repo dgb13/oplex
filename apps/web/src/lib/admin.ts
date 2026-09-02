@@ -209,3 +209,38 @@ export const adminBnaSyncApi = {
     api.patch<BnaSyncSettings>('/admin/bna-sync', dto).then((r) => r.data),
   syncNow: () => api.post<BnaSyncResult>('/admin/bna-sync/sync-now').then((r) => r.data),
 };
+
+export interface PriceIndexSyncSettings {
+  ipcSyncEnabled: boolean;
+  ipcSyncHour: number;
+}
+
+export interface PriceIndexSyncResult {
+  synced: number;
+  skippedManual: number;
+}
+
+export type PriceIndexSource = 'API_ARGENTINADATOS' | 'MANUAL';
+
+export interface PriceIndexEntry {
+  id: string;
+  period: string;
+  monthlyVariationPct: string;
+  indexValue: string;
+  source: PriceIndexSource;
+  updatedAt: string;
+}
+
+// Índice de inflación (IPC) sincronizado una sola vez para toda la
+// plataforma (no por tenant, ver PriceIndexSchedulerService - es un único
+// dato nacional) - horario/on-off vive acá en Admin, mismo criterio que
+// Cotizaciones USD arriba.
+export const adminPriceIndexSyncApi = {
+  getSettings: () => api.get<PriceIndexSyncSettings>('/admin/price-index-sync').then((r) => r.data),
+  updateSettings: (dto: Partial<{ enabled: boolean; hour: number }>) =>
+    api.patch<PriceIndexSyncSettings>('/admin/price-index-sync', dto).then((r) => r.data),
+  syncNow: () => api.post<PriceIndexSyncResult>('/admin/price-index-sync/sync-now').then((r) => r.data),
+  listPeriods: () => api.get<PriceIndexEntry[]>('/admin/price-index-sync/periods').then((r) => r.data),
+  upsertPeriod: (period: string, variationPct: number) =>
+    api.post<PriceIndexEntry>('/admin/price-index-sync/periods', { period, variationPct }).then((r) => r.data),
+};

@@ -76,5 +76,6 @@ export type {
   WebhookEvent,
   BankStatementImport,
   BankStatementLine,
+  PriceIndexEntry,
 } from './generated/client.js';
 export * from './generated/enums.js';

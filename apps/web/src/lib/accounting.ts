@@ -8,6 +8,7 @@ export interface AccountingAccount {
   code: string;
   name: string;
   type: AccountType;
+  isMonetary: boolean;
 }
 
 export interface TrialBalanceRow {
@@ -68,10 +69,33 @@ export interface PostJournalEntryInput {
   lines: PostJournalEntryLineInput[];
 }
 
+export interface InflationAdjustmentAccountRow {
+  accountId: string;
+  code: string;
+  name: string;
+  type: AccountType;
+  openingBalance: string;
+  movementsNominal: string;
+  closingBalanceNominal: string;
+  closingBalanceReexpressed: string;
+  contribution: string;
+}
+
+export interface InflationAdjustmentPreview {
+  from: string;
+  to: string;
+  rows: InflationAdjustmentAccountRow[];
+  /** Positivo = pérdida (posición monetaria neta activa, erosionada por la
+   * inflación). Negativo = ganancia (posición neta pasiva). */
+  recpam: string;
+}
+
 export const accountingApi = {
   listAccounts: () => api.get<AccountingAccount[]>('/accounting/accounts').then((r) => r.data),
   createAccount: (dto: CreateAccountInput) =>
     api.post<AccountingAccount>('/accounting/accounts', dto).then((r) => r.data),
+  updateAccount: (id: string, dto: { isMonetary: boolean }) =>
+    api.patch<AccountingAccount>(`/accounting/accounts/${id}`, dto).then((r) => r.data),
   getTrialBalance: () =>
     api.get<TrialBalanceRow[]>('/accounting/trial-balance').then((r) => r.data),
   listJournalEntries: () =>
@@ -80,4 +104,8 @@ export const accountingApi = {
     api.post<JournalEntry>('/accounting/journal-entries', dto).then((r) => r.data),
   getAccountLedger: (accountId: string) =>
     api.get<AccountLedger>(`/accounting/accounts/${accountId}/ledger`).then((r) => r.data),
+  getInflationAdjustmentPreview: (from: string, to: string) =>
+    api
+      .get<InflationAdjustmentPreview>('/accounting/inflation-adjustment/preview', { params: { from, to } })
+      .then((r) => r.data),
 };

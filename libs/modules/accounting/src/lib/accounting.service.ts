@@ -259,6 +259,16 @@ export class AccountingService {
     return getTenantDb().accountingAccount.findMany({ orderBy: { code: 'asc' } });
   }
 
+  /** Sólo `isMonetary` es editable hoy (ver UpdateAccountDto) - clasificación
+   * monetaria/no monetaria para el Ajuste por Inflación (RT6/NC39). */
+  async updateAccount(id: string, dto: { isMonetary: boolean }): Promise<AccountingAccount> {
+    const account = await getTenantDb().accountingAccount.findUnique({ where: { id } });
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+    return getTenantDb().accountingAccount.update({ where: { id }, data: { isMonetary: dto.isMonetary } });
+  }
+
   listJournalEntries(): Promise<JournalEntryWithLines[]> {
     return getTenantDb().journalEntry.findMany({
       include: { lines: true },
@@ -1058,6 +1068,48 @@ export class AccountingService {
         balance,
       };
     });
+  }
+
+  /** Saldo de cada cuenta a una fecha (exclusive) - "as of", mismo criterio
+   * débito/crédito normal que getTrialBalance/getIncomeStatement. Compartido
+   * por InflationAdjustmentService (saldo de apertura del período a
+   * reexpresar) y por getTrialBalance cuando se le pasa `to` (ver ahí). */
+  async getAccountBalancesAsOf(accountIds: string[], asOfDate: Date): Promise<Map<string, Prisma.Decimal>> {
+    const db = getTenantDb();
+    const accounts = await db.accountingAccount.findMany({ where: { id: { in: accountIds } } });
+    const grouped = await db.journalEntryLine.groupBy({
+      by: ['accountId', 'direction'],
+      where: { accountId: { in: accountIds }, journalEntry: { date: { lt: asOfDate } } },
+      _sum: { amount: true },
+    });
+
+    const totalsByAccount = new Map<string, { debit: Prisma.Decimal; credit: Prisma.Decimal }>();
+    for (const row of grouped) {
+      const entry = totalsByAccount.get(row.accountId) ?? {
+        debit: new Prisma.Decimal(0),
+        credit: new Prisma.Decimal(0),
+      };
+      const sum = row._sum.amount ?? new Prisma.Decimal(0);
+      if (row.direction === 'DEBIT') {
+        entry.debit = entry.debit.add(sum);
+      } else {
+        entry.credit = entry.credit.add(sum);
+      }
+      totalsByAccount.set(row.accountId, entry);
+    }
+
+    const result = new Map<string, Prisma.Decimal>();
+    for (const account of accounts) {
+      const totals = totalsByAccount.get(account.id) ?? {
+        debit: new Prisma.Decimal(0),
+        credit: new Prisma.Decimal(0),
+      };
+      result.set(
+        account.id,
+        isDebitNormal(account.type) ? totals.debit.sub(totals.credit) : totals.credit.sub(totals.debit),
+      );
+    }
+    return result;
   }
 
   async getAccountLedger(accountId: string) {

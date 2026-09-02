@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import AccountsTab from './AccountsTab';
+import InflationAdjustmentTab from './InflationAdjustmentTab';
 import JournalTab from './JournalTab';
 import LedgerTab from './LedgerTab';
 import TrialBalanceTab from './TrialBalanceTab';
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'journal', label: 'Libro Diario' },
   { id: 'ledger', label: 'Libro Mayor' },
   { id: 'trial-balance', label: 'Balance de Sumas y Saldos' },
+  { id: 'inflation-adjustment', label: 'Ajuste por Inflación' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -42,6 +44,7 @@ export default function AccountingPage() {
       {tab === 'journal' && <JournalTab />}
       {tab === 'ledger' && <LedgerTab />}
       {tab === 'trial-balance' && <TrialBalanceTab />}
+      {tab === 'inflation-adjustment' && <InflationAdjustmentTab />}
     </div>
   );
 }

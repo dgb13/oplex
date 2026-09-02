@@ -1,15 +1,29 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { RequireModuleAccess } from '@plexo/auth';
 import { AccountingService } from './accounting.service.js';
 import { CreateAccountDto } from './dto/create-account.dto.js';
 import { CreateReversingEntryDto } from './dto/create-reversing-entry.dto.js';
+import { InflationAdjustmentRangeDto } from './dto/inflation-adjustment-range.dto.js';
 import { PostJournalEntryDto } from './dto/post-journal-entry.dto.js';
+import { UpdateAccountDto } from './dto/update-account.dto.js';
+import { InflationAdjustmentService } from './inflation-adjustment.service.js';
 
 const MODULE = 'accounting';
 
+function parseMonthStart(value: string, field: 'from' | 'to'): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException(`"${field}" no es una fecha válida`);
+  }
+  return date;
+}
+
 @Controller('accounting')
 export class AccountingController {
-  constructor(private readonly accountingService: AccountingService) {}
+  constructor(
+    private readonly accountingService: AccountingService,
+    private readonly inflationAdjustmentService: InflationAdjustmentService,
+  ) {}
 
   @RequireModuleAccess(MODULE, 'write')
   @Post('accounts')
@@ -27,6 +41,12 @@ export class AccountingController {
   @Get('accounts/:id/ledger')
   getAccountLedger(@Param('id', ParseUUIDPipe) id: string) {
     return this.accountingService.getAccountLedger(id);
+  }
+
+  @RequireModuleAccess(MODULE, 'write')
+  @Patch('accounts/:id')
+  updateAccount(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
+    return this.accountingService.updateAccount(id, dto);
   }
 
   @RequireModuleAccess(MODULE, 'read')
@@ -57,5 +77,14 @@ export class AccountingController {
   @Post('journal-entries/reversals')
   createReversingEntry(@Body() dto: CreateReversingEntryDto) {
     return this.accountingService.createReversingEntry(dto);
+  }
+
+  @RequireModuleAccess(MODULE, 'read')
+  @Get('inflation-adjustment/preview')
+  getInflationAdjustmentPreview(@Query() query: InflationAdjustmentRangeDto) {
+    return this.inflationAdjustmentService.getPreview(
+      parseMonthStart(query.from, 'from'),
+      parseMonthStart(query.to, 'to'),
+    );
   }
 }

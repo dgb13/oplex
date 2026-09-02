@@ -331,6 +331,71 @@ describe('AccountingService.getTrialBalance', () => {
   });
 });
 
+describe('AccountingService.getAccountBalancesAsOf', () => {
+  it('only counts journal_entry_lines strictly before the given date', async () => {
+    const groupBy = jest.fn().mockResolvedValue([
+      { accountId: 'acc-cash', direction: 'DEBIT', _sum: { amount: new Prisma.Decimal(700) } },
+    ]);
+    const db = {
+      accountingAccount: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'acc-cash', code: '1.1.03', name: 'Caja', type: 'ASSET' }]),
+      },
+      journalEntryLine: { groupBy },
+    };
+    const service = new AccountingService();
+    const asOf = new Date('2026-03-01T00:00:00Z');
+
+    const balances = await runInTenant(db, () => service.getAccountBalancesAsOf(['acc-cash'], asOf));
+
+    expect(groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ journalEntry: { date: { lt: asOf } } }) }),
+    );
+    expect(balances.get('acc-cash')?.toNumber()).toBe(700);
+  });
+
+  it('defaults an account with no lines yet before that date to zero', async () => {
+    const db = {
+      accountingAccount: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'acc-new', code: '2.1.05', name: 'Proveedores', type: 'LIABILITY' }]),
+      },
+      journalEntryLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new AccountingService();
+
+    const balances = await runInTenant(db, () =>
+      service.getAccountBalancesAsOf(['acc-new'], new Date('2026-01-01T00:00:00Z')),
+    );
+
+    expect(balances.get('acc-new')?.toNumber()).toBe(0);
+  });
+});
+
+describe('AccountingService.updateAccount', () => {
+  it('throws NotFoundException when the account does not exist', async () => {
+    const db = { accountingAccount: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const service = new AccountingService();
+
+    await expect(
+      runInTenant(db, () => service.updateAccount('missing', { isMonetary: false })),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('updates isMonetary for an existing account', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'acc-1', isMonetary: false });
+    const db = {
+      accountingAccount: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'acc-1', isMonetary: true }),
+        update,
+      },
+    };
+    const service = new AccountingService();
+
+    await runInTenant(db, () => service.updateAccount('acc-1', { isMonetary: false }));
+
+    expect(update).toHaveBeenCalledWith({ where: { id: 'acc-1' }, data: { isMonetary: false } });
+  });
+});
+
 describe('AccountingService.getAccountLedger', () => {
   it('throws when the account does not exist', async () => {
     const db = { accountingAccount: { findUnique: jest.fn().mockResolvedValue(null) } };
