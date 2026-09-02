@@ -1,0 +1,9 @@
+{
+  "name": "bank-reconciliation",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/modules/bank-reconciliation/src",
+  "projectType": "library",
+  "tags": ["scope:bank-reconciliation", "type:feature"],
+  "// targets": "to see all targets run: nx show project bank-reconciliation --web",
+  "targets": {}
+}

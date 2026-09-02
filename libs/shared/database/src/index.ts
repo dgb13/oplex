@@ -74,5 +74,7 @@ export type {
   ConnectorSecret,
   PaymentIntent,
   WebhookEvent,
+  BankStatementImport,
+  BankStatementLine,
 } from './generated/client.js';
 export * from './generated/enums.js';

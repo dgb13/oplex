@@ -482,6 +482,7 @@ model User {
   createdPurchaseCreditNotes PurchaseCreditNote[]
   recordedSupplierPayments   SupplierPayment[]
   createdChecks              Check[]
+  createdBankStatementImports BankStatementImport[]
   cartItems                  InventoryCartItem[]
   createdQuotes              Quote[]
   emailVerificationCode      EmailVerificationCode?
@@ -1447,6 +1448,14 @@ model JournalEntry {
   // receiptId/supplierPaymentId del Recibo/Pago que lo trajo o lo usó.
   checkId              String?             @unique
   check                Check?              @relation(fields: [tenantId, checkId], references: [tenantId, id])
+  // Ajuste posteado al convertir una línea de extracto sin matchear en un
+  // movimiento nuevo (Gasto/Ingreso bancario) - ver AccountingService.
+  // postBankStatementAdjustmentJournalEntry. Una línea de extracto sólo
+  // tiene asiento propio en este caso; una línea auto-matcheada o
+  // vinculada a mano a una FinancialTransaction ya existente no genera
+  // ninguno acá (esa transacción ya tenía o no el suyo).
+  bankStatementLineId  String?             @unique
+  bankStatementLine    BankStatementLine?  @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id])
   description          String
   date                 DateTime            @default(now())
   createdById          String
@@ -1467,6 +1476,7 @@ model JournalEntry {
   @@unique([tenantId, supplierPaymentId])
   @@unique([tenantId, receiptId])
   @@unique([tenantId, checkId])
+  @@unique([tenantId, bankStatementLineId])
   @@index([tenantId])
   @@map("journal_entries")
 }
@@ -1639,6 +1649,9 @@ model FinancialAccount {
   supplierPayments SupplierPayment[]
   // Cheques depositados/emitidos contra esta cuenta - ver model Check.
   checks           Check[]
+  // Conciliación bancaria - ver models BankStatementImport/BankStatementLine.
+  bankStatementImports BankStatementImport[]
+  bankStatementLines   BankStatementLine[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -1655,8 +1668,83 @@ model FinancialTransaction {
   externalRef        String?
   occurredAt         DateTime         @default(now())
 
+  // Seteado si esta transacción fue creada, o vinculada a mano, a partir
+  // de una línea de un extracto bancario importado - ver
+  // BankStatementLine.matchedTransactionId.
+  bankStatementLine  BankStatementLine?
+
   @@index([tenantId])
   @@map("financial_transactions")
+}
+
+// --- Conciliación Bancaria (@plexo/bank-reconciliation) ---
+// Fase 1: sólo plantilla propia de Oplex (Fecha/Descripción/Importe), sin
+// parser nativo por banco real todavía (necesita un archivo de muestra real
+// antes de codearse - mismo criterio ya aplicado a AFIP QR/Tiendanube).
+
+enum BankStatementLineStatus {
+  PENDING
+  MATCHED
+  IGNORED
+}
+
+model BankStatementImport {
+  id                 String              @id @default(uuid())
+  tenantId           String
+  financialAccountId String
+  financialAccount   FinancialAccount    @relation(fields: [financialAccountId], references: [id])
+  fileName           String
+  // sha256 del buffer subido - guarda contra re-importar el mismo archivo
+  // dos veces (no hay un ID externo por línea que dedupear, como en un
+  // webhook, así que se dedupea el archivo entero).
+  fileHash           String
+  lineCount          Int
+  createdByUserId    String
+  createdBy          User                @relation(fields: [createdByUserId], references: [id])
+  createdAt          DateTime            @default(now())
+
+  lines BankStatementLine[]
+
+  @@unique([tenantId, financialAccountId, fileHash])
+  @@index([tenantId])
+  @@map("bank_statement_imports")
+}
+
+model BankStatementLine {
+  id                     String                  @id @default(uuid())
+  tenantId               String
+  bankStatementImportId  String
+  bankStatementImport    BankStatementImport     @relation(fields: [bankStatementImportId], references: [id])
+  financialAccountId     String
+  financialAccount       FinancialAccount        @relation(fields: [financialAccountId], references: [id])
+
+  lineDate    DateTime
+  description String
+  // Misma convención de signo que FinancialTransaction.amount (positivo =
+  // ingreso, negativo = egreso) - la columna "Importe" de la plantilla la
+  // garantiza, sin conversión de signo en ningún lado del código.
+  amount      Decimal                 @db.Decimal(14, 2)
+  status      BankStatementLineStatus @default(PENDING)
+
+  // Seteado al hacer match automático, vincular a mano, o al crear un
+  // movimiento nuevo (Gasto/Ingreso bancario) a partir de esta línea.
+  matchedTransactionId String?               @unique
+  matchedTransaction   FinancialTransaction? @relation(fields: [matchedTransactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  // Sólo existe cuando la línea se convirtió en un movimiento nuevo (Gasto/
+  // Ingreso bancario) - ver AccountingService.postBankStatementAdjustmentJournalEntry.
+  // Una línea auto-matcheada o vinculada a mano a una transacción ya
+  // existente no genera ninguno acá (esa transacción ya tenía o no el suyo).
+  journalEntry JournalEntry?
+
+  // @@unique([tenantId, id]) existe sólo para que
+  // JournalEntry.bankStatementLineId use el mismo FK compuesto que checkId.
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, financialAccountId, status])
+  @@map("bank_statement_lines")
 }
 
 // --- Tesorería / Cartera de Cheques (@plexo/treasury) ---

@@ -92,6 +92,9 @@
     },
     {
       "path": "./libs/modules/mercadopago"
+    },
+    {
+      "path": "./libs/modules/bank-reconciliation"
     }
   ],
   "compilerOptions": {}

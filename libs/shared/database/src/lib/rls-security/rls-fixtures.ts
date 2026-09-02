@@ -337,6 +337,23 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
     financialAccountId,
     createdByUserId: userId,
   });
+  const bankStatementImportId = await ins('bank_statement_imports', {
+    tenantId,
+    financialAccountId,
+    fileName: `extracto-${label}.xlsx`,
+    fileHash: `hash-${label}`,
+    lineCount: 1,
+    createdByUserId: userId,
+  });
+  await ins('bank_statement_lines', {
+    tenantId,
+    bankStatementImportId,
+    financialAccountId,
+    lineDate: new Date(),
+    description: 'RLS test fixture',
+    amount: 50,
+    status: 'PENDING',
+  });
   await ins('stock_movements', {
     tenantId,
     warehouseId,
@@ -485,6 +502,8 @@ const CLEANUP_TABLES_REVERSE = [
   'quotes',
   'financial_transactions',
   'checks',
+  'bank_statement_lines',
+  'bank_statement_imports',
   'receipts',
   'credit_note_lines',
   'credit_notes',

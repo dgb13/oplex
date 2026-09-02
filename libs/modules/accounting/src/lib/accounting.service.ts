@@ -88,6 +88,16 @@ const CHECK_REJECTION_FEE_ACCOUNT = {
   type: 'INCOME' as const,
 };
 
+// Conciliación bancaria (ver postBankStatementAdjustmentJournalEntry) - un
+// movimiento real del banco que nadie había registrado todavía (comisión
+// cobrada, interés acreditado), no una reversa de nada.
+const BANK_FEES_EXPENSE_ACCOUNT = { code: '5.1.03', name: 'Gastos Bancarios', type: 'EXPENSE' as const };
+const BANK_INTEREST_INCOME_ACCOUNT = {
+  code: '4.2.02',
+  name: 'Intereses Ganados',
+  type: 'INCOME' as const,
+};
+
 // Retenciones que EL TENANT practica a sus proveedores al pagarles
 // (Ganancias/IVA/IIBB) - ver postSupplierPaymentJournalEntry. Pasivo: lo
 // retenido no es nuestro, hay que depositarlo en AFIP/ARBA/etc. (ese
@@ -215,6 +225,15 @@ export interface PostCheckRejectionJournalEntryInput {
   checkId: string;
   amount: Prisma.Decimal | number | string;
   feeAmount?: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
+export interface PostBankStatementAdjustmentJournalEntryInput {
+  bankStatementLineId: string;
+  kind: 'EXPENSE' | 'INCOME';
+  /** Siempre una magnitud positiva - el signo ya lo decide `kind`, no el
+   * signo de este número. */
+  amount: Prisma.Decimal | number | string;
   date?: Date;
 }
 
@@ -525,6 +544,7 @@ export class AccountingService {
       supplierPaymentId?: string;
       receiptId?: string;
       checkId?: string;
+      bankStatementLineId?: string;
     },
   ): Promise<JournalEntryWithLines> {
     const tenantId = getTenantId();
@@ -561,6 +581,7 @@ export class AccountingService {
         supplierPaymentId: opts.supplierPaymentId,
         receiptId: opts.receiptId,
         checkId: opts.checkId,
+        bankStatementLineId: opts.bankStatementLineId,
         createdById,
         lines: {
           createMany: {
@@ -914,6 +935,43 @@ export class AccountingService {
       date: input.date,
       checkId: input.checkId,
     });
+  }
+
+  /**
+   * Ajuste posteado al convertir una línea de extracto bancario sin
+   * matchear en un movimiento nuevo (ver apps/api's BankReconciliationService.
+   * createTransactionFromLine) - un gasto/ingreso bancario real que el
+   * extracto reveló y nadie había cargado todavía (comisión, interés).
+   * No recibe financialAccountId - igual que postReceiptJournalEntry, el
+   * asiento siempre postea contra la CASH_ACCOUNT genérica del plan de
+   * cuentas, no una cuenta contable distinta por cada banco.
+   */
+  async postBankStatementAdjustmentJournalEntry(
+    input: PostBankStatementAdjustmentJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lte(0)) {
+      return undefined;
+    }
+    const [cash, other] = await Promise.all([
+      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.getOrCreateAccount(input.kind === 'EXPENSE' ? BANK_FEES_EXPENSE_ACCOUNT : BANK_INTEREST_INCOME_ACCOUNT),
+    ]);
+    const lines: PostJournalEntryDto['lines'] =
+      input.kind === 'EXPENSE'
+        ? [
+            { accountId: other.id, direction: 'DEBIT', amount: amount.toNumber() },
+            { accountId: cash.id, direction: 'CREDIT', amount: amount.toNumber() },
+          ]
+        : [
+            { accountId: cash.id, direction: 'DEBIT', amount: amount.toNumber() },
+            { accountId: other.id, direction: 'CREDIT', amount: amount.toNumber() },
+          ];
+    return this.createBalancedEntry(
+      `${input.kind === 'EXPENSE' ? 'Gasto bancario' : 'Ingreso bancario'} - línea de extracto ${input.bankStatementLineId}`,
+      lines,
+      { date: input.date, bankStatementLineId: input.bankStatementLineId },
+    );
   }
 
   /** The only way to correct a posted entry: a new entry with the same

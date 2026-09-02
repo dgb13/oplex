@@ -613,6 +613,64 @@ describe('AccountingService.postReceiptJournalEntry', () => {
   });
 });
 
+describe('AccountingService.postBankStatementAdjustmentJournalEntry', () => {
+  it('books debit Gastos Bancarios / credit Caja for an EXPENSE line', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postBankStatementAdjustmentJournalEntry({
+        bankStatementLineId: 'line-1',
+        kind: 'EXPENSE',
+        amount: 850,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(expect.arrayContaining(['5.1.03', '1.1.03']));
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.bankStatementLineId).toBe('line-1');
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-5.1.03', direction: 'DEBIT', amount: 850 },
+      { accountId: 'acc-1.1.03', direction: 'CREDIT', amount: 850 },
+    ]);
+  });
+
+  it('books debit Caja / credit Intereses Ganados for an INCOME line', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postBankStatementAdjustmentJournalEntry({
+        bankStatementLineId: 'line-2',
+        kind: 'INCOME',
+        amount: 120,
+      }),
+    );
+
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.03', direction: 'DEBIT', amount: 120 },
+      { accountId: 'acc-4.2.02', direction: 'CREDIT', amount: 120 },
+    ]);
+  });
+
+  it('skips posting entirely for a zero or negative amount', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postBankStatementAdjustmentJournalEntry({
+        bankStatementLineId: 'line-3',
+        kind: 'EXPENSE',
+        amount: 0,
+      }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('AccountingService.postPurchaseCreditNoteJournalEntry', () => {
   it('books debit Proveedores / credit IVA Crédito Fiscal + Mercaderías, balanced', async () => {
     const db = dbWithAccounts();

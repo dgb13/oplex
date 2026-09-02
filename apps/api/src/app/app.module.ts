@@ -26,6 +26,7 @@ import { AdminModule } from './admin/admin.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module.js';
+import { BankReconciliationModule } from './bank-reconciliation/bank-reconciliation.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module.js';
 import { InventoryCartCheckoutModule } from './inventory-cart-checkout/inventory-cart-checkout.module.js';
@@ -70,6 +71,7 @@ import { MercadoPagoWebhookModule } from './webhooks/mercadopago-webhook.module.
     PurchaseInvoicesModule,
     PurchaseCreditNotesModule,
     TreasuryModule,
+    BankReconciliationModule,
     SubscriptionModule,
     MercadoPagoModule,
     MercadoPagoWebhookModule,
