@@ -65,6 +65,21 @@ describe('BackupSchedulerService.runDailyBackup', () => {
     });
   });
 
+  it('strips the ?schema=... query string before handing DATABASE_URL to pg_dump - it rejects it as an invalid URI parameter', async () => {
+    process.env['BACKUP_STORAGE_DIR'] = 'C:/tmp/backups';
+    process.env['DATABASE_URL'] = 'postgresql://admin:pw@localhost:5432/plexo?schema=public';
+    const { prisma } = makePrisma();
+    const service = new BackupSchedulerService(prisma);
+
+    await service.runDailyBackup();
+
+    expect(execFile).toHaveBeenCalledWith(
+      'pg_dump',
+      expect.arrayContaining(['--dbname', 'postgresql://admin:pw@localhost:5432/plexo']),
+      expect.any(Function),
+    );
+  });
+
   it('rotates FIFO, keeping only the 5 most recent COMPLETED backups', async () => {
     process.env['BACKUP_STORAGE_DIR'] = 'C:/tmp/backups';
     process.env['DATABASE_URL'] = 'postgresql://admin:pw@localhost:5432/plexo';

@@ -64,7 +64,19 @@ export class BackupSchedulerService {
     try {
       await mkdir(storageDir, { recursive: true });
       // -F c: formato custom de pg_dump (comprimido, restaurable con pg_restore).
-      await execFileAsync('pg_dump', ['--dbname', databaseUrl, '--format', 'custom', '--file', filePath]);
+      // El "?schema=public" de DATABASE_URL es una extensión propia de
+      // Prisma, no un parámetro real de libpq - pg_dump lo rechaza con
+      // "parámetro de URI no válido" si se lo pasamos tal cual (confirmado
+      // corriendo esto a mano). Se descarta antes de pasarlo a pg_dump, que
+      // igual vuelca todos los schemas por default.
+      await execFileAsync('pg_dump', [
+        '--dbname',
+        databaseUrl.split('?')[0],
+        '--format',
+        'custom',
+        '--file',
+        filePath,
+      ]);
       const { size } = await stat(filePath);
 
       await this.prisma.databaseBackup.update({
