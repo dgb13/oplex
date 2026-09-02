@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { AccountingService } from './accounting.service.js';
 import { InflationAdjustmentService } from './inflation-adjustment.service.js';
@@ -6,6 +6,10 @@ import type { PriceIndexService } from './price-index.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
+}
+
+function runWithoutUser<T>(db: Record<string, unknown>, fn: () => T): T {
+  return tenantContextStorage.run({ tenantId: 'tenant-1', tx: db as never }, fn);
 }
 
 function period(year: number, month: number): Date {
@@ -32,6 +36,7 @@ function makeServices(overrides: {
 } = {}) {
   const accountingService = {
     getAccountBalancesAsOf: jest.fn().mockResolvedValue(new Map()),
+    postInflationAdjustmentJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1' }),
     ...overrides.accountingService,
   } as unknown as AccountingService;
   const priceIndexService = {
@@ -149,5 +154,61 @@ describe('InflationAdjustmentService.getPreview', () => {
     expect(db.accountingAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ isMonetary: true }) }),
     );
+  });
+});
+
+describe('InflationAdjustmentService.postInflationAdjustment', () => {
+  it('throws BadRequestException when there is no authenticated user', async () => {
+    const { service } = makeServices();
+    const db = { inflationAdjustment: { findUnique: jest.fn() } };
+
+    await expect(
+      runWithoutUser(db, () => service.postInflationAdjustment(period(2026, 1), period(2026, 3))),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('throws ConflictException when this exact period was already posted', async () => {
+    const { service } = makeServices();
+    const db = {
+      inflationAdjustment: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'adj-old', createdAt: new Date('2026-08-01T00:00:00Z') }),
+      },
+    };
+
+    await expect(
+      runInTenant(db, () => service.postInflationAdjustment(period(2026, 1), period(2026, 3))),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('creates the InflationAdjustment row first, then posts the journal entry linked to it', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'adj-new', recpamAmount: new Prisma.Decimal(0) });
+    const db = {
+      inflationAdjustment: { findUnique: jest.fn().mockResolvedValue(null), create },
+      accountingAccount: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const { service, accountingService } = makeServices();
+    const from = period(2026, 1);
+    const to = period(2026, 3);
+
+    const result = await runInTenant(db, () => service.postInflationAdjustment(from, to));
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        tenantId: 'tenant-1',
+        periodFrom: from,
+        periodTo: to,
+        recpamAmount: expect.any(Prisma.Decimal),
+        createdByUserId: 'user-1',
+      },
+    });
+    expect(accountingService.postInflationAdjustmentJournalEntry).toHaveBeenCalledWith({
+      inflationAdjustmentId: 'adj-new',
+      recpamAmount: expect.any(Prisma.Decimal),
+      date: to,
+    });
+    expect(result).toEqual({
+      adjustment: { id: 'adj-new', recpamAmount: new Prisma.Decimal(0) },
+      journalEntry: { id: 'entry-1' },
+    });
   });
 });

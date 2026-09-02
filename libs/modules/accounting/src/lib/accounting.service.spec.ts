@@ -408,16 +408,18 @@ describe('AccountingService.getAccountLedger', () => {
 });
 
 function dbWithAccounts(existingByCode: Record<string, { id: string }> = {}) {
-  const created: { code: string; name: string; type: string }[] = [];
+  const created: { code: string; name: string; type: string; isMonetary?: boolean }[] = [];
   return {
     accountingAccount: {
       findFirst: jest.fn(({ where }: { where: { code: string } }) =>
         Promise.resolve(existingByCode[where.code] ?? null),
       ),
-      create: jest.fn(({ data }: { data: { code: string; name: string; type: string } }) => {
-        created.push({ code: data.code, name: data.name, type: data.type });
-        return Promise.resolve({ id: `acc-${data.code}`, ...data });
-      }),
+      create: jest.fn(
+        ({ data }: { data: { code: string; name: string; type: string; isMonetary?: boolean } }) => {
+          created.push({ code: data.code, name: data.name, type: data.type, isMonetary: data.isMonetary });
+          return Promise.resolve({ id: `acc-${data.code}`, ...data });
+        },
+      ),
     },
     journalEntry: {
       create: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
@@ -733,6 +735,105 @@ describe('AccountingService.postBankStatementAdjustmentJournalEntry', () => {
 
     expect(result).toBeUndefined();
     expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountingService.postInflationAdjustmentJournalEntry', () => {
+  it('books debit Pérdida / credit Ajuste de Capital for a positive (loss) RECPAM', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postInflationAdjustmentJournalEntry({
+        inflationAdjustmentId: 'adj-1',
+        recpamAmount: 239.2,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(expect.arrayContaining(['5.1.04', '3.1.01']));
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.inflationAdjustmentId).toBe('adj-1');
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-5.1.04', direction: 'DEBIT', amount: 239.2 },
+      { accountId: 'acc-3.1.01', direction: 'CREDIT', amount: 239.2 },
+    ]);
+  });
+
+  it('creates the Ajuste de Capital account as non-monetary, never the isMonetary=true default', async () => {
+    // Regression: this EQUITY account is one of the 3 types InflationAdjustmentService's
+    // RECPAM calc treats as monetary when isMonetary=true (see MONETARY_TYPES). Left at
+    // the schema default, the balance this same entry leaves would get swept into the
+    // NEXT period's net monetary position - a capital adjustment must never do that.
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postInflationAdjustmentJournalEntry({ inflationAdjustmentId: 'adj-1', recpamAmount: 239.2 }),
+    );
+
+    expect(db._created.find((a) => a.code === '3.1.01')?.isMonetary).toBe(false);
+  });
+
+  it('books debit Ajuste de Capital / credit Ganancia for a negative (gain) RECPAM', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postInflationAdjustmentJournalEntry({
+        inflationAdjustmentId: 'adj-2',
+        recpamAmount: -50,
+      }),
+    );
+
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-3.1.01', direction: 'DEBIT', amount: 50 },
+      { accountId: 'acc-4.2.03', direction: 'CREDIT', amount: 50 },
+    ]);
+  });
+
+  it('skips posting entirely for a RECPAM of exactly zero', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postInflationAdjustmentJournalEntry({ inflationAdjustmentId: 'adj-3', recpamAmount: 0 }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountingService.getTrialBalance with a date range', () => {
+  it('restricts the underlying groupBy to the given range when from/to are provided', async () => {
+    const groupBy = jest.fn().mockResolvedValue([]);
+    const db = {
+      accountingAccount: { findMany: jest.fn().mockResolvedValue([]) },
+      journalEntryLine: { groupBy },
+    };
+    const service = new AccountingService();
+    const from = new Date('2026-01-01T00:00:00Z');
+    const to = new Date('2026-09-01T00:00:00Z');
+
+    await runInTenant(db, () => service.getTrialBalance(from, to));
+
+    expect(groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { journalEntry: { date: { gte: from, lte: to } } } }),
+    );
+  });
+
+  it('omits the date filter entirely when neither from nor to is given (unchanged behavior)', async () => {
+    const groupBy = jest.fn().mockResolvedValue([]);
+    const db = {
+      accountingAccount: { findMany: jest.fn().mockResolvedValue([]) },
+      journalEntryLine: { groupBy },
+    };
+    const service = new AccountingService();
+
+    await runInTenant(db, () => service.getTrialBalance());
+
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: undefined }));
   });
 });
 

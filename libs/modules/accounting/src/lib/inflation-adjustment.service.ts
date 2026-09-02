@@ -1,5 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { getTenantDb, isDebitNormal, Prisma, type AccountType } from '@plexo/database';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  getTenantDb,
+  getTenantId,
+  getUserId,
+  isDebitNormal,
+  Prisma,
+  type AccountType,
+  type InflationAdjustment,
+} from '@plexo/database';
 import { AccountingService } from './accounting.service.js';
 import { PriceIndexService } from './price-index.service.js';
 
@@ -139,5 +147,55 @@ export class InflationAdjustmentService {
     }
 
     return { from, to, rows, recpam };
+  }
+
+  listAdjustments(): Promise<InflationAdjustment[]> {
+    return getTenantDb().inflationAdjustment.findMany({ orderBy: { periodFrom: 'desc' } });
+  }
+
+  /**
+   * Emite el asiento definitivo del RECPAM (Fase 2). Rechaza con 409 si ya
+   * se posteó exactamente este rango antes (`@@unique([tenantId,
+   * periodFrom, periodTo])`) - mismo criterio que el rechazo de re-importar
+   * el mismo extracto bancario en Conciliación Bancaria. El
+   * `InflationAdjustment` se crea ANTES que el asiento (necesita su `id`
+   * para que `postInflationAdjustmentJournalEntry` lo enlace vía
+   * `JournalEntry.inflationAdjustmentId`) - si el RECPAM da exactamente 0
+   * (posición monetaria neta perfectamente neutra) igual queda el registro
+   * de "ya se revisó este período", pero sin asiento (mismo short-circuit
+   * que el resto de los `postX` de este servicio para un monto nulo).
+   */
+  async postInflationAdjustment(
+    from: Date,
+    to: Date,
+  ): Promise<{ adjustment: InflationAdjustment; journalEntry: Awaited<ReturnType<AccountingService['postInflationAdjustmentJournalEntry']>> }> {
+    const createdByUserId = getUserId();
+    if (!createdByUserId) {
+      throw new BadRequestException('An authenticated user is required to post an inflation adjustment');
+    }
+
+    const tenantId = getTenantId();
+    const existing = await getTenantDb().inflationAdjustment.findUnique({
+      where: { tenantId_periodFrom_periodTo: { tenantId, periodFrom: from, periodTo: to } },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Ya se emitió el ajuste por inflación de este período (${existing.createdAt.toLocaleDateString('es-AR')}) - no se emite dos veces.`,
+      );
+    }
+
+    const preview = await this.getPreview(from, to);
+
+    const adjustment = await getTenantDb().inflationAdjustment.create({
+      data: { tenantId, periodFrom: from, periodTo: to, recpamAmount: preview.recpam, createdByUserId },
+    });
+
+    const journalEntry = await this.accountingService.postInflationAdjustmentJournalEntry({
+      inflationAdjustmentId: adjustment.id,
+      recpamAmount: preview.recpam,
+      date: to,
+    });
+
+    return { adjustment, journalEntry };
   }
 }

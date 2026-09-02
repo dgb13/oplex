@@ -90,14 +90,29 @@ export interface InflationAdjustmentPreview {
   recpam: string;
 }
 
+export interface InflationAdjustment {
+  id: string;
+  periodFrom: string;
+  periodTo: string;
+  recpamAmount: string;
+  createdAt: string;
+}
+
+export interface PostInflationAdjustmentResult {
+  adjustment: InflationAdjustment;
+  journalEntry: JournalEntry | null;
+}
+
 export const accountingApi = {
   listAccounts: () => api.get<AccountingAccount[]>('/accounting/accounts').then((r) => r.data),
   createAccount: (dto: CreateAccountInput) =>
     api.post<AccountingAccount>('/accounting/accounts', dto).then((r) => r.data),
   updateAccount: (id: string, dto: { isMonetary: boolean }) =>
     api.patch<AccountingAccount>(`/accounting/accounts/${id}`, dto).then((r) => r.data),
-  getTrialBalance: () =>
-    api.get<TrialBalanceRow[]>('/accounting/trial-balance').then((r) => r.data),
+  getTrialBalance: (from?: string, to?: string) =>
+    api
+      .get<TrialBalanceRow[]>('/accounting/trial-balance', { params: { from, to } })
+      .then((r) => r.data),
   listJournalEntries: () =>
     api.get<JournalEntry[]>('/accounting/journal-entries').then((r) => r.data),
   postJournalEntry: (dto: PostJournalEntryInput) =>
@@ -107,5 +122,11 @@ export const accountingApi = {
   getInflationAdjustmentPreview: (from: string, to: string) =>
     api
       .get<InflationAdjustmentPreview>('/accounting/inflation-adjustment/preview', { params: { from, to } })
+      .then((r) => r.data),
+  listInflationAdjustments: () =>
+    api.get<InflationAdjustment[]>('/accounting/inflation-adjustment').then((r) => r.data),
+  postInflationAdjustment: (from: string, to: string) =>
+    api
+      .post<PostInflationAdjustmentResult>('/accounting/inflation-adjustment', { from, to })
       .then((r) => r.data),
 };

@@ -77,5 +77,6 @@ export type {
   BankStatementImport,
   BankStatementLine,
   PriceIndexEntry,
+  InflationAdjustment,
 } from './generated/client.js';
 export * from './generated/enums.js';

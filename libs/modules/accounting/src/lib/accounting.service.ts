@@ -98,6 +98,36 @@ const BANK_INTEREST_INCOME_ACCOUNT = {
   type: 'INCOME' as const,
 };
 
+// Ajuste por Inflación (RT6/NC39, ver postInflationAdjustmentJournalEntry) -
+// asiento neto de 2 líneas: Resultado (Pérdida o Ganancia, según el signo
+// del RECPAM) contra una cuenta de Patrimonio dedicada. No hay ninguna
+// cuenta EQUITY en este chart of accounts todavía - ésta es la primera.
+// Decisión explícita del usuario: el asiento no reproduce el desglose por
+// cuenta monetaria de la vista previa (eso queda sólo en pantalla), es un
+// neto único - mismo criterio que el resto de los asientos de este sistema.
+const INFLATION_LOSS_ACCOUNT = {
+  code: '5.1.04',
+  name: 'Pérdida por Exposición a la Inflación',
+  type: 'EXPENSE' as const,
+};
+const INFLATION_GAIN_ACCOUNT = {
+  code: '4.2.03',
+  name: 'Ganancia por Exposición a la Inflación',
+  type: 'INCOME' as const,
+};
+// isMonetary: false explícito - es EQUITY, uno de los 3 tipos donde el flag
+// tiene efecto real en InflationAdjustmentService.getPreview (MONETARY_TYPES
+// incluye EQUITY). Si quedara en el default true, el saldo que este mismo
+// asiento le deja quedaría atrapado en el cálculo del RECPAM del período
+// siguiente - un capital ajustado por inflación es por definición no
+// monetario, nunca debe formar parte de la posición monetaria neta.
+const INFLATION_CAPITAL_ADJUSTMENT_ACCOUNT = {
+  code: '3.1.01',
+  name: 'Ajuste de Capital por Inflación',
+  type: 'EQUITY' as const,
+  isMonetary: false,
+};
+
 // Retenciones que EL TENANT practica a sus proveedores al pagarles
 // (Ganancias/IVA/IIBB) - ver postSupplierPaymentJournalEntry. Pasivo: lo
 // retenido no es nuestro, hay que depositarlo en AFIP/ARBA/etc. (ese
@@ -237,6 +267,16 @@ export interface PostBankStatementAdjustmentJournalEntryInput {
   date?: Date;
 }
 
+export interface PostInflationAdjustmentJournalEntryInput {
+  inflationAdjustmentId: string;
+  /** RECPAM tal cual lo devuelve InflationAdjustmentService.getPreview -
+   * positivo = pérdida, negativo = ganancia, nunca cero (ver short-circuit
+   * en el método). El signo decide qué cuenta de resultado se usa, el
+   * asiento siempre postea la magnitud absoluta. */
+  recpamAmount: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
 export interface TrialBalanceRow {
   accountId: string;
   code: string;
@@ -343,6 +383,7 @@ export class AccountingService {
     code: string;
     name: string;
     type: AccountType;
+    isMonetary?: boolean;
   }): Promise<AccountingAccount> {
     const db = getTenantDb();
     const existing = await db.accountingAccount.findFirst({ where: { code: spec.code } });
@@ -350,7 +391,13 @@ export class AccountingService {
       return existing;
     }
     return db.accountingAccount.create({
-      data: { tenantId: getTenantId(), code: spec.code, name: spec.name, type: spec.type },
+      data: {
+        tenantId: getTenantId(),
+        code: spec.code,
+        name: spec.name,
+        type: spec.type,
+        ...(spec.isMonetary !== undefined ? { isMonetary: spec.isMonetary } : {}),
+      },
     });
   }
 
@@ -555,6 +602,7 @@ export class AccountingService {
       receiptId?: string;
       checkId?: string;
       bankStatementLineId?: string;
+      inflationAdjustmentId?: string;
     },
   ): Promise<JournalEntryWithLines> {
     const tenantId = getTenantId();
@@ -592,6 +640,7 @@ export class AccountingService {
         receiptId: opts.receiptId,
         checkId: opts.checkId,
         bankStatementLineId: opts.bankStatementLineId,
+        inflationAdjustmentId: opts.inflationAdjustmentId,
         createdById,
         lines: {
           createMany: {
@@ -984,6 +1033,48 @@ export class AccountingService {
     );
   }
 
+  /**
+   * Ajuste por Inflación (RT6/NC39, Fase 2 - ver apps/api's
+   * InflationAdjustmentService.postInflationAdjustment, que ya calculó
+   * `recpamAmount` con el método del activo y pasivo monetario neto vía
+   * getPreview). Asiento neto de 2 líneas, decisión explícita del usuario:
+   * NO reproduce el desglose por cuenta monetaria de la vista previa (eso
+   * queda sólo en pantalla) - Resultado (Pérdida o Ganancia según el signo)
+   * contra "Ajuste de Capital por Inflación" (Patrimonio). Positivo =
+   * pérdida (la posición monetaria neta era activa, erosionada por la
+   * inflación): Dr Pérdida / Cr Ajuste de Capital. Negativo = ganancia (la
+   * posición neta era pasiva, la deuda se licuó): Dr Ajuste de Capital /
+   * Cr Ganancia.
+   */
+  async postInflationAdjustmentJournalEntry(
+    input: PostInflationAdjustmentJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const recpam = new Prisma.Decimal(input.recpamAmount);
+    if (recpam.eq(0)) {
+      return undefined;
+    }
+    const isLoss = recpam.gt(0);
+    const amount = recpam.abs();
+    const [resultAccount, capitalAdjustmentAccount] = await Promise.all([
+      this.getOrCreateAccount(isLoss ? INFLATION_LOSS_ACCOUNT : INFLATION_GAIN_ACCOUNT),
+      this.getOrCreateAccount(INFLATION_CAPITAL_ADJUSTMENT_ACCOUNT),
+    ]);
+    const lines: PostJournalEntryDto['lines'] = isLoss
+      ? [
+          { accountId: resultAccount.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: capitalAdjustmentAccount.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ]
+      : [
+          { accountId: capitalAdjustmentAccount.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: resultAccount.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ];
+    return this.createBalancedEntry(
+      `Ajuste por Inflación (RECPAM) - ${input.inflationAdjustmentId}`,
+      lines,
+      { date: input.date, inflationAdjustmentId: input.inflationAdjustmentId },
+    );
+  }
+
   /** The only way to correct a posted entry: a new entry with the same
    * lines, DEBIT/CREDIT swapped, linked back via reversalOfId. Never an
    * UPDATE to the original - the DB trigger wouldn't allow it anyway. */
@@ -1025,12 +1116,16 @@ export class AccountingService {
 
   /** Net balance per account, using the standard debit/credit-normal sign
    * convention by account type - not a stored figure, always derived from
-   * journal_entry_lines so it can never drift from the ledger. */
-  async getTrialBalance(): Promise<TrialBalanceRow[]> {
+   * journal_entry_lines so it can never drift from the ledger. `from`/`to`
+   * son opcionales e independientes (mismo criterio que
+   * ReportsPnlService.getIncomeStatement) - sin ninguno de los dos, el
+   * comportamiento es exactamente el de antes (todo el historial). */
+  async getTrialBalance(from?: Date, to?: Date): Promise<TrialBalanceRow[]> {
     const db = getTenantDb();
     const accounts = await db.accountingAccount.findMany({ orderBy: { code: 'asc' } });
     const grouped = await db.journalEntryLine.groupBy({
       by: ['accountId', 'direction'],
+      where: from || to ? { journalEntry: { date: { gte: from, lte: to } } } : undefined,
       _sum: { amount: true },
     });
 

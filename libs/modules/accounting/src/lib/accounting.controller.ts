@@ -5,12 +5,13 @@ import { CreateAccountDto } from './dto/create-account.dto.js';
 import { CreateReversingEntryDto } from './dto/create-reversing-entry.dto.js';
 import { InflationAdjustmentRangeDto } from './dto/inflation-adjustment-range.dto.js';
 import { PostJournalEntryDto } from './dto/post-journal-entry.dto.js';
+import { TrialBalanceQueryDto } from './dto/trial-balance-query.dto.js';
 import { UpdateAccountDto } from './dto/update-account.dto.js';
 import { InflationAdjustmentService } from './inflation-adjustment.service.js';
 
 const MODULE = 'accounting';
 
-function parseMonthStart(value: string, field: 'from' | 'to'): Date {
+function parseDate(value: string, field: 'from' | 'to'): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw new BadRequestException(`"${field}" no es una fecha válida`);
@@ -51,8 +52,11 @@ export class AccountingController {
 
   @RequireModuleAccess(MODULE, 'read')
   @Get('trial-balance')
-  getTrialBalance() {
-    return this.accountingService.getTrialBalance();
+  getTrialBalance(@Query() query: TrialBalanceQueryDto) {
+    return this.accountingService.getTrialBalance(
+      query.from ? parseDate(query.from, 'from') : undefined,
+      query.to ? parseDate(query.to, 'to') : undefined,
+    );
   }
 
   @RequireModuleAccess(MODULE, 'read')
@@ -83,8 +87,23 @@ export class AccountingController {
   @Get('inflation-adjustment/preview')
   getInflationAdjustmentPreview(@Query() query: InflationAdjustmentRangeDto) {
     return this.inflationAdjustmentService.getPreview(
-      parseMonthStart(query.from, 'from'),
-      parseMonthStart(query.to, 'to'),
+      parseDate(query.from, 'from'),
+      parseDate(query.to, 'to'),
+    );
+  }
+
+  @RequireModuleAccess(MODULE, 'read')
+  @Get('inflation-adjustment')
+  listInflationAdjustments() {
+    return this.inflationAdjustmentService.listAdjustments();
+  }
+
+  @RequireModuleAccess(MODULE, 'write')
+  @Post('inflation-adjustment')
+  postInflationAdjustment(@Body() dto: InflationAdjustmentRangeDto) {
+    return this.inflationAdjustmentService.postInflationAdjustment(
+      parseDate(dto.from, 'from'),
+      parseDate(dto.to, 'to'),
     );
   }
 }

@@ -512,6 +512,7 @@ model User {
   recordedSupplierPayments   SupplierPayment[]
   createdChecks              Check[]
   createdBankStatementImports BankStatementImport[]
+  createdInflationAdjustments InflationAdjustment[]
   cartItems                  InventoryCartItem[]
   createdQuotes              Quote[]
   emailVerificationCode      EmailVerificationCode?
@@ -1491,6 +1492,13 @@ model JournalEntry {
   // ninguno acá (esa transacción ya tenía o no el suyo).
   bankStatementLineId  String?             @unique
   bankStatementLine    BankStatementLine?  @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id])
+  // Asiento neto del RECPAM de un período (Fase 2 del Ajuste por Inflación,
+  // RT6/NC39) - ver InflationAdjustmentService.postInflationAdjustment. Un
+  // período sólo tiene asiento propio acá; el desglose por cuenta monetaria
+  // que armó el número es sólo informativo (vista previa), nunca se postea
+  // línea por línea.
+  inflationAdjustmentId String?              @unique
+  inflationAdjustment   InflationAdjustment? @relation(fields: [tenantId, inflationAdjustmentId], references: [tenantId, id])
   description          String
   date                 DateTime            @default(now())
   createdById          String
@@ -1512,8 +1520,33 @@ model JournalEntry {
   @@unique([tenantId, receiptId])
   @@unique([tenantId, checkId])
   @@unique([tenantId, bankStatementLineId])
+  @@unique([tenantId, inflationAdjustmentId])
   @@index([tenantId])
   @@map("journal_entries")
+}
+
+// Un registro por período de Ajuste por Inflación ya emitido (RT6/NC39,
+// Fase 2) - existe sólo para que el mismo rango exacto no se pueda postear
+// dos veces (@@unique de abajo), mismo criterio que BankStatementImport
+// contra re-importar el mismo archivo. El desglose por cuenta que dio este
+// número vive únicamente en la vista previa (InflationAdjustmentService.
+// getPreview, recalculable en cualquier momento) - no se persiste acá.
+model InflationAdjustment {
+  id              String       @id @default(uuid())
+  tenantId        String
+  periodFrom      DateTime
+  periodTo        DateTime
+  recpamAmount    Decimal      @db.Decimal(14, 2)
+  createdByUserId String
+  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  journalEntry JournalEntry?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, periodFrom, periodTo])
+  @@index([tenantId])
+  @@map("inflation_adjustments")
 }
 
 // One line = one account + one direction + one amount (the standard

@@ -354,6 +354,13 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
     amount: 50,
     status: 'PENDING',
   });
+  await ins('inflation_adjustments', {
+    tenantId,
+    periodFrom: new Date(Date.UTC(2026, 0, 1)),
+    periodTo: new Date(Date.UTC(2026, 5, 1)),
+    recpamAmount: 100,
+    createdByUserId: userId,
+  });
   await ins('stock_movements', {
     tenantId,
     warehouseId,
@@ -502,6 +509,7 @@ const CLEANUP_TABLES_REVERSE = [
   'quotes',
   'financial_transactions',
   'checks',
+  'inflation_adjustments',
   'bank_statement_lines',
   'bank_statement_imports',
   'receipts',
