@@ -738,6 +738,61 @@ describe('AccountingService.postBankStatementAdjustmentJournalEntry', () => {
   });
 });
 
+describe('AccountingService.postCashSessionAdjustmentJournalEntry', () => {
+  it('books debit Faltante de Caja / credit Caja for a negative difference (shortage)', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postCashSessionAdjustmentJournalEntry({
+        cashSessionId: 'session-1',
+        difference: -50,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(expect.arrayContaining(['5.1.05', '1.1.03']));
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.cashSessionId).toBe('session-1');
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-5.1.05', direction: 'DEBIT', amount: 50 },
+      { accountId: 'acc-1.1.03', direction: 'CREDIT', amount: 50 },
+    ]);
+  });
+
+  it('books debit Caja / credit Sobrante de Caja for a positive difference (overage)', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postCashSessionAdjustmentJournalEntry({
+        cashSessionId: 'session-2',
+        difference: 30,
+      }),
+    );
+
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.03', direction: 'DEBIT', amount: 30 },
+      { accountId: 'acc-4.2.04', direction: 'CREDIT', amount: 30 },
+    ]);
+  });
+
+  it('skips posting entirely for an exact close (difference = 0)', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postCashSessionAdjustmentJournalEntry({
+        cashSessionId: 'session-3',
+        difference: 0,
+      }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('AccountingService.postInflationAdjustmentJournalEntry', () => {
   it('books debit Pérdida / credit Ajuste de Capital for a positive (loss) RECPAM', async () => {
     const db = dbWithAccounts();

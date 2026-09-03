@@ -121,6 +121,13 @@ const INFLATION_GAIN_ACCOUNT = {
 // asiento le deja quedaría atrapado en el cálculo del RECPAM del período
 // siguiente - un capital ajustado por inflación es por definición no
 // monetario, nunca debe formar parte de la posición monetaria neta.
+// Arqueo de Caja/POS (ver postCashSessionAdjustmentJournalEntry) - la
+// diferencia entre lo contado y lo esperado al cerrar un turno. Faltante =
+// gasto (el cajón físico tenía menos de lo que el ledger de movimientos
+// dice que debería); Sobrante = ingreso (tenía más).
+const CASH_SHORTAGE_ACCOUNT = { code: '5.1.05', name: 'Faltante de Caja', type: 'EXPENSE' as const };
+const CASH_OVERAGE_ACCOUNT = { code: '4.2.04', name: 'Sobrante de Caja', type: 'INCOME' as const };
+
 const INFLATION_CAPITAL_ADJUSTMENT_ACCOUNT = {
   code: '3.1.01',
   name: 'Ajuste de Capital por Inflación',
@@ -264,6 +271,16 @@ export interface PostBankStatementAdjustmentJournalEntryInput {
   /** Siempre una magnitud positiva - el signo ya lo decide `kind`, no el
    * signo de este número. */
   amount: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
+export interface PostCashSessionAdjustmentJournalEntryInput {
+  cashSessionId: string;
+  /** CashSession.difference tal cual (countedAmount - expectedAmount) -
+   * positivo = sobrante, negativo = faltante, nunca cero (ver short-circuit
+   * en el método). El signo decide qué cuenta de resultado se usa, el
+   * asiento siempre postea la magnitud absoluta. */
+  difference: Prisma.Decimal | number | string;
   date?: Date;
 }
 
@@ -603,6 +620,7 @@ export class AccountingService {
       checkId?: string;
       bankStatementLineId?: string;
       inflationAdjustmentId?: string;
+      cashSessionId?: string;
     },
   ): Promise<JournalEntryWithLines> {
     const tenantId = getTenantId();
@@ -641,6 +659,7 @@ export class AccountingService {
         checkId: opts.checkId,
         bankStatementLineId: opts.bankStatementLineId,
         inflationAdjustmentId: opts.inflationAdjustmentId,
+        cashSessionId: opts.cashSessionId,
         createdById,
         lines: {
           createMany: {
@@ -1030,6 +1049,43 @@ export class AccountingService {
       `${input.kind === 'EXPENSE' ? 'Gasto bancario' : 'Ingreso bancario'} - línea de extracto ${input.bankStatementLineId}`,
       lines,
       { date: input.date, bankStatementLineId: input.bankStatementLineId },
+    );
+  }
+
+  /**
+   * Ajuste posteado al cerrar un turno de Caja/POS con diferencia entre lo
+   * contado y lo esperado (ver apps/api's PosService.closeSession, que ya
+   * calculó `difference` vía CashSessionsService.closeSession). Mismo molde
+   * que postBankStatementAdjustmentJournalEntry: no recibe financialAccountId,
+   * el asiento siempre postea contra la CASH_ACCOUNT genérica del plan de
+   * cuentas, no una cuenta contable distinta por cada caja física.
+   */
+  async postCashSessionAdjustmentJournalEntry(
+    input: PostCashSessionAdjustmentJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const difference = new Prisma.Decimal(input.difference);
+    if (difference.eq(0)) {
+      return undefined;
+    }
+    const isShortage = difference.lt(0);
+    const amount = difference.abs();
+    const [cash, other] = await Promise.all([
+      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.getOrCreateAccount(isShortage ? CASH_SHORTAGE_ACCOUNT : CASH_OVERAGE_ACCOUNT),
+    ]);
+    const lines: PostJournalEntryDto['lines'] = isShortage
+      ? [
+          { accountId: other.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: cash.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ]
+      : [
+          { accountId: cash.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: other.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ];
+    return this.createBalancedEntry(
+      `${isShortage ? 'Faltante' : 'Sobrante'} de caja - turno ${input.cashSessionId}`,
+      lines,
+      { date: input.date, cashSessionId: input.cashSessionId },
     );
   }
 

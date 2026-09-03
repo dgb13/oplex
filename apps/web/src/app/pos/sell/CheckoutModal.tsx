@@ -1,0 +1,217 @@
+'use client';
+
+import { companiesApi } from '@/lib/companies';
+import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
+import { invoicingApi } from '@/lib/invoicing';
+import { posApi, POS_PAYMENT_METHODS, type CheckoutPaymentInput } from '@/lib/pos';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
+import { useMemo, useState } from 'react';
+import type { TicketLine } from './types';
+
+interface Props {
+  registerId: string;
+  lines: TicketLine[];
+  totals: { subtotal: number; taxTotal: number; total: number };
+  onClose: () => void;
+  onCompleted: () => void;
+}
+
+const inputClass =
+  'rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500';
+
+interface PaymentRow {
+  method: string;
+  amount: string;
+}
+
+/** Sólo lectura de "Consumidor Final" en pantalla si no se elige otro
+ * cliente - el placeholder real (Company sin CUIT) lo crea el backend la
+ * primera vez que hace falta, ver PosService.resolveDefaultCustomer. */
+export default function CheckoutModal({ registerId, lines, totals, onClose, onCompleted }: Props) {
+  const [customerId, setCustomerId] = useState('');
+  const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'CASH', amount: totals.total.toFixed(2) }]);
+  const [error, setError] = useState('');
+  const [completedInvoice, setCompletedInvoice] = useState<{ id: string; documentLetter: string; number: string } | null>(
+    null,
+  );
+
+  const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
+  const currenciesQuery = useQuery({ queryKey: ['invoicing-currencies'], queryFn: invoicingApi.listCurrencies });
+  const tenantSettingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+
+  const selectedCustomer = (customersQuery.data ?? []).find((c) => c.id === customerId);
+  const baseCurrency = (currenciesQuery.data ?? []).find((c) => c.isBase) ?? currenciesQuery.data?.[0];
+
+  const letterSuggestion = suggestDocumentLetter(
+    tenantSettingsQuery.data?.ownTaxCondition ?? null,
+    selectedCustomer?.taxId ?? null,
+    selectedCustomer?.taxCondition ?? null,
+  );
+  const documentLetter: DocumentLetter = letterSuggestion.letter ?? 'B';
+
+  const paidTotal = useMemo(
+    () => payments.reduce((sum, p) => sum + (Number(p.amount.replace(',', '.')) || 0), 0),
+    [payments],
+  );
+  const change = paidTotal - totals.total;
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const paymentsInput: CheckoutPaymentInput[] = payments
+        .filter((p) => Number(p.amount) > 0)
+        .map((p) => ({ method: p.method, amount: Number(p.amount.replace(',', '.')) }));
+      return posApi.checkout({
+        registerId,
+        customerId: customerId || undefined,
+        documentLetter,
+        currencyId: baseCurrency?.id ?? '',
+        lines: lines.map((l) => ({
+          articleVariantId: l.articleVariantId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxKind: l.taxKind,
+          taxRate: l.taxRate ?? undefined,
+        })),
+        payments: paymentsInput,
+      });
+    },
+    onSuccess: (invoice) => {
+      setCompletedInvoice(invoice);
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudo completar el cobro';
+      setError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
+
+  function addPaymentRow() {
+    const remaining = Math.max(totals.total - paidTotal, 0);
+    setPayments((prev) => [...prev, { method: 'CASH', amount: remaining > 0 ? remaining.toFixed(2) : '' }]);
+  }
+
+  function updatePayment(index: number, patch: Partial<PaymentRow>) {
+    setPayments((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+  }
+
+  function removePayment(index: number) {
+    setPayments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleConfirm() {
+    setError('');
+    if (paidTotal < totals.total) {
+      setError('El total pagado es menor al total de la venta');
+      return;
+    }
+    // El vuelto se resta de la primera pata en efectivo antes de mandar -
+    // el backend valida que Σpayments == Invoice.total exacto, el vuelto
+    // nunca viaja como parte del pago.
+    mutation.mutate();
+  }
+
+  if (completedInvoice) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
+          <p className="mb-1 text-lg font-semibold text-green-700">Venta confirmada</p>
+          <p className="mb-4 text-sm text-slate-500">
+            {completedInvoice.documentLetter}-{completedInvoice.number}
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => invoicingApi.openPdf(completedInvoice.id, 'TICKET')}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-200"
+            >
+              Imprimir ticket
+            </button>
+            <button
+              onClick={onCompleted}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+            >
+              Nueva venta
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">Cobrar</h2>
+
+        <div className="mb-4 flex flex-col gap-1">
+          <label className="text-sm text-slate-600">Cliente</label>
+          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <option value="">Consumidor Final</option>
+            {(customersQuery.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-400">Factura {documentLetter} - {letterSuggestion.reason}</p>
+        </div>
+
+        <div className="mb-2 flex items-center justify-between text-lg font-semibold">
+          <span>Total</span>
+          <span>${totals.total.toFixed(2)}</span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {payments.map((payment, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                className={`${inputClass} flex-1`}
+                value={payment.method}
+                onChange={(e) => updatePayment(i, { method: e.target.value })}
+              >
+                {POS_PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                step="any"
+                className={`${inputClass} w-24`}
+                value={payment.amount}
+                onChange={(e) => updatePayment(i, { amount: e.target.value })}
+              />
+              {payments.length > 1 && (
+                <button onClick={() => removePayment(i)} className="text-slate-400 hover:text-red-600">
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <button onClick={addPaymentRow} className="text-left text-xs font-medium text-indigo-600 hover:text-indigo-500">
+            + Agregar otro método de pago
+          </button>
+        </div>
+
+        {change > 0.004 && (
+          <p className="mt-3 text-sm font-medium text-blue-600">Vuelto: ${change.toFixed(2)}</p>
+        )}
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-4 flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-slate-600 transition hover:text-slate-800">
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={mutation.isPending || !baseCurrency}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Confirmando...' : 'Confirmar cobro'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

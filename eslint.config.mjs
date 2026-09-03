@@ -58,6 +58,7 @@ export default [
                 'scope:treasury',
                 'scope:mercadopago',
                 'scope:bank-reconciliation',
+                'scope:pos',
               ],
             },
             {

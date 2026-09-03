@@ -518,6 +518,9 @@ model User {
   emailVerificationCode      EmailVerificationCode?
   passwordResetTokens        PasswordResetToken[]
   oauthAccounts              OAuthAccount[]
+  cashSessionsOpened         CashSession[] @relation("CashSessionOpenedBy")
+  cashSessionsClosed         CashSession[] @relation("CashSessionClosedBy")
+  cashMovements              CashMovement[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -733,6 +736,9 @@ model Company {
   // (cliente) o a quien se le endosó/pagó (proveedor) - ver model Check.
   checksAsCustomer     Check[]              @relation("CheckCustomer")
   checksAsSupplier     Check[]              @relation("CheckSupplier")
+  // Cajas de mostrador cuya sucursal (rol BRANCH) es esta Company - ver
+  // model CashRegister.
+  cashRegisters        CashRegister[]
 
   @@index([tenantId])
   @@map("companies")
@@ -1007,10 +1013,113 @@ model Warehouse {
   minimumStocks MinimumStock[]
   movements     StockMovement[]
   goodsReceipts GoodsReceipt[]
+  cashRegisters CashRegister[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("warehouses")
+}
+
+// --- Caja / POS (@plexo/pos) ---
+// Módulo de mostrador (venta rápida + apertura/cierre de caja), aparte de
+// Facturación (pensada para venta B2B con cuenta corriente completa) - ver
+// PosService.checkout, que reusa SalesService.createSale/recordReceipt tal
+// cual en vez de duplicar la lógica de factura/stock/asiento.
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  SALE
+  CASH_IN
+  CASH_OUT
+}
+
+// Un mostrador/terminal físico. Siempre atado a una Company con rol BRANCH
+// (define pointOfSaleNumber/AFIP) + un Warehouse (stock) + una
+// FinancialAccount propia (provider CASH, 1:1) - el "cajón" de esa caja
+// específica, separado de cualquier otra cuenta de efectivo del tenant.
+// Multi-caja = N filas de esto por tenant, cada una con sus propias
+// sesiones independientes.
+model CashRegister {
+  id                 String           @id @default(uuid())
+  tenantId           String
+  name               String
+  branchId           String
+  branch             Company          @relation(fields: [branchId], references: [id])
+  warehouseId        String
+  warehouse          Warehouse        @relation(fields: [warehouseId], references: [id])
+  financialAccountId String           @unique
+  financialAccount   FinancialAccount @relation(fields: [financialAccountId], references: [id])
+  active             Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+
+  sessions CashSession[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("cash_registers")
+}
+
+// Un "turno" por caja. Sin dueño exclusivo (multi-cajero: cualquier
+// usuario habilitado opera contra la sesión OPEN de su caja, ver
+// CashMovement.createdByUserId para la auditoría por persona).
+// expectedAmount/difference se snapshotean al cerrar (no se re-derivan
+// después) - mismo criterio que Invoice.customerName/customerTaxId: un
+// hecho de auditoría no debe poder cambiar de valor retroactivamente si
+// algún día cambia cómo se suman los CashMovement. @@unique([tenantId, id])
+// existe sólo para que JournalEntry pueda referenciarla por FK compuesta
+// (tenantId, cashSessionId) - mismo criterio que Receipt/InflationAdjustment.
+model CashSession {
+  id             String            @id @default(uuid())
+  tenantId       String
+  registerId     String
+  register       CashRegister      @relation(fields: [registerId], references: [id])
+  status         CashSessionStatus @default(OPEN)
+  openedByUserId String
+  openedBy       User              @relation("CashSessionOpenedBy", fields: [openedByUserId], references: [id])
+  openingAmount  Decimal           @db.Decimal(14, 2)
+  openedAt       DateTime          @default(now())
+  closedByUserId String?
+  closedBy       User?             @relation("CashSessionClosedBy", fields: [closedByUserId], references: [id])
+  countedAmount  Decimal?          @db.Decimal(14, 2)
+  expectedAmount Decimal?          @db.Decimal(14, 2)
+  difference     Decimal?          @db.Decimal(14, 2)
+  closedAt       DateTime?
+  notes          String?
+
+  movements    CashMovement[]
+  journalEntry JournalEntry?
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, registerId, status])
+  @@map("cash_sessions")
+}
+
+model CashMovement {
+  id              String           @id @default(uuid())
+  tenantId        String
+  sessionId       String
+  session         CashSession      @relation(fields: [sessionId], references: [id])
+  type            CashMovementType
+  // Efecto firmado sobre el cajón físico: positivo ingreso, negativo
+  // egreso. Para SALE, sólo la porción en EFECTIVO de una venta con pago
+  // dividido - tarjeta/MP/transferencia tienen su propio Receipt pero NO
+  // generan CashMovement (no tocan el cajón).
+  amount          Decimal          @db.Decimal(14, 2)
+  invoiceId       String?
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
+  reason          String?
+  createdByUserId String
+  createdBy       User             @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime         @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, sessionId])
+  @@map("cash_movements")
 }
 
 // Current balance per (warehouse, variant) - materialized and kept in sync
@@ -1211,6 +1320,10 @@ model Invoice {
   journalEntry JournalEntry?
   receipts     Receipt[]
   creditNotes  CreditNote[]
+  // Venta cobrada en efectivo desde Caja/POS - ver CashMovement.invoiceId.
+  // Opcional: una factura de Facturación normal (fuera de POS) nunca tiene
+  // ninguno.
+  cashMovements CashMovement[]
 
   @@unique([tenantId, documentLetter, pointOfSale, number])
   @@unique([tenantId, id])
@@ -1499,6 +1612,12 @@ model JournalEntry {
   // línea por línea.
   inflationAdjustmentId String?              @unique
   inflationAdjustment   InflationAdjustment? @relation(fields: [tenantId, inflationAdjustmentId], references: [tenantId, id])
+  // Asiento de ajuste por diferencia de arqueo al cerrar un turno de Caja
+  // (Faltante/Sobrante) - ver AccountingService.postCashSessionAdjustmentJournalEntry.
+  // Un turno sólo tiene asiento propio acá cuando cierra con diferencia
+  // distinta de cero; un cierre exacto no genera ninguno.
+  cashSessionId        String?              @unique
+  cashSession          CashSession?         @relation(fields: [tenantId, cashSessionId], references: [tenantId, id])
   description          String
   date                 DateTime            @default(now())
   createdById          String
@@ -1521,6 +1640,7 @@ model JournalEntry {
   @@unique([tenantId, checkId])
   @@unique([tenantId, bankStatementLineId])
   @@unique([tenantId, inflationAdjustmentId])
+  @@unique([tenantId, cashSessionId])
   @@index([tenantId])
   @@map("journal_entries")
 }
@@ -1720,6 +1840,10 @@ model FinancialAccount {
   // Conciliación bancaria - ver models BankStatementImport/BankStatementLine.
   bankStatementImports BankStatementImport[]
   bankStatementLines   BankStatementLine[]
+  // El "cajón" de una caja de mostrador es una FinancialAccount 1:1 (ver
+  // CashRegister.financialAccountId) - relación inversa opcional, la
+  // mayoría de las cuentas financieras no son cajas de POS.
+  cashRegister         CashRegister?
 
   @@unique([tenantId, name])
   @@index([tenantId])

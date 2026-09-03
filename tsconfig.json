@@ -95,6 +95,9 @@
     },
     {
       "path": "./libs/modules/bank-reconciliation"
+    },
+    {
+      "path": "./libs/modules/pos"
     }
   ],
   "compilerOptions": {}

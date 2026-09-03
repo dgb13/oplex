@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
+  ShoppingBasket,
   ShoppingCart,
   type LucideIcon,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/dashboard', label: 'Tablero', icon: LayoutDashboard },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
+  { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket },
   {
     kind: 'group',
     label: 'Ventas',

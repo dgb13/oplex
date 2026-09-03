@@ -32,6 +32,7 @@ import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module.js';
 import { InventoryCartCheckoutModule } from './inventory-cart-checkout/inventory-cart-checkout.module.js';
 import { PurchaseCreditNotesModule } from './purchase-credit-notes/purchase-credit-notes.module.js';
 import { PurchaseInvoicesModule } from './purchase-invoices/purchase-invoices.module.js';
+import { PosModule } from './pos/pos.module.js';
 import { SalesModule } from './sales/sales.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
 import { SupplierReturnsModule } from './supplier-returns/supplier-returns.module.js';
@@ -72,6 +73,7 @@ import { MercadoPagoWebhookModule } from './webhooks/mercadopago-webhook.module.
     PurchaseCreditNotesModule,
     TreasuryModule,
     BankReconciliationModule,
+    PosModule,
     SubscriptionModule,
     MercadoPagoModule,
     MercadoPagoWebhookModule,

@@ -101,6 +101,9 @@
     },
     {
       "path": "../../libs/modules/accounting/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/modules/pos/tsconfig.lib.json"
     }
   ]
 }

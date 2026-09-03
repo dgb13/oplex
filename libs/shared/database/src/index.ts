@@ -78,5 +78,8 @@ export type {
   BankStatementLine,
   PriceIndexEntry,
   InflationAdjustment,
+  CashRegister,
+  CashSession,
+  CashMovement,
 } from './generated/client.js';
 export * from './generated/enums.js';
