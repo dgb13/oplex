@@ -51,7 +51,7 @@ function PosSellScreen() {
   const [cashMovement, setCashMovement] = useState<'CASH_IN' | 'CASH_OUT' | null>(null);
   const [closingSession, setClosingSession] = useState(false);
 
-  const registersQuery = useQuery({ queryKey: ['pos-registers'], queryFn: posApi.listRegisters });
+  const registersQuery = useQuery({ queryKey: ['pos-registers'], queryFn: () => posApi.listRegisters() });
   const openSessionsQuery = useQuery({
     queryKey: ['pos-open-sessions'],
     queryFn: posApi.listOpenSessions,

@@ -161,4 +161,158 @@ describe('CashSessionsService.closeSession', () => {
       runInTenant(db, () => service.closeSession('session-1', { countedAmount: 1000 })),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('recalculates countedAmount from denominationBreakdown, ignoring an inconsistent dto.countedAmount', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    let findUniqueCalls = 0;
+    const db = {
+      cashSession: {
+        findUnique: jest.fn().mockImplementation(() => {
+          findUniqueCalls += 1;
+          return Promise.resolve({
+            id: 'session-1',
+            status: findUniqueCalls <= 1 ? 'OPEN' : 'CLOSED',
+            openingAmount: new Prisma.Decimal(1000),
+            movements: [],
+          });
+        }),
+        update,
+      },
+    };
+    const service = new CashSessionsService();
+
+    // Desglose real: 2 billetes de 10000 + 3 monedas de 100 = 20300.
+    // dto.countedAmount llega deliberadamente distinto (999999) - el
+    // servidor tiene que ignorarlo y usar la suma real del desglose, nunca
+    // al revés (ver el comentario en closeSession).
+    const { session } = await runInTenant(db, () =>
+      service.closeSession('session-1', {
+        countedAmount: 999999,
+        denominationBreakdown: [
+          { kind: 'BILL', denomination: 10000, count: 2 },
+          { kind: 'COIN', denomination: 100, count: 3 },
+        ],
+      }),
+    );
+
+    const updateData = update.mock.calls[0][0].data;
+    expect((updateData.countedAmount as Prisma.Decimal).toNumber()).toBe(20300);
+    // expected = openingAmount (1000) + 0 movimientos = 1000
+    expect((updateData.difference as Prisma.Decimal).toNumber()).toBe(20300 - 1000);
+    expect(updateData.denominationBreakdown).toEqual([
+      { kind: 'BILL', denomination: 10000, count: 2 },
+      { kind: 'COIN', denomination: 100, count: 3 },
+    ]);
+    expect(session).toBeDefined();
+  });
+
+  it('rejects a denominationBreakdown item whose kind/denomination pair is not a real ARS denomination', async () => {
+    const db = {
+      cashSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'session-1',
+          status: 'OPEN',
+          openingAmount: new Prisma.Decimal(1000),
+          movements: [],
+        }),
+      },
+    };
+    const service = new CashSessionsService();
+
+    // $2000 no existe como moneda (sólo como billete) - kind/denomination
+    // inconsistente tiene que rechazarse antes de tocar cashSession.update.
+    await expect(
+      runInTenant(db, () =>
+        service.closeSession('session-1', {
+          countedAmount: 2000,
+          denominationBreakdown: [{ kind: 'COIN', denomination: 2000, count: 1 }],
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('falls back to dto.countedAmount (simple mode) when denominationBreakdown is absent', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    let findUniqueCalls = 0;
+    const db = {
+      cashSession: {
+        findUnique: jest.fn().mockImplementation(() => {
+          findUniqueCalls += 1;
+          return Promise.resolve({
+            id: 'session-1',
+            status: findUniqueCalls <= 1 ? 'OPEN' : 'CLOSED',
+            openingAmount: new Prisma.Decimal(1000),
+            movements: [],
+          });
+        }),
+        update,
+      },
+    };
+    const service = new CashSessionsService();
+
+    await runInTenant(db, () => service.closeSession('session-1', { countedAmount: 1500 }));
+
+    const updateData = update.mock.calls[0][0].data;
+    expect((updateData.countedAmount as Prisma.Decimal).toNumber()).toBe(1500);
+    expect(updateData.denominationBreakdown).toBe(Prisma.JsonNull);
+  });
+});
+
+describe('CashSessionsService.listSessions', () => {
+  it('filters by registerId and a closedAt range (inclusive end-of-day)', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { cashSession: { findMany } };
+    const service = new CashSessionsService();
+
+    await runInTenant(db, () =>
+      service.listSessions({ registerId: 'register-1', from: '2026-09-01', to: '2026-09-02' }),
+    );
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('CLOSED');
+    expect(where.registerId).toBe('register-1');
+    expect(where.closedAt.gte).toEqual(new Date('2026-09-01'));
+    expect(where.closedAt.lte.toISOString()).toBe('2026-09-02T23:59:59.999Z');
+  });
+
+  it('returns every CLOSED session when no filter is given (unchanged Fase 1 behavior)', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { cashSession: { findMany } };
+    const service = new CashSessionsService();
+
+    await runInTenant(db, () => service.listSessions());
+
+    expect(findMany.mock.calls[0][0].where).toEqual({ status: 'CLOSED' });
+  });
+});
+
+describe('CashSessionsService.getDailyPosition', () => {
+  it('aggregates open sessions (opening + movements) and closed-today totals', async () => {
+    const db = {
+      cashSession: {
+        findMany: jest.fn().mockImplementation(({ where }: { where: { status: string } }) => {
+          if (where.status === 'OPEN') {
+            return Promise.resolve([
+              { openingAmount: new Prisma.Decimal(1000), movements: [{ amount: new Prisma.Decimal(500) }] }, // 1500
+              { openingAmount: new Prisma.Decimal(2000), movements: [] }, // 2000
+            ]);
+          }
+          // CLOSED today: uno con sobrante (+50), uno con faltante (-20)
+          return Promise.resolve([
+            { countedAmount: new Prisma.Decimal(1050), difference: new Prisma.Decimal(50) },
+            { countedAmount: new Prisma.Decimal(980), difference: new Prisma.Decimal(-20) },
+          ]);
+        }),
+      },
+    };
+    const service = new CashSessionsService();
+
+    const position = await runInTenant(db, () => service.getDailyPosition());
+
+    expect(position.openSessionsCount).toBe(2);
+    expect(position.openSessionsExpectedTotal.toNumber()).toBe(3500);
+    expect(position.closedTodayCount).toBe(2);
+    expect(position.closedTodayCountedTotal.toNumber()).toBe(2030);
+    expect(position.closedTodayDifferenceTotal.toNumber()).toBe(30);
+  });
 });

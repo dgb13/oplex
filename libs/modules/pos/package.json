@@ -18,7 +18,9 @@
   "dependencies": {
     "@nestjs/common": "^11.1.28",
     "@plexo/database": "^0.0.1",
+    "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "exceljs": "^4.4.0",
     "tslib": "^2.3.0"
   }
 }

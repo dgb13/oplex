@@ -1089,6 +1089,14 @@ model CashSession {
   difference     Decimal?          @db.Decimal(14, 2)
   closedAt       DateTime?
   notes          String?
+  // Desglose de billetes/monedas del cierre, estilo Odoo (Fase 2) - sólo se
+  // completa si el cajero usó el modo desglose en vez de tipear un total a
+  // mano; nullable a propósito. Forma: { denomination: number; count: number }[].
+  // Fuente de verdad real de countedAmount cuando está presente: el
+  // servidor recalcula Σ(denomination × count) y lo usa en vez de confiar
+  // en cualquier total que mande el cliente aparte (ver
+  // CashSessionsService.closeSession) - nunca al revés.
+  denominationBreakdown Json?
 
   movements    CashMovement[]
   journalEntry JournalEntry?

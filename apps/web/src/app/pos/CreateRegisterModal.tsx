@@ -14,8 +14,8 @@ interface Props {
 const inputClass =
   'rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500';
 
-// Alta simple (Fase 1) - una pantalla de settings más completa para
-// CashRegister queda para Fase 2, ver el plan.
+// Alta simple (Fase 1) - reusado tal cual desde /settings/pos (Fase 2, ver
+// el plan) para no duplicar el formulario de creación.
 export default function CreateRegisterModal({ onClose }: Props) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');

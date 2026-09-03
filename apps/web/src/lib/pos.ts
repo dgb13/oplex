@@ -19,6 +19,23 @@ export interface CreateCashRegisterInput {
   warehouseId: string;
 }
 
+export interface UpdateCashRegisterInput {
+  name?: string;
+  active?: boolean;
+}
+
+// $100 existe como billete y como moneda a la vez en la Argentina real -
+// por eso cada fila del desglose lleva `kind` además de `denomination`, no
+// sólo un número (mismo criterio que ars-denominations.ts en el backend,
+// la fuente de verdad real que recalcula/valida esto).
+export type DenominationKind = 'BILL' | 'COIN';
+
+export interface DenominationBreakdownItem {
+  kind: DenominationKind;
+  denomination: number;
+  count: number;
+}
+
 export type CashMovementType = 'SALE' | 'CASH_IN' | 'CASH_OUT';
 
 export interface CashMovement {
@@ -56,6 +73,7 @@ export interface CashSessionListRow {
   difference: string | null;
   closedAt: string | null;
   notes: string | null;
+  denominationBreakdown: DenominationBreakdownItem[] | null;
 }
 
 export interface CashSessionDetail extends CashSessionListRow {
@@ -80,6 +98,25 @@ export interface CashMovementInput {
 export interface CloseCashSessionInput {
   countedAmount: number;
   notes?: string;
+  // Opcional - sólo se manda en modo "Desglose por billetes". El servidor
+  // recalcula countedAmount a partir de esto e ignora el de arriba cuando
+  // llega (ver CashSessionsService.closeSession) - se manda igual por
+  // prolijidad de payload, nunca es la fuente de verdad.
+  denominationBreakdown?: DenominationBreakdownItem[];
+}
+
+export interface ListSessionsFilter {
+  registerId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface DailyPosition {
+  openSessionsCount: number;
+  openSessionsExpectedTotal: string;
+  closedTodayCount: number;
+  closedTodayCountedTotal: string;
+  closedTodayDifferenceTotal: string;
 }
 
 export interface CheckoutPaymentInput {
@@ -108,12 +145,41 @@ export const POS_PAYMENT_METHODS = [
   { value: 'CHECK', label: 'Cheque' },
 ] as const;
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function sessionsParams(filter?: ListSessionsFilter) {
+  return {
+    ...(filter?.registerId ? { registerId: filter.registerId } : {}),
+    ...(filter?.from ? { from: filter.from } : {}),
+    ...(filter?.to ? { to: filter.to } : {}),
+  };
+}
+
 export const posApi = {
   createRegister: (dto: CreateCashRegisterInput) =>
     api.post<CashRegister>('/pos/registers', dto).then((r) => r.data),
-  listRegisters: () => api.get<CashRegister[]>('/pos/registers').then((r) => r.data),
+  listRegisters: (includeInactive?: boolean) =>
+    api
+      .get<CashRegister[]>('/pos/registers', { params: includeInactive ? { includeInactive: 'true' } : undefined })
+      .then((r) => r.data),
+  updateRegister: (id: string, dto: UpdateCashRegisterInput) =>
+    api.patch<CashRegister>(`/pos/registers/${id}`, dto).then((r) => r.data),
   listOpenSessions: () => api.get<CashSessionListRow[]>('/pos/sessions/open').then((r) => r.data),
-  listSessions: () => api.get<CashSessionListRow[]>('/pos/sessions').then((r) => r.data),
+  listSessions: (filter?: ListSessionsFilter) =>
+    api.get<CashSessionListRow[]>('/pos/sessions', { params: sessionsParams(filter) }).then((r) => r.data),
+  exportSessions: async (filter?: ListSessionsFilter) => {
+    const res = await api.get('/pos/sessions/export', { params: sessionsParams(filter), responseType: 'blob' });
+    downloadBlob(new Blob([res.data]), 'historial-turnos.xlsx');
+  },
   openSession: (dto: OpenCashSessionInput) =>
     api.post<CashSessionDetail>('/pos/sessions', dto).then((r) => r.data),
   getSessionSummary: (id: string) =>
@@ -125,4 +191,5 @@ export const posApi = {
   closeSession: (sessionId: string, dto: CloseCashSessionInput) =>
     api.post<CashSessionDetail>(`/pos/sessions/${sessionId}/close`, dto).then((r) => r.data),
   checkout: (dto: CheckoutInput) => api.post<Invoice>(`/pos/checkout`, dto).then((r) => r.data),
+  getDailyPosition: () => api.get<DailyPosition>('/pos/dashboard').then((r) => r.data),
 };

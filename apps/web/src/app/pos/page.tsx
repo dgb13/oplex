@@ -1,7 +1,7 @@
 'use client';
 
 import AppShell from '@/components/AppShell';
-import { posApi } from '@/lib/pos';
+import { posApi, type DailyPosition } from '@/lib/pos';
 import { useQuery } from '@tanstack/react-query';
 import { Lock, Plus, Unlock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -14,8 +14,15 @@ export default function PosSelectorPage() {
   const [openingRegisterId, setOpeningRegisterId] = useState<string | null>(null);
   const [creatingRegister, setCreatingRegister] = useState(false);
 
-  const registersQuery = useQuery({ queryKey: ['pos-registers'], queryFn: posApi.listRegisters });
+  const registersQuery = useQuery({ queryKey: ['pos-registers'], queryFn: () => posApi.listRegisters() });
   const openSessionsQuery = useQuery({ queryKey: ['pos-open-sessions'], queryFn: posApi.listOpenSessions });
+  // Refetch corto - franja de sólo lectura, tiene que reflejar abrir/cerrar
+  // turnos en otras cajas "en vivo" sin que el usuario recargue la página.
+  const dashboardQuery = useQuery({
+    queryKey: ['pos-dashboard'],
+    queryFn: posApi.getDailyPosition,
+    refetchInterval: 15000,
+  });
 
   const openSessionByRegister = new Map(
     (openSessionsQuery.data ?? []).map((s) => [s.registerId, s]),
@@ -51,6 +58,8 @@ export default function PosSelectorPage() {
             </button>
           </div>
         </div>
+
+        {dashboardQuery.data && <DailyPositionStrip position={dashboardQuery.data} />}
 
         {registersQuery.isLoading && <p className="text-sm text-slate-500">Cargando cajas...</p>}
         {!registersQuery.isLoading && (registersQuery.data ?? []).length === 0 && (
@@ -101,5 +110,33 @@ export default function PosSelectorPage() {
 
       {creatingRegister && <CreateRegisterModal onClose={() => setCreatingRegister(false)} />}
     </AppShell>
+  );
+}
+
+/** Reporte consolidado multi-caja (Fase 2) - sólo lectura, sin navegación
+ * nueva. Mismo criterio de color que /pos/history/CloseSessionModal:
+ * diferencia 0 gris, positiva (sobrante) azul, negativa (faltante) roja. */
+function DailyPositionStrip({ position }: { position: DailyPosition }) {
+  const diff = Number(position.closedTodayDifferenceTotal);
+  const diffColor = diff === 0 ? 'text-slate-500' : diff > 0 ? 'text-blue-600' : 'text-red-600';
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm">
+      <div>
+        <span className="text-slate-500">{position.openSessionsCount} caja{position.openSessionsCount === 1 ? '' : 's'} abierta{position.openSessionsCount === 1 ? '' : 's'} — </span>
+        <span className="font-semibold text-slate-900">
+          ${Number(position.openSessionsExpectedTotal).toFixed(2)} esperado en total
+        </span>
+      </div>
+      <div>
+        <span className="text-slate-500">
+          ${Number(position.closedTodayCountedTotal).toFixed(2)} contado hoy ({position.closedTodayCount} turno
+          {position.closedTodayCount === 1 ? '' : 's'} cerrado{position.closedTodayCount === 1 ? '' : 's'}) —{' '}
+        </span>
+        <span className={`font-semibold ${diffColor}`}>
+          diferencia neta {diff === 0 ? 'exacta' : `${diff > 0 ? '+' : ''}$${diff.toFixed(2)}`}
+        </span>
+      </div>
+    </div>
   );
 }

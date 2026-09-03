@@ -398,6 +398,18 @@ function UserMenu() {
             </Link>
           )}
 
+          {/* Mismo gate que "Equipo" arriba: administrar cajas es política
+           * del tenant, sólo tiene sentido para quien puede crear/desactivar. */}
+          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+            <Link
+              href="/settings/pos"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cajas (POS)
+            </Link>
+          )}
+
           {/* Tenant-wide business policy, not a personal preference - same
            * write restriction as PATCH /tenant-settings (OWNER/ADMIN), so
            * this only shows to roles that can actually save a change here. */}

@@ -7,8 +7,10 @@ import {
   type CashMovement,
   type CashMovementType,
 } from '@plexo/database';
+import { isValidArsDenomination } from './ars-denominations.js';
 import type { CashMovementDto } from './dto/cash-movement.dto.js';
 import type { CloseCashSessionDto } from './dto/close-cash-session.dto.js';
+import type { ListSessionsQueryDto } from './dto/list-sessions-query.dto.js';
 import type { OpenCashSessionDto } from './dto/open-cash-session.dto.js';
 
 const USER_SUMMARY_SELECT = { select: { id: true, name: true, email: true } } as const;
@@ -30,6 +32,14 @@ export type CashSessionDetail = Prisma.CashSessionGetPayload<{ include: typeof S
 export interface CashSessionSummary {
   session: CashSessionDetail;
   expectedAmount: Prisma.Decimal;
+}
+
+export interface DailyPosition {
+  openSessionsCount: number;
+  openSessionsExpectedTotal: Prisma.Decimal;
+  closedTodayCount: number;
+  closedTodayCountedTotal: Prisma.Decimal;
+  closedTodayDifferenceTotal: Prisma.Decimal;
 }
 
 function requireUserId(): string {
@@ -111,12 +121,76 @@ export class CashSessionsService {
     });
   }
 
-  listSessions(): Promise<CashSessionListRow[]> {
+  /** Filtros de /pos/history (Fase 2): `registerId` exacto, `from`/`to`
+   * contra `closedAt`. Mismo criterio de "hasta" que
+   * VatBookService.defaultRange (libs/modules/taxes) - un "hasta" de sólo
+   * fecha calendario (el caso común de un date-picker) tiene que llegar
+   * hasta el final de ese día, si no un turno cerrado más tarde ese mismo
+   * día queda afuera. */
+  listSessions(filter?: Pick<ListSessionsQueryDto, 'registerId' | 'from' | 'to'>): Promise<CashSessionListRow[]> {
+    const where: Prisma.CashSessionWhereInput = { status: 'CLOSED' };
+    if (filter?.registerId) {
+      where.registerId = filter.registerId;
+    }
+    if (filter?.from || filter?.to) {
+      const closedAt: Prisma.DateTimeFilter = {};
+      if (filter.from) {
+        closedAt.gte = new Date(filter.from);
+      }
+      if (filter.to) {
+        const to = new Date(filter.to);
+        to.setUTCHours(23, 59, 59, 999);
+        closedAt.lte = to;
+      }
+      where.closedAt = closedAt;
+    }
     return getTenantDb().cashSession.findMany({
-      where: { status: 'CLOSED' },
+      where,
       include: SESSION_LIST_INCLUDE,
       orderBy: { closedAt: 'desc' },
     });
+  }
+
+  /** Posición de efectivo del día, todas las cajas juntas ("¿cuánto tengo
+   * abierto ahora, cuánto se contó/difirió hoy?") - franja de resumen de
+   * /pos. "Hoy" = calendario UTC, mismo criterio que dateRange.ts
+   * (apps/web/src/app/reports) usa para construir sus rangos - el resto del
+   * repo no tiene un concepto de huso horario por tenant. */
+  async getDailyPosition(): Promise<DailyPosition> {
+    const db = getTenantDb();
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+    const openSessions = await db.cashSession.findMany({
+      where: { status: 'OPEN' },
+      include: { movements: true },
+    });
+    const openSessionsExpectedTotal = openSessions.reduce(
+      (sum, s) =>
+        sum.add(s.movements.reduce((mSum, m) => mSum.add(m.amount), new Prisma.Decimal(s.openingAmount))),
+      new Prisma.Decimal(0),
+    );
+
+    const closedToday = await db.cashSession.findMany({
+      where: { status: 'CLOSED', closedAt: { gte: todayStart, lte: todayEnd } },
+    });
+    const closedTodayCountedTotal = closedToday.reduce(
+      (sum, s) => sum.add(s.countedAmount ?? 0),
+      new Prisma.Decimal(0),
+    );
+    const closedTodayDifferenceTotal = closedToday.reduce(
+      (sum, s) => sum.add(s.difference ?? 0),
+      new Prisma.Decimal(0),
+    );
+
+    return {
+      openSessionsCount: openSessions.length,
+      openSessionsExpectedTotal,
+      closedTodayCount: closedToday.length,
+      closedTodayCountedTotal,
+      closedTodayDifferenceTotal,
+    };
   }
 
   private async getSessionDetail(id: string): Promise<CashSessionDetail> {
@@ -199,7 +273,29 @@ export class CashSessionsService {
     if (summary.session.status !== 'OPEN') {
       throw new BadRequestException('This cash session is already closed');
     }
-    const countedAmount = new Prisma.Decimal(dto.countedAmount);
+
+    let countedAmount: Prisma.Decimal;
+    let denominationBreakdown: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    if (dto.denominationBreakdown && dto.denominationBreakdown.length > 0) {
+      for (const item of dto.denominationBreakdown) {
+        if (!isValidArsDenomination(item.kind, item.denomination)) {
+          throw new BadRequestException(
+            `Denominación inválida: ${item.kind === 'BILL' ? 'billete' : 'moneda'} de $${item.denomination}`,
+          );
+        }
+      }
+      // Recalculado en el servidor - nunca se confía en dto.countedAmount
+      // cuando llega un desglose (el front lo manda igual por prolijidad de
+      // payload, pero podría no coincidir con su propia suma).
+      countedAmount = dto.denominationBreakdown.reduce(
+        (sum, item) => sum.add(new Prisma.Decimal(item.denomination).mul(item.count)),
+        new Prisma.Decimal(0),
+      );
+      denominationBreakdown = dto.denominationBreakdown as unknown as Prisma.InputJsonValue;
+    } else {
+      countedAmount = new Prisma.Decimal(dto.countedAmount);
+      denominationBreakdown = Prisma.JsonNull;
+    }
     const difference = countedAmount.sub(summary.expectedAmount);
 
     await getTenantDb().cashSession.update({
@@ -212,6 +308,7 @@ export class CashSessionsService {
         difference,
         closedAt: new Date(),
         notes: dto.notes,
+        denominationBreakdown,
       },
     });
 

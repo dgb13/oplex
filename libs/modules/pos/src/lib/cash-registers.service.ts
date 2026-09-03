@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, getTenantId, type CashRegister } from '@plexo/database';
 import type { CreateCashRegisterDto } from './dto/create-cash-register.dto.js';
+import type { UpdateCashRegisterDto } from './dto/update-cash-register.dto.js';
 
 /**
  * CRUD de mostradores físicos. La creación de la FinancialAccount ("el
@@ -47,9 +48,12 @@ export class CashRegistersService {
     });
   }
 
-  list(): Promise<CashRegister[]> {
+  /** `includeInactive` sólo lo usa /settings/pos (Fase 2) - el selector de
+   * /pos sigue viendo únicamente cajas activas, comportamiento sin cambios
+   * para el resto de la app. */
+  list(includeInactive = false): Promise<CashRegister[]> {
     return getTenantDb().cashRegister.findMany({
-      where: { active: true },
+      where: includeInactive ? {} : { active: true },
       include: { branch: { select: { id: true, name: true } }, warehouse: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
     });
@@ -61,5 +65,29 @@ export class CashRegistersService {
       throw new NotFoundException('Cash register not found');
     }
     return register;
+  }
+
+  /** Renombrar y/o togglear `active` (Fase 2, /settings/pos). Desactivar
+   * con un turno OPEN se rechaza - mismo criterio de invariante que el
+   * resto del módulo (nunca dejar un estado ambiguo a mitad de camino: una
+   * caja inactiva con un turno abierto sería imposible de cerrar desde
+   * /pos, que sólo lista cajas activas). */
+  async update(id: string, dto: UpdateCashRegisterDto): Promise<CashRegister> {
+    const register = await this.getById(id);
+    if (dto.active === false && register.active) {
+      const openSession = await getTenantDb().cashSession.findFirst({
+        where: { registerId: id, status: 'OPEN' },
+      });
+      if (openSession) {
+        throw new BadRequestException('Cerrá el turno abierto antes de desactivar esta caja');
+      }
+    }
+    return getTenantDb().cashRegister.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+      },
+    });
   }
 }
