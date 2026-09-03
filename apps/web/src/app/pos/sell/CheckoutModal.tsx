@@ -19,7 +19,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500';
+  'rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 pos-dark:border-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-100 pos-dark:focus:border-indigo-400 pos-contrast:border-slate-600 pos-contrast:bg-slate-900 pos-contrast:text-white pos-contrast:focus:border-amber-400 pos-emerald:border-emerald-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-900 pos-emerald:focus:border-emerald-500';
 
 interface PaymentRow {
   method: string;
@@ -114,21 +114,23 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   if (completedInvoice) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
-          <p className="mb-1 text-lg font-semibold text-green-700">Venta confirmada</p>
-          <p className="mb-4 text-sm text-slate-500">
+        <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-6 text-center shadow-2xl pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-contrast:border-slate-700 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
+          <p className="mb-1 text-lg font-semibold text-green-700 pos-dark:text-green-400 pos-contrast:text-green-400 pos-emerald:text-green-700">
+            Venta confirmada
+          </p>
+          <p className="mb-4 text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
             {completedInvoice.documentLetter}-{completedInvoice.number}
           </p>
           <div className="flex flex-col gap-2">
             <button
               onClick={() => invoicingApi.openPdf(completedInvoice.id, 'TICKET')}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-200"
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:text-slate-100 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:text-white pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:text-slate-800 pos-emerald:hover:bg-emerald-100"
             >
               Imprimir ticket
             </button>
             <button
               onClick={onCompleted}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
             >
               Nueva venta
             </button>
@@ -140,11 +142,15 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Cobrar</h2>
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-contrast:border-slate-700 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900 pos-dark:text-slate-100 pos-contrast:text-white pos-emerald:text-slate-900">
+          Cobrar
+        </h2>
 
         <div className="mb-4 flex flex-col gap-1">
-          <label className="text-sm text-slate-600">Cliente</label>
+          <label className="text-sm text-slate-600 pos-dark:text-slate-300 pos-contrast:text-slate-200 pos-emerald:text-slate-600">
+            Cliente
+          </label>
           <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
             <option value="">Consumidor Final</option>
             {(customersQuery.data ?? []).map((c) => (
@@ -153,7 +159,9 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
               </option>
             ))}
           </select>
-          <p className="text-xs text-slate-400">Factura {documentLetter} - {letterSuggestion.reason}</p>
+          <p className="text-xs text-slate-400 pos-dark:text-slate-500 pos-contrast:text-slate-400 pos-emerald:text-slate-400">
+            Factura {documentLetter} - {letterSuggestion.reason}
+          </p>
         </div>
 
         <div className="mb-2 flex items-center justify-between text-lg font-semibold">
@@ -183,30 +191,45 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
                 onChange={(e) => updatePayment(i, { amount: e.target.value })}
               />
               {payments.length > 1 && (
-                <button onClick={() => removePayment(i)} className="text-slate-400 hover:text-red-600">
+                <button
+                  onClick={() => removePayment(i)}
+                  className="text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
+                >
                   ✕
                 </button>
               )}
             </div>
           ))}
-          <button onClick={addPaymentRow} className="text-left text-xs font-medium text-indigo-600 hover:text-indigo-500">
+          <button
+            onClick={addPaymentRow}
+            className="text-left text-xs font-medium text-indigo-600 hover:text-indigo-500 pos-dark:text-indigo-400 pos-dark:hover:text-indigo-300 pos-contrast:text-amber-400 pos-contrast:hover:text-amber-300 pos-emerald:text-emerald-600 pos-emerald:hover:text-emerald-500"
+          >
             + Agregar otro método de pago
           </button>
         </div>
 
         {change > 0.004 && (
-          <p className="mt-3 text-sm font-medium text-blue-600">Vuelto: ${change.toFixed(2)}</p>
+          <p className="mt-3 text-sm font-medium text-blue-600 pos-dark:text-blue-400 pos-contrast:text-blue-400 pos-emerald:text-blue-600">
+            Vuelto: ${change.toFixed(2)}
+          </p>
         )}
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="mt-3 text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400 pos-emerald:text-red-600">
+            {error}
+          </p>
+        )}
 
         <div className="mt-4 flex justify-end gap-3">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-slate-600 transition hover:text-slate-800">
+          <button
+            onClick={onClose}
+            className="rounded-lg px-4 py-2 text-sm text-slate-600 transition hover:text-slate-800 pos-dark:text-slate-300 pos-dark:hover:text-slate-100 pos-contrast:text-slate-200 pos-contrast:hover:text-white pos-emerald:text-slate-600 pos-emerald:hover:text-slate-800"
+          >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={mutation.isPending || !baseCurrency}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
           >
             {mutation.isPending ? 'Confirmando...' : 'Confirmar cobro'}
           </button>

@@ -1,3 +1,6 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant pos-dark (&:where([data-pos-theme="dark"], [data-pos-theme="dark"] *));
+@custom-variant pos-contrast (&:where([data-pos-theme="contrast"], [data-pos-theme="contrast"] *));
+@custom-variant pos-emerald (&:where([data-pos-theme="emerald"], [data-pos-theme="emerald"] *));

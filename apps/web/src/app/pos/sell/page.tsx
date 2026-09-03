@@ -10,6 +10,7 @@ import CashMovementModal from './CashMovementModal';
 import CheckoutModal from './CheckoutModal';
 import CloseSessionModal from './CloseSessionModal';
 import { computeTotals, type TicketLine } from './types';
+import PosThemePicker from '../PosThemePicker';
 
 interface ProductOption {
   id: string;
@@ -121,19 +122,23 @@ function PosSellScreen() {
 
   if (!registerId || (!registersQuery.isLoading && !register)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-sm text-slate-500">Caja no encontrada.</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 pos-dark:bg-slate-950 pos-contrast:bg-black pos-emerald:bg-emerald-50">
+        <p className="text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+          Caja no encontrada.
+        </p>
       </div>
     );
   }
 
   if (!openSessionsQuery.isLoading && !session) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50">
-        <p className="text-sm text-slate-500">Esta caja no tiene un turno abierto.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 pos-dark:bg-slate-950 pos-contrast:bg-black pos-emerald:bg-emerald-50">
+        <p className="text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+          Esta caja no tiene un turno abierto.
+        </p>
         <button
           onClick={() => router.push('/pos')}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
         >
           Volver al selector de cajas
         </button>
@@ -144,39 +149,44 @@ function PosSellScreen() {
   const expectedAmount = sessionSummaryQuery.data?.expectedAmount;
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+    <div className="flex h-screen flex-col bg-slate-50 text-slate-900 pos-dark:bg-slate-950 pos-dark:text-slate-100 pos-contrast:bg-black pos-contrast:text-white pos-emerald:bg-emerald-50 pos-emerald:text-slate-900">
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3 pos-dark:border-slate-800 pos-dark:bg-slate-900 pos-contrast:border-slate-800 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
         <div className="flex items-center gap-3">
-          <ShoppingBasket className="h-5 w-5 text-indigo-600" />
+          <ShoppingBasket className="h-5 w-5 text-indigo-600 pos-dark:text-indigo-400 pos-contrast:text-amber-400 pos-emerald:text-emerald-600" />
           <div>
             <p className="text-sm font-semibold">{register?.name}</p>
-            <p className="text-xs text-slate-500">{register?.branch.name}</p>
+            <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+              {register?.branch.name}
+            </p>
           </div>
+          <PosThemePicker />
         </div>
         <div className="flex items-center gap-4">
           {expectedAmount !== undefined && (
-            <div className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm">
-              <span className="text-slate-500">Efectivo esperado: </span>
+            <div className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm pos-dark:bg-slate-800 pos-contrast:bg-slate-900 pos-emerald:bg-emerald-100">
+              <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-600">
+                Efectivo esperado:{' '}
+              </span>
               <span className="font-semibold">${Number(expectedAmount).toFixed(2)}</span>
             </div>
           )}
           <button
             onClick={() => setCashMovement('CASH_IN')}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-green-700 transition hover:bg-green-50"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-green-700 transition hover:bg-green-50 pos-dark:text-green-400 pos-dark:hover:bg-green-950 pos-contrast:text-green-400 pos-contrast:hover:bg-green-950 pos-emerald:text-green-700 pos-emerald:hover:bg-green-50"
           >
             <ArrowDownCircle className="h-4 w-4" />
             Ingreso
           </button>
           <button
             onClick={() => setCashMovement('CASH_OUT')}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-50"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-50 pos-dark:text-amber-400 pos-dark:hover:bg-amber-950 pos-contrast:text-amber-400 pos-contrast:hover:bg-amber-950 pos-emerald:text-amber-700 pos-emerald:hover:bg-amber-50"
           >
             <ArrowUpCircle className="h-4 w-4" />
             Egreso
           </button>
           <button
             onClick={() => setClosingSession(true)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 pos-dark:text-slate-300 pos-dark:hover:bg-slate-800 pos-contrast:text-slate-200 pos-contrast:hover:bg-slate-900 pos-emerald:text-slate-600 pos-emerald:hover:bg-emerald-100"
           >
             <LogOut className="h-4 w-4" />
             Cerrar turno
@@ -191,7 +201,7 @@ function PosSellScreen() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar artículo, SKU o escanear código de barras..."
-            className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-indigo-500"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-indigo-500 pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-dark:text-slate-100 pos-dark:focus:border-indigo-400 pos-contrast:border-slate-700 pos-contrast:bg-black pos-contrast:text-white pos-contrast:focus:border-amber-400 pos-emerald:border-emerald-200 pos-emerald:bg-white pos-emerald:focus:border-emerald-500"
           />
           <div className="grid flex-1 auto-rows-min grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4 lg:grid-cols-5">
             {filtered.map((product) => (
@@ -199,32 +209,43 @@ function PosSellScreen() {
                 key={product.id}
                 onClick={() => addProduct(product)}
                 disabled={product.totalStock <= 0}
-                className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:border-indigo-300 hover:shadow-md disabled:opacity-40"
+                className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:border-indigo-300 hover:shadow-md disabled:opacity-40 pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-dark:hover:border-indigo-500 pos-contrast:border-slate-700 pos-contrast:bg-black pos-contrast:hover:border-amber-400 pos-emerald:border-emerald-100 pos-emerald:bg-white pos-emerald:hover:border-emerald-300"
               >
-                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100 pos-dark:bg-slate-800 pos-contrast:bg-slate-900 pos-emerald:bg-emerald-50">
                   {product.imageUrl ? (
                     <img src={resolveUploadUrl(product.imageUrl) ?? undefined} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <ShoppingBasket className="h-6 w-6 text-slate-400" />
+                    <ShoppingBasket className="h-6 w-6 text-slate-400 pos-dark:text-slate-500 pos-contrast:text-slate-400 pos-emerald:text-slate-400" />
                   )}
                 </div>
                 <p className="line-clamp-2 text-xs font-medium">
                   {product.articleName}
-                  {product.variantLabel && <span className="text-slate-500"> · {product.variantLabel}</span>}
+                  {product.variantLabel && (
+                    <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                      {' '}
+                      · {product.variantLabel}
+                    </span>
+                  )}
                 </p>
-                <p className="text-sm font-semibold text-indigo-700">${product.unitPrice.toFixed(2)}</p>
+                <p className="text-sm font-semibold text-indigo-700 pos-dark:text-indigo-400 pos-contrast:text-amber-400 pos-emerald:text-emerald-700">
+                  ${product.unitPrice.toFixed(2)}
+                </p>
               </button>
             ))}
             {!articlesQuery.isLoading && filtered.length === 0 && (
-              <p className="col-span-full text-sm text-slate-500">Sin artículos que coincidan</p>
+              <p className="col-span-full text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                Sin artículos que coincidan
+              </p>
             )}
           </div>
         </div>
 
-        <div className="flex w-1/3 flex-col border-l border-slate-200 bg-white">
+        <div className="flex w-1/3 flex-col border-l border-slate-200 bg-white pos-dark:border-slate-800 pos-dark:bg-slate-900 pos-contrast:border-slate-800 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
           <div className="flex-1 overflow-y-auto p-4">
             {lines.length === 0 ? (
-              <p className="mt-8 text-center text-sm text-slate-400">Todavía no agregaste ningún artículo</p>
+              <p className="mt-8 text-center text-sm text-slate-400 pos-dark:text-slate-500 pos-contrast:text-slate-400 pos-emerald:text-slate-400">
+                Todavía no agregaste ningún artículo
+              </p>
             ) : (
               <div className="flex flex-col gap-3">
                 {lines.map((line) => (
@@ -232,20 +253,27 @@ function PosSellScreen() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
                         {line.articleName}
-                        {line.variantLabel && <span className="text-slate-500"> · {line.variantLabel}</span>}
+                        {line.variantLabel && (
+                          <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                            {' '}
+                            · {line.variantLabel}
+                          </span>
+                        )}
                       </p>
-                      <p className="text-xs text-slate-500">${line.unitPrice.toFixed(2)} c/u</p>
+                      <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                        ${line.unitPrice.toFixed(2)} c/u
+                      </p>
                     </div>
                     <button
                       onClick={() => updateQuantity(line.articleVariantId, line.quantity - 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </button>
                     <span className="w-6 text-center text-sm">{line.quantity}</span>
                     <button
                       onClick={() => updateQuantity(line.articleVariantId, line.quantity + 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -254,7 +282,7 @@ function PosSellScreen() {
                     </p>
                     <button
                       onClick={() => updateQuantity(line.articleVariantId, 0)}
-                      className="text-slate-400 hover:text-red-600"
+                      className="text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -264,12 +292,12 @@ function PosSellScreen() {
             )}
           </div>
 
-          <div className="border-t border-slate-200 p-4">
-            <div className="flex justify-between text-sm text-slate-500">
+          <div className="border-t border-slate-200 p-4 pos-dark:border-slate-800 pos-contrast:border-slate-800 pos-emerald:border-emerald-100">
+            <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
               <span>Subtotal</span>
               <span>${totals.subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm text-slate-500">
+            <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
               <span>IVA</span>
               <span>${totals.taxTotal.toFixed(2)}</span>
             </div>
@@ -280,7 +308,7 @@ function PosSellScreen() {
             <button
               onClick={() => setCheckingOut(true)}
               disabled={lines.length === 0}
-              className="mt-4 w-full rounded-lg bg-indigo-600 py-3 text-base font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-40"
+              className="mt-4 w-full rounded-lg bg-indigo-600 py-3 text-base font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-40 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
             >
               Cobrar
             </button>

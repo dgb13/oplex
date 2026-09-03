@@ -95,12 +95,48 @@ export class CashSessionsService {
       );
     }
 
+    let openingAmount: Prisma.Decimal;
+    let openingDenominationBreakdown: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+    if (dto.denominationBreakdown && dto.denominationBreakdown.length > 0) {
+      for (const item of dto.denominationBreakdown) {
+        if (!isValidArsDenomination(item.kind, item.denomination)) {
+          throw new BadRequestException(
+            `Denominación inválida: ${item.kind === 'BILL' ? 'billete' : 'moneda'} de $${item.denomination}`,
+          );
+        }
+      }
+      // Recalculado en el servidor - nunca se confía en dto.openingAmount
+      // cuando llega un desglose, mismo criterio que closeSession aplica
+      // para countedAmount.
+      openingAmount = dto.denominationBreakdown.reduce(
+        (sum, item) => sum.add(new Prisma.Decimal(item.denomination).mul(item.count)),
+        new Prisma.Decimal(0),
+      );
+      openingDenominationBreakdown = dto.denominationBreakdown as unknown as Prisma.InputJsonValue;
+    } else {
+      openingAmount = new Prisma.Decimal(dto.openingAmount);
+      openingDenominationBreakdown = Prisma.JsonNull;
+    }
+
+    // Arqueo de apertura contra el cierre del turno anterior de esta misma
+    // caja (Fase 3) - puramente informativo/auditable, nunca bloquea la
+    // apertura aunque la diferencia sea grande. Null si es el primer turno
+    // de la caja o si ese turno previo no tiene countedAmount.
+    const lastClosed = await db.cashSession.findFirst({
+      where: { registerId: dto.registerId, status: 'CLOSED' },
+      orderBy: { closedAt: 'desc' },
+    });
+    const openingDifference =
+      lastClosed?.countedAmount != null ? openingAmount.sub(lastClosed.countedAmount) : null;
+
     const session = await db.cashSession.create({
       data: {
         tenantId,
         registerId: dto.registerId,
         openedByUserId: userId,
-        openingAmount: dto.openingAmount,
+        openingAmount,
+        openingDenominationBreakdown,
+        openingDifference,
       },
     });
     return this.getSessionDetail(session.id);
@@ -110,6 +146,17 @@ export class CashSessionsService {
     return getTenantDb().cashSession.findFirst({
       where: { registerId, status: 'OPEN' },
       include: SESSION_DETAIL_INCLUDE,
+    });
+  }
+
+  /** Cierre anterior de esta caja (Fase 3) - referencia que muestra
+   * OpenSessionModal para que el cajero entrante cuente contra lo que dejó
+   * el saliente. Null si la caja nunca tuvo un turno cerrado. */
+  getLastClosedSession(registerId: string): Promise<CashSessionDetail | null> {
+    return getTenantDb().cashSession.findFirst({
+      where: { registerId, status: 'CLOSED' },
+      include: SESSION_DETAIL_INCLUDE,
+      orderBy: { closedAt: 'desc' },
     });
   }
 

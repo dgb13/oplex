@@ -74,6 +74,12 @@ export interface CashSessionListRow {
   closedAt: string | null;
   notes: string | null;
   denominationBreakdown: DenominationBreakdownItem[] | null;
+  // Simétrico a lo de arriba pero para la APERTURA (Fase 3) - desglose con
+  // el que el cajero entrante contó el cajón, y diferencia contra el
+  // countedAmount del último turno cerrado de esa misma caja. Null si es
+  // el primer turno de la caja o si abrió en modo "monto simple".
+  openingDenominationBreakdown: DenominationBreakdownItem[] | null;
+  openingDifference: string | null;
 }
 
 export interface CashSessionDetail extends CashSessionListRow {
@@ -88,6 +94,12 @@ export interface CashSessionSummary {
 export interface OpenCashSessionInput {
   registerId: string;
   openingAmount: number;
+  // Opcional - sólo se manda en modo "Desglose por billetes". El servidor
+  // recalcula openingAmount a partir de esto e ignora el de arriba cuando
+  // llega (ver CashSessionsService.openSession) - se manda igual por
+  // prolijidad de payload, nunca es la fuente de verdad. Mismo criterio que
+  // CloseCashSessionInput.denominationBreakdown.
+  denominationBreakdown?: DenominationBreakdownItem[];
 }
 
 export interface CashMovementInput {
@@ -173,6 +185,8 @@ export const posApi = {
       .then((r) => r.data),
   updateRegister: (id: string, dto: UpdateCashRegisterInput) =>
     api.patch<CashRegister>(`/pos/registers/${id}`, dto).then((r) => r.data),
+  getLastClosedSession: (registerId: string) =>
+    api.get<CashSessionDetail | null>(`/pos/registers/${registerId}/last-closed-session`).then((r) => r.data),
   listOpenSessions: () => api.get<CashSessionListRow[]>('/pos/sessions/open').then((r) => r.data),
   listSessions: (filter?: ListSessionsFilter) =>
     api.get<CashSessionListRow[]>('/pos/sessions', { params: sessionsParams(filter) }).then((r) => r.data),

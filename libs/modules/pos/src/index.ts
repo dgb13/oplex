@@ -7,5 +7,5 @@ export * from './lib/dto/create-cash-register.dto.js';
 export * from './lib/dto/update-cash-register.dto.js';
 export * from './lib/dto/open-cash-session.dto.js';
 export * from './lib/dto/cash-movement.dto.js';
-export * from './lib/dto/close-cash-session.dto.js';
+export * from './lib/dto/close-cash-session.dto.js'; // incluye DenominationBreakdownItemDto
 export * from './lib/dto/list-sessions-query.dto.js';

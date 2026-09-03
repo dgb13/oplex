@@ -1097,6 +1097,17 @@ model CashSession {
   // en cualquier total que mande el cliente aparte (ver
   // CashSessionsService.closeSession) - nunca al revés.
   denominationBreakdown Json?
+  // Simétrico a lo anterior pero para la APERTURA (Fase 3): desglose de
+  // billetes/monedas con el que el cajero entrante contó el cajón, misma
+  // forma que denominationBreakdown de arriba - también nullable a
+  // propósito (sólo se completa si usó el modo desglose al abrir).
+  openingDenominationBreakdown Json?
+  // openingAmount de ESTA sesión menos countedAmount del último turno
+  // CERRADO de la misma caja - rastro auditable de cuánto declaró el
+  // cajero entrante contra lo que dejó contado el saliente. Null si es el
+  // primer turno de la caja o si no hubo turno cerrado previo. Puramente
+  // informativo: nunca bloquea la apertura (ver CashSessionsService.openSession).
+  openingDifference            Decimal? @db.Decimal(14, 2)
 
   movements    CashMovement[]
   journalEntry JournalEntry?

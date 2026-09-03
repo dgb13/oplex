@@ -34,7 +34,7 @@ export default function NumericKeypad({ value, onChange }: Props) {
           key={key}
           type="button"
           onClick={() => press(key)}
-          className="flex h-14 items-center justify-center rounded-lg bg-slate-100 text-xl font-semibold text-slate-800 transition hover:bg-slate-200 active:bg-slate-300"
+          className="flex h-14 items-center justify-center rounded-lg bg-slate-100 text-xl font-semibold text-slate-800 transition hover:bg-slate-200 active:bg-slate-300 pos-dark:bg-slate-800 pos-dark:text-slate-100 pos-dark:hover:bg-slate-700 pos-dark:active:bg-slate-600 pos-contrast:bg-slate-900 pos-contrast:text-white pos-contrast:hover:bg-slate-800 pos-contrast:active:bg-slate-700 pos-emerald:bg-emerald-50 pos-emerald:text-slate-800 pos-emerald:hover:bg-emerald-100 pos-emerald:active:bg-emerald-200"
         >
           {key === 'del' ? <Delete className="h-5 w-5" /> : key}
         </button>

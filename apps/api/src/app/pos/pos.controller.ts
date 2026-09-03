@@ -46,6 +46,15 @@ export class PosController {
     return this.cashRegistersService.update(id, dto);
   }
 
+  // Ruta específica ANTES de la dinámica PATCH registers/:id de arriba, no
+  // colisionan (métodos distintos) pero se agrupa junto a las demás rutas
+  // fijas de /registers.
+  @Roles(...SALES_ROLES)
+  @Get('registers/:id/last-closed-session')
+  getLastClosedSession(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cashSessionsService.getLastClosedSession(id);
+  }
+
   // Rutas estáticas de /sessions ANTES de la dinámica /sessions/:id, si no
   // Nest matchea "open"/"export"/nada como si fuera un :id.
   @Roles(...SALES_ROLES)
