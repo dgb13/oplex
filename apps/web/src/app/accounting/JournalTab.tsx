@@ -62,7 +62,9 @@ export default function JournalTab() {
                     <div>
                       <p className="text-slate-800 dark:text-slate-200">{entry.description}</p>
                       <p className="text-xs text-slate-500">
-                        {new Date(entry.date).toLocaleDateString('es-AR')}
+                        {/* timeZone: 'UTC' - entry.date is a business day, not a moment; local
+                           display shifted day-only dates (RECPAM, bank lines) back by one day. */}
+                        {new Date(entry.date).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                         {entry.reversalOfId && ' · reversión'}
                       </p>
                     </div>

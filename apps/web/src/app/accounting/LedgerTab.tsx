@@ -69,7 +69,8 @@ export default function LedgerTab() {
                 return (
                   <tr key={line.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
                     <td className={`${cellY} pr-4 text-slate-600 dark:text-slate-400`}>
-                      {new Date(line.journalEntry.date).toLocaleDateString('es-AR')}
+                      {/* timeZone: 'UTC' - see JournalTab.tsx, same date-only display fix. */}
+                      {new Date(line.journalEntry.date).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                     </td>
                     <td className={`${cellY} pr-4 text-slate-700 dark:text-slate-300`}>{line.journalEntry.description}</td>
                     <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
