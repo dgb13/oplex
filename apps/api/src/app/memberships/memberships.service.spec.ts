@@ -6,6 +6,10 @@ function runInStudioTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'studio-1', userId: 'studio-user-1', tx: db as never }, fn);
 }
 
+function runInClientTenant<T>(db: Record<string, unknown>, fn: () => T): T {
+  return tenantContextStorage.run({ tenantId: 'client-1', userId: 'client-user-1', tx: db as never }, fn);
+}
+
 function makeMembershipRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'membership-1',
@@ -183,5 +187,361 @@ describe('MembershipsService.activate', () => {
     expect(fakeTx.tenantMembershipLink.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ studioUserId: 'studio-user-2', linkedUserId: 'linked-user-2' }) }),
     );
+  });
+});
+
+describe('MembershipsService.listForClient', () => {
+  it('lista mis relaciones (RLS estandar, ya en mi propio tenant) y resuelve el nombre del estudio del otro lado por-tenant', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'membership-1',
+        homeTenantId: 'studio-1',
+        direction: 'CLIENT_INVITED',
+        status: 'PENDING',
+        inviteeIdentifier: 'contador@estudio.com',
+        createdAt: new Date('2026-09-04'),
+        respondedAt: null,
+      },
+    ]);
+    const fakeTx = {
+      tenant: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-1', name: 'Estudio Contable SRL' }) },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbClient = { tenantMembership: { findMany } };
+
+    const result = await runInClientTenant(dbClient, () => service.listForClient());
+
+    expect(findMany).toHaveBeenCalledWith({ orderBy: { createdAt: 'desc' } });
+    expect(result).toEqual([
+      {
+        id: 'membership-1',
+        homeTenantId: 'studio-1',
+        homeTenantName: 'Estudio Contable SRL',
+        direction: 'CLIENT_INVITED',
+        status: 'PENDING',
+        inviteeIdentifier: 'contador@estudio.com',
+        createdAt: new Date('2026-09-04'),
+        respondedAt: null,
+      },
+    ]);
+  });
+});
+
+describe('MembershipsService.inviteFromClient', () => {
+  it('resuelve por email, crea la fila PENDING/CLIENT_INVITED con RLS estandar (sin saltar de contexto)', async () => {
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValueOnce([{ tenant_id: 'studio-1', tenant_name: 'Estudio Contable SRL' }]);
+    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const create = jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: 'membership-new',
+        tenantId: data['tenantId'],
+        direction: data['direction'],
+        status: data['status'],
+        inviteeIdentifier: data['inviteeIdentifier'],
+        createdAt: new Date('2026-09-04'),
+        respondedAt: null,
+      }),
+    );
+    const db = { tenantMembership: { findFirst: jest.fn().mockResolvedValue(null), create } };
+
+    const result = await runInClientTenant(db, () =>
+      service.inviteFromClient('contador@estudio.com', 'client-1', 'client-user-1'),
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        tenantId: 'client-1',
+        homeTenantId: 'studio-1',
+        inviteeIdentifier: 'contador@estudio.com',
+        direction: 'CLIENT_INVITED',
+        status: 'PENDING',
+        initiatedByUserId: 'client-user-1',
+      },
+    });
+    expect(result.clientTenantName).toBe('Estudio Contable SRL');
+  });
+
+  it('rechaza invitarse a si mismo', async () => {
+    const queryRaw = jest.fn().mockResolvedValueOnce([{ tenant_id: 'client-1', tenant_name: 'Cliente Demo SA' }]);
+    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = { tenantMembership: { findFirst: jest.fn(), create: jest.fn() } };
+
+    await expect(
+      runInClientTenant(db, () => service.inviteFromClient('yo@mismo.com', 'client-1', 'client-user-1')),
+    ).rejects.toThrow('No podés invitarte a vos mismo');
+  });
+
+  it('rechaza una segunda invitacion si ya hay una relacion pendiente/activa con ese estudio', async () => {
+    const queryRaw = jest.fn().mockResolvedValueOnce([{ tenant_id: 'studio-1', tenant_name: 'Estudio' }]);
+    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = {
+      tenantMembership: { findFirst: jest.fn().mockResolvedValue({ id: 'membership-existing' }), create: jest.fn() },
+    };
+
+    await expect(
+      runInClientTenant(db, () => service.inviteFromClient('contador@estudio.com', 'client-1', 'client-user-1')),
+    ).rejects.toThrow('Ya existe una relación');
+    expect(db.tenantMembership.create).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un identificador que no resuelve a ninguna cuenta (NotFoundException)', async () => {
+    const queryRaw = jest.fn().mockResolvedValueOnce([]);
+    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = { tenantMembership: { findFirst: jest.fn(), create: jest.fn() } };
+
+    await expect(
+      runInClientTenant(db, () => service.inviteFromClient('nadie@nada.com', 'client-1', 'client-user-1')),
+    ).rejects.toThrow('el estudio contable necesita tener su propia cuenta');
+  });
+
+  it('rechaza un email ambiguo (mas de un tenant con el mismo email)', async () => {
+    const queryRaw = jest.fn().mockResolvedValueOnce([
+      { tenant_id: 'studio-1', tenant_name: 'Estudio A' },
+      { tenant_id: 'studio-2', tenant_name: 'Estudio B' },
+    ]);
+    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = { tenantMembership: { findFirst: jest.fn(), create: jest.fn() } };
+
+    await expect(
+      runInClientTenant(db, () => service.inviteFromClient('compartido@x.com', 'client-1', 'client-user-1')),
+    ).rejects.toThrow('más de una cuenta');
+  });
+});
+
+describe('MembershipsService.requestFromStudio', () => {
+  it('resuelve por CUIT y crea la fila abriendo withTenantContext del tenant CLIENTE (el estudio no tiene contexto propio ahi)', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'membership-new',
+            tenantId: data['tenantId'],
+            direction: data['direction'],
+            status: data['status'],
+            inviteeIdentifier: data['inviteeIdentifier'],
+            createdAt: new Date('2026-09-04'),
+            respondedAt: null,
+          }),
+        ),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValueOnce([{ tenant_id: 'client-1', tenant_name: 'Cliente Demo SA' }])
+      .mockResolvedValueOnce([]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = { user: { findUnique: jest.fn() } };
+
+    const result = await runInStudioTenant(db, () =>
+      service.requestFromStudio('30-71659554-9', 'studio-1', 'studio-user-1'),
+    );
+
+    expect(fakeTx.tenantMembership.create).toHaveBeenCalledWith({
+      data: {
+        tenantId: 'client-1',
+        homeTenantId: 'studio-1',
+        inviteeIdentifier: '30-71659554-9',
+        direction: 'ACCOUNTANT_REQUESTED',
+        status: 'PENDING',
+        initiatedByUserId: 'studio-user-1',
+      },
+    });
+    expect(result.clientTenantName).toBe('Cliente Demo SA');
+  });
+
+  it('rechaza un identificador que no tiene 11 digitos ni es un email', async () => {
+    const prisma = { $queryRaw: jest.fn() } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const db = { user: { findUnique: jest.fn() } };
+
+    await expect(
+      runInStudioTenant(db, () => service.requestFromStudio('123', 'studio-1', 'studio-user-1')),
+    ).rejects.toThrow('email o un CUIT válido');
+  });
+});
+
+describe('MembershipsService.respond', () => {
+  it('el ESTUDIO puede responder una invitacion CLIENT_INVITED (RLS del lado cliente no la ve, pasa por list_studio_memberships)', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'membership-1',
+          tenantId: 'client-1',
+          homeTenantId: 'studio-1',
+          direction: 'CLIENT_INVITED',
+          status: 'PENDING',
+        }),
+        update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'membership-1',
+            tenantId: 'client-1',
+            direction: 'CLIENT_INVITED',
+            status: data['status'],
+            inviteeIdentifier: null,
+            createdAt: new Date('2026-09-01'),
+            respondedAt: data['respondedAt'],
+          }),
+        ),
+      },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Cliente Demo SA' }) },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const queryRaw = jest.fn().mockResolvedValueOnce([makeMembershipRow({ status: 'PENDING' })]);
+    const prisma = {
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbStudio = { tenantMembership: { findUnique: jest.fn().mockResolvedValue(null) } };
+
+    const result = await runInStudioTenant(dbStudio, () => service.respond('membership-1', 'studio-1', 'ACCEPTED'));
+
+    expect(fakeTx.tenantMembership.update).toHaveBeenCalledWith({
+      where: { id: 'membership-1' },
+      data: { status: 'ACCEPTED', respondedAt: expect.any(Date) },
+    });
+    expect(result.status).toBe('ACCEPTED');
+  });
+
+  it('rechaza que el CLIENTE responda su propia invitacion CLIENT_INVITED - le corresponde al estudio, no a quien la mando', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'membership-1',
+          tenantId: 'client-1',
+          homeTenantId: 'studio-1',
+          direction: 'CLIENT_INVITED',
+          status: 'PENDING',
+        }),
+        update: jest.fn(),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    await expect(
+      runInClientTenant(dbClient, () => service.respond('membership-1', 'client-1', 'ACCEPTED')),
+    ).rejects.toThrow('No te corresponde responder');
+    expect(fakeTx.tenantMembership.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza responder una solicitud que ya no esta PENDING', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'membership-1',
+          tenantId: 'client-1',
+          homeTenantId: 'studio-1',
+          direction: 'ACCOUNTANT_REQUESTED',
+          status: 'ACCEPTED',
+        }),
+        update: jest.fn(),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    await expect(
+      runInClientTenant(dbClient, () => service.respond('membership-1', 'client-1', 'ACCEPTED')),
+    ).rejects.toThrow('ya fue respondida');
+    expect(fakeTx.tenantMembership.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('MembershipsService.revoke', () => {
+  it('suspende todas las filas espejo ya creadas para esta membership y la marca REVOKED', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1', status: 'ACCEPTED' }),
+        update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'membership-1',
+            tenantId: 'client-1',
+            direction: 'CLIENT_INVITED',
+            status: data['status'],
+            inviteeIdentifier: null,
+            createdAt: new Date('2026-09-01'),
+            respondedAt: data['respondedAt'],
+          }),
+        ),
+      },
+      tenantMembershipLink: {
+        findMany: jest.fn().mockResolvedValue([{ linkedUserId: 'linked-user-1' }, { linkedUserId: 'linked-user-2' }]),
+      },
+      user: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Cliente Demo SA' }) },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    const result = await runInClientTenant(dbClient, () => service.revoke('membership-1', 'client-1'));
+
+    expect(fakeTx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['linked-user-1', 'linked-user-2'] } },
+      data: { status: 'SUSPENDED' },
+    });
+    expect(fakeTx.tenantMembership.update).toHaveBeenCalledWith({
+      where: { id: 'membership-1' },
+      data: { status: 'REVOKED', respondedAt: expect.any(Date) },
+    });
+    expect(result.status).toBe('REVOKED');
+  });
+
+  it('rechaza revocar una membership que no esta ACCEPTED', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1', status: 'PENDING' }),
+        update: jest.fn(),
+      },
+      tenantMembershipLink: { findMany: jest.fn() },
+      user: { updateMany: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    await expect(runInClientTenant(dbClient, () => service.revoke('membership-1', 'client-1'))).rejects.toThrow(
+      'Sólo se puede revocar una relación activa',
+    );
+    expect(fakeTx.user.updateMany).not.toHaveBeenCalled();
   });
 });

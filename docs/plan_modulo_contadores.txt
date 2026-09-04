@@ -7,8 +7,26 @@
   activación, duración configurable en `PlatformSettings`, fix de
   `assertCanAddUser()`. Ver la entrada de sesión correspondiente en
   PROGRESS.md para el detalle completo y la verificación de punta a punta.
-- 1b (invitación bidireccional), 1c (permisos por defecto), 1d (cartera +
-  consolidado), 1e (vencimientos): todavía no empezadas.
+- **1b — Invitación bidireccional: HECHO** (sesión 2026-09-04, misma
+  sesión que 1a). `POST /memberships/invite` (cliente invita) y `POST
+  /memberships/request` (estudio pide acceso), ambos resolviendo el otro
+  lado por email o CUIT (`find_tenants_by_email()` ya existía,
+  `find_tenant_by_tax_id()` nueva - migración
+  `20260921000000_membership_invites`). `POST /memberships/:id/respond` y
+  `POST /memberships/:id/revoke` funcionan para cualquiera de los dos
+  lados sin necesitar ninguna función SQL nueva (reusan el mismo patrón
+  `withTenantContext` de `activate()`, ya que el tenant CLIENTE siempre se
+  puede resolver primero). Se sumó además `GET /memberships/as-client`
+  (no estaba en el plan original - hueco real encontrado recién al probar
+  el flujo de punta a punta: sin esto el cliente no tenía forma de ver
+  quién le pidió acceso). Sin email de notificación (se evaluó reusar
+  `AuthEmailSender`/`TeamInvitation` como decía la primera versión de este
+  plan, pero no aplica: ahí el token es para que alguien SIN cuenta se cree
+  una - acá ambos lados ya tienen cuenta real, la solicitud pendiente ya
+  queda visible en `GET /memberships`/`GET /memberships/as-client` sin
+  necesitar un link mágico).
+- 1c (permisos por defecto), 1d (cartera + consolidado), 1e (vencimientos):
+  todavía no empezadas.
 
 ## Contexto
 
