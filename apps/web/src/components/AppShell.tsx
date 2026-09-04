@@ -4,6 +4,7 @@ import { initials, profileApi } from '@/lib/profile';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
 import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
+import MembershipSessionBanner from './MembershipSessionBanner';
 import TrialBanner from './TrialBanner';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { useDensity } from '@/providers/DensityProvider';
@@ -11,6 +12,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Briefcase,
   Building2,
   Calculator,
   ChevronDown,
@@ -81,6 +83,7 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
+  { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase },
 ];
 
 interface PresenceUser {
@@ -179,6 +182,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <ImpersonationBanner />
+      <MembershipSessionBanner />
       <TrialBanner />
       <main className="p-6">{children}</main>
     </div>

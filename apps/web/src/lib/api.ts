@@ -42,21 +42,29 @@ function isPublicAuthRequest(url: unknown): boolean {
 }
 
 // A 401 means the current token no longer works - either a normal session
-// expired, or (the new case, see lib/impersonation.ts) a 15-minute
-// impersonation token did. window.location.assign() rather than a Next
-// router: this file isn't a component, has no router/QueryClient to reach,
-// and a full navigation clears every in-memory cache (React Query
+// expired, a 15-minute impersonation token did (see lib/impersonation.ts),
+// or a membership session token did (see lib/membership-session.ts, same
+// swap mechanism, own storage keys). window.location.assign() rather than
+// a Next router: this file isn't a component, has no router/QueryClient to
+// reach, and a full navigation clears every in-memory cache (React Query
 // included) on its own, no queryClient.clear() needed here.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (typeof window !== 'undefined' && error?.response?.status === 401 && !isPublicAuthRequest(error?.config?.url)) {
       const adminToken = localStorage.getItem('adminToken');
+      const membershipHomeToken = localStorage.getItem('membershipHomeToken');
       if (adminToken) {
         localStorage.setItem('token', adminToken);
         localStorage.removeItem('adminToken');
         localStorage.removeItem('impersonationExpiresAt');
         window.location.assign('/admin');
+      } else if (membershipHomeToken) {
+        localStorage.setItem('token', membershipHomeToken);
+        localStorage.removeItem('membershipHomeToken');
+        localStorage.removeItem('membershipExpiresAt');
+        localStorage.removeItem('membershipClientName');
+        window.location.assign('/accountants');
       } else {
         localStorage.removeItem('token');
         localStorage.removeItem('tenantId');

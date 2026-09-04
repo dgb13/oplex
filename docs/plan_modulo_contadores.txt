@@ -87,9 +87,47 @@
   al verificar 1e en vivo.
 
 Con 1a/1b/1c/1d/1e cerradas, el alcance backend explícito de la Fase 1 según
-este plan queda completo. Falta toda la UI de frontend (cartera, invitación,
-activación/swap de token, vencimientos) - no empezada todavía, sigue siendo
-100% backend probado por API/curl.
+este plan queda completo.
+
+- **UI de frontend: HECHO** (sesión 2026-09-04, misma sesión que 1a-1e). Una
+  sola pantalla nueva `/accountants` ("Contadores") con dos vistas - "Mi
+  cartera" (lado estudio: portfolio + solicitudes + pedir acceso + botón
+  Entrar) y "Mis contadores" (lado cliente: invitar/responder/revocar) -
+  porque un mismo Tenant puede ser estudio de unos y cliente de otro al
+  mismo tiempo, ver la nota de diseño del punto 1. `lib/membership-session.ts`
+  + `MembershipSessionBanner.tsx` para el swap de token al "activar" un
+  cliente, mismo mecanismo que `lib/impersonation.ts` pero con claves de
+  localStorage propias (nunca deben pisarse entre sí). Pestaña nueva
+  "Vencimientos" en `/taxes` (alta manual + marcar cumplido). Página
+  `/admin/membership-settings` (selector 1/2/5/8hs para SuperAdmin, calcada
+  de `/admin/bna-sync`). Nav: link "Contadores" en el menú principal, entrada
+  en el nav de Admin.
+
+  Probado en vivo en el navegador real (no sólo build/lint) de punta a
+  punta: invitar estudio → aceptar → Entrar (swap de token + banner) →
+  cargar vencimiento → aparece vencido en rojo → marcar cumplido → aparece
+  en el consolidado de cartera del estudio → Volver a mi cartera. Se
+  encontraron y arreglaron 3 bugs reales durante esta prueba (no serían
+  visibles con sólo `nx build`/tests unitarios):
+  1. Faltaba `apps/web/src/app/accountants/layout.tsx` (AppShell se monta
+     por-sección en este repo, no globalmente vía el layout raíz) - la
+     página cargaba sin header/nav.
+  2. Mismatch de hidratación en `MembershipSessionBanner` (y el mismo
+     patrón preexistente en `ImpersonationBanner`, corregido también acá de
+     paso): leían `localStorage` directo en el `useState` inicial, lo que
+     genera un árbol distinto entre servidor (sin localStorage) y cliente
+     en cada carga completa de página mientras la sesión está activa -
+     movido a `useEffect`.
+  3. Un vencimiento cargado como 1/8/2026 se mostraba como 31/7/2026 -
+     `dueDate` es una fecha "sin hora" que el backend persiste como
+     medianoche UTC; formatearla/compararla en hora LOCAL corre un día para
+     cualquier viewer en huso horario negativo (Argentina, UTC-3). Arreglado
+     mostrando y comparando siempre con los componentes UTC de la fecha
+     (`toLocaleDateString(..., {timeZone:'UTC'})`), tanto en
+     `TaxDeadlinesTab` como en el resumen de `PortfolioSection`.
+
+  Con esto, la Fase 1 completa (backend + frontend) del módulo para
+  estudios contables queda cerrada de punta a punta.
 
 ## Contexto
 
