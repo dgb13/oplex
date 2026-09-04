@@ -67,6 +67,7 @@ describe('SalesService.createSale', () => {
         { articleVariantId: 'variant-1', quantity: new Prisma.Decimal(3) },
         { articleVariantId: 'variant-2', quantity: new Prisma.Decimal(1) },
       ],
+      taxLines: [],
     };
     const invoicingService = {
       createInvoice: jest.fn().mockResolvedValue(invoice),
@@ -148,6 +149,7 @@ describe('SalesService.createSale', () => {
       exchangeRate: new Prisma.Decimal(1),
       issueDate: new Date('2026-01-01'),
       lines: [],
+      taxLines: [],
     };
     const invoicingService = {
       createInvoice: jest.fn().mockResolvedValue(invoice),
@@ -250,6 +252,7 @@ describe('SalesService.createSale', () => {
       exchangeRate: new Prisma.Decimal(1),
       issueDate: new Date('2026-01-01'),
       lines: [{ articleVariantId: 'variant-1', quantity: new Prisma.Decimal(999) }],
+      taxLines: [],
     };
     const invoicingService = {
       createInvoice: jest.fn().mockResolvedValue(invoice),
@@ -287,6 +290,7 @@ describe('SalesService.createSale', () => {
       exchangeRate: new Prisma.Decimal(1),
       issueDate: new Date('2026-01-01'),
       lines: [{ articleVariantId: 'variant-1', quantity: new Prisma.Decimal(1) }],
+      taxLines: [],
     };
     const invoicingService = {
       createInvoice: jest.fn().mockResolvedValue(invoice),
@@ -328,6 +332,7 @@ describe('SalesService.createSale', () => {
       exchangeRate: new Prisma.Decimal(1050),
       issueDate: new Date('2026-01-01'),
       lines: [{ articleVariantId: 'variant-1', quantity: new Prisma.Decimal(1) }],
+      taxLines: [],
     };
     const invoicingService = {
       createInvoice: jest.fn().mockResolvedValue(invoice),

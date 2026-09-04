@@ -1,5 +1,5 @@
 import { DocumentLetter } from '@plexo/database';
-import { CreateInvoiceLineDto } from '@plexo/invoicing';
+import { CreateInvoiceLineDto, CreateInvoiceTaxLineDto } from '@plexo/invoicing';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -59,4 +59,10 @@ export class CreateSaleDto {
   @ValidateNested({ each: true })
   @Type(() => CreateInvoiceLineDto)
   lines!: CreateInvoiceLineDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateInvoiceTaxLineDto)
+  otherTaxLines?: CreateInvoiceTaxLineDto[];
 }

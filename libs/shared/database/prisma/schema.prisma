@@ -99,6 +99,18 @@ enum TaxLineKind {
   NO_GRAVADO
 }
 
+// Jurisdicción del tributo para AFIP FECAESolicitar (WSFE Tributos[].Id,
+// tabla pública de FEParamGetTiposTributos) - eje distinto de
+// WithholdingTaxType (que es Ganancias/IVA/IIBB sin importar jurisdicción).
+// PROVINCIAL es la opción más común en la práctica (Percepción IIBB).
+enum InvoiceTaxLineKind {
+  NATIONAL // AFIP Tributo Id 1
+  PROVINCIAL // AFIP Tributo Id 2 - Percepción IIBB
+  MUNICIPAL // AFIP Tributo Id 3
+  INTERNAL // AFIP Tributo Id 4
+  OTHER // AFIP Tributo Id 99
+}
+
 enum DiscountType {
   PERCENTAGE
   AMOUNT
@@ -1343,11 +1355,35 @@ model Invoice {
   // Opcional: una factura de Facturación normal (fuera de POS) nunca tiene
   // ninguno.
   cashMovements CashMovement[]
+  taxLines      InvoiceTaxLine[]
 
   @@unique([tenantId, documentLetter, pointOfSale, number])
   @@unique([tenantId, id])
   @@index([tenantId, customerId])
   @@map("invoices")
+}
+
+// Percepciones/otros tributos cobrados en una factura de venta (ej.
+// Percepción IIBB) - hermano de PurchaseInvoiceTaxLine, pero a diferencia
+// de ese (transcripción libre de lo que cobró un proveedor, nunca
+// transmitido), esta tabla sí se manda de verdad a AFIP en
+// FECAESolicitar (ver InvoicingService.createInvoice/AfipWsfeClient).
+model InvoiceTaxLine {
+  id        String             @id @default(uuid())
+  tenantId  String
+  invoiceId String
+  invoice   Invoice            @relation(fields: [tenantId, invoiceId], references: [tenantId, id])
+  kind      InvoiceTaxLineKind
+  concept   String
+  // Base imponible y alícuota del tributo (AFIP BaseImp/Alic) - opcionales:
+  // no todo tributo se expresa como base*alícuota (ej. una tasa municipal
+  // fija). amount es siempre lo que realmente se cobra (AFIP Importe).
+  baseAmount Decimal? @db.Decimal(14, 2)
+  rate       Decimal? @db.Decimal(5, 2)
+  amount     Decimal  @db.Decimal(14, 2)
+
+  @@index([tenantId])
+  @@map("invoice_tax_lines")
 }
 
 model InvoiceLine {

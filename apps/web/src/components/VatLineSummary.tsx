@@ -40,13 +40,18 @@ export function computeLineTotals(line: VatSummaryLine, pricesIncludeTax: boolea
 }
 
 /** Resumen Neto + IVA por alícuota + Total, mismas columnas que el Libro
- * IVA - preview en vivo antes de guardar/emitir. */
+ * IVA - preview en vivo antes de guardar/emitir. otherTaxLines (opcional,
+ * sólo lo pasa Facturación - Cotizaciones no tiene percepciones) suma una
+ * columna más y entra al Total, igual que hace el backend en
+ * InvoicingService.createInvoice. */
 export default function VatLineSummary({
   lines,
   pricesIncludeTax,
+  otherTaxLines,
 }: {
   lines: VatSummaryLine[];
   pricesIncludeTax: boolean;
+  otherTaxLines?: { amount: number }[];
 }) {
   let netTaxed = 0;
   let netExempt = 0;
@@ -62,7 +67,8 @@ export default function VatLineSummary({
     }
   }
   const vatTotal = buckets.vat21 + buckets.vat10_5 + buckets.vat27 + buckets.vatOther;
-  const total = netTaxed + netExempt + vatTotal;
+  const otherTaxesTotal = (otherTaxLines ?? []).reduce((sum, l) => sum + (l.amount || 0), 0);
+  const total = netTaxed + netExempt + vatTotal + otherTaxesTotal;
   const money = (n: number) => `$${n.toFixed(2)}`;
 
   return (
@@ -72,6 +78,7 @@ export default function VatLineSummary({
       <Stat label="IVA 21%" value={money(buckets.vat21)} />
       <Stat label="IVA 10,5%" value={money(buckets.vat10_5)} />
       <Stat label="IVA 27%/Otras" value={money(buckets.vat27 + buckets.vatOther)} />
+      {otherTaxLines != null && <Stat label="Otros tributos" value={money(otherTaxesTotal)} />}
       <Stat label="Total" value={money(total)} bold />
     </div>
   );

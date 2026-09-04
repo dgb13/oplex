@@ -32,6 +32,7 @@ export type {
   StockMovement,
   Invoice,
   InvoiceLine,
+  InvoiceTaxLine,
   CreditNote,
   CreditNoteLine,
   Quote,

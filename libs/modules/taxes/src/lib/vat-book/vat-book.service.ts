@@ -50,7 +50,12 @@ export class VatBookService {
 
     const invoices = await db.invoice.findMany({
       where: { issueDate: { gte: range.from, lte: range.to }, status: { not: 'CANCELLED' } },
-      include: { lines: true, customer: { select: { taxCondition: true } }, currency: { select: { code: true } } },
+      include: {
+        lines: true,
+        taxLines: true,
+        customer: { select: { taxCondition: true } },
+        currency: { select: { code: true } },
+      },
       orderBy: { issueDate: 'asc' },
     });
 
@@ -81,6 +86,10 @@ export class VatBookService {
         }
       }
       const vatTotal = buckets.vat21 + buckets.vat10_5 + buckets.vat27 + buckets.vatOther;
+      // Notas de Crédito no tienen InvoiceTaxLine propias todavía (v1 -
+      // percepciones sólo se cargan al facturar, no se acreditan) - las
+      // filas de abajo (isCreditNote: true) siguen en 0 a propósito.
+      const perceptions = invoice.taxLines.reduce((sum, line) => sum + line.amount.toNumber(), 0);
       entries.push({
         id: invoice.id,
         date: invoice.issueDate.toISOString().slice(0, 10),
@@ -97,7 +106,7 @@ export class VatBookService {
         netExempt,
         netUntaxed,
         ...buckets,
-        perceptions: 0,
+        perceptions,
         vatTotal,
         total: invoice.total.toNumber(),
         isCreditNote: false,

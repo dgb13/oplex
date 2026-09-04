@@ -1,5 +1,6 @@
 import { DiscountType, DocumentLetter, TaxLineKind } from '@plexo/database';
 import { Type } from 'class-transformer';
+import { CreateInvoiceTaxLineDto } from './create-invoice-tax-line.dto.js';
 import {
   ArrayMinSize,
   IsArray,
@@ -110,4 +111,12 @@ export class CreateInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => CreateInvoiceLineDto)
   lines!: CreateInvoiceLineDto[];
+
+  // Percepciones/otros tributos (ej. IIBB) - opcional, la mayoría de las
+  // facturas no llevan ninguno. Ver CreateInvoiceTaxLineDto.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateInvoiceTaxLineDto)
+  otherTaxLines?: CreateInvoiceTaxLineDto[];
 }

@@ -178,6 +178,51 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(wsfeBody).toContain('<ar:ImpTotal>201.00</ar:ImpTotal>');
   });
 
+  it('sends 0.00 ImpTrib and no Tributos block when the invoice has no otherTaxes', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await client.requestCae(baseInvoice());
+
+    const wsfeBody = fetchMock.mock.calls[1][1].body as string;
+    expect(wsfeBody).toContain('<ar:ImpTrib>0.00</ar:ImpTrib>');
+    expect(wsfeBody).not.toContain('<Tributos>');
+  });
+
+  it('sends a Tributos block per otherTax and sums ImpTrib - never the hardcoded 0.00', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await client.requestCae(
+      baseInvoice({
+        total: new Prisma.Decimal(151),
+        otherTaxes: [
+          {
+            id: 2,
+            desc: 'Percepción IIBB & CABA',
+            baseImp: new Prisma.Decimal(100),
+            alic: new Prisma.Decimal(21),
+            importe: new Prisma.Decimal(21),
+          },
+          { id: 99, desc: 'Otro', baseImp: new Prisma.Decimal(100), alic: new Prisma.Decimal(9), importe: new Prisma.Decimal(9) },
+        ],
+      }),
+    );
+
+    const wsfeBody = fetchMock.mock.calls[1][1].body as string;
+    expect(wsfeBody).toContain('<ar:ImpTrib>30.00</ar:ImpTrib>');
+    expect(wsfeBody).toContain('<Tributos>');
+    expect(wsfeBody).toContain('<Tributo><Id>2</Id><Desc>Percepción IIBB &amp; CABA</Desc><BaseImp>100.00</BaseImp><Alic>21.00</Alic><Importe>21.00</Importe></Tributo>');
+    expect(wsfeBody).toContain('<Tributo><Id>99</Id><Desc>Otro</Desc><BaseImp>100.00</BaseImp><Alic>9.00</Alic><Importe>9.00</Importe></Tributo>');
+    // Tributos va después de CbtesAsoc y antes de Iva, según el orden del
+    // XSD real de FECAEDetRequest.
+    expect(wsfeBody.indexOf('<Tributos>')).toBeLessThan(wsfeBody.indexOf('<Iva>'));
+  });
+
   it('sends Concepto 2 and FchServDesde/FchServHasta/FchVtoPago for a service invoice', async () => {
     fetchMock
       .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })

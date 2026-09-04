@@ -90,6 +90,14 @@ function formatImporte(amount: Prisma.Decimal): string {
   return amount.toFixed(2);
 }
 
+// Tributo.Desc es el único texto libre (elegido por el usuario al facturar,
+// ver CreateInvoiceTaxLineDto.concept) que termina en este SOAP body - todo
+// lo demás es numérico/enum/generado por el servidor. Escapar para no
+// romper el XML con un "&"/"<" en el concepto.
+function escapeXml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 interface WsfeError {
   Code: number | string;
   Msg: string;
@@ -148,6 +156,20 @@ export class AfipWsfeClient {
       ? `<CbtesAsoc><CbteAsoc><Tipo>${CBTE_TIPO.FACTURA[invoice.associatedVoucher.documentLetter]}</Tipo><PtoVta>${invoice.associatedVoucher.pointOfSale}</PtoVta><Nro>${Number.parseInt(invoice.associatedVoucher.number, 10)}</Nro></CbteAsoc></CbtesAsoc>`
       : '';
 
+    // Percepciones/otros tributos (ej. IIBB) - vacío en la enorme mayoría
+    // de comprobantes. AFIP exige el total en ImpTrib = Σ Tributo.Importe,
+    // nunca 0.00 hardcodeado cuando hay filas (ver InvoicingService).
+    const otherTaxes = invoice.otherTaxes ?? [];
+    const impTrib = otherTaxes.reduce((sum, t) => sum + t.importe.toNumber(), 0);
+    const tributosXml = otherTaxes.length
+      ? `<Tributos>${otherTaxes
+          .map(
+            (t) =>
+              `<Tributo><Id>${t.id}</Id><Desc>${escapeXml(t.desc)}</Desc><BaseImp>${formatImporte(t.baseImp)}</BaseImp><Alic>${t.alic.toFixed(2)}</Alic><Importe>${formatImporte(t.importe)}</Importe></Tributo>`,
+          )
+          .join('')}</Tributos>`
+      : '';
+
     const concepto = CONCEPTO_ID[invoice.concept];
     // AFIP rejects FchServ*/FchVtoPago when present for Concepto 1, and
     // rejects their absence for 2/3 - never send them for Productos.
@@ -185,11 +207,12 @@ export class AfipWsfeClient {
             <ar:ImpNeto>${formatImporte(invoice.netAmount)}</ar:ImpNeto>
             <ar:ImpOpEx>${formatImporte(invoice.exemptAmount)}</ar:ImpOpEx>
             <ar:ImpIVA>${formatImporte(invoice.taxAmount)}</ar:ImpIVA>
-            <ar:ImpTrib>0.00</ar:ImpTrib>
+            <ar:ImpTrib>${impTrib.toFixed(2)}</ar:ImpTrib>
             <ar:MonId>${monId}</ar:MonId>
             <ar:MonCotiz>${invoice.exchangeRate.toFixed(6)}</ar:MonCotiz>
             ${servicioXml}
             ${cbtesAsocXml}
+            ${tributosXml}
             ${ivaXml}
           </ar:FECAEDetRequest>
         </ar:FeDetReq>

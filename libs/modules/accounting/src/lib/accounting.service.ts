@@ -163,6 +163,18 @@ const WITHHOLDING_ACCOUNT_BY_TAX_TYPE: Record<WithholdingTaxType, typeof WITHHOL
   VAT: WITHHOLDING_VAT_ACCOUNT,
   GROSS_INCOME: WITHHOLDING_GROSS_INCOME_ACCOUNT,
 };
+// Espejo de las cuentas de Retenciones de arriba, pero del lado Ventas: acá
+// no retenemos, PERCIBIMOS (le cobramos de más a un cliente por cuenta de
+// AFIP/ARBA/etc.) - mismo hecho económico (plata que no es nuestra, hay que
+// depositarla), signo contrario (pasivo que crece con la venta, no con un
+// pago). Una sola cuenta agregada sin desagregar por InvoiceTaxLineKind,
+// mismo criterio que PERCEPTIONS_ACCOUNT/WITHHOLDING_* de arriba - el
+// detalle por tributo vive en InvoiceTaxLine, no multiplica cuentas.
+const PERCEPTIONS_PAYABLE_ACCOUNT = {
+  code: '2.1.09',
+  name: 'Percepciones cobradas a depositar',
+  type: 'LIABILITY' as const,
+};
 
 export interface PostInvoiceJournalEntryInput {
   invoiceId: string;
@@ -175,6 +187,10 @@ export interface PostInvoiceJournalEntryInput {
   // with. Optional/zero is common (uncosted variant, no purchase history
   // yet) and simply skips the COGS lines below - not an error.
   cogsAmount?: Prisma.Decimal | number | string;
+  // Suma de InvoiceTaxLine.amount (percepciones, ej. IIBB) - ya incluida
+  // en `total` (ver InvoicingService.createInvoice), necesaria acá aparte
+  // para no romper el balanceo Dr AR(total) = Cr Ventas+IVA+Percepciones.
+  otherTaxesTotal?: Prisma.Decimal | number | string;
 }
 
 export interface PostCreditNoteJournalEntryInput {
@@ -459,11 +475,15 @@ export class AccountingService {
     const subtotal = new Prisma.Decimal(input.subtotal);
     const taxTotal = new Prisma.Decimal(input.taxTotal);
     const cogsAmount = new Prisma.Decimal(input.cogsAmount ?? 0);
+    const otherTaxesTotal = new Prisma.Decimal(input.otherTaxesTotal ?? 0);
 
-    const [ar, revenue, vat, cogsAccounts] = await Promise.all([
+    const [ar, revenue, vat, perceptionsPayable, cogsAccounts] = await Promise.all([
       this.getOrCreateAccount(ACCOUNTS_RECEIVABLE_ACCOUNT),
       this.getOrCreateAccount(SALES_REVENUE_ACCOUNT),
       taxTotal.gt(0) ? this.getOrCreateAccount(VAT_PAYABLE_ACCOUNT) : Promise.resolve(undefined),
+      otherTaxesTotal.gt(0)
+        ? this.getOrCreateAccount(PERCEPTIONS_PAYABLE_ACCOUNT)
+        : Promise.resolve(undefined),
       cogsAmount.gt(0)
         ? Promise.all([
             this.getOrCreateAccount(COGS_EXPENSE_ACCOUNT),
@@ -478,6 +498,9 @@ export class AccountingService {
     ];
     if (vat && taxTotal.gt(0)) {
       lines.push({ accountId: vat.id, direction: 'CREDIT', amount: taxTotal.toNumber() });
+    }
+    if (perceptionsPayable && otherTaxesTotal.gt(0)) {
+      lines.push({ accountId: perceptionsPayable.id, direction: 'CREDIT', amount: otherTaxesTotal.toNumber() });
     }
     if (cogsAccounts && cogsAmount.gt(0)) {
       const [cogs, inventory] = cogsAccounts;

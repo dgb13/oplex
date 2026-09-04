@@ -15,6 +15,18 @@ export interface ElectronicInvoiceTaxLine {
   taxAmount: Prisma.Decimal;
 }
 
+/** One "otro tributo" (ej. Percepción IIBB) - AFIP's Tributos[] array in
+ * FECAESolicitar. `id` is AFIP's own Tributo type code (1 Nacional/2
+ * Provincial/3 Municipal/4 Interno/99 Otro - see AFIP_TRIBUTO_ID in
+ * invoicing.service.ts), not InvoiceTaxLineKind itself. */
+export interface ElectronicOtherTax {
+  id: number;
+  desc: string;
+  baseImp: Prisma.Decimal;
+  alic: Prisma.Decimal;
+  importe: Prisma.Decimal;
+}
+
 /** invoiceLetter/pointOfSale/number of the ORIGINAL Invoice being credited -
  * only present for kind: 'NOTA_CREDITO', where AFIP requires the CbtesAsoc
  * association. Separate from this voucher's own documentLetter/pointOfSale/
@@ -68,6 +80,9 @@ export interface ElectronicInvoiceRequest {
   taxAmount: Prisma.Decimal;
   total: Prisma.Decimal;
   taxLines: ElectronicInvoiceTaxLine[];
+  /** Percepciones/otros tributos (→ AFIP's Tributos[] + ImpTrib) - vacío u
+   * omitido en la enorme mayoría de comprobantes, que no cobran ninguno. */
+  otherTaxes?: ElectronicOtherTax[];
   associatedVoucher?: AssociatedVoucher;
 }
 

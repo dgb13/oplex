@@ -37,6 +37,7 @@ describe('VatBookService.getSalesBook', () => {
               // No gravado
               { taxKind: 'NO_GRAVADO', taxRate: d(0), netAmount: d(150), lineTotal: d(150) },
             ],
+            taxLines: [],
           },
         ]),
       },
@@ -77,6 +78,7 @@ describe('VatBookService.getSalesBook', () => {
             currency: { code: 'ARS' },
             total: d(1210),
             lines: [{ taxKind: 'GRAVADO', taxRate: d(21), netAmount: d(1000), lineTotal: d(1210) }],
+            taxLines: [],
           },
         ]),
       },
@@ -121,6 +123,35 @@ describe('VatBookService.getSalesBook', () => {
     expect(result.totals.vat21).toBe(0);
     expect(result.totals.vatTotal).toBe(0);
     expect(result.totals.total).toBe(0);
+  });
+
+  it('suma InvoiceTaxLine.amount en la columna perceptions - no queda hardcodeada en 0', async () => {
+    const db = {
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-perc',
+            issueDate: new Date('2026-08-05'),
+            documentLetter: 'A',
+            pointOfSale: '0001',
+            number: '00000300',
+            customerName: 'Acme SA',
+            customerTaxId: '30-71659554-9',
+            customer: { taxCondition: 'Responsable Inscripto' },
+            currency: { code: 'ARS' },
+            total: d(1210 + 30),
+            lines: [{ taxKind: 'GRAVADO', taxRate: d(21), netAmount: d(1000), lineTotal: d(1210) }],
+            taxLines: [{ amount: d(30) }],
+          },
+        ]),
+      },
+      creditNote: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new VatBookService();
+
+    const result = await runInTenant(db, () => service.getSalesBook());
+
+    expect(result.entries[0].perceptions).toBe(30);
   });
 });
 

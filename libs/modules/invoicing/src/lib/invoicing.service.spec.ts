@@ -65,6 +65,7 @@ function makeFinalInvoiceFixture() {
     issueDate: new Date('2026-01-01'),
     total: new Prisma.Decimal(0),
     lines: [],
+    taxLines: [],
   };
 }
 
@@ -280,6 +281,7 @@ describe('InvoicingService.createInvoice', () => {
       taxTotal: new Prisma.Decimal(34.02),
       total: new Prisma.Decimal(358.02),
       lines: [],
+      taxLines: [],
     };
     const db = {
       company: {
@@ -399,6 +401,7 @@ describe('InvoicingService.createInvoice', () => {
       taxTotal: new Prisma.Decimal(0),
       total: new Prisma.Decimal(200),
       lines: [],
+      taxLines: [],
     };
     const db = {
       company: {
@@ -454,6 +457,7 @@ describe('InvoicingService.createInvoice', () => {
         taxTotal: new Prisma.Decimal(0),
         total: new Prisma.Decimal(100),
         lines: [],
+        taxLines: [],
       };
       const db = {
         company: {
@@ -538,6 +542,7 @@ describe('InvoicingService.createInvoice', () => {
       taxTotal: new Prisma.Decimal(21),
       total: new Prisma.Decimal(201),
       lines: [],
+      taxLines: [],
     };
     const db = {
       company: {
@@ -624,6 +629,7 @@ describe('InvoicingService.createInvoice', () => {
       taxTotal: new Prisma.Decimal(58.5),
       total: new Prisma.Decimal(458.5),
       lines: [],
+      taxLines: [],
     };
     const db = {
       company: {
@@ -716,6 +722,7 @@ describe('InvoicingService.createInvoice', () => {
       taxTotal: new Prisma.Decimal(21),
       total: new Prisma.Decimal(121),
       lines: [],
+      taxLines: [],
     };
     const db = {
       company: {
@@ -879,6 +886,80 @@ describe('InvoicingService.createInvoice', () => {
     expect(line.taxKind).toBe('EXENTO');
     expect(line.taxRate.toNumber()).toBe(0);
     expect(line.lineTotal.toNumber()).toBeCloseTo(100, 2);
+  });
+
+  it('otherTaxLines (percepciones) suman al total y se mandan a AFIP como otherTaxes, no como el 0.00 hardcodeado', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const service = new InvoicingService(makeEmailSender(), electronicInvoicing, makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+    const dto = {
+      customerId: 'customer-1',
+      documentLetter: 'B' as const,
+      pointOfSale: '0001',
+      currencyId: 'currency-1',
+      lines: [{ articleVariantId: 'variant-1', quantity: 1, unitPrice: 100, taxKind: 'GRAVADO' as const, taxRate: 21 }],
+      otherTaxLines: [{ kind: 'PROVINCIAL' as const, concept: 'Percepción IIBB', baseAmount: 100, rate: 3, amount: 3 }],
+    };
+    // create() tiene que devolver los taxLines persistidos con forma real
+    // de Prisma.Decimal (no el objeto plano del DTO) - es lo que
+    // createInvoice usa para armar otherTaxes, no dto.otherTaxLines
+    // directamente (ver invoicing.service.ts).
+    const persistedInvoice = {
+      id: 'invoice-1',
+      tenantId: 'tenant-1',
+      number: '00000001',
+      customerName: 'Acme',
+      customerTaxId: null,
+      documentLetter: 'B',
+      concept: 'PRODUCTOS',
+      pointOfSale: '0001',
+      status: 'ISSUED',
+      issueDate: new Date('2026-01-01'),
+      dueDate: null,
+      exchangeRate: new Prisma.Decimal(1),
+      subtotal: new Prisma.Decimal(100),
+      taxTotal: new Prisma.Decimal(21),
+      total: new Prisma.Decimal(124),
+      lines: [],
+      taxLines: [
+        {
+          kind: 'PROVINCIAL',
+          concept: 'Percepción IIBB',
+          baseAmount: new Prisma.Decimal(100),
+          rate: new Prisma.Decimal(3),
+          amount: new Prisma.Decimal(3),
+        },
+      ],
+    };
+    const db = {
+      company: { findUnique: jest.fn().mockResolvedValue({ id: 'customer-1', active: true, email: null, roles: [{ role: 'CUSTOMER' }] }) },
+      currency: { findUnique: jest.fn().mockResolvedValue({ id: 'currency-1', isBase: true }) },
+      articleVariant: { findUnique: jest.fn().mockResolvedValue({ id: 'variant-1', unitPrice: new Prisma.Decimal(999), article: { taxDefinition: null } }) },
+      invoice: {
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockResolvedValue(persistedInvoice),
+        update: jest.fn().mockResolvedValue(persistedInvoice),
+      },
+    };
+
+    await runInTenant(db, () => service.createInvoice(dto));
+
+    // Neto 100 + IVA 21 + Percepción 3 = 124 - el total no se olvida de la
+    // percepción (bug real que este test previene: total = netSubtotal +
+    // taxTotal sin el .add(otherTaxesTotal) de InvoicingService).
+    const createArgs = (db.invoice.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.total.toNumber()).toBeCloseTo(124, 2);
+    expect(createArgs.data.taxLines.createMany.data).toEqual([
+      { kind: 'PROVINCIAL', concept: 'Percepción IIBB', baseAmount: 100, rate: 3, amount: 3 },
+    ]);
+
+    const caeRequest = (electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0];
+    // AFIP_TRIBUTO_ID.PROVINCIAL = 2 (tabla pública de FEParamGetTiposTributos).
+    expect(caeRequest.otherTaxes).toHaveLength(1);
+    expect(caeRequest.otherTaxes[0].id).toBe(2);
+    expect(caeRequest.otherTaxes[0].desc).toBe('Percepción IIBB');
+    expect(caeRequest.otherTaxes[0].baseImp.toNumber()).toBe(100);
+    expect(caeRequest.otherTaxes[0].alic.toNumber()).toBe(3);
+    expect(caeRequest.otherTaxes[0].importe.toNumber()).toBe(3);
   });
 
   it('rejects a FORMULA tax definition rather than silently mis-taxing', async () => {

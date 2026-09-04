@@ -2,13 +2,14 @@
 
 import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import VatLineSummary from '@/components/VatLineSummary';
 import VatRateSelect, { type VatKind } from '@/components/VatRateSelect';
 import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
-import { invoicingApi, type CreateSaleLineInput } from '@/lib/invoicing';
+import { invoicingApi, type CreateSaleLineInput, type InvoiceTaxLineInput } from '@/lib/invoicing';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -65,6 +66,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
   const [lines, setLines] = useState<CreateSaleLineInput[]>([
     { articleVariantId: '', quantity: 1, unitPrice: 0, taxKind: 'GRAVADO', taxRate: 0 },
   ]);
+  const [otherTaxLines, setOtherTaxLines] = useState<InvoiceTaxLineInput[]>([]);
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
@@ -118,6 +120,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
             : undefined,
         pricesIncludeTax,
         lines,
+        otherTaxLines: otherTaxLines.filter((l) => l.concept.trim() && l.amount > 0),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -372,8 +375,10 @@ export default function NewInvoiceModal({ onClose }: Props) {
               >
                 + Agregar línea
               </button>
-              <VatLineSummary lines={lines} pricesIncludeTax={pricesIncludeTax} />
+              <VatLineSummary lines={lines} pricesIncludeTax={pricesIncludeTax} otherTaxLines={otherTaxLines} />
             </div>
+
+            <InvoiceTaxLinesEditor lines={otherTaxLines} onChange={setOtherTaxLines} />
 
             {!afipConfigured && (
               <p className="text-sm text-amber-600 dark:text-amber-400">

@@ -17,6 +17,8 @@ import {
   type ExchangeRateHistory,
   type InvoiceConcept,
   type InvoicePdfFormat,
+  type InvoiceTaxLine,
+  type InvoiceTaxLineKind,
   type Receipt,
   type ReminderTone,
   type TaxDefinition,
@@ -38,7 +40,19 @@ import {
 import { buildInvoicePdfData } from './pdf/build-pdf-data.js';
 import { InvoicePdfService } from './pdf/invoice-pdf.service.js';
 
+// AFIP WSFE Tributos[].Id (tabla pública de FEParamGetTiposTributos) -
+// hardcodeada a propósito, mismo criterio que las alícuotas de IVA fijas
+// en otros puntos de este módulo.
+const AFIP_TRIBUTO_ID: Record<InvoiceTaxLineKind, number> = {
+  NATIONAL: 1,
+  PROVINCIAL: 2,
+  MUNICIPAL: 3,
+  INTERNAL: 4,
+  OTHER: 99,
+};
+
 type InvoiceWithLines = Invoice & { lines: InvoiceLine[] };
+type InvoiceWithLinesAndTaxLines = InvoiceWithLines & { taxLines: InvoiceTaxLine[] };
 export type InvoiceLineDetail = InvoiceLine & { articleVariant: ArticleVariant & { article: Article } };
 export type InvoiceDetail = Invoice & {
   lines: InvoiceLineDetail[];
@@ -234,7 +248,7 @@ export class InvoicingService {
    * Does not touch stock - see SalesService (apps/api) for why that's
    * composed at the app layer instead of being called from here.
    */
-  async createInvoice(dto: CreateInvoiceDto, senderFrom?: string): Promise<InvoiceWithLines> {
+  async createInvoice(dto: CreateInvoiceDto, senderFrom?: string): Promise<InvoiceWithLinesAndTaxLines> {
     await this.subscriptionService.assertCanIssueInvoiceThisMonth();
 
     const db = getTenantDb();
@@ -394,7 +408,25 @@ export class InvoicingService {
     }
 
     const netSubtotal = subtotal.sub(globalDiscountAmount);
-    const total = netSubtotal.add(taxTotal);
+    // Percepciones/otros tributos (ej. IIBB) - no son parte del neto ni del
+    // IVA, pero sí del total que le cobramos al cliente (AFIP los suma en
+    // ImpTotal vía ImpTrib, ver más abajo). Ver AccountingService
+    // .postInvoiceJournalEntry para el lado contable (van a un pasivo
+    // propio, no a Ventas).
+    const otherTaxLineInputs: Prisma.InvoiceTaxLineCreateManyInvoiceInput[] = (dto.otherTaxLines ?? []).map(
+      (line) => ({
+        kind: line.kind,
+        concept: line.concept,
+        baseAmount: line.baseAmount,
+        rate: line.rate,
+        amount: line.amount,
+      }),
+    );
+    const otherTaxesTotal = (dto.otherTaxLines ?? []).reduce(
+      (sum, line) => sum.add(new Prisma.Decimal(line.amount)),
+      new Prisma.Decimal(0),
+    );
+    const total = netSubtotal.add(taxTotal).add(otherTaxesTotal);
     // The taxed-only slice of netSubtotal - what AFIP's ImpNeto actually
     // means once ImpOpEx/ImpTotConc exist as separate buckets.
     const taxedNetAmount = netSubtotal.sub(exemptAmount).sub(nonTaxedAmount);
@@ -430,8 +462,9 @@ export class InvoicingService {
         balanceDue: total,
         issuedByUserId,
         lines: { createMany: { data: lineInputs } },
+        taxLines: { createMany: { data: otherTaxLineInputs } },
       },
-      include: { lines: true },
+      include: { lines: true, taxLines: true },
     });
 
     const { cae, caeExpiry } = await this.electronicInvoicing.requestCae({
@@ -451,12 +484,19 @@ export class InvoicingService {
       taxAmount: created.taxTotal,
       total: created.total,
       taxLines: this.groupTaxLines(taxLineRows),
+      otherTaxes: created.taxLines.map((line) => ({
+        id: AFIP_TRIBUTO_ID[line.kind],
+        desc: line.concept,
+        baseImp: line.baseAmount ?? taxedNetAmount,
+        alic: line.rate ?? new Prisma.Decimal(0),
+        importe: line.amount,
+      })),
     });
 
     const finalInvoice = await db.invoice.update({
       where: { id: created.id },
       data: { afipCae: cae, afipCaeExpiry: caeExpiry },
-      include: { lines: true },
+      include: { lines: true, taxLines: true },
     });
 
     if (customer.email) {

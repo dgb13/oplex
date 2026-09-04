@@ -6,5 +6,6 @@ export * from './lib/bna-exchange-rate.port.js';
 export * from './lib/dto/create-credit-note.dto.js';
 export * from './lib/dto/create-currency.dto.js';
 export * from './lib/dto/create-invoice.dto.js';
+export * from './lib/dto/create-invoice-tax-line.dto.js';
 export * from './lib/dto/record-exchange-rate.dto.js';
 export * from './lib/dto/record-receipt.dto.js';

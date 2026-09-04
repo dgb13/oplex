@@ -95,6 +95,18 @@ export interface CreateSaleLineInput {
   taxRate?: number;
 }
 
+// AFIP Tributos - jurisdicción del tributo (id numérico que espera AFIP se
+// resuelve en el backend, ver AFIP_TRIBUTO_ID en InvoicingService).
+export type InvoiceTaxLineKind = 'NATIONAL' | 'PROVINCIAL' | 'MUNICIPAL' | 'INTERNAL' | 'OTHER';
+
+export interface InvoiceTaxLineInput {
+  kind: InvoiceTaxLineKind;
+  concept: string;
+  baseAmount?: number;
+  rate?: number;
+  amount: number;
+}
+
 export interface CreateSaleInput {
   customerId: string;
   warehouseId: string;
@@ -109,6 +121,9 @@ export interface CreateSaleInput {
   dueDate?: string;
   pricesIncludeTax?: boolean;
   lines: CreateSaleLineInput[];
+  // Percepciones/otros tributos (ej. IIBB) - opcional, la mayoría de las
+  // facturas no llevan ninguno.
+  otherTaxLines?: InvoiceTaxLineInput[];
 }
 
 export interface ReceiptCheckInput {

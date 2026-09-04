@@ -61,6 +61,7 @@ export class SalesService {
         dueDate: dto.dueDate,
         pricesIncludeTax: dto.pricesIncludeTax,
         lines: dto.lines,
+        otherTaxLines: dto.otherTaxLines,
       },
       resolveEmailFrom(settings),
     );
@@ -93,6 +94,7 @@ export class SalesService {
     // factura en ARS). cogsAmount NO se convierte: viene del costo de
     // inventario, que siempre está en ARS sin importar en qué moneda se
     // facturó la venta.
+    const otherTaxesTotal = invoice.taxLines.reduce((sum, line) => sum.add(line.amount), new Prisma.Decimal(0));
     await this.accountingService.postInvoiceJournalEntry({
       invoiceId: invoice.id,
       subtotal: invoice.subtotal.mul(invoice.exchangeRate),
@@ -100,6 +102,7 @@ export class SalesService {
       total: invoice.total.mul(invoice.exchangeRate),
       date: invoice.issueDate,
       cogsAmount: totalCogs,
+      otherTaxesTotal: otherTaxesTotal.mul(invoice.exchangeRate),
     });
 
     return invoice;
