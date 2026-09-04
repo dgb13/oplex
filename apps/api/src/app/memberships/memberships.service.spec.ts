@@ -64,7 +64,10 @@ describe('MembershipsService.activate', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
       },
-      userModuleAccess: { findMany: jest.fn().mockResolvedValue([]) },
+      userModuleAccess: {
+        createMany: jest.fn().mockResolvedValue({ count: 5 }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $executeRaw: jest.fn().mockResolvedValue(undefined),
       ...fakeTxOverrides,
     };
@@ -105,8 +108,20 @@ describe('MembershipsService.activate', () => {
     expect(authService.buildAccessToken).not.toHaveBeenCalled();
   });
 
-  it('crea la fila espejo (User + TenantMembershipLink) la primera vez, con la identidad del contador puntual', async () => {
-    const { prisma, fakeTx } = makePrisma([makeMembershipRow()]);
+  it('crea la fila espejo (User + TenantMembershipLink) la primera vez, con la identidad del contador puntual, y le otorga el alcance por defecto (solo lectura salvo taxes)', async () => {
+    const defaultGrants = [
+      { userId: 'linked-user-1', module: 'taxes', canRead: true, canWrite: true },
+      { userId: 'linked-user-1', module: 'accounting', canRead: true, canWrite: false },
+      { userId: 'linked-user-1', module: 'reports-sales', canRead: true, canWrite: false },
+      { userId: 'linked-user-1', module: 'reports-pnl', canRead: true, canWrite: false },
+      { userId: 'linked-user-1', module: 'reports-financial', canRead: true, canWrite: false },
+    ];
+    const { prisma, fakeTx } = makePrisma([makeMembershipRow()], {
+      userModuleAccess: {
+        createMany: jest.fn().mockResolvedValue({ count: 5 }),
+        findMany: jest.fn().mockResolvedValue(defaultGrants),
+      },
+    });
     (fakeTx.user.create as jest.Mock).mockResolvedValue({
       id: 'linked-user-1',
       email: 'juan@estudio.com',
@@ -131,10 +146,19 @@ describe('MembershipsService.activate', () => {
     expect(fakeTx.tenantMembershipLink.create).toHaveBeenCalledWith({
       data: { tenantId: 'client-1', membershipId: 'membership-1', studioUserId: 'studio-user-1', linkedUserId: 'linked-user-1' },
     });
+    expect(fakeTx.userModuleAccess.createMany).toHaveBeenCalledWith({
+      data: [
+        { tenantId: 'client-1', userId: 'linked-user-1', module: 'taxes', canRead: true, canWrite: true },
+        { tenantId: 'client-1', userId: 'linked-user-1', module: 'accounting', canRead: true, canWrite: false },
+        { tenantId: 'client-1', userId: 'linked-user-1', module: 'reports-sales', canRead: true, canWrite: false },
+        { tenantId: 'client-1', userId: 'linked-user-1', module: 'reports-pnl', canRead: true, canWrite: false },
+        { tenantId: 'client-1', userId: 'linked-user-1', module: 'reports-financial', canRead: true, canWrite: false },
+      ],
+    });
     expect(authService.buildAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'linked-user-1' }),
       'client-1',
-      [],
+      defaultGrants,
       { expiresIn: '2h' },
     );
     expect(result.accessToken).toBe('signed-jwt');
@@ -159,6 +183,7 @@ describe('MembershipsService.activate', () => {
 
     expect(fakeTx.user.create).not.toHaveBeenCalled();
     expect(fakeTx.tenantMembershipLink.create).not.toHaveBeenCalled();
+    expect(fakeTx.userModuleAccess.createMany).not.toHaveBeenCalled();
   });
 
   it('dos contadores distintos del mismo estudio activando el mismo cliente terminan con linkedUserId DISTINTOS - identidad de auditoría por persona, no por estudio', async () => {

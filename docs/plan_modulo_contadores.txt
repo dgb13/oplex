@@ -25,8 +25,22 @@
   una - acá ambos lados ya tienen cuenta real, la solicitud pendiente ya
   queda visible en `GET /memberships`/`GET /memberships/as-client` sin
   necesitar un link mágico).
-- 1c (permisos por defecto), 1d (cartera + consolidado), 1e (vencimientos):
-  todavía no empezadas.
+- **1c — Permisos por defecto: HECHO** (sesión 2026-09-04, misma sesión que
+  1a/1b). Al crear la fila espejo por primera vez (`activate()`), se le
+  otorgan `UserModuleAccess` de solo lectura en `accounting`/
+  `reports-sales`/`reports-pnl`/`reports-financial`, y lectura+escritura en
+  `taxes` (único precedente real ya existente en el código,
+  `managedByAccountant`). Grep verificado: ese es el conjunto COMPLETO de
+  módulos que en toda la app usan `@RequireModuleAccess` - `invoicing`/
+  `receivables`/`payables` sólo usan `@Roles(...)` (que ya incluye
+  `ACCOUNTANT` en varios de ellos), así que el rol de la fila espejo ya les
+  da acceso sin necesitar ninguna fila acá. Verificado en vivo contra el
+  servidor real: `GET /taxes/definitions` con el JWT activado devolvió 200
+  con datos reales, `POST /accounting/journal-entries` devolvió 403 "No
+  write access to module accounting", y `GET /invoicing/invoices` devolvió
+  200 sin ninguna fila de `UserModuleAccess` de por medio - las 3
+  dimensiones del diseño confirmadas.
+- 1d (cartera + consolidado), 1e (vencimientos): todavía no empezadas.
 
 ## Contexto
 

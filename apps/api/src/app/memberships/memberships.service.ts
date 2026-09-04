@@ -6,6 +6,27 @@ import { AuthService } from '../auth/auth.service.js';
 
 const PLATFORM_SETTINGS_ID = 'global';
 
+/**
+ * Alcance por defecto de un contador externo (ver docs/plan_modulo_contadores.txt,
+ * punto 3) - sólo lectura, salvo `taxes` (único precedente real ya
+ * existente en el código: `managedByAccountant` en
+ * libs/modules/taxes/src/lib/taxes.service.ts, que ya distingue "esto se
+ * le puede delegar a un ACCOUNTANT" en producción). Éste es además el
+ * conjunto COMPLETO de módulos que en toda la app usan
+ * `@RequireModuleAccess` (grep verificado) - `invoicing`/`receivables`/
+ * `payables` sólo usan `@Roles(...)`, así que el rol `ACCOUNTANT` de la
+ * fila espejo ya les da acceso sin necesitar ninguna fila acá; nada de
+ * Inventario/Ventas/Compras/POS por defecto, ninguno de esos módulos
+ * aparece en esta lista a propósito.
+ */
+const DEFAULT_ACCOUNTANT_MODULE_ACCESS: { module: string; canRead: boolean; canWrite: boolean }[] = [
+  { module: 'taxes', canRead: true, canWrite: true },
+  { module: 'accounting', canRead: true, canWrite: false },
+  { module: 'reports-sales', canRead: true, canWrite: false },
+  { module: 'reports-pnl', canRead: true, canWrite: false },
+  { module: 'reports-financial', canRead: true, canWrite: false },
+];
+
 export interface ResolvedTenant {
   tenantId: string;
   tenantName: string;
@@ -181,8 +202,19 @@ export class MembershipsService {
       await db.tenantMembershipLink.create({
         data: { tenantId: clientTenantId, membershipId, studioUserId: actorUserId, linkedUserId: user.id },
       });
+      // Primera vez que algo escribe en UserModuleAccess en toda la app -
+      // hasta acá sólo se leía (ver plan). Alcance mínimo/curado, no un CRUD
+      // genérico: sólo esta fila puntual, con este set fijo de módulos.
+      await db.userModuleAccess.createMany({
+        data: DEFAULT_ACCOUNTANT_MODULE_ACCESS.map((grant) => ({
+          tenantId: clientTenantId,
+          userId: user.id,
+          ...grant,
+        })),
+      });
+      const moduleAccessRows = await db.userModuleAccess.findMany({ where: { userId: user.id } });
 
-      return { linkedUser: user, moduleAccess: [] as { module: string; canRead: boolean; canWrite: boolean }[] };
+      return { linkedUser: user, moduleAccess: moduleAccessRows };
     });
 
     const settings = await this.getSettings();
