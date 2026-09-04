@@ -1937,6 +1937,39 @@ model WithholdingRegime {
   @@map("withholding_regimes")
 }
 
+enum TaxDeadlineKind {
+  IVA
+  MONOTRIBUTO
+  IIBB
+  GANANCIAS
+  OTRO
+}
+
+enum TaxDeadlineStatus {
+  PENDING
+  DONE
+}
+
+// Entidad chica a propósito, sin motor de recurrencia ni integración con
+// ningún calendario oficial de ARCA - carga 100% manual, igual criterio que
+// TaxDefinition/WithholdingRegime arriba (data mantenida a mano por el
+// contador, no calculada). Ver docs/plan_modulo_contadores.txt, punto 5 -
+// el consolidado de MembershipsService.getPortfolio() suma "próximos N
+// vencimientos" por tenant leyendo esta tabla dentro del mismo loop.
+model TaxDeadline {
+  id              String            @id @default(uuid())
+  tenantId        String
+  kind            TaxDeadlineKind
+  dueDate         DateTime
+  description     String
+  status          TaxDeadlineStatus @default(PENDING)
+  createdByUserId String
+  createdAt       DateTime          @default(now())
+
+  @@index([tenantId, status, dueDate])
+  @@map("tax_deadlines")
+}
+
 // Retención puntual aplicada a un SupplierPayment - análogo a
 // PurchaseInvoiceTaxLine pero del lado del pago (ver AccountingService.
 // postSupplierPaymentJournalEntry, que la lee agrupada por taxType).

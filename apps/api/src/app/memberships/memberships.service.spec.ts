@@ -215,6 +215,83 @@ describe('MembershipsService.activate', () => {
   });
 });
 
+describe('MembershipsService.getPortfolio', () => {
+  it('sólo incluye membresías ACCEPTED, con condición IVA y facturación del mes por cliente', async () => {
+    const rows = [
+      makeMembershipRow({ id: 'membership-accepted', status: 'ACCEPTED', tenant_id: 'client-1', client_tenant_name: 'Cliente Aceptado' }),
+      makeMembershipRow({ id: 'membership-pending', status: 'PENDING', tenant_id: 'client-2', client_tenant_name: 'Cliente Pendiente' }),
+    ];
+    const queryRaw = jest.fn().mockResolvedValue(rows);
+    const fakeTx = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ tenantId: 'client-1', ownTaxCondition: 'RESPONSABLE_INSCRIPTO' }) },
+      invoice: { count: jest.fn().mockResolvedValue(7) },
+      taxDeadline: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'deadline-1', kind: 'IVA', dueDate: new Date('2026-10-20'), description: 'IVA mensual' },
+        ]),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+
+    const result = await service.getPortfolio('studio-1');
+
+    expect(result).toEqual([
+      {
+        membershipId: 'membership-accepted',
+        clientTenantId: 'client-1',
+        clientTenantName: 'Cliente Aceptado',
+        ownTaxCondition: 'RESPONSABLE_INSCRIPTO',
+        invoicesThisMonth: 7,
+        upcomingDeadlines: [
+          { id: 'deadline-1', kind: 'IVA', dueDate: new Date('2026-10-20'), description: 'IVA mensual' },
+        ],
+      },
+    ]);
+    // El PENDING nunca abre contexto del tenant cliente - ni siquiera se consulta.
+    expect(fakeTx.tenantSettings.findUnique).toHaveBeenCalledTimes(1);
+    expect(fakeTx.taxDeadline.findMany).toHaveBeenCalledWith({
+      where: { status: 'PENDING' },
+      orderBy: { dueDate: 'asc' },
+      take: 5,
+    });
+  });
+
+  it('sigue con el resto de la cartera si un cliente falla, en vez de tumbar todo (mismo criterio que AdminTenantsService.listTenants)', async () => {
+    const rows = [
+      makeMembershipRow({ id: 'membership-1', status: 'ACCEPTED', tenant_id: 'client-1', client_tenant_name: 'Cliente Roto' }),
+      makeMembershipRow({ id: 'membership-2', status: 'ACCEPTED', tenant_id: 'client-2', client_tenant_name: 'Cliente OK' }),
+    ];
+    const queryRaw = jest.fn().mockResolvedValue(rows);
+    let call = 0;
+    const prisma = {
+      $queryRaw: queryRaw,
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => {
+        call += 1;
+        if (call === 1) {
+          return Promise.reject(new Error('boom'));
+        }
+        return cb({
+          tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+          invoice: { count: jest.fn().mockResolvedValue(0) },
+          taxDeadline: { findMany: jest.fn().mockResolvedValue([]) },
+          $executeRaw: jest.fn().mockResolvedValue(undefined),
+        });
+      }),
+    } as unknown as PrismaService;
+    const service = new MembershipsService(prisma, makeAuthService());
+
+    const result = await service.getPortfolio('studio-1');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].clientTenantId).toBe('client-2');
+  });
+});
+
 describe('MembershipsService.listForClient', () => {
   it('lista mis relaciones (RLS estandar, ya en mi propio tenant) y resuelve el nombre del estudio del otro lado por-tenant', async () => {
     const findMany = jest.fn().mockResolvedValue([

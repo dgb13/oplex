@@ -36,6 +36,14 @@ export class MembershipsController {
     return this.membershipsService.listForClient();
   }
 
+  /** Cartera consolidada (sólo clientes ACCEPTED, con resumen liviano por
+   * cliente) - ver MembershipsService.getPortfolio. */
+  @Get('portfolio')
+  @Roles(...ACTIVATE_ROLES)
+  getPortfolio(@CurrentUser() user: AuthenticatedUser) {
+    return this.membershipsService.getPortfolio(user.tenantId);
+  }
+
   @Post(':id/activate')
   @Roles(...ACTIVATE_ROLES)
   activate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {

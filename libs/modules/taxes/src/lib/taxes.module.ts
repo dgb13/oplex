@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TaxDeadlineService } from './tax-deadline.service.js';
 import { TaxesController } from './taxes.controller.js';
 import { TaxesService } from './taxes.service.js';
 import { CitiExportService } from './vat-book/citi/citi-export.service.js';
@@ -16,7 +17,8 @@ import { WithholdingRegimeService } from './withholding-regime.service.js';
     VatBookExcelService,
     VatBookPdfService,
     CitiExportService,
+    TaxDeadlineService,
   ],
-  exports: [TaxesService, WithholdingRegimeService, VatBookService],
+  exports: [TaxesService, WithholdingRegimeService, VatBookService, TaxDeadlineService],
 })
 export class TaxesModule {}

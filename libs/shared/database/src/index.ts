@@ -85,5 +85,6 @@ export type {
   TenantMembership,
   TenantMembershipLink,
   PlatformSettings,
+  TaxDeadline,
 } from './generated/client.js';
 export * from './generated/enums.js';

@@ -1,8 +1,20 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { AuthService } from '../auth/auth.service.js';
+
+/** Rango del mes calendario actual en UTC - mismo criterio que
+ * AdminTenantsService.currentMonthRangeUtc() (apps/api/src/app/admin/
+ * admin-tenants.service.ts), reescrito acá porque ese helper es privado de
+ * otro composition-root y este uso es igual de cross-tenant (un solo
+ * "ahora" para todo el recorrido de la cartera, no por-cliente). */
+function currentMonthRangeUtc(): { from: Date; to: Date } {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return { from, to };
+}
 
 const PLATFORM_SETTINGS_ID = 'global';
 
@@ -31,6 +43,28 @@ export interface ResolvedTenant {
   tenantId: string;
   tenantName: string;
 }
+
+export interface PortfolioClientSummary {
+  membershipId: string;
+  clientTenantId: string;
+  clientTenantName: string;
+  ownTaxCondition: string | null;
+  invoicesThisMonth: number;
+  upcomingDeadlines: PortfolioDeadlineSummary[];
+}
+
+export interface PortfolioDeadlineSummary {
+  id: string;
+  kind: string;
+  dueDate: Date;
+  description: string;
+}
+
+/** Cuántos vencimientos PENDING trae el consolidado por cliente - a
+ * propósito sin filtro de fecha (>= hoy): uno ya vencido y todavía PENDING
+ * es justamente el que más le importa ver primero al contador, orderBy
+ * dueDate asc ya lo deja arriba de la lista. */
+const PORTFOLIO_DEADLINES_PER_CLIENT = 5;
 
 export interface StudioMembershipSummary {
   id: string;
@@ -65,6 +99,8 @@ export interface ClientMembershipSummary {
  */
 @Injectable()
 export class MembershipsService {
+  private readonly logger = new Logger(MembershipsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
@@ -97,6 +133,61 @@ export class MembershipsService {
       createdAt: row.created_at,
       respondedAt: row.responded_at,
     }));
+  }
+
+  /**
+   * Cartera consolidada: sólo las membresías ACCEPTED, con un resumen
+   * liviano por cliente (condición IVA + facturación de este mes) - mismo
+   * patrón/costo que AdminTenantsService.listTenants() (un
+   * withTenantContext por cliente, secuencial, con try/catch individual
+   * para que un cliente con datos corruptos no tumbe la cartera entera).
+   * Deliberadamente liviano: NO recalcula VatBookService.getSalesBook()
+   * completo acá - eso se reserva para cuando el contador entra a UN
+   * cliente puntual (ver plan, "Costo, honestamente"). Incluye los próximos
+   * vencimientos PENDING de cada cliente (sub-fase 1e).
+   */
+  async getPortfolio(studioTenantId: string): Promise<PortfolioClientSummary[]> {
+    const memberships = await this.listMine(studioTenantId);
+    const accepted = memberships.filter((m) => m.status === 'ACCEPTED');
+    const { from, to } = currentMonthRangeUtc();
+
+    const summaries: PortfolioClientSummary[] = [];
+    for (const membership of accepted) {
+      try {
+        const summary = await withTenantContext(this.prisma, membership.clientTenantId, async () => {
+          const db = getTenantDb();
+          const [settings, invoicesThisMonth, deadlines] = await Promise.all([
+            db.tenantSettings.findUnique({ where: { tenantId: membership.clientTenantId } }),
+            db.invoice.count({ where: { issueDate: { gte: from, lt: to } } }),
+            db.taxDeadline.findMany({
+              where: { status: 'PENDING' },
+              orderBy: { dueDate: 'asc' },
+              take: PORTFOLIO_DEADLINES_PER_CLIENT,
+            }),
+          ]);
+          return {
+            membershipId: membership.id,
+            clientTenantId: membership.clientTenantId,
+            clientTenantName: membership.clientTenantName,
+            ownTaxCondition: settings?.ownTaxCondition ?? null,
+            invoicesThisMonth,
+            upcomingDeadlines: deadlines.map((d) => ({
+              id: d.id,
+              kind: d.kind,
+              dueDate: d.dueDate,
+              description: d.description,
+            })),
+          };
+        });
+        summaries.push(summary);
+      } catch (err) {
+        this.logger.error(
+          `Failed to load portfolio summary for ${membership.clientTenantId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return summaries;
   }
 
   /** Relaciones donde YO soy el cliente (invité a un estudio, o un estudio

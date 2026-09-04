@@ -40,7 +40,56 @@
   write access to module accounting", y `GET /invoicing/invoices` devolvió
   200 sin ninguna fila de `UserModuleAccess` de por medio - las 3
   dimensiones del diseño confirmadas.
-- 1d (cartera + consolidado), 1e (vencimientos): todavía no empezadas.
+- **1d — Cartera + consolidado liviano: HECHO** (sesión 2026-09-04, misma
+  sesión que 1a/1b/1c). `GET /memberships/portfolio` filtra `listMine()`
+  a sólo `ACCEPTED` y agrega, por cliente, `TenantSettings.ownTaxCondition`
+  + `invoicesThisMonth` - mismo patrón de costo/resiliencia que
+  `AdminTenantsService.listTenants()` (un `withTenantContext` por cliente,
+  secuencial, try/catch individual para que un cliente roto no tumbe la
+  cartera entera). Deliberadamente liviano - no recalcula
+  `VatBookService.getSalesBook()` por cliente en cada carga, eso queda
+  para cuando el contador entra a un cliente puntual. Sin vencimientos
+  todavía (eso es 1e). Verificado en vivo contra el servidor real.
+- **1e — Vencimientos: HECHO** (sesión 2026-09-04, misma sesión que
+  1a/1b/1c/1d). Modelo nuevo y chico `TaxDeadline` (migración
+  `20260922000000_tax_deadlines`, RLS estándar - cae automático bajo
+  `tenant-scoped-tables.rls-spec.ts`, confirmado con
+  `nx run database:test-rls`), sin motor de recurrencia ni integración con
+  ARCA, carga 100% manual (`kind`/`dueDate`/`description`/`status`
+  PENDING|DONE). `TaxDeadlineService` + 3 rutas nuevas colgadas del
+  `TaxesController` YA EXISTENTE bajo el mismo `MODULE = 'taxes'`
+  (`POST /taxes/deadlines`, `GET /taxes/deadlines?status=`,
+  `POST /taxes/deadlines/:id/done`) - cero cambios en
+  `DEFAULT_ACCOUNTANT_MODULE_ACCESS`, el contador ya tenía
+  `taxes: {canRead:true,canWrite:true}` desde 1c. `GET /memberships/portfolio`
+  ahora suma, por cliente ACCEPTED, los próximos 5 vencimientos PENDING
+  (orderBy dueDate asc, sin filtro de fecha a propósito - uno ya vencido y
+  todavía PENDING es el que más le importa ver primero al contador, queda
+  arriba de la lista solo). Verificado en vivo de punta a punta contra el
+  servidor real: invitación Demo Tenant → Comercial Perez SRL, aceptación,
+  activación, el usuario espejo (`ACCOUNTANT`, moduleAccess con `taxes`
+  read+write) creó un vencimiento nuevo con su propia identidad
+  (`createdByUserId` = el linked user, no el owner del estudio), y
+  `GET /memberships/portfolio` devolvió el vencimiento cargado por el OWNER
+  del cliente dentro de `upcomingDeadlines`. Todos los datos de prueba
+  limpiados al terminar (deadlines, `UserModuleAccess`, el usuario espejo,
+  el link y la membership).
+
+  **Nota al margen, no corregida acá (fuera de alcance de 1e)**: el objeto
+  que devuelven `inviteFromClient()`/`requestFromStudio()` en el momento de
+  crear la relación (`POST /memberships/invite` y `/request`) etiqueta mal
+  `clientTenantId`/`clientTenantName` cuando quien llama es el cliente - el
+  `id`/`status` son correctos, pero el nombre mostrado es el del ESTUDIO
+  resuelto, no el propio. `GET /memberships` (`listMine`, vía
+  `list_studio_memberships()`) resuelve el nombre correctamente en todos los
+  casos - sólo la respuesta inmediata del POST de alta tiene el rótulo
+  cambiado. Cosmético (no afecta permisos/seguridad), heredado de 1b, visto
+  al verificar 1e en vivo.
+
+Con 1a/1b/1c/1d/1e cerradas, el alcance backend explícito de la Fase 1 según
+este plan queda completo. Falta toda la UI de frontend (cartera, invitación,
+activación/swap de token, vencimientos) - no empezada todavía, sigue siendo
+100% backend probado por API/curl.
 
 ## Contexto
 

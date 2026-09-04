@@ -1,11 +1,13 @@
 import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import { RequireModuleAccess } from '@plexo/auth';
-import type { WithholdingTaxType } from '@plexo/database';
+import type { TaxDeadlineStatus, WithholdingTaxType } from '@plexo/database';
+import { CreateTaxDeadlineDto } from './dto/create-tax-deadline.dto.js';
 import { CreateTaxDefinitionDto } from './dto/create-tax-definition.dto.js';
 import { CreateWithholdingRegimeDto } from './dto/create-withholding-regime.dto.js';
 import { ReviseTaxDefinitionDto } from './dto/revise-tax-definition.dto.js';
 import { ReviseWithholdingRegimeDto } from './dto/revise-withholding-regime.dto.js';
 import { VatBookQueryDto } from './dto/vat-book-query.dto.js';
+import { TaxDeadlineService } from './tax-deadline.service.js';
 import { TaxesService } from './taxes.service.js';
 import { CitiExportService } from './vat-book/citi/citi-export.service.js';
 import { VatBookExcelService } from './vat-book/vat-book-excel.service.js';
@@ -31,6 +33,7 @@ export class TaxesController {
     private readonly vatBookExcelService: VatBookExcelService,
     private readonly vatBookPdfService: VatBookPdfService,
     private readonly citiExportService: CitiExportService,
+    private readonly taxDeadlineService: TaxDeadlineService,
   ) {}
 
   @RequireModuleAccess(MODULE, 'write')
@@ -191,5 +194,25 @@ export class TaxesController {
       type: 'text/plain',
       disposition: 'attachment; filename="LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS.txt"',
     });
+  }
+
+  // --- Vencimientos (carga manual, ver TaxDeadlineService) ---
+
+  @RequireModuleAccess(MODULE, 'write')
+  @Post('deadlines')
+  createDeadline(@Body() dto: CreateTaxDeadlineDto) {
+    return this.taxDeadlineService.create(dto);
+  }
+
+  @RequireModuleAccess(MODULE, 'read')
+  @Get('deadlines')
+  listDeadlines(@Query('status') status?: TaxDeadlineStatus) {
+    return this.taxDeadlineService.list(status);
+  }
+
+  @RequireModuleAccess(MODULE, 'write')
+  @Post('deadlines/:id/done')
+  markDeadlineDone(@Param('id') id: string) {
+    return this.taxDeadlineService.markDone(id);
   }
 }
