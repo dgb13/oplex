@@ -1,0 +1,402 @@
+# Fase 1 — Módulo para estudios contables (multi-tenant, una cuenta)
+
+## Estado
+
+- **1a — Núcleo de membresía: HECHO** (sesión 2026-09-04). `TenantMembership`
+  + `TenantMembershipLink`, `list_studio_memberships()`, endpoint de
+  activación, duración configurable en `PlatformSettings`, fix de
+  `assertCanAddUser()`. Ver la entrada de sesión correspondiente en
+  PROGRESS.md para el detalle completo y la verificación de punta a punta.
+- 1b (invitación bidireccional), 1c (permisos por defecto), 1d (cartera +
+  consolidado), 1e (vencimientos): todavía no empezadas.
+
+## Contexto
+
+Hoy `User.tenantId` es 1:1 estricto (sin tabla de membresía) y el único
+mecanismo cross-tenant que existe es la impersonación de `/admin`
+(`AuthService.impersonate()`), atada al allowlist de email de
+`PlatformAdminGuard` y con un problema de auditoría real: el JWT resultante
+tiene `sub` = el usuario **destino**, así que toda acción queda indistinguible
+de una acción genuina de ese usuario — no sirve como base para que un contador
+externo actúe con su propia identidad en varios tenants.
+
+Este plan diseña cómo una cuenta de contador accede a N tenants clientes,
+entra a operar en cualquiera con alcance acotado, queda auditado como sí
+mismo (no como un usuario prestado), y tiene una cartera consolidada con
+vencimientos — reusando al máximo los mecanismos ya probados (RLS,
+`withTenantContext`, `UserModuleAccess`, el patrón `list_tenant_ids()` +
+loop de `AdminTenantsService`/`AdminAuditService`) en vez de inventar
+paralelos nuevos.
+
+**Verificado contra el código real** (no asumido): `buildAccessToken`/
+`AuthService.login`/`impersonate()` completos, `JwtAuthGuard` (puramente
+criptográfico, no re-consulta la DB por request), `/auth/me` (confía 100%
+en RLS via `getTenantDb().user.findUnique({where:{id}})`, sin chequeo manual
+de tenant), el flujo de `TeamInvitation` (single-tenant por construcción,
+no reusable tal cual), `UserModuleAccess` (**sin ningún endpoint de
+gestión hoy** — solo se lee en 4 lugares al emitir el JWT, nunca se
+crea/actualiza vía API), las dos únicas policies RLS no-estándar del repo
+(`tenants`/`audit_log`), el mecanismo exacto de `list_tenant_ids()`
+(`SECURITY DEFINER`, `GRANT EXECUTE` acotado, llamado con el cliente Prisma
+crudo antes de abrir `withTenantContext`), y el trigger de `AuditLog`
+(`changedBy` sale de `current_setting('app.user_id', true)`, que
+`TenantContextInterceptor` ya setea en cada request autenticado).
+
+## 1. Modelo de membresía múltiple
+
+**Actualizado tras confirmar con el usuario: el estudio contable es una
+entidad compartida, no una cuenta individual.** Varios contadores de un
+mismo estudio tienen que heredar la misma cartera de clientes. Esto cambia
+el diseño de fondo respecto a la primera versión de este plan (que colgaba
+la membresía de un `User` individual) — ahora cuelga de un **Tenant**.
+
+**Decisión: el estudio contable ES un `Tenant` más de este sistema** (no un
+concepto paralelo nuevo tipo "equipo"/"organización"). Reusa el 100% de lo
+que ya existe: signup propio, `User`s propios (OWNER/ADMIN/staff) con login
+real, roles ya definidos. Un estudio incluso podría llegar a usar Oplex para
+su propio negocio (facturar honorarios) si quisiera, aunque eso no es
+requisito. La alternativa (inventar una entidad "Firma"/"Equipo" separada de
+`Tenant`) hubiera duplicado exactamente lo que `Tenant`+`User`+roles ya
+resuelven — no se justifica.
+
+**Decisión: nueva tabla `TenantMembership`, NO se toca `User.tenantId`.**
+Sigue sin tocarse por la misma razón que antes: todo el codebase confía en
+`User.tenantId` como escalar único (`@@unique([tenantId, email])`,
+`/auth/me`, `changePassword`, `updateProfile`, y ~26 sitios que hacen
+`getTenantDb().user.findUnique({where:{id: getUserId()}})` confiando en que
+RLS ya los limita al tenant correcto).
+
+**`TenantMembership`** (RLS **estándar**, `tenantId` = el tenant **cliente**,
+NOT NULL — cae automáticamente bajo `tenant-scoped-tables.rls-spec.ts` sin
+necesitar ninguna excepción, mismo patrón que las 40+ tablas existentes).
+El vínculo ahora es **tenant↔tenant**, no user↔tenant:
+
+```
+id
+tenantId          // tenant cliente, dueño de la relación
+homeTenantId      // tenant del ESTUDIO CONTABLE (no un User individual)
+inviteeIdentifier // email o CUIT del tenant/estudio invitado, hasta que se resuelve
+direction         // CLIENT_INVITED | ACCOUNTANT_REQUESTED
+status            // PENDING | ACCEPTED | DECLINED | REVOKED
+initiatedByUserId // quien disparó la fila (siempre alguien con contexto propio en ese momento)
+respondedAt
+createdAt
+```
+
+**`TenantMembershipLink`** (tabla nueva, RLS estándar por `tenantId` =
+tenant cliente): la identidad de auditoría **sigue siendo por persona, no
+por estudio** — esto es deliberado y es la parte que preserva el punto 2
+(identidad/auditoría) intacto a pesar de que el permiso ahora es
+compartido. Si 3 contadores del mismo estudio accedieran con una única fila
+`User` "espejo" compartida, sus acciones volverían a ser indistinguibles
+entre sí — exactamente el mismo problema que tiene hoy la impersonación.
+Por eso, la fila `User` espejo dentro del tenant cliente se sigue creando
+**por persona**, pero ahora de forma perezosa (lazy) la primera vez que ESE
+usuario puntual del estudio activa una sesión en ESE cliente puntual — no
+al aceptar la membresía (que es a nivel estudio, no a nivel persona):
+
+```
+id
+membershipId    // FK a TenantMembership
+studioUserId    // User.id del contador puntual, en SU tenant (el estudio)
+linkedUserId    // User.id "espejo" de ESE contador puntual, DENTRO del tenant cliente
+createdAt
+```
+
+**Cómo se elige el tenant activo por request — igual mecanismo que hoy, sin
+tocar nada del núcleo**: el tenant activo sigue siendo 100% una propiedad
+del JWT (`tenantId` claim), decidido en el momento de emitir el token, nunca
+por-request. Se agrega un endpoint nuevo, estructuralmente idéntico a
+`POST /admin/tenants/:id/impersonate` pero gateado distinto:
+
+`POST /memberships/:id/activate` — el chequeo de pertenencia es ahora **más
+simple** que en la versión individual del diseño, porque no hace falta
+cruzar contra ningún campo adicional: `membership.homeTenantId ===
+request.user.tenantId` (el tenant del JWT ya verificado del usuario que
+llama — es literalmente su propio tenant, el del estudio) **&&**
+`membership.status === 'ACCEPTED'`. Dentro de `withTenantContext(clientTenantId)`
+busca (o, si es la primera vez que ESTE usuario puntual entra a ESTE
+cliente, crea) el `TenantMembershipLink` correspondiente y su
+`linkedUserId`, y llama `buildAccessToken(linkedUser, clientTenantId,
+moduleAccess, {expiresIn: <configurable, ver más abajo>})` — la MISMA
+función que ya usa login/impersonate, sin cambios. El frontend reusa el
+mismo patrón client-side de `apps/web/src/lib/impersonation.ts` (guardar el
+token "hogar", swap al token del tenant cliente, restaurar al volver a la
+cartera).
+
+**Quién dentro del estudio puede hacer qué** (usando roles ya existentes,
+sin inventar nada nuevo): crear/aceptar/revocar una `TenantMembership`
+(la relación estudio↔cliente en sí) queda gateado a `@Roles('OWNER','ADMIN')`
+del estudio — es una decisión administrativa del estudio, no de cualquier
+empleado. **Activar** una sesión en un cliente ya-aceptado (`POST
+/memberships/:id/activate`) puede hacerlo cualquier usuario del estudio con
+rol `OWNER`/`ADMIN`/`ACCOUNTANT` (no `VIEWER`/`SALES`/etc.) — es trabajo del
+día a día, no una decisión administrativa nueva cada vez.
+
+**Impacto en `@@unique([tenantId, email])`**: ninguno, igual que antes — la
+fila espejo (ahora en `TenantMembershipLink.linkedUserId`) sigue siendo una
+fila real dentro del tenant cliente, con su propio `(tenantId, email)`
+válido. Sigue sin haber ninguna FK nueva que cruce tenants (mismo argumento
+que antes respecto al antecedente de `composite_tenant_fks`).
+
+**Impacto en JWT/`JwtAuthGuard`**: cero, igual que antes.
+
+**El problema estructural real, y cómo se resuelve** (mismo mecanismo que
+`list_tenant_ids()`, ahora parametrizado por `tenantId` del estudio en vez
+de por `userId` — lo cual además simplifica el chequeo de IDOR, ver punto 3):
+1. Listar "las" membresías/invitaciones pendientes del estudio, sin importar
+   el tenant destino → `list_studio_memberships(studio_tenant_id)`,
+   `SECURITY DEFINER`, `GRANT EXECUTE` acotado a `plexo_app`. El único
+   chequeo de seguridad que necesita esta función es que quien la invoque
+   pase su propio `request.user.tenantId` — no hace falta cruzar contra un
+   usuario puntual.
+2. Crear una solicitud dirigida a un tenant en el que el estudio todavía no
+   tiene contexto (`ACCOUNTANT_REQUESTED`) → misma función de escritura que
+   antes, ahora recibe `homeTenantId` en vez de `homeUserId`.
+3. Aceptar/rechazar una invitación recibida, y crear/reusar el
+   `TenantMembershipLink` + fila espejo al activar → sigue siendo, sin duda,
+   **la pieza de más escrutinio de todo el diseño**: nunca acepta ningún id
+   de actor desde el body/params, siempre `request.user.tenantId`/`.sub` del
+   JWT ya verificado. Necesita su propio test dedicado (mismo espíritu que
+   `cross-tenant-write.rls-spec.ts`, pero a nivel service: un estudio no
+   puede activar/leer la membership de otro estudio).
+
+Todo lo demás (el cliente invita, el cliente aprueba una solicitud, el
+cliente revoca, cualquier lectura desde el lado del tenant cliente) usa RLS
+estándar sin escape hatch, porque el cliente siempre opera dentro de su
+propio contexto.
+
+## 2. Identidad y auditoría del contador
+
+Resuelto como efecto directo del punto 1, **preservado incluso con el
+permiso ahora a nivel estudio**: cada contador puntual del estudio tiene su
+propia fila `TenantMembershipLink.linkedUserId`, una fila `User` real y
+permanente dentro del tenant cliente (no un usuario prestado como en la
+impersonación, y no compartida entre los distintos contadores del mismo
+estudio). Toda escritura durante una sesión activada por membership queda
+en `UserActivityLog`/`AuditLog` con `userId` = ese `linkedUserId` puntual —
+una identidad única y estable por persona, que el propio visor de auditoría
+del tenant cliente resuelve correctamente a "Juan Pérez (Contador, Estudio
+XYZ)", nunca ambigua entre los distintos contadores del mismo estudio ni
+con la ambigüedad que tiene hoy la impersonación. No hace falta ningún
+cambio en `ActivityLogInterceptor`, `computeDiff`, ni en el trigger de
+`audit_log_capture()` — `app.user_id` ya se setea solo, automáticamente,
+porque `TenantContextInterceptor` ya pasa `request.user.sub` (el
+`linkedUserId` de esa persona puntual) a `withTenantContext` en cada
+request, sin cambios.
+
+## 3. Alcance y seguridad
+
+**Recomendación de alcance para esta v1 (justificada)**: solo lectura por
+defecto en un set curado de módulos relevantes para un contador (`taxes`,
+`accounting`, `invoicing`, `reports`, `receivables`, `payables`),
+auto-otorgado al aceptar la membresía vía `UserModuleAccess` — creando ahí,
+por primera vez, filas reales para ese `linkedUserId` (hoy esa tabla no
+tiene NINGÚN endpoint de creación en toda la app; se construye solo la
+escritura mínima puntual para este flujo, **no** un CRUD genérico de
+`UserModuleAccess` — eso queda fuera de alcance de la Fase 1). Escritura
+explícita solo en `taxes`, apoyándose en el único precedente real que ya
+existe en el código (`managedByAccountant` en
+`libs/modules/taxes/src/lib/taxes.service.ts`, que ya distingue "esto se le
+puede delegar a un `ACCOUNTANT`" en producción). Nada de escritura en
+Inventario/Ventas/Compras/POS por defecto — son módulos operativos, no
+contables/fiscales.
+
+**Caminos de fuga posibles y cómo el diseño los previene** (con el
+antecedente real de las 2 fugas ya encontradas en mente):
+- **Tabla nueva sin RLS** (clase del incidente de `add_purchases_module`,
+  7 tablas sin `RLS`/`GRANT` hasta que un curl real lo reveló) → mitigado:
+  `TenantMembership` sigue el patrón estándar de tenant, cae automático
+  dentro de `tenant-scoped-tables.rls-spec.ts` sin necesitar ninguna
+  excepción — el test ya existente lo cubre el mismo día que se migre.
+- **FK simple cross-tenant** (clase de la fuga corregida en
+  `composite_tenant_fks`) → el diseño la evita por construcción: no hay
+  ninguna FK nueva que cruce de un tenant a otro, porque la identidad del
+  contador "vive" como fila real en cada tenant al que tiene acceso.
+- **IDOR en las 2 funciones `SECURITY DEFINER` nuevas** → la única fuga real
+  posible de todo el diseño, porque ahí RLS no protege nada. Mitigación:
+  disciplina de código (nunca aceptar el id del actor desde el body/params,
+  siempre desde el JWT verificado) + test dedicado obligatorio antes de
+  cerrar esta fase. Con el vínculo a nivel estudio (no por usuario) este
+  chequeo es además más simple que en la primera versión del diseño: alcanza
+  con comparar `request.user.tenantId` (el propio tenant del JWT ya
+  verificado) contra `homeTenantId`, sin cruzar contra un `userId`
+  individual.
+- **Un empleado del estudio con rol de bajo privilegio activando acceso a un
+  cliente sin que el estudio realmente lo haya autorizado** → mitigado
+  separando "quién puede crear/aceptar/revocar la relación con un cliente"
+  (`@Roles('OWNER','ADMIN')` del estudio, decisión administrativa) de "quién
+  puede activar una sesión en un cliente ya aceptado" (`OWNER`/`ADMIN`/
+  `ACCOUNTANT`, trabajo del día a día) — un `VIEWER`/`SALES`/etc. del estudio
+  nunca puede activar nada, ni aunque la membership ya esté `ACCEPTED`.
+- **Token de sesión de membership sin revocación activa** — mismo límite que
+  ya tiene hoy la impersonación (`JwtAuthGuard` no re-consulta DB, así que
+  revocar no invalida un JWT ya emitido hasta que expira). No es un límite
+  nuevo que este diseño introduzca, se hereda tal cual; se mitiga con una
+  expiración acotada y configurable (ver sección dedicada más abajo), más
+  larga que los 15min de impersonación porque acá sí se espera una sesión de
+  trabajo real, pero igual lejos de un login normal de 8h/30d.
+- **Fila espejo reusable tras revocar** → revocar una membership tiene que
+  poner `status: SUSPENDED` en el `linkedUserId` (mismo mecanismo de
+  `UserStatus` que ya se chequea hoy en `login()`), y el flujo de activación
+  debe re-chequear `membership.status === 'ACCEPTED'` cada vez (no solo al
+  invitar), para que una membership revocada no pueda reactivarse sin pasar
+  de nuevo por todo el flujo.
+
+## 4. Vista de cartera + consolidado
+
+Mismo patrón exacto que `AdminTenantsService.listTenants()`/
+`AdminAuditService.listActivity()`: `list_studio_memberships()` (función
+nueva del punto 1) da la lista de tenantIds ACCEPTED del **estudio** (no de
+un contador puntual — la cartera es del estudio, cualquier usuario con rol
+habilitado la ve entera; ver "Decisiones confirmadas" sobre este punto),
+después un loop de `withTenantContext(tenantId)` por cada uno junta un
+resumen (`TenantSettings.ownTaxCondition`, conteos de facturación,
+vencimientos próximos del punto 5).
+
+**Costo, honestamente**: cada iteración abre su propia transacción
+(`withTenantContext` envuelve en `$transaction`), igual que hace
+`AdminTenantsService` hoy — el propio comentario de ese archivo ya asume
+recorrido secuencial con try/catch por tenant (no en paralelo, para no
+tumbar el panel entero si un tenant falla). Para un contador con una
+cartera de decenas de clientes esto es aceptable; no escala indefinido.
+Recomendación: la vista de cartera solo trae conteos livianos (no recalcula
+`VatBookService.getSalesBook()` completo por cada tenant en cada carga de
+pantalla — eso se reserva para cuando el contador entra a UN tenant
+puntual), y cualquier cosa más pesada queda atrás de una acción explícita
+de "actualizar" en vez de recalcularse en cada render.
+
+## Duración del token de sesión — configurable por SuperAdmin
+
+Confirmado con el usuario: no un valor fijo, sino elegible por SuperAdmin
+entre 1, 2, 5 u 8 horas. Mismo patrón exacto ya usado para "Cotizaciones
+USD"/"Índices de Inflación" en el backoffice — un campo nuevo en
+`PlatformSettings` (tabla global sin `tenantId`/RLS, ya tiene precedente de
+config editable por SuperAdmin: `bnaSyncEnabled`/`bnaSyncHour`,
+`ipcSyncEnabled`/`ipcSyncHour`), ej. `membershipSessionDurationHours: Int
+@default(2)`, con un nuevo controller `AdminMembershipSettingsController`
+(`@Controller('admin/membership-settings')`, `@UseGuards(PlatformAdminGuard)`,
+`GET`/`PATCH`) calcado literalmente de `AdminBnaSyncController`
+(`apps/api/src/app/scheduler/admin-bna-sync.controller.ts`) — mismo
+`GET`+`PATCH` sobre el mismo `PlatformSettings`, un DTO nuevo con
+`@IsIn([1,2,5,8])` en vez de las 4 opciones fijas hardcodeadas en el
+frontend sin validar. El endpoint de activación (`POST
+/memberships/:id/activate`) lee este valor al llamar a `buildAccessToken`
+en vez de un `expiresIn` fijo.
+
+## 5. Vencimientos — modelo mínimo
+
+Nueva entidad, chica a propósito, sin motor de recurrencia:
+
+```
+model TaxDeadline (o FiscalDeadline)
+  id, tenantId (RLS estándar)
+  kind          // texto corto o enum chico: IVA / MONOTRIBUTO / IIBB / GANANCIAS / OTRO
+  dueDate
+  description
+  status        // PENDING | DONE (marcado a mano)
+  createdByUserId
+  createdAt
+```
+
+Carga 100% manual — no existe (ni se planea acá) integración con un
+calendario oficial de ARCA. Coherente con el resto del código impositivo de
+este repo, que ya es data mantenida a mano y versionada (`TaxDefinition`,
+`WithholdingRegime`), no calculada. El consolidado del punto 4 simplemente
+suma "próximos N vencimientos" por tenant dentro del mismo loop.
+
+## Qué se reusa tal cual / qué se extiende / qué se construye de cero
+
+- **Tal cual, sin tocar**: RLS estándar y su test suite, `withTenantContext`/
+  `TenantContextInterceptor`, `JwtAuthGuard`, `buildAccessToken`,
+  `ActivityLogInterceptor`/`computeDiff`, el trigger `audit_log_capture()`,
+  el patrón `SECURITY DEFINER` + `GRANT EXECUTE` acotado de
+  `list_tenant_ids()`, el patrón de loop de `AdminTenantsService`.
+- **Se extiende**: `UserModuleAccess` (primera vez que algo la escribe, acá
+  con un alcance bien acotado — no CRUD genérico), `UserRole.ACCOUNTANT` +
+  el precedente de `managedByAccountant`, el patrón client-side de
+  `impersonation.ts` (swap de token) para "activar cartera".
+- **Se construye de cero**: `TenantMembership` + `TenantMembershipLink`, las
+  2 funciones `SECURITY DEFINER` nuevas, el endpoint de activación, la
+  pantalla de cartera/consolidado, `TaxDeadline`, el campo
+  `membershipSessionDurationHours` en `PlatformSettings` +
+  `AdminMembershipSettingsController` (calcado de `AdminBnaSyncController`),
+  y el flujo de invitación bidireccional (reusando el patrón de
+  token/hash/expiración de `TeamInvitation` y el puerto `AuthEmailSender` ya
+  usados por invitaciones de equipo/reset de password — la lógica de
+  aceptación es nueva porque `TeamInvitation.accept` siempre crea un usuario
+  nuevo sin contraseña, y acá hace falta *vincular* un tenant que ya existe,
+  no crear uno nuevo).
+
+## isExternalAccountant — resolución explícita
+
+**Repurpose, no eliminar.** Pasa a tener sentido real por primera vez: se
+setea `true` en (a) toda fila `User` del tenant-estudio (marca el tipo de
+cuenta/tenant en general) y (b) en cada fila espejo
+(`TenantMembershipLink.linkedUserId`) creada por este flujo — sirve para que
+la UI del tenant cliente lo distinga visualmente en su listado de usuarios
+("Contador externo — Estudio XYZ", no un empleado real), y es el gancho
+natural para excluir estas filas de cualquier conteo de cupo de usuarios del
+plan (`Plan.maxUsers`) — ver "Decisiones confirmadas" abajo, ya verificado y
+resuelto.
+
+## Sub-secuenciado dentro de la Fase 1
+
+1. **1a — Núcleo de membresía**: `TenantMembership` + `TenantMembershipLink`
+   (fila espejo lazy por persona), las 2 funciones `SECURITY DEFINER`,
+   endpoint de activación, duración configurable en `PlatformSettings`.
+   Demostrable sin UI de invitación todavía (memberships creadas a
+   mano/seed) — "entro a un tenant cliente como contador de un estudio y
+   queda auditado con mi propia identidad, no la del estudio ni la de un
+   usuario del cliente" de punta a punta.
+2. **1b — Invitación bidireccional real** (UI + endpoints), reusando
+   token/email de `TeamInvitation`/`AuthEmailSender`.
+3. **1c — Permisos por defecto** (`UserModuleAccess` al aceptar, alcance
+   del punto 3).
+4. **1d — Cartera + consolidado liviano** (sin vencimientos todavía).
+5. **1e — Vencimientos** (`TaxDeadline` + que aparezcan en el consolidado).
+
+## Decisiones confirmadas con el usuario (ya cerradas)
+
+1. **`Plan.maxUsers`/cupo de usuarios — las filas espejo quedan AFUERA del
+   cupo del cliente.** Verificado el código real:
+   `SubscriptionService.assertCanAddUser()`
+   (`libs/shared/subscriptions/src/lib/subscription.service.ts:88-96`) hace
+   `getTenantDb().user.count()` sin filtro y lo compara contra
+   `plan.maxUsers`; solo lo invoca `UsersService` (flujo de invitación de
+   equipo normal, `apps/api/src/app/users/users.service.ts`) — la creación
+   de la fila espejo (`TenantMembershipLink.linkedUserId`) es un código
+   nuevo, completamente separado, que **nunca debe llamar
+   `assertCanAddUser()`**. Además, como defensa en profundidad, el propio
+   `count()` de `assertCanAddUser()` pasa a filtrar
+   `where: { isExternalAccountant: { not: true } }` — así el cupo mostrado
+   siempre refleja asientos reales del cliente, sin importar qué código lo
+   invoque en el futuro.
+2. **Visibilidad de la cartera — completa para cualquier `OWNER`/`ADMIN`/
+   `ACCOUNTANT` del estudio, sin reparto por contador en esta Fase 1.**
+   Confirmado, queda tal como estaba recomendado en el diseño original.
+3. **Nombres de tablas/campos** (`TenantMembership`, `TenantMembershipLink`,
+   nombres de columnas) — se implementan tal como están propuestos en este
+   plan; se pueden ajustar en el camino sin cambiar el diseño de fondo.
+
+## Verificación (cuando se apruebe e implemente)
+
+1. Migración nueva con RLS+GRANT estándar para `TenantMembership` y
+   `TaxDeadline` — correr `npx nx run database:test-rls` y confirmar que
+   `tenant-scoped-tables.rls-spec.ts` las toma automáticamente sin tocar el
+   test.
+2. Test nuevo dedicado para las 2 funciones `SECURITY DEFINER` (estudio A no
+   puede activar/leer/resolver una membership de estudio B; dentro del mismo
+   estudio, dos contadores distintos activando el mismo cliente terminan con
+   `linkedUserId` distintos) — mismo espíritu que
+   `cross-tenant-write.rls-spec.ts`.
+3. `nx run-many -t lint,test,build` de los proyectos tocados (`database`,
+   `auth` compartido, un módulo nuevo tipo `memberships`, `api`, `web`).
+4. Prueba manual end-to-end (Chrome o curl como se hizo en sesiones
+   anteriores): crear una membership ACCEPTED a mano para un tenant-estudio
+   con 2 usuarios, activar sesión con cada uno de los 2 en el mismo cliente,
+   hacer una acción mutante con cada uno, confirmar en `UserActivityLog` de
+   ESE tenant que quedan 2 identidades distintas (no una compartida, no la
+   de un usuario real del cliente), y confirmar que el JWT respeta la
+   duración configurada en `PlatformSettings` y no se puede reusar pasado
+   ese límite.

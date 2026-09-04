@@ -178,6 +178,88 @@ model Tenant {
   @@map("tenants")
 }
 
+// El estudio contable que invita/solicita, o al que se invita, no es un
+// User individual - es el Tenant entero (varios contadores del mismo
+// estudio comparten la misma cartera de clientes, decisión con el usuario).
+// No user↔tenant, sino tenant↔tenant.
+enum MembershipDirection {
+  CLIENT_INVITED
+  ACCOUNTANT_REQUESTED
+}
+
+enum MembershipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+}
+
+// Relación tenant↔tenant entre un tenant CLIENTE (tenantId, dueño de la
+// fila - RLS estándar) y un tenant ESTUDIO CONTABLE (homeTenantId). Ninguno
+// de los dos es una FK real: homeTenantId vive en otro tenant (no se puede
+// referenciar cross-tenant, ver PROGRESS.md sobre la fuga de FK simple ya
+// corregida) y ambos IDs se resuelven siempre vía las funciones SECURITY
+// DEFINER (list_studio_memberships, mismo patrón que list_tenant_ids()/
+// find_tenants_by_email en tenant-context/auth), nunca vía RLS directa
+// desde el lado del estudio - ver plan en docs/plan_modulo_contadores.txt.
+model TenantMembership {
+  id                String              @id @default(uuid())
+  tenantId          String
+  homeTenantId      String
+  // Email o CUIT del tenant/estudio invitado, hasta que la invitación se
+  // resuelve - mismo criterio que TeamInvitation.email (el invitado
+  // todavía no tiene ninguna fila propia acá).
+  inviteeIdentifier String?
+  direction         MembershipDirection
+  status            MembershipStatus    @default(PENDING)
+  // Quien disparó la fila - siempre alguien que en ese momento tenía
+  // contexto propio (el cliente en CLIENT_INVITED; en ACCOUNTANT_REQUESTED
+  // es del lado del estudio, por eso sin @relation, igual criterio que el
+  // resto de los *ByUserId de este schema que aún no son FK compuesta).
+  initiatedByUserId String
+  respondedAt       DateTime?
+  createdAt         DateTime            @default(now())
+
+  links TenantMembershipLink[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([homeTenantId])
+  @@map("tenant_memberships")
+}
+
+// Identidad de auditoría POR PERSONA, no por estudio - deliberado (ver
+// plan): si varios contadores del mismo estudio compartieran una sola fila
+// "espejo", sus acciones serían indistinguibles entre sí en el tenant
+// cliente, el mismo problema que ya tiene la impersonación. Se crea de
+// forma perezosa, la primera vez que ESE usuario puntual del estudio activa
+// una sesión en ESE cliente puntual (ver endpoint de activación) - no al
+// aceptar la membership, que es a nivel estudio.
+model TenantMembershipLink {
+  id           String           @id @default(uuid())
+  tenantId     String
+  membershipId String
+  membership   TenantMembership @relation(fields: [tenantId, membershipId], references: [tenantId, id])
+  // User.id del contador puntual, en SU tenant (el estudio) - cross-tenant
+  // respecto a tenantId de esta fila, por eso sin @relation (mismo
+  // criterio que homeTenantId arriba).
+  studioUserId String
+  // User.id "espejo" de ese contador puntual, DENTRO de este mismo tenant
+  // (el cliente) - FK simple a propósito, no compuesta: a diferencia de los
+  // ~22 casos ya endurecidos, este valor nunca sale de un body/request de
+  // usuario, lo arma siempre el propio backend dentro de
+  // withTenantContext(tenantId cliente) en el mismo momento que crea la
+  // fila User referenciada - no hay superficie de ataque que una FK
+  // compuesta esté evitando acá.
+  linkedUserId String
+  linkedUser   User             @relation("MembershipLinkedUser", fields: [linkedUserId], references: [id])
+  createdAt    DateTime         @default(now())
+
+  @@unique([membershipId, studioUserId])
+  @@index([tenantId])
+  @@map("tenant_membership_links")
+}
+
 enum SubscriptionStatus {
   TRIALING
   ACTIVE
@@ -227,6 +309,13 @@ model PlatformSettings {
   // bnaSync* de arriba, ver PriceIndexScheduler.
   ipcSyncEnabled Boolean  @default(true)
   ipcSyncHour    Int      @default(10)
+  // Duración del token de sesión al activar una membership de estudio
+  // contable (ver TenantMembership/POST /memberships/:id/activate) -
+  // elegible por el SuperAdmin entre 1/2/5/8hs, igual criterio que
+  // bnaSyncHour/ipcSyncHour arriba. Sin revocación activa (mismo límite que
+  // ya tiene la impersonación), por eso queda acotado y configurable en vez
+  // de fijo.
+  membershipSessionDurationHours Int @default(2)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
@@ -533,6 +622,7 @@ model User {
   cashSessionsOpened         CashSession[] @relation("CashSessionOpenedBy")
   cashSessionsClosed         CashSession[] @relation("CashSessionClosedBy")
   cashMovements              CashMovement[]
+  membershipLinkAsLinkedUser TenantMembershipLink[] @relation("MembershipLinkedUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])

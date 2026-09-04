@@ -1,0 +1,304 @@
+Informe: estado actual para un futuro modulo de estudios contables
+(relevamiento de codigo real - sin propuestas de diseno/arquitectura nueva)
+Generado: sesion 2026-09-04, a partir de docs/modulo contadores.txt
+
+====================================================================
+1. MULTI-TENANCY / RLS
+====================================================================
+
+Mecanismo: variable de sesion de Postgres por request, propagada via
+AsyncLocalStorage.
+
+- libs/shared/database/src/lib/tenant-context.ts: tenantContextStorage
+  (AsyncLocalStorage<{tenantId, userId?, role?, tx}>) lleva el contexto
+  a traves de la cadena async de un request. withTenantContext(prisma,
+  tenantId, fn, userId?, role?) abre una transaccion Prisma, corre
+  SELECT set_config('app.tenant_id', ...) sobre esa transaccion, y
+  ejecuta fn dentro de tenantContextStorage.run(...). getTenantDb()/
+  getTenantId()/getUserRole() leen de ahi y explotan si no hay contexto
+  activo.
+- TenantContextInterceptor (mismo directorio) es lo que lo conecta a
+  cada request: lee request.user?.tenantId (ya puesto por JwtAuthGuard)
+  y envuelve el resto del pipeline en withTenantContext(...).
+
+RLS a nivel Postgres: real y aplicado en amplitud, no solo declarado en
+el ORM.
+
+- Migracion base 20260723000001_row_level_security: ENABLE/FORCE ROW
+  LEVEL SECURITY + CREATE POLICY tenant_isolation ... USING
+  ("tenantId" = current_setting('app.tenant_id', true)) en 24 tablas
+  iniciales, mas una policy especial para tenants (id =
+  current_setting(...)) y audit_log (solo lectura+insert, sin
+  UPDATE/DELETE).
+- El mismo patron (ENABLE/FORCE ROW LEVEL SECURITY + CREATE POLICY
+  tenant_isolation + GRANT) se repite a mano en al menos 22 migraciones
+  posteriores, cada vez que se agrega una tabla nueva con tenantId.
+- Excepciones deliberadas y documentadas: Plan (catalogo comercial
+  global) y PlatformSettings/PriceIndexEntry (config/indices
+  nacionales, no tienen tenantId); system_error_log.tenantId es
+  nullable/informativo, sin RLS (puede ocurrir un error antes de
+  resolver el tenant).
+
+Dos fugas reales ya encontradas y corregidas (relevante como
+antecedente, no como estado actual):
+1. Migracion add_purchases_module creo 7 tablas sin RLS/GRANT -
+   detectado recien con un curl real contra la API (permiso denegado a
+   la tabla transport_modes). Corregido en
+   20260808000002_purchases_module_rls.
+2. FKs simples (xId -> id) no respetan RLS - se podia insertar una fila
+   de tenant A con una FK apuntando a una fila de tenant B, sin que
+   Postgres lo bloqueara (mitigado en la practica porque cada service
+   revalida con findUnique bajo RLS antes de usar la referencia, pero
+   era un agujero de defensa en profundidad). Corregido para 22
+   relaciones fiscales/financieras via FK compuesta ((tenantId, xId) ->
+   (tenantId, id)), migracion 20260829000000_composite_tenant_fks.
+   Explicitamente Fase 1 solamente - quedan ~28 relaciones
+   comerciales/catalogo (supplierId, customerId, currencyId,
+   createdByUserId, etc.) sin este endurecimiento, dejado fuera de
+   alcance a proposito.
+
+Backstop automatizado: libs/shared/database/src/lib/rls-security/*.rls-spec.ts
+- deriva la lista de tablas tenant-scoped en vivo desde
+information_schema (no una lista a mano) y assertea que todas tengan
+RLS habilitado+forzado+con policy. Es lo que hoy protege contra que se
+repita la fuga #1.
+
+Modelo Usuario<->Tenant: estrictamente 1 a 1, sin tabla de membresia.
+
+- User.tenantId: String es un campo escalar simple y requerido
+  (schema.prisma), no una relacion N:M. @@unique([tenantId, email]) - el
+  mismo email puede repetirse en distintos tenants precisamente porque
+  la unicidad es por tenant, no global.
+- No existe ninguna tabla UserTenant/TenantMembership/equivalente en
+  todo el schema.
+- Conclusion explicita: hoy una misma cuenta/login no puede acceder a
+  mas de un tenant. Un contador que atienda 5 clientes necesitaria 5
+  cuentas (User) distintas, una por tenant - no hay ningun mecanismo de
+  membresia multiple.
+
+====================================================================
+2. USUARIOS, ROLES Y PERMISOS
+====================================================================
+
+Roles (enum UserRole en schema.prisma): OWNER, ADMIN, SALES, PURCHASES,
+INVENTORY, ACCOUNTANT, VIEWER.
+
+"Contador externo": existe como concepto, pero repartido en dos piezas
+distintas, una viva y una muerta:
+- Viva: el rol ACCOUNTANT + UserModuleAccess (modelo con {userId,
+  module, canRead, canWrite}, unico por (userId, module)) - permisos
+  granulares por modulo, pensados especificamente para esto segun el
+  propio PROGRESS.md ("Impuestos - tasas versionadas, delegables al
+  contador"). Ejemplo de uso real en
+  libs/modules/taxes/src/lib/taxes.service.ts (reviseTaxDefinition): si
+  role === 'ACCOUNTANT' y esa TaxDefinition no tiene
+  managedByAccountant: true, se rechaza con 403 aunque tenga el modulo
+  en write.
+- Muerta: User.isExternalAccountant: Boolean @default(false) - existe
+  en el schema desde la migracion inicial, pero cero referencias en
+  todo el codigo de aplicacion (ningun guard, service, controller ni
+  frontend la lee o escribe). Parece intencion nunca conectada, no
+  confundir con el rol ACCOUNTANT que si se usa.
+
+Enforcement del lado del servidor: cadena de 4 guards globales
+(apps/api/src/app/app.module.ts, orden real de ejecucion):
+1. JwtAuthGuard - verifica el JWT, pone request.user.
+2. RolesGuard - @Roles(...UserRole[]) por ruta (opt-in, sin decorator
+   no filtra nada).
+3. ModuleAccessGuard - @RequireModuleAccess(module, 'read'|'write'); se
+   salta el chequeo entero si role es OWNER/ADMIN; si no, compara
+   contra moduleAccess: ModuleAccessClaim[] embebido en el propio JWT
+   (no se re-consulta la DB en cada request).
+4. MustChangePasswordGuard.
+
+Ejemplos reales de uso: bank-reconciliation.controller.ts (WRITE_ROLES
+= ['OWNER','ADMIN','ACCOUNTANT']), taxes.controller.ts (todas las
+rutas con @RequireModuleAccess), inventory.controller.ts,
+pos.controller.ts.
+
+isPlatformAdmin en el JWT no lo lee ningun guard - es solo para que el
+frontend decida a donde redirigir tras login. El chequeo real y
+separado es PlatformAdminGuard (ver seccion 3).
+
+====================================================================
+3. IMPERSONACION
+====================================================================
+
+- Endpoint: POST /admin/tenants/:id/impersonate
+  (AdminTenantsController), detras de PlatformAdminGuard - el mismo
+  guard que protege todo /admin, no hay nada especifico para esta
+  ruta.
+- Gate: puramente un allowlist de emails en la env var
+  PLATFORM_ADMIN_EMAILS (isPlatformAdminEmail()). No es un UserRole, no
+  es una cuenta separada. El propio comentario del guard:
+  "Single-operator-by-env-var on purpose - there's no separate
+  superadmin account/login."
+- ¿Reusable para un actor no-SuperAdmin? No, estructuralmente no. Es el
+  unico metodo (AuthService.impersonate()), invocado solo desde este
+  unico controller, detras de este unico guard. No hay ningun actor
+  intermedio con permiso acotado que pueda dispararlo hoy.
+- Alcance del token resultante: el JWT que se emite tiene sub = usuario
+  destino (no el admin), role/moduleAccess = los del usuario destino.
+  Es decir, el admin impersonando queda acotado exactamente a lo que
+  ese usuario podria hacer - no es un "puede todo". Se agrega un claim
+  impersonatedBy: {id, email}, pero es puramente informativo: ningun
+  guard lo lee.
+- Vida: token de 15 minutos (vs 8h/30d normal). No hay revocacion
+  activa, solo expiracion de JWT.
+- "Salir": no existe endpoint de backend para terminarla. Es 100%
+  client-side (apps/web/src/lib/impersonation.ts) - guarda el token del
+  admin en localStorage, lo restaura al click de "Salir" o
+  automaticamente cuando el interceptor 401 detecta que expiro. No
+  queda ningun registro de que la sesion "termino".
+
+====================================================================
+4. AUDITORIA
+====================================================================
+
+Dos mecanismos, modelos en schema.prisma:
+- AuditLog: trigger de Postgres a nivel fila (tenantId, tableName,
+  recordId, action, changedBy, changes, createdAt) - sin
+  IP/userAgent/sesion, no puede tenerlos por ser a nivel DB.
+- UserActivityLog: aplicacion, poblado por ActivityLogInterceptor
+  (global, pero se auto-descarta si no hay tenantId o el metodo no es
+  mutante - GET nunca se loguea, confirmado en codigo, igual que dice
+  PROGRESS.md). Diff campo a campo real (computeDiff(), excluye
+  siempre campos sensibles por regex /password|secret|token|hash|encrypted/i)
+  solo en rutas decoradas con @AuditEntity - sin el decorator, la fila
+  queda como "METHOD /url" plano.
+
+Atribucion durante impersonacion - aca esta el hueco real: como el JWT
+de impersonacion tiene sub = usuario destino, toda accion durante la
+sesion impersonada queda en UserActivityLog con el userId del usuario
+impersonado, indistinguible de una accion genuina suya. El unico
+rastro de que hubo impersonacion es una unica fila admin.impersonate
+al iniciar (escrita a mano dentro de AuthService.impersonate(), con
+userId = el admin, entityLabel = texto libre "email (impersonado por
+admin@x)"). No hay fila de cierre, no hay sessionId que una esa fila
+con las acciones posteriores - solo se podria reconstruir cruzando
+manualmente por horario. Y hay un bug adicional: el visor de auditoria
+cross-tenant busca el nombre del admin dentro del tenant destino (bajo
+RLS), asi que no lo encuentra y esa fila queda con userName/userEmail
+en null en la UI.
+
+¿Alcanza para "que hizo el contador en el tenant Y"? Sin impersonacion
+de por medio, razonablemente si (userId inequivoco, IP, diff de que
+cambio). Con impersonacion de por medio, no de forma confiable - justo
+el escenario que probablemente mas importe para un contador externo.
+
+====================================================================
+5. DATOS QUE UN CONSOLIDADO DE CARTERA NECESITARIA
+====================================================================
+
+No existe ningun calendario de vencimientos fiscales. Busqueda
+exhaustiva de "monotributo", "vencimiento fiscal", "F.2051", "IVA
+Simple", "calendario fiscal" no da nada relacionado con fechas de
+presentacion. Esto no es un olvido: PROGRESS.md (sesion 2026-09-04)
+documenta que se evaluo a proposito y se descarto, porque desde
+nov/2025 ARCA absorbio esa necesidad via "IVA Simple" (F.2051) para el
+propio tenant - pero esa decision se tomo desde el punto de vista del
+tenant individual, no desde el de un contador llevando el calendario
+de N clientes a la vez.
+
+Que si hay por tenant sobre su propio estado fiscal (TenantSettings):
+ownTaxCondition: TenantTaxCondition? (enum cerrado de 3 valores:
+RESPONSABLE_INSCRIPTO/MONOTRIBUTO/EXENTO, sin categoria/escala de
+Monotributo), Tenant.taxId, fiscalAddress, grossIncomeNumber,
+activityStartDate, flags de agente de retencion, y la config del
+certificado AFIP (afipCertExpiresAt es la unica "fecha de vencimiento"
+que existe en todo TenantSettings - y es del certificado digital, no
+de una obligacion impositiva).
+
+Libro de IVA: VatBookService.getSalesBook()/getPurchasesBook() lo
+calculan al vuelo leyendo Invoice/PurchaseInvoice para un rango de
+fechas - no hay ninguna tabla que persista "F.2051 presentado" ni su
+fecha.
+
+Agregacion cross-tenant: el patron existe y ya se usa en 2 lugares
+reales - AdminTenantsService.listTenants() y
+AdminAuditService.listActivity() recorren list_tenant_ids() (funcion
+SQL) y abren withTenantContext() tenant por tenant, agregando en
+memoria (mismo molde que usan 4 schedulers de cron). Pero hoy nada usa
+ese molde para datos de negocio/fiscales - solo para conteos de uso
+(usuarios activos, facturas del mes) y actividad. Un endpoint que
+recorra tenants y calcule VatBookService/facturas vencidas por cada
+uno seria mecanicamente posible con el mismo patron, pero no existe.
+
+====================================================================
+6. BACKOFFICE ACTUAL
+====================================================================
+
+/admin tiene 9 secciones, todas gateadas por PlatformAdminGuard (el
+mismo allowlist de email de la seccion 3):
+
+- Tenants: tabla con nombre, status, plan, subscriptionStatus,
+  activeUsers, invoicesThisMonth, fecha de alta + grafico de facturas
+  por tenant este mes. Acciones: Suspender/Activar, Impersonar. Sin
+  buscador ni paginacion.
+- Actividad: es explicitamente cross-tenant/plataforma-completa por
+  diseno (el propio codigo la llama "Actividad (todos los tenants)"),
+  no una vista de detalle por tenant - aunque el selector de tenant
+  permite acotarla y en la practica sirve para eso.
+- Planes, Errores, Mercado Pago, Backups, Cotizaciones USD, Indices de
+  Inflacion, Configuracion del sistema: todas estrictamente operativas
+  de plataforma (catalogo de precios, errores 5xx, webhooks de cobro,
+  backups, crons de datos globales) - ninguna tiene rollup de datos de
+  negocio/fiscales por tenant.
+
+Conclusion de reutilizacion: lo unico parecido a una vista de cartera
+hoy es la tabla de Tenants (uso/plan) y, con el filtro puesto,
+Actividad. No existe ningun endpoint que combine facturacion +
+condicion IVA + vencimientos de un tenant, y mucho menos de varios a
+la vez.
+
+====================================================================
+7. ESTADO / DEUDA TECNICA
+====================================================================
+
+Solido y probado:
+- RLS multi-tenant: robusto, con tests de regresion automaticos que
+  derivan la lista de tablas en vivo (no a mano) y ya atraparon una
+  fuga real en produccion de desarrollo. Falla cerrado, confirmado.
+- Cadena de guards (Jwt->Roles->ModuleAccess->MustChangePassword) y
+  UserModuleAccess: mecanismo real y ya usado en varios modulos
+  (Impuestos, Compras, Inventario, POS), con al menos un ejemplo
+  concreto de logica pensada para el contador (managedByAccountant).
+- Patron de agregacion cross-tenant (list_tenant_ids() +
+  withTenantContext por tenant): probado en 2 servicios de admin + 4
+  schedulers de cron.
+- Impersonacion: funciona y esta bien acotada en cuanto a privilegio
+  (el admin queda limitado al rol del usuario impersonado, no gana
+  poder extra) y es de vida corta.
+
+A medio hacer:
+- isExternalAccountant en User: campo fantasma, cero codigo lo usa - o
+  se termina de conectar o es ruido a limpiar.
+- Auditoria de impersonacion: solo se loguea el inicio, nunca el fin,
+  sin sessionId que ligue esa fila con las acciones posteriores, y con
+  un bug real donde el nombre del admin no resuelve en el visor
+  cross-tenant del tenant destino.
+- UserActivityLog no cubre GET ni acciones de cron/sistema - gap ya
+  conocido y documentado por el propio equipo.
+- Hardening de FKs compuestas contra fuga cross-tenant: Fase 1 nada
+  mas (documentos fiscales), ~28 relaciones comerciales/catalogo
+  quedan con FK simple, dejado afuera a proposito.
+- Pantalla de Actividad del admin: usable como "actividad de un
+  tenant" solo de forma incidental (filtro), no disenada para eso.
+
+No existe, habria que construirlo de cero:
+- Cualquier forma de que una cuenta acceda a mas de un tenant sin ser
+  SuperAdmin - hoy es estrictamente 1 usuario = 1 tenant, y el unico
+  mecanismo cross-tenant que existe (impersonacion) esta atado al
+  allowlist de email de plataforma, no es delegable ni acotable a
+  "solo lectura para este contador en estos 3 tenants". Este es
+  probablemente el hueco estructural mas grande para el modulo
+  planeado - no hay nada intermedio entre "usuario normal de un solo
+  tenant" y "SuperAdmin de toda la plataforma".
+- Calendario de vencimientos fiscales/impositivos, en cualquier forma.
+- Categoria/escala de Monotributo (solo existe la condicion IVA como
+  enum de 3 valores).
+- Cualquier servicio o pantalla que junte estado de
+  IVA/facturacion/vencimientos de varios tenants en una sola vista -
+  ni el dato ni la UI existen hoy, aunque el patron tecnico para
+  construirlo (RLS + list_tenant_ids() + agregacion en memoria) ya
+  esta probado en otro contexto.

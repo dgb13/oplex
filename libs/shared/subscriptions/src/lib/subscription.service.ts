@@ -87,7 +87,11 @@ export class SubscriptionService {
 
   async assertCanAddUser(): Promise<void> {
     const { plan } = await this.assertSubscriptionActive();
-    const count = await getTenantDb().user.count();
+    // Un contador externo (fila espejo creada por MembershipsService,
+    // isExternalAccountant: true) no es un asiento del tenant - no debe
+    // hacer que un plan chico se quede sin cupo por darle acceso a su
+    // estudio contable, ver docs/plan_modulo_contadores.txt.
+    const count = await getTenantDb().user.count({ where: { isExternalAccountant: { not: true } } });
     if (count >= plan.maxUsers) {
       throw new ForbiddenException(
         `Alcanzaste el límite de usuarios de tu plan actual (${plan.name}: ${plan.maxUsers})`,

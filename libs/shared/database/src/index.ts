@@ -82,5 +82,8 @@ export type {
   CashRegister,
   CashSession,
   CashMovement,
+  TenantMembership,
+  TenantMembershipLink,
+  PlatformSettings,
 } from './generated/client.js';
 export * from './generated/enums.js';

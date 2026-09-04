@@ -78,6 +78,17 @@ describe('SubscriptionService quota checks', () => {
     await expect(runInTenant(db, () => service.assertCanAddUser())).rejects.toThrow(ForbiddenException);
   });
 
+  it('assertCanAddUser excludes filas espejo de contadores externos (isExternalAccountant) del cupo', async () => {
+    const findUniqueOrThrow = jest.fn().mockResolvedValue(makeActiveSubscription());
+    const count = jest.fn().mockResolvedValue(3);
+    const db = { tenantSubscription: { findUniqueOrThrow }, user: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await runInTenant(db, () => service.assertCanAddUser());
+
+    expect(count).toHaveBeenCalledWith({ where: { isExternalAccountant: { not: true } } });
+  });
+
   it('assertCanAddClient only counts active companies with a CUSTOMER role', async () => {
     const findUniqueOrThrow = jest.fn().mockResolvedValue(makeActiveSubscription());
     const count = jest.fn().mockResolvedValue(10);

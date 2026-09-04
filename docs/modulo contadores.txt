@@ -1,0 +1,52 @@
+No implementes ni diseñes nada todavía. Necesito que investigues el código
+actual y me devuelvas un INFORME del estado de las piezas sobre las que
+después vamos a construir un "módulo para estudios contables" (un contador
+que administra varios tenants desde una cuenta). Sé concreto y citá archivos,
+tablas y funciones reales. Donde algo no exista, decilo explícitamente en vez
+de asumir que está.
+
+Quiero el informe organizado en estas secciones:
+
+1. MULTI-TENANCY / RLS
+   - Cómo está implementado el aislamiento por tenant (tablas, policies de
+     RLS, cómo se setea el tenant activo en cada request).
+   - ¿Un mismo usuario puede hoy pertenecer o acceder a más de un tenant, o
+     la relación usuario→tenant es 1 a 1? Mostrame el modelo real.
+
+2. USUARIOS, ROLES Y PERMISOS
+   - Modelo de usuarios y cómo se vinculan al tenant.
+   - Qué roles existen hoy, incluido el "contador externo": qué puede y qué
+     no puede hacer, y dónde se define ese alcance.
+   - Cómo se verifican los permisos del lado del servidor (mostrame el
+     mecanismo, no solo que existe).
+
+3. IMPERSONACIÓN
+   - Cómo funciona hoy la impersonación del backoffice/SuperAdmin (quién
+     puede, cómo se registra, qué límites tiene).
+   - ¿Está atada a ser SuperAdmin, o el mecanismo se podría reutilizar para
+     que un usuario externo entre a un tenant con permisos acotados?
+
+4. AUDITORÍA
+   - Qué queda registrado hoy de cada acción (campos, quién, cuándo) y dónde
+     se guarda. ¿Alcanza para dejar traza de "el contador hizo X en el
+     tenant Y"?
+
+5. DATOS QUE UN CONSOLIDADO DE CARTERA NECESITARÍA
+   - ¿Qué tan fácil es hoy, a nivel de datos, responder “estado de IVA / de
+     facturación / de vencimientos por tenant”? ¿Existe algo de calendario
+     de vencimientos o de estado impositivo por empresa, o no hay nada?
+   - ¿Hay algún concepto de "monotributo" cargado por tenant (categoría,
+     CUIT, condición)?
+
+6. BACKOFFICE ACTUAL
+   - Qué permite hoy el panel de SuperAdmin respecto a listar tenants, ver
+     su plan/uso y actividad — porque parte de eso quizás se reusa para la
+     vista de cartera del contador.
+
+7. ESTADO / DEUDA TÉCNICA
+   - De todo lo anterior, qué está sólido y probado, qué está a medio hacer,
+     y qué directamente no existe todavía.
+
+Formato: informe en texto, con referencias a archivos/módulos concretos. No
+propongas soluciones ni arquitectura nueva todavía — esto es solo un
+relevamiento del estado actual para planificar sobre base real.
