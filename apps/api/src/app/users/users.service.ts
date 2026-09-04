@@ -33,6 +33,7 @@ export interface TeamMember {
   status: UserStatus;
   mustChangePassword: boolean;
   createdAt: Date;
+  isExternalAccountant: boolean;
 }
 
 /**
@@ -69,6 +70,7 @@ export class UsersService {
         status: true,
         mustChangePassword: true,
         createdAt: true,
+        isExternalAccountant: true,
       },
     });
   }
@@ -190,6 +192,7 @@ export class UsersService {
     if (!target) {
       throw new NotFoundException('Usuario no encontrado');
     }
+    this.assertNotExternalAccountant(target);
     if (target.role === 'OWNER' && dto.role !== 'OWNER') {
       await this.assertNotLastActiveOwner(tenantId, userId);
     }
@@ -209,11 +212,27 @@ export class UsersService {
     if (!target) {
       throw new NotFoundException('Usuario no encontrado');
     }
+    this.assertNotExternalAccountant(target);
     if (dto.status === 'SUSPENDED' && target.role === 'OWNER') {
       await this.assertNotLastActiveOwner(tenantId, userId);
     }
 
     await db.user.update({ where: { id: userId }, data: { status: dto.status } });
+  }
+
+  /** Defensa en profundidad para la fila espejo de un contador externo
+   * (creada por MembershipsService.activate(), ver
+   * docs/plan_modulo_contadores.txt Fase 2 punto 1) - su rol/estado real
+   * lo gobierna la membership, no la gestión de equipo normal. El
+   * frontend ya oculta estos controles para esta fila; esto es la
+   * garantía server-side de que no se puede esquivar pegándole directo a
+   * la API. */
+  private assertNotExternalAccountant(target: { isExternalAccountant: boolean }): void {
+    if (target.isExternalAccountant) {
+      throw new ForbiddenException(
+        'Este usuario está gestionado desde Contadores - andá a /accountants para revocar el acceso',
+      );
+    }
   }
 
   /** Admin-triggered: reusa el mismo modelo/mecanismo (PasswordResetToken +

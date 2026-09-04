@@ -1,8 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AUTH_EMAIL_SENDER, type AuthEmailSender, type MembershipNoticeKind } from '@plexo/auth-email';
 import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { AuthService } from '../auth/auth.service.js';
+
+const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:4200';
 
 /** Rango del mes calendario actual en UTC - mismo criterio que
  * AdminTenantsService.currentMonthRangeUtc() (apps/api/src/app/admin/
@@ -75,6 +78,26 @@ export interface StudioMembershipSummary {
   inviteeIdentifier: string | null;
   createdAt: Date;
   respondedAt: Date | null;
+  // Vacío = visible para todo el estudio (comportamiento por defecto) - ver
+  // docs/plan_modulo_contadores.txt, Fase 2 punto 4.
+  assignedStudioUserIds: string[];
+}
+
+/** OWNER/ADMIN del estudio siempre ven la cartera completa (supervisión) -
+ * cualquier otro rol (ACCOUNTANT) sólo ve las membresías sin asignación
+ * (vacío = todo el estudio, comportamiento original) o asignadas
+ * específicamente a él. Función pura, sin acceso a DB - se aplica por
+ * callsite, nunca dentro de listMine() (que sigue devolviendo todo, ver
+ * comentario ahí). */
+export function filterVisibleForCaller<T extends { assignedStudioUserIds: string[] }>(
+  rows: T[],
+  callerRole: string,
+  callerUserId: string,
+): T[] {
+  if (callerRole === 'OWNER' || callerRole === 'ADMIN') {
+    return rows;
+  }
+  return rows.filter((r) => r.assignedStudioUserIds.length === 0 || r.assignedStudioUserIds.includes(callerUserId));
 }
 
 export interface ClientMembershipSummary {
@@ -104,7 +127,48 @@ export class MembershipsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    @Inject(AUTH_EMAIL_SENDER) private readonly authEmailSender: AuthEmailSender,
   ) {}
+
+  /** Avisa por email a los OWNER/ADMIN activos de `tenantId` (ver
+   * docs/plan_modulo_contadores.txt, Fase 2 punto 3) - primer lugar del
+   * repo que le manda un email a "los admins de un tenant" en vez de a un
+   * destinatario puntual ya conocido. Nunca relanza: un email caído no
+   * debe tumbar la invitación/solicitud/respuesta real que ya se
+   * escribió, mismo espíritu que ya usan los propios adaptadores de
+   * AuthEmailSender puertas adentro (acá se repite un nivel más arriba
+   * porque esta vez son N destinatarios, no 1). */
+  private async notifyTenantAdmins(
+    tenantId: string,
+    kind: MembershipNoticeKind,
+    counterpartName: string,
+  ): Promise<void> {
+    try {
+      const { admins, tenantName } = await withTenantContext(this.prisma, tenantId, async () => {
+        const db = getTenantDb();
+        const [admins, tenant] = await Promise.all([
+          db.user.findMany({ where: { role: { in: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } }),
+          db.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+        ]);
+        return { admins, tenantName: tenant.name };
+      });
+      await Promise.all(
+        admins.map((admin) =>
+          this.authEmailSender.sendMembershipNotice({
+            to: admin.email,
+            tenantName,
+            counterpartName,
+            kind,
+            portalUrl: `${FRONTEND_URL}/accountants`,
+          }),
+        ),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to notify tenant ${tenantId} admins of membership ${kind}: ${(err as Error).message}`,
+      );
+    }
+  }
 
   /** Cartera del estudio (todas las membresías donde homeTenantId = el
    * tenant del que llama), sin importar en qué tenant cliente vive cada
@@ -120,6 +184,7 @@ export class MembershipsService {
         invitee_identifier: string | null;
         created_at: Date;
         responded_at: Date | null;
+        assigned_studio_user_ids: string[];
       }[]
     >`SELECT * FROM list_studio_memberships(${studioTenantId})`;
 
@@ -132,6 +197,7 @@ export class MembershipsService {
       inviteeIdentifier: row.invitee_identifier,
       createdAt: row.created_at,
       respondedAt: row.responded_at,
+      assignedStudioUserIds: row.assigned_studio_user_ids,
     }));
   }
 
@@ -144,10 +210,17 @@ export class MembershipsService {
    * Deliberadamente liviano: NO recalcula VatBookService.getSalesBook()
    * completo acá - eso se reserva para cuando el contador entra a UN
    * cliente puntual (ver plan, "Costo, honestamente"). Incluye los próximos
-   * vencimientos PENDING de cada cliente (sub-fase 1e).
+   * vencimientos PENDING de cada cliente (sub-fase 1e). Filtrado por reparto
+   * de cartera (Fase 2 punto 4): un ACCOUNTANT sin asignación explícita en
+   * una membership no la ve acá, aunque sea ACCEPTED - OWNER/ADMIN siempre
+   * ven todo.
    */
-  async getPortfolio(studioTenantId: string): Promise<PortfolioClientSummary[]> {
-    const memberships = await this.listMine(studioTenantId);
+  async getPortfolio(
+    studioTenantId: string,
+    callerUserId: string,
+    callerRole: string,
+  ): Promise<PortfolioClientSummary[]> {
+    const memberships = filterVisibleForCaller(await this.listMine(studioTenantId), callerRole, callerUserId);
     const accepted = memberships.filter((m) => m.status === 'ACCEPTED');
     const { from, to } = currentMonthRangeUtc();
 
@@ -230,11 +303,16 @@ export class MembershipsService {
    * único id de estudio que importa es request.user.tenantId (el del JWT ya
    * verificado, resuelto por el controller), nunca uno pasado por el
    * caller - es la pieza de más escrutinio de todo el diseño, ver el plan.
+   * También respeta el reparto de cartera (Fase 2 punto 4): un ACCOUNTANT
+   * sin asignación en esta membership recibe el mismo "Membership not
+   * found" que si no existiera - mismo patrón IDOR-safe, no un 403 aparte
+   * que revelaría que la fila sí existe.
    */
   async activate(
     membershipId: string,
     actorUserId: string,
     actorTenantId: string,
+    actorRole: string,
   ): Promise<{ accessToken: string; expiresAt: string }> {
     // Todavía dentro del contexto RLS del PROPIO tenant del que llama (el
     // estudio) - TenantContextInterceptor ya lo abrió para este request.
@@ -246,7 +324,7 @@ export class MembershipsService {
       throw new NotFoundException('User not found');
     }
 
-    const memberships = await this.listMine(actorTenantId);
+    const memberships = filterVisibleForCaller(await this.listMine(actorTenantId), actorRole, actorUserId);
     const membership = memberships.find((m) => m.id === membershipId);
     if (!membership) {
       throw new NotFoundException('Membership not found');
@@ -355,6 +433,18 @@ export class MembershipsService {
         initiatedByUserId,
       },
     });
+
+    // Resolver el nombre propio + notificar nunca debe tumbar la invitación
+    // que ya se escribió arriba - mismo espíritu que notifyTenantAdmins,
+    // repetido acá porque ese try/catch no cubre este lookup previo (el
+    // nombre del CLIENTE, no del estudio destino).
+    try {
+      const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
+      await this.notifyTenantAdmins(resolved.tenantId, 'invited', clientTenant.name);
+    } catch (err) {
+      this.logger.error(`Failed to notify studio ${resolved.tenantId} of invitation: ${(err as Error).message}`);
+    }
+
     return this.toSummary(created, resolved.tenantName);
   }
 
@@ -396,6 +486,16 @@ export class MembershipsService {
         },
       }),
     );
+
+    try {
+      const studioTenant = await withTenantContext(this.prisma, studioTenantId, () =>
+        getTenantDb().tenant.findUniqueOrThrow({ where: { id: studioTenantId } }),
+      );
+      await this.notifyTenantAdmins(resolved.tenantId, 'requested', studioTenant.name);
+    } catch (err) {
+      this.logger.error(`Failed to notify client ${resolved.tenantId} of access request: ${(err as Error).message}`);
+    }
+
     return this.toSummary(created, resolved.tenantName);
   }
 
@@ -411,34 +511,80 @@ export class MembershipsService {
   ): Promise<StudioMembershipSummary> {
     const clientTenantId = await this.resolveMembershipClientTenantId(membershipId, callerTenantId);
 
-    return withTenantContext(this.prisma, clientTenantId, async () => {
-      const db = getTenantDb();
-      const membership = await db.tenantMembership.findUnique({ where: { id: membershipId } });
-      if (!membership) {
-        throw new NotFoundException('Membership not found');
-      }
-      if (membership.status !== 'PENDING') {
-        throw new ForbiddenException('Esta solicitud ya fue respondida');
-      }
-      const expectedResponderTenantId =
-        membership.direction === 'CLIENT_INVITED' ? membership.homeTenantId : membership.tenantId;
-      if (expectedResponderTenantId !== callerTenantId) {
-        throw new ForbiddenException('No te corresponde responder esta solicitud');
-      }
+    const { summary, homeTenantId, direction, clientTenantName } = await withTenantContext(
+      this.prisma,
+      clientTenantId,
+      async () => {
+        const db = getTenantDb();
+        const membership = await db.tenantMembership.findUnique({ where: { id: membershipId } });
+        if (!membership) {
+          throw new NotFoundException('Membership not found');
+        }
+        if (membership.status !== 'PENDING') {
+          throw new ForbiddenException('Esta solicitud ya fue respondida');
+        }
+        const expectedResponderTenantId =
+          membership.direction === 'CLIENT_INVITED' ? membership.homeTenantId : membership.tenantId;
+        if (expectedResponderTenantId !== callerTenantId) {
+          throw new ForbiddenException('No te corresponde responder esta solicitud');
+        }
 
-      const updated = await db.tenantMembership.update({
-        where: { id: membershipId },
-        data: { status: decision, respondedAt: new Date() },
-      });
-      const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
-      return this.toSummary(updated, clientTenant.name);
-    });
+        const updated = await db.tenantMembership.update({
+          where: { id: membershipId },
+          data: { status: decision, respondedAt: new Date() },
+        });
+        const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
+        return {
+          summary: this.toSummary(updated, clientTenant.name),
+          homeTenantId: membership.homeTenantId,
+          direction: membership.direction,
+          clientTenantName: clientTenant.name,
+        };
+      },
+    );
+
+    // Notifica al lado que INICIÓ la relación, no al que acaba de responder
+    // (ver notifyTenantAdmins) - mismo cálculo que revoke() usa para
+    // autorizar el cancelar. callerTenantId siempre ES quien acaba de
+    // responder (ya verificado arriba), así que su nombre es el
+    // "counterpart" desde la perspectiva del iniciador - se reusa
+    // clientTenantName si coincide con el cliente, para no repetir la
+    // consulta. Envuelto en try/catch propio (no sólo el interno de
+    // notifyTenantAdmins) porque este lookup del nombre del responder
+    // tampoco debe tumbar una respuesta ya persistida.
+    try {
+      const initiatorTenantId = direction === 'CLIENT_INVITED' ? clientTenantId : homeTenantId;
+      const counterpartName =
+        callerTenantId === clientTenantId
+          ? clientTenantName
+          : (
+              await withTenantContext(this.prisma, callerTenantId, () =>
+                getTenantDb().tenant.findUniqueOrThrow({ where: { id: callerTenantId } }),
+              )
+            ).name;
+      await this.notifyTenantAdmins(initiatorTenantId, decision === 'ACCEPTED' ? 'accepted' : 'declined', counterpartName);
+    } catch (err) {
+      this.logger.error(`Failed to notify initiator of response to membership ${membershipId}: ${(err as Error).message}`);
+    }
+
+    return summary;
   }
 
-  /** Corta una relación ACCEPTED - cualquiera de las dos partes puede
-   * hacerlo. Suspende (no borra) todas las filas espejo ya creadas para
-   * esta membership, para que ninguna reactivación futura las reutilice -
-   * activate() ya rechaza un User con status SUSPENDED. */
+  /** Corta una relación - dos casos, mismo endpoint/status final
+   * (`REVOKED`), porque de fondo es la misma operación: cortarla antes de
+   * que llegue a buen puerto.
+   * - `ACCEPTED`: cualquiera de las dos partes puede hacerlo (comportamiento
+   *   original). Suspende (no borra) todas las filas espejo ya creadas
+   *   para esta membership, para que ninguna reactivación futura las
+   *   reutilice - activate() ya rechaza un User con status SUSPENDED.
+   * - `PENDING` (ver docs/plan_modulo_contadores.txt, Fase 2 punto 2):
+   *   "cancelar" - sólo el lado que INICIÓ la relación puede hacerlo
+   *   (quien tiene que responder ya tiene su propio camino: `respond()`
+   *   con `DECLINED`). Mismo cálculo que `expectedResponderTenantId` de
+   *   `respond()` arriba, pero invertido - sigue sin leer
+   *   `initiatedByUserId` para la autorización (chequeo a nivel TENANT,
+   *   no de usuario puntual, mismo criterio que el resto del diseño). Sin
+   *   filas espejo que suspender todavía, `activate()` nunca corrió. */
   async revoke(membershipId: string, callerTenantId: string): Promise<StudioMembershipSummary> {
     const clientTenantId = await this.resolveMembershipClientTenantId(membershipId, callerTenantId);
 
@@ -448,16 +594,23 @@ export class MembershipsService {
       if (!membership) {
         throw new NotFoundException('Membership not found');
       }
-      if (membership.status !== 'ACCEPTED') {
-        throw new BadRequestException('Sólo se puede revocar una relación activa');
-      }
 
-      const links = await db.tenantMembershipLink.findMany({ where: { membershipId } });
-      if (links.length) {
-        await db.user.updateMany({
-          where: { id: { in: links.map((l) => l.linkedUserId) } },
-          data: { status: 'SUSPENDED' },
-        });
+      if (membership.status === 'ACCEPTED') {
+        const links = await db.tenantMembershipLink.findMany({ where: { membershipId } });
+        if (links.length) {
+          await db.user.updateMany({
+            where: { id: { in: links.map((l) => l.linkedUserId) } },
+            data: { status: 'SUSPENDED' },
+          });
+        }
+      } else if (membership.status === 'PENDING') {
+        const expectedInitiatorTenantId =
+          membership.direction === 'CLIENT_INVITED' ? membership.tenantId : membership.homeTenantId;
+        if (expectedInitiatorTenantId !== callerTenantId) {
+          throw new ForbiddenException('No podés cancelar una solicitud que no iniciaste vos');
+        }
+      } else {
+        throw new BadRequestException('Esta relación no se puede revocar/cancelar en su estado actual');
       }
 
       const updated = await db.tenantMembership.update({
@@ -466,6 +619,47 @@ export class MembershipsService {
       });
       const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
       return this.toSummary(updated, clientTenant.name);
+    });
+  }
+
+  /**
+   * Reemplaza el conjunto completo de contadores asignados a una membership
+   * (reparto de cartera, ver docs/plan_modulo_contadores.txt Fase 2 punto
+   * 4) - semántica PUT, no altas/bajas individuales: más simple de razonar
+   * y mapea directo a un multi-select que manda todo lo tildado de una.
+   * `studioUserIds` vacío = "todo el estudio" (default). Cada id se valida
+   * ACÁ, todavía en el contexto propio del que llama (el estudio) - nunca
+   * confía en que un id del body pertenezca realmente a este estudio.
+   */
+  async setAssignments(
+    membershipId: string,
+    callerTenantId: string,
+    studioUserIds: string[],
+  ): Promise<void> {
+    if (studioUserIds.length > 0) {
+      const validCount = await getTenantDb().user.count({
+        where: { id: { in: studioUserIds }, tenantId: callerTenantId },
+      });
+      if (validCount !== new Set(studioUserIds).size) {
+        throw new BadRequestException('Uno o más usuarios no pertenecen a tu equipo');
+      }
+    }
+
+    const clientTenantId = await this.resolveMembershipClientTenantId(membershipId, callerTenantId);
+
+    await withTenantContext(this.prisma, clientTenantId, async () => {
+      const db = getTenantDb();
+      const membership = await db.tenantMembership.findUnique({ where: { id: membershipId } });
+      if (!membership || membership.homeTenantId !== callerTenantId) {
+        throw new NotFoundException('Membership not found');
+      }
+
+      await db.tenantMembershipAssignment.deleteMany({ where: { membershipId } });
+      if (studioUserIds.length > 0) {
+        await db.tenantMembershipAssignment.createMany({
+          data: studioUserIds.map((studioUserId) => ({ tenantId: clientTenantId, membershipId, studioUserId })),
+        });
+      }
     });
   }
 
@@ -541,6 +735,10 @@ export class MembershipsService {
       inviteeIdentifier: row.inviteeIdentifier,
       createdAt: row.createdAt,
       respondedAt: row.respondedAt,
+      // Estos call sites nunca crean/tocan asignaciones - el reparto de
+      // cartera es una acción aparte (setAssignments()), así que "vacío"
+      // (visible para todo el estudio) siempre es exacto acá.
+      assignedStudioUserIds: [],
     };
   }
 

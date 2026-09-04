@@ -164,6 +164,17 @@ function RelationRow({
           >
             Revocar
           </button>
+        ) : relation.status === 'PENDING' ? (
+          // CLIENT_INVITED (la inicié yo) es la única PENDING que llega
+          // acá - ACCOUNTANT_REQUESTED ya es "actionable" arriba. Mismo
+          // endpoint que "Revocar" (revoke() distingue ACCEPTED/PENDING
+          // internamente, ver MembershipsService).
+          <button
+            onClick={onRevoke}
+            className="rounded-lg border border-red-800 px-2 py-1 text-xs text-red-400 transition hover:bg-red-950"
+          >
+            Cancelar
+          </button>
         ) : (
           <span className="text-xs text-slate-500">—</span>
         )}

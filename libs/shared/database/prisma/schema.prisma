@@ -220,7 +220,8 @@ model TenantMembership {
   respondedAt       DateTime?
   createdAt         DateTime            @default(now())
 
-  links TenantMembershipLink[]
+  links       TenantMembershipLink[]
+  assignments TenantMembershipAssignment[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -258,6 +259,28 @@ model TenantMembershipLink {
   @@unique([membershipId, studioUserId])
   @@index([tenantId])
   @@map("tenant_membership_links")
+}
+
+// Reparto de cartera dentro del estudio (ver docs/plan_modulo_contadores.txt,
+// Fase 2 punto 4) - conjunto vacío (sin filas para una membership) =
+// visible para cualquier OWNER/ADMIN/ACCOUNTANT del estudio (comportamiento
+// original, sin cambios); con filas = sólo esos contadores puntuales
+// (OWNER/ADMIN del estudio siempre retienen visión completa, filtrado en
+// MembershipsService, no acá). Un cliente puede asignarse a varios
+// contadores a la vez (N-a-N), decisión confirmada con el usuario.
+model TenantMembershipAssignment {
+  id           String           @id @default(uuid())
+  tenantId     String
+  membershipId String
+  membership   TenantMembership @relation(fields: [tenantId, membershipId], references: [tenantId, id])
+  // User.id del contador puntual, en SU tenant (el estudio) - cross-tenant,
+  // sin @relation, mismo criterio que TenantMembershipLink.studioUserId.
+  studioUserId String
+  createdAt    DateTime         @default(now())
+
+  @@unique([tenantId, membershipId, studioUserId])
+  @@index([tenantId, membershipId])
+  @@map("tenant_membership_assignments")
 }
 
 enum SubscriptionStatus {

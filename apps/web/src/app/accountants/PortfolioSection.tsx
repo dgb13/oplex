@@ -6,6 +6,8 @@ import {
   TAX_DEADLINE_KIND_LABELS,
   type StudioMembershipSummary,
 } from '@/lib/memberships';
+import { profileApi } from '@/lib/profile';
+import { teamApi } from '@/lib/team';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -26,6 +28,15 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
 export default function PortfolioSection() {
   const queryClient = useQueryClient();
   const router = useRouter();
+
+  const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
+  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  // Sólo OWNER/ADMIN puede repartir cartera (GET /users es OWNER/ADMIN-only
+  // en el backend) - y sólo tiene sentido mostrar contadores (ACCOUNTANT):
+  // asignarle a un OWNER/ADMIN sería un no-op, ya ven todo sin importar la
+  // asignación (ver filterVisibleForCaller).
+  const { data: team } = useQuery({ queryKey: ['team-members'], queryFn: teamApi.list, enabled: canManage });
+  const accountants = (team ?? []).filter((m) => m.role === 'ACCOUNTANT' && !m.isExternalAccountant);
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery({
     queryKey: ['membership-portfolio'],
@@ -49,6 +60,17 @@ export default function PortfolioSection() {
   const respondMutation = useMutation({
     mutationFn: ({ id, decision }: { id: string; decision: 'ACCEPTED' | 'DECLINED' }) =>
       membershipsApi.respond(id, decision),
+    onSuccess: () => invalidateAll(queryClient),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: membershipsApi.revoke,
+    onSuccess: () => invalidateAll(queryClient),
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ id, studioUserIds }: { id: string; studioUserIds: string[] }) =>
+      membershipsApi.setAssignments(id, studioUserIds),
     onSuccess: () => invalidateAll(queryClient),
   });
 
@@ -100,7 +122,12 @@ export default function PortfolioSection() {
           <h2 className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">Solicitudes pendientes</h2>
           <div className="flex flex-col gap-2">
             {pending.map((m) => (
-              <PendingRow key={m.id} membership={m} onRespond={(decision) => respondMutation.mutate({ id: m.id, decision })} />
+              <PendingRow
+                key={m.id}
+                membership={m}
+                onRespond={(decision) => respondMutation.mutate({ id: m.id, decision })}
+                onCancel={() => cancelMutation.mutate(m.id)}
+              />
             ))}
           </div>
         </div>
@@ -116,36 +143,64 @@ export default function PortfolioSection() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {portfolio.map((client) => (
-              <div
-                key={client.membershipId}
-                className="flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4"
-              >
-                <div>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{client.clientTenantName}</p>
-                  <p className="text-xs text-slate-500">{client.ownTaxCondition ?? 'Condición IVA sin cargar'}</p>
-                </div>
-                <p className="text-xs text-slate-500">{client.invoicesThisMonth} factura(s) este mes</p>
-                {client.upcomingDeadlines.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs font-medium text-slate-500">Próximos vencimientos</p>
-                    {client.upcomingDeadlines.map((d) => (
-                      <p key={d.id} className="text-xs text-amber-600 dark:text-amber-400">
-                        {TAX_DEADLINE_KIND_LABELS[d.kind as keyof typeof TAX_DEADLINE_KIND_LABELS] ?? d.kind} —{' '}
-                        {new Date(d.dueDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })} · {d.description}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                <button
-                  onClick={() => activateMutation.mutate(client.membershipId)}
-                  disabled={activateMutation.isPending}
-                  className="mt-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            {portfolio.map((client) => {
+              const assignedIds = mine?.find((m) => m.id === client.membershipId)?.assignedStudioUserIds ?? [];
+              return (
+                <div
+                  key={client.membershipId}
+                  className="flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4"
                 >
-                  {activateMutation.isPending ? 'Entrando...' : 'Entrar'}
-                </button>
-              </div>
-            ))}
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-slate-100">{client.clientTenantName}</p>
+                    <p className="text-xs text-slate-500">{client.ownTaxCondition ?? 'Condición IVA sin cargar'}</p>
+                  </div>
+                  <p className="text-xs text-slate-500">{client.invoicesThisMonth} factura(s) este mes</p>
+                  {client.upcomingDeadlines.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs font-medium text-slate-500">Próximos vencimientos</p>
+                      {client.upcomingDeadlines.map((d) => (
+                        <p key={d.id} className="text-xs text-amber-600 dark:text-amber-400">
+                          {TAX_DEADLINE_KIND_LABELS[d.kind as keyof typeof TAX_DEADLINE_KIND_LABELS] ?? d.kind} —{' '}
+                          {new Date(d.dueDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })} · {d.description}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {canManage && accountants.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-500">
+                        Asignado a {assignedIds.length === 0 && '(todo el estudio)'}
+                      </label>
+                      <select
+                        multiple
+                        value={assignedIds}
+                        onChange={(e) =>
+                          assignMutation.mutate({
+                            id: client.membershipId,
+                            studioUserIds: Array.from(e.target.selectedOptions, (o) => o.value),
+                          })
+                        }
+                        className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2 py-1 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+                        size={Math.min(accountants.length, 3)}
+                      >
+                        {accountants.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name ?? a.email}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => activateMutation.mutate(client.membershipId)}
+                    disabled={activateMutation.isPending}
+                    className="mt-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {activateMutation.isPending ? 'Entrando...' : 'Entrar'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
         {activateMutation.isError && (
@@ -161,13 +216,16 @@ export default function PortfolioSection() {
 function PendingRow({
   membership,
   onRespond,
+  onCancel,
 }: {
   membership: StudioMembershipSummary;
   onRespond: (decision: 'ACCEPTED' | 'DECLINED') => void;
+  onCancel: () => void;
 }) {
   // Si la inicié yo (le pedí acceso a un cliente), me toca esperar - no hay
-  // nada que responder de mi lado. Sólo una invitación que ME mandó el
-  // cliente (CLIENT_INVITED) es accionable acá.
+  // nada que responder de mi lado, pero sí puedo cancelarla. Sólo una
+  // invitación que ME mandó el cliente (CLIENT_INVITED) es accionable con
+  // Aceptar/Rechazar acá.
   const actionable = membership.direction === 'CLIENT_INVITED';
 
   return (
@@ -182,7 +240,7 @@ function PendingRow({
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[membership.status]}`}>
           {STATUS_LABELS[membership.status]}
         </span>
-        {actionable && (
+        {actionable ? (
           <>
             <button
               onClick={() => onRespond('ACCEPTED')}
@@ -197,6 +255,13 @@ function PendingRow({
               Rechazar
             </button>
           </>
+        ) : (
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-red-800 px-2 py-1 text-xs text-red-400 transition hover:bg-red-950"
+          >
+            Cancelar
+          </button>
         )}
       </div>
     </div>

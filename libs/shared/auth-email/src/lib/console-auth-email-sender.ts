@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import type {
   AuthEmailSender,
   SendInvitationPayload,
+  SendMembershipNoticePayload,
   SendPasswordResetLinkPayload,
   SendVerificationCodePayload,
 } from './auth-email-sender.port.js';
+import { buildMembershipNoticeCopy } from './membership-notice-template.js';
 
 /** Logs instead of sending. Used when RESEND_API_KEY/EMAIL_FROM aren't set -
  * mismo criterio que ConsoleEmailSender de Facturación. */
@@ -28,5 +30,10 @@ export class ConsoleAuthEmailSender implements AuthEmailSender {
     this.logger.log(
       `[stub] invitation for ${payload.to} to join ${payload.tenantName} as ${payload.role}: ${payload.acceptUrl} (expira en ${payload.expiresInMinutes} min)`,
     );
+  }
+
+  async sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void> {
+    const { subject } = buildMembershipNoticeCopy(payload);
+    this.logger.log(`[stub] membership notice for ${payload.to}: ${subject}`);
   }
 }

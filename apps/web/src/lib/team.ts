@@ -11,6 +11,7 @@ export interface TeamMember {
   status: TeamMemberStatus;
   mustChangePassword: boolean;
   createdAt: string;
+  isExternalAccountant: boolean;
 }
 
 export interface InviteMemberInput {

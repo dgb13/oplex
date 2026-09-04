@@ -144,6 +144,21 @@ describe('UsersService.changeRole', () => {
 
     expect(db.user.update).toHaveBeenCalledWith({ where: { id: 'user-2' }, data: { role: 'PURCHASES' } });
   });
+
+  it('blocks changing the role of an external accountant mirror row (managed from /accountants, not here)', async () => {
+    const db = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'user-2', role: 'ACCOUNTANT', isExternalAccountant: true }),
+        update: jest.fn(),
+      },
+    };
+    const service = new UsersService({} as PrismaService, makeSubscriptionService(), makeAuthEmailSender());
+
+    await expect(
+      runInTenant(db, () => service.changeRole('user-2', { role: 'VIEWER' })),
+    ).rejects.toThrow('gestionado desde Contadores');
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('UsersService.acceptInvitation', () => {
@@ -269,5 +284,20 @@ describe('UsersService.toggleStatus', () => {
     await runInTenant(db, () => service.toggleStatus('user-2', { status: 'SUSPENDED' }, actor));
 
     expect(db.user.update).toHaveBeenCalledWith({ where: { id: 'user-2' }, data: { status: 'SUSPENDED' } });
+  });
+
+  it('blocks suspending/reactivating an external accountant mirror row', async () => {
+    const db = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'user-2', role: 'ACCOUNTANT', isExternalAccountant: true }),
+        update: jest.fn(),
+      },
+    };
+    const service = new UsersService({} as PrismaService, makeSubscriptionService(), makeAuthEmailSender());
+
+    await expect(
+      runInTenant(db, () => service.toggleStatus('user-2', { status: 'SUSPENDED' }, actor)),
+    ).rejects.toThrow('gestionado desde Contadores');
+    expect(db.user.update).not.toHaveBeenCalled();
   });
 });

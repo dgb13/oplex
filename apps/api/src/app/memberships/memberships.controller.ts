@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser, Roles } from '@plexo/auth';
 import type { AuthenticatedUser } from '@plexo/types';
 import { InviteMembershipDto } from './dto/invite-membership.dto.js';
 import { RespondMembershipDto } from './dto/respond-membership.dto.js';
-import { MembershipsService } from './memberships.service.js';
+import { SetAssignmentsDto } from './dto/set-assignments.dto.js';
+import { filterVisibleForCaller, MembershipsService } from './memberships.service.js';
 
 // Quién dentro del estudio puede hacer qué (ver docs/plan_modulo_contadores.txt,
 // punto 1): activar una sesión en un cliente ya-aceptado es trabajo del día
@@ -21,11 +22,14 @@ export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 
   /** Cartera del estudio del que llama (todas las membresías, cualquier
-   * status) - ver MembershipsService.listMine. */
+   * status) - ver MembershipsService.listMine. Filtrada por reparto de
+   * cartera (Fase 2 punto 4) - OWNER/ADMIN ven todo, ACCOUNTANT sólo lo
+   * suyo/sin asignar. */
   @Get()
   @Roles(...ACTIVATE_ROLES)
-  listMine(@CurrentUser() user: AuthenticatedUser) {
-    return this.membershipsService.listMine(user.tenantId);
+  async listMine(@CurrentUser() user: AuthenticatedUser) {
+    const rows = await this.membershipsService.listMine(user.tenantId);
+    return filterVisibleForCaller(rows, user.role, user.sub);
   }
 
   /** Relaciones donde el que llama es el CLIENTE (invitaciones que mandó,
@@ -41,13 +45,22 @@ export class MembershipsController {
   @Get('portfolio')
   @Roles(...ACTIVATE_ROLES)
   getPortfolio(@CurrentUser() user: AuthenticatedUser) {
-    return this.membershipsService.getPortfolio(user.tenantId);
+    return this.membershipsService.getPortfolio(user.tenantId, user.sub, user.role);
   }
 
   @Post(':id/activate')
   @Roles(...ACTIVATE_ROLES)
   activate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.membershipsService.activate(id, user.sub, user.tenantId);
+    return this.membershipsService.activate(id, user.sub, user.tenantId, user.role);
+  }
+
+  /** Reparto de cartera (Fase 2 punto 4) - reemplaza el conjunto completo de
+   * contadores asignados a esta membership. Decisión administrativa del
+   * estudio, mismo gate que crear/aceptar/revocar. */
+  @Put(':id/assignments')
+  @Roles(...ADMIN_ROLES)
+  setAssignments(@Param('id') id: string, @Body() dto: SetAssignmentsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.membershipsService.setAssignments(id, user.tenantId, dto.studioUserIds);
   }
 
   /** El cliente invita a un estudio por su email/CUIT. */

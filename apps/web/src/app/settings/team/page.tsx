@@ -156,7 +156,14 @@ function MemberRow({
         )}
       </td>
       <td className="p-3">
-        {member.role === 'OWNER' ? (
+        {member.isExternalAccountant ? (
+          <span
+            className="rounded-full bg-indigo-100 dark:bg-indigo-950/50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+            title="Fila espejo de un contador externo - gestioná el acceso desde Contadores, no acá"
+          >
+            Contador externo
+          </span>
+        ) : member.role === 'OWNER' ? (
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES.OWNER}`}>
             {ROLE_LABELS.OWNER}
           </span>
@@ -176,14 +183,18 @@ function MemberRow({
         )}
       </td>
       <td className="p-3">
-        <div className="flex items-center gap-2" title={isSelf ? 'No podés suspender tu propia cuenta' : undefined}>
-          <ToggleSwitch
-            checked={member.status === 'ACTIVE'}
-            onChange={(checked) => statusMutation.mutate(checked ? 'ACTIVE' : 'SUSPENDED')}
-            label={member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}
-          />
+        {member.isExternalAccountant ? (
           <span className="text-xs text-slate-500">{member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}</span>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2" title={isSelf ? 'No podés suspender tu propia cuenta' : undefined}>
+            <ToggleSwitch
+              checked={member.status === 'ACTIVE'}
+              onChange={(checked) => statusMutation.mutate(checked ? 'ACTIVE' : 'SUSPENDED')}
+              label={member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}
+            />
+            <span className="text-xs text-slate-500">{member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}</span>
+          </div>
+        )}
       </td>
       <td className="p-3 text-xs text-slate-500">{new Date(member.createdAt).toLocaleDateString('es-AR')}</td>
       <td className="p-3 text-right">
@@ -204,16 +215,18 @@ function MemberRow({
                 Ver actividad
               </button>
             </MenuItem>
-            <MenuItem>
-              <button
-                type="button"
-                onClick={() => resetPasswordMutation.mutate()}
-                disabled={resetPasswordMutation.isPending}
-                className="block w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 data-[focus]:bg-slate-100 dark:data-[focus]:bg-slate-800 disabled:opacity-50"
-              >
-                {resetPasswordMutation.isPending ? 'Enviando...' : 'Resetear contraseña'}
-              </button>
-            </MenuItem>
+            {!member.isExternalAccountant && (
+              <MenuItem>
+                <button
+                  type="button"
+                  onClick={() => resetPasswordMutation.mutate()}
+                  disabled={resetPasswordMutation.isPending}
+                  className="block w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 data-[focus]:bg-slate-100 dark:data-[focus]:bg-slate-800 disabled:opacity-50"
+                >
+                  {resetPasswordMutation.isPending ? 'Enviando...' : 'Resetear contraseña'}
+                </button>
+              </MenuItem>
+            )}
           </MenuItems>
         </Menu>
       </td>

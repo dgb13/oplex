@@ -3,10 +3,12 @@ import { Resend } from 'resend';
 import type {
   AuthEmailSender,
   SendInvitationPayload,
+  SendMembershipNoticePayload,
   SendPasswordResetLinkPayload,
   SendVerificationCodePayload,
 } from './auth-email-sender.port.js';
 import { buildVerificationEmailCopy } from './verification-email-template.js';
+import { buildMembershipNoticeCopy } from './membership-notice-template.js';
 
 /** Real sender, wired in sólo cuando RESEND_API_KEY está seteado (ver
  * AuthEmailModule) - mismo criterio que ResendEmailSender de Facturación.
@@ -64,6 +66,20 @@ export class ResendAuthEmailSender implements AuthEmailSender {
 
     if (error) {
       this.logger.error(`Failed to email invitation to ${payload.to}: ${error.message}`);
+    }
+  }
+
+  async sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void> {
+    const { subject, text } = buildMembershipNoticeCopy(payload);
+    const { error } = await this.resend.emails.send({
+      from: this.from,
+      to: payload.to,
+      subject,
+      text,
+    });
+
+    if (error) {
+      this.logger.error(`Failed to email membership notice to ${payload.to}: ${error.message}`);
     }
   }
 }

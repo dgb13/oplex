@@ -14,6 +14,9 @@ export interface StudioMembershipSummary {
   inviteeIdentifier: string | null;
   createdAt: string;
   respondedAt: string | null;
+  // Vacío = visible para todo el estudio (default) - ver reparto de
+  // cartera, docs/plan_modulo_contadores.txt Fase 2 punto 4.
+  assignedStudioUserIds: string[];
 }
 
 // "Mis contadores" (lado cliente): tenantId = mi tenant - ver
@@ -62,6 +65,8 @@ export const membershipsApi = {
   respond: (id: string, decision: 'ACCEPTED' | 'DECLINED') =>
     api.post<StudioMembershipSummary>(`/memberships/${id}/respond`, { decision }).then((r) => r.data),
   revoke: (id: string) => api.post<StudioMembershipSummary>(`/memberships/${id}/revoke`).then((r) => r.data),
+  setAssignments: (id: string, studioUserIds: string[]) =>
+    api.put<void>(`/memberships/${id}/assignments`, { studioUserIds }).then((r) => r.data),
 };
 
 // --- Vencimientos impositivos (carga manual, ver TaxDeadlineService) ---

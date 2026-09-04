@@ -519,3 +519,393 @@ resuelto.
    de un usuario real del cliente), y confirmar que el JWT respeta la
    duración configurada en `PlatformSettings` y no se puede reusar pasado
    ese límite.
+
+---
+
+# Fase 2 — Módulo para estudios contables
+
+## Estado
+
+- **2a — Distinguir contador externo en Equipo: HECHO** (sesión 2026-09-04).
+  `UsersService.listMembers()` ahora selecciona `isExternalAccountant`;
+  `changeRole()`/`toggleStatus()` la rechazan con 403 (defensa en
+  profundidad server-side, no sólo ocultar el botón). Frontend: badge
+  "Contador externo" (indigo) en vez del `<select>` de rol, toggle de
+  estado deshabilitado (texto plano), "Resetear contraseña" oculto en el
+  menú "⋯". Verificado con tests unitarios nuevos (`changeRole`/
+  `toggleStatus` rechazan una fila `isExternalAccountant`), en vivo por
+  API (`GET /users` devuelve el campo, `PATCH .../role` y `.../status`
+  devuelven 403 contra una fila espejo real) y en el navegador real
+  (Chrome, `/settings/team` con una membership activada de punta a
+  punta). Datos de prueba limpiados.
+- **2b — Cancelar solicitud pendiente: HECHO** (sesión 2026-09-04).
+  `MembershipsService.revoke()` extendido (mismo endpoint) para aceptar
+  también `PENDING` - sólo el lado iniciador puede cancelarla (chequeo a
+  nivel tenant, igual criterio que `respond()`). Frontend: botón
+  "Cancelar" en `PortfolioSection`/`ClientAccountantsSection` para la
+  solicitud PENDING que uno mismo inició, reusando la misma mutation de
+  revoke. Verificado con 2 tests nuevos (cancela si soy el iniciador,
+  rechaza si no) + los 2 existentes de `revoke()` actualizados. Probado
+  en vivo por API en las 2 direcciones × iniciador/no-iniciador (4 casos)
+  y en el navegador real (invitar → Cancelar → pasa a "Revocada", sin
+  acciones). Datos de prueba limpiados.
+- **2c — Notificaciones por email: HECHO** (sesión 2026-09-04).
+  `sendMembershipNotice` nuevo en `AuthEmailSender` (puerto +
+  `ResendAuthEmailSender`/`ConsoleAuthEmailSender`), redacción centralizada
+  en `membership-notice-template.ts`. `MembershipsService.notifyTenantAdmins()`
+  (primer lugar del repo que le manda un email a "los admins de un tenant",
+  no a un destinatario puntual ya conocido) - nunca relanza, envuelto en
+  try/catch en cada call site también (el lookup del nombre de la
+  contraparte tampoco debe tumbar la operación real). Wireado en
+  `inviteFromClient()` (avisa al estudio), `requestFromStudio()` (avisa al
+  cliente), `respond()` (avisa al iniciador, con el nombre de quien
+  respondió). Encontrado y arreglado un bug real en la redacción del
+  aviso "invited" (usaba el nombre del destinatario en vez de la
+  contraparte que invitó - detectado por el test de
+  `resend-auth-email-sender.spec.ts`, no por revisión manual). Verificado
+  con 3 tests nuevos en `memberships.service.spec.ts` (uno por flujo,
+  aserción exacta de destinatario/nombres/kind) + 2 nuevos en
+  `resend-auth-email-sender.spec.ts`, y en vivo contra el servidor real
+  (invite/respond/revoke siguen devolviendo 200/201 sin romperse con el
+  side-effect nuevo). Datos de prueba limpiados.
+- **2d — Reparto de cartera: HECHO** (sesión 2026-09-04). Modelo nuevo
+  `TenantMembershipAssignment` (N-a-N, confirmado con el usuario - varios
+  contadores por cliente), migración con RLS estándar +
+  `list_studio_memberships()` regenerada (DROP+CREATE, Postgres no permite
+  cambiar columnas de `RETURNS TABLE` con `CREATE OR REPLACE`) para incluir
+  `assigned_studio_user_ids text[]` vía `array_agg` con `LEFT JOIN`.
+  `PUT /memberships/:id/assignments` (ADMIN_ROLES) reemplaza el conjunto
+  completo, valida cada id contra el propio equipo antes de saltar de
+  tenant. Helper puro `filterVisibleForCaller()` (OWNER/ADMIN ven todo,
+  ACCOUNTANT sólo lo sin asignar o asignado a él) aplicado en 3 lugares:
+  `GET /memberships`, `getPortfolio()`, `activate()` (esta última devuelve
+  el mismo 404 "Membership not found" que si no existiera - IDOR-safe,
+  nunca un 403 que revele que la fila sí existe). Frontend: `<select
+  multiple>` nativo "Asignado a" en cada tarjeta de `PortfolioSection`,
+  visible sólo para OWNER/ADMIN, opciones = el propio equipo con rol
+  ACCOUNTANT (reusa `teamApi.list()`, sin endpoint nuevo).
+
+  Verificado con 7 tests unitarios nuevos (`filterVisibleForCaller` × 3,
+  `setAssignments` × 4) + `nx run database:test-rls` (la tabla nueva cae
+  automática, sin excepción). **Probado en vivo de punta a punta contra el
+  servidor real** con un escenario de 2 clientes × 2 contadores reales
+  (Juan OWNER, Ana ACCOUNTANT sembrada a mano): Juan ve los 2 clientes en
+  su portfolio; tras asignar el cliente B exclusivamente a Juan, Ana sólo
+  ve el cliente A (sin asignar) en su portfolio - y si intenta `activate()`
+  sobre B recibe el mismo 404 que si no existiera, mientras que A activa
+  con éxito. Validación de ids ajenos probada (400 real). Durante esta
+  verificación el servidor de API se cayó (proceso previo a esta sesión) y
+  se reinició sin pérdida de datos; el servidor web tuvo un cuelgue
+  transitorio de Turbopack (cache interna corrupta, mensaje propio de
+  Next confirmándolo) resuelto reiniciándolo - ninguno de los dos
+  relacionado con el código de esta sub-fase.
+
+  **Única pieza no verificada en el navegador real**: la interacción de
+  click dentro del popup nativo de `<select multiple>` - es un popup
+  renderizado por el SO, fuera del árbol DOM que las herramientas de
+  automatización de este entorno pueden manipular con fiabilidad (5
+  intentos distintos con mecanismos diferentes, todos sin efecto, mismo
+  patrón de limitación en los 5). El resto del componente sí se verificó
+  en el navegador (opciones correctas, valor inicial correcto,
+  gateado a OWNER/ADMIN) y la mutation que dispara el `onChange` es
+  idéntica en estructura a `respondMutation`/`cancelMutation`/
+  `activateMutation`, las 3 ya probadas funcionando en vivo en sub-fases
+  anteriores.
+
+## Contexto
+
+La Fase 1 (núcleo de membresía, invitación bidireccional, permisos por
+defecto, cartera + consolidado, vencimientos, y toda la UI de frontend)
+está commiteada y pusheada en `main`, probada en vivo de punta a punta.
+
+Durante esa verificación en el navegador se encontró un hueco real que el
+propio diseño original ya había anticipado pero no cerrado:
+`User.isExternalAccountant` se setea en la fila espejo del contador
+(`MembershipsService.activate()`) pero `UsersService.listMembers()`
+(detrás de `GET /users`, consumida por "Equipo") nunca lo selecciona ni lo
+filtra — un OWNER/ADMIN del tenant cliente ve la fila espejo mezclada con
+sus empleados reales, sin distinción, con las mismas acciones de gestión
+de equipo disponibles sobre ella.
+
+A partir de ahí, con el usuario, se definió el alcance de esta Fase 2 (4
+puntos, elegidos explícitamente los 4 juntos):
+
+1. Distinguir el contador externo en "Equipo".
+2. Cancelar una solicitud PENDING que uno mismo inició.
+3. Notificar por email cuando llega una invitación/solicitud nueva
+   (revierte la decisión explícita de 1b de no mandar email).
+4. Reparto de cartera por contador dentro del estudio (revierte la
+   decisión explícita de 1a-1d de que toda la cartera es visible para
+   cualquier OWNER/ADMIN/ACCOUNTANT del estudio).
+
+**Verificado contra el código real, no asumido** (research dedicada antes
+de diseñar): `UsersService.listMembers()`/`changeRole()`/`toggleStatus()`
+completos, `settings/team/page.tsx` fila por fila (`MemberRow`, dónde
+vive el badge de rol vs. el `<select>`, el toggle de estado, el menú
+"⋯"), `AuthEmailSender` (puerto + las 2 implementaciones, patrón texto
+plano para reset/invitación) — **no existe en todo el repo** ningún
+método multi-destinatario ni ningún query tipo
+`user.findMany({where:{role:{in:['OWNER','ADMIN']}}})` para "avisarle a
+los admins de un tenant", sería nuevo. Tampoco existe en ningún lado del
+repo un flujo "cancelar algo PENDING que yo mismo inicié" (ni
+`PurchaseOrder.cancel()` ni `Quote.cancel()` chequean autoría, sólo
+rol) — `initiatedByUserId` se guarda en `TenantMembership` pero nunca se
+lee para nada. Tampoco existe ningún campo tipo `assignedToUserId`/
+`ownerId` con filtrado por fila en ningún modelo del schema — el único
+precedente real es `managedByAccountant` (`TaxDefinition`/
+`WithholdingRegime`), que es un flag booleano a nivel tenant, no una
+asignación por persona.
+
+## 1. Distinguir el contador externo en "Equipo"
+
+**Backend** (`apps/api/src/app/users/users.service.ts`):
+- `listMembers()`: agregar `isExternalAccountant: true` al `select` y al
+  interface `TeamMember`.
+- `changeRole()`/`toggleStatus()`: agregar un chequeo temprano — si
+  `target.isExternalAccountant`, `BadRequestException('Este usuario está
+  gestionado desde Contadores - andá a /accountants para revocar el
+  acceso')`. Defensa en profundidad (nunca confiar sólo en que el
+  frontend oculte el botón), mismo criterio que el resto del repo.
+  Cambiar rol o suspender/reactivar esta fila a mano no rompe nada
+  técnicamente hoy (el acceso real lo gatea `TenantMembership.status`,
+  no el rol/status del `User`), pero es engañoso — mejor cerrarlo del
+  todo que dejarlo "funciona pero confunde".
+- Reset de contraseña vía admin (el botón del menú "⋯"): **no** se
+  bloquea en el backend (la fila espejo tiene un hash aleatorio
+  inutilizable — resetearlo no rompe ni habilita nada, sólo genera un
+  hash inutilizable distinto) — alcanza con ocultarlo en el frontend.
+
+**Frontend**:
+- `apps/web/src/lib/team.ts`: agregar `isExternalAccountant: boolean` a
+  `TeamMember`.
+- `apps/web/src/app/settings/team/page.tsx`, `MemberRow` — mismo lugar
+  donde hoy `member.role === 'OWNER'` ya rama entre badge-plano vs.
+  `<select>` editable (líneas ~158-176): agregar la rama
+  `isExternalAccountant` ANTES del chequeo de OWNER, con un badge propio
+  ("Contador externo", color indigo — mismo tono que
+  `MembershipSessionBanner` para consistencia visual con el resto del
+  módulo) en vez del `<select>` de rol. El `ToggleSwitch` de estado
+  (~178-187) se deshabilita (no se oculta, para que se siga viendo si
+  está suspendido) para esa fila. El item "Resetear contraseña" del menú
+  "⋯" (~189-219) se oculta para esa fila.
+
+## 2. Cancelar una solicitud PENDING que inicié
+
+**Decisión de diseño**: no crear un endpoint nuevo ni un status nuevo de
+enum — **extender `MembershipsService.revoke()`** (mismo endpoint `POST
+/memberships/:id/revoke`, ya usado desde ambos lados en el frontend) para
+que además de cortar una relación `ACCEPTED` (comportamiento actual, sin
+cambios), también pueda cancelar una `PENDING`:
+
+```
+if (membership.status === 'ACCEPTED') {
+  // comportamiento actual sin cambios: cualquiera de las dos partes,
+  // suspende las filas espejo ya creadas.
+} else if (membership.status === 'PENDING') {
+  // NUEVO: sólo el lado que inició la relación puede cancelarla -
+  // mismo cálculo que expectedResponderTenantId de respond(), pero
+  // invertido (el iniciador, no quien tiene que responder). Nunca
+  // lee initiatedByUserId para la autorización (sigue sin usarse para
+  // eso, igual que el resto del diseño) - el chequeo es a nivel
+  // TENANT, no de usuario puntual, mismo criterio que respond().
+  const expectedInitiatorTenantId =
+    membership.direction === 'CLIENT_INVITED' ? membership.tenantId : membership.homeTenantId;
+  if (expectedInitiatorTenantId !== callerTenantId) {
+    throw new ForbiddenException('No podés cancelar una solicitud que no iniciaste vos');
+  }
+  // sin filas espejo que suspender todavía (activate() nunca corrió)
+} else {
+  throw new BadRequestException('Esta relación no se puede revocar/cancelar en su estado actual');
+}
+```
+
+El mensaje de error genérico y el `updated.status = 'REVOKED'` quedan
+iguales para los dos casos — "revocada"/"cancelada" es la misma
+operación de fondo (cortar antes de que llegue a buen puerto), no hace
+falta un status nuevo.
+
+**Frontend**: en `PortfolioSection.tsx` (`PendingRow`) y
+`ClientAccountantsSection.tsx` (`RelationRow`), la rama `else` que hoy
+muestra "Esperando respuesta del cliente"/"—" sin botón pasa a mostrar un
+botón "Cancelar" que llama al mismo `membershipsApi.revoke(id)` que ya
+existe (reusa la mutation de revoke ya cableada para el caso ACCEPTED).
+
+## 3. Email al llegar una invitación/solicitud nueva
+
+**Puerto** (`libs/shared/auth-email/src/lib/auth-email-sender.port.ts`):
+nuevo método, patrón texto plano (igual que `sendPasswordResetLink`/
+`sendInvitation`, no el HTML de verificación):
+
+```ts
+export interface SendMembershipNoticePayload {
+  to: string;
+  tenantName: string;       // el tenant que la recibe (a quién le hablamos)
+  counterpartName: string;  // el otro tenant (quién invitó/pidió/respondió)
+  kind: 'invited' | 'requested' | 'accepted' | 'declined';
+  portalUrl: string;
+}
+sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void>;
+```
+
+Implementar en `ResendAuthEmailSender` y `ConsoleAuthEmailSender`, mismo
+patrón que las otras dos (errores logueados, nunca relanzados).
+
+**`MembershipsService`**: inyectar `AUTH_EMAIL_SENDER` (mismo patrón que
+`UsersService`). Nuevo helper privado `notifyTenantAdmins(tenantId,
+kind, counterpartName)`:
+
+```ts
+private async notifyTenantAdmins(tenantId: string, kind: ..., counterpartName: string) {
+  try {
+    const { admins, tenantName } = await withTenantContext(this.prisma, tenantId, async () => {
+      const db = getTenantDb();
+      const admins = await db.user.findMany({ where: { role: { in: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } });
+      const tenant = await db.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+      return { admins, tenantName: tenant.name };
+    });
+    await Promise.all(admins.map((a) =>
+      this.authEmailSender.sendMembershipNotice({ to: a.email, tenantName, counterpartName, kind, portalUrl: `${FRONTEND_URL}/accountants` }),
+    ));
+  } catch (err) {
+    this.logger.error(`Failed to notify tenant ${tenantId} admins of membership ${kind}: ${(err as Error).message}`);
+  }
+}
+```
+
+Envuelto en try/catch propio y NUNCA relanzado — un email caído no debe
+tumbar la invitación/solicitud/respuesta real (mismo espíritu que ya usan
+`ResendAuthEmailSender`/`ConsoleAuthEmailSender` puertas adentro, acá se
+repite un nivel más arriba porque esta vez son N destinatarios, no 1).
+
+**Dónde se llama** (después de escribir la fila, nunca antes ni
+bloqueando la respuesta):
+- `inviteFromClient()` → notifica a los admins del ESTUDIO (`kind:
+  'invited'`).
+- `requestFromStudio()` → notifica a los admins del CLIENTE (`kind:
+  'requested'`).
+- `respond()` → notifica a los admins del lado que INICIÓ la relación
+  (`kind: 'accepted'`/`'declined'`, según `decision`).
+
+**Deliberadamente fuera de alcance**: no se manda email en `revoke()`
+(incluyendo el cancelar del punto 2) — no fue pedido, y mantiene el
+alcance acotado.
+
+## 4. Reparto de cartera por contador
+
+**Decisión confirmada con el usuario: varios contadores por cliente**
+(no uno solo) — hace falta una tabla de asignación N-a-N, no un campo
+escalar.
+
+**Schema** (`libs/shared/database/prisma/schema.prisma`): modelo nuevo,
+RLS estándar (`tenantId` = el tenant CLIENTE, mismo criterio que
+`TenantMembershipLink`):
+
+```prisma
+// Conjunto vacío (sin filas) = visible para cualquier OWNER/ADMIN/
+// ACCOUNTANT del estudio (comportamiento actual, sin cambios) - con
+// filas = sólo esos contadores puntuales (más OWNER/ADMIN del estudio,
+// que siempre retienen visión completa para supervisión). Ver
+// docs/plan_modulo_contadores.txt, Fase 2.
+model TenantMembershipAssignment {
+  id           String           @id @default(uuid())
+  tenantId     String
+  membershipId String
+  membership   TenantMembership @relation(fields: [tenantId, membershipId], references: [tenantId, id])
+  // User.id del contador puntual, en SU tenant (el estudio) - cross-tenant,
+  // sin @relation, mismo criterio que TenantMembershipLink.studioUserId.
+  studioUserId String
+  createdAt    DateTime         @default(now())
+
+  @@unique([tenantId, membershipId, studioUserId])
+  @@index([tenantId, membershipId])
+  @@map("tenant_membership_assignments")
+}
+```
+
+(+ `assignments TenantMembershipAssignment[]` en `TenantMembership`).
+
+Nueva migración (`..._membership_assignment/migration.sql`): tabla nueva
+con RLS+GRANT estándar (cae automático bajo
+`tenant-scoped-tables.rls-spec.ts`, sin excepción) + regenerar
+`list_studio_memberships()` para que devuelva también el conjunto de
+asignados por fila. Postgres no permite cambiar las columnas de
+`RETURNS TABLE` con `CREATE OR REPLACE` - hace falta `DROP FUNCTION` +
+`CREATE FUNCTION` de nuevo, mismo cuerpo que hoy más un `LEFT JOIN` contra
+la tabla nueva y `array_agg(...) FILTER (WHERE ...)` agrupado por fila de
+membership, devolviendo `assigned_studio_user_ids text[]` (vacío si no
+hay ninguna asignación):
+
+```sql
+SELECT m.id, m."tenantId", t.name, m.direction::text, m.status::text,
+       m."inviteeIdentifier", m."createdAt", m."respondedAt",
+       COALESCE(array_agg(a."studioUserId") FILTER (WHERE a."studioUserId" IS NOT NULL), '{}')
+FROM tenant_memberships m
+JOIN tenants t ON t.id = m."tenantId"
+LEFT JOIN tenant_membership_assignments a ON a."tenantId" = m."tenantId" AND a."membershipId" = m.id
+WHERE m."homeTenantId" = p_studio_tenant_id
+GROUP BY m.id, m."tenantId", t.name, m.direction, m.status, m."inviteeIdentifier", m."createdAt", m."respondedAt"
+ORDER BY m."createdAt" DESC;
+```
+
+**Endpoint nuevo**: `PUT /memberships/:id/assignments`, body
+`{studioUserIds: string[]}` - reemplaza el conjunto completo en una sola
+llamada (semántica PUT, mapea directo a un multi-select que manda todo lo
+tildado; evita tener que diffear altas/bajas). Gateado `ADMIN_ROLES`
+(mismo criterio que crear/aceptar/revocar - decisión administrativa del
+estudio). Antes de saltar al tenant cliente, valida que CADA id de
+`studioUserIds` sea realmente un usuario del PROPIO tenant del que llama
+(`getTenantDb().user.findMany({where:{id:{in:studioUserIds},
+tenantId:callerTenantId}})`, todavía en contexto propio del estudio,
+comparando el conteo) - nunca confía en ids ajenos pasados por el body.
+Después, dentro de `withTenantContext(clientTenantId)`: borra todas las
+asignaciones existentes de esa membership y crea las nuevas
+(`deleteMany` + `createMany`, reemplazo simple).
+
+**Filtrado por visibilidad**: helper puro `filterVisibleForCaller(rows,
+callerRole, callerUserId)` - si `callerRole` es `OWNER`/`ADMIN`, devuelve
+todo sin cambios; si no (`ACCOUNTANT`), filtra a
+`assignedStudioUserIds.length === 0 || assignedStudioUserIds.includes(callerUserId)`.
+Se aplica en los 3 lugares donde importa "qué ve/puede tocar ESTE caller
+puntual" - la ruta `GET /memberships`, `getPortfolio()`, y `activate()`
+(filtrando el resultado de `listMine()` ANTES de buscar el `id` pedido -
+un contador sin asignación que intenta activar un cliente ajeno recibe el
+mismo "Membership not found" que si la fila no existiera, mismo patrón
+IDOR-safe que ya usa el resto del diseño). **No** se aplica en
+`requestFromStudio()` (chequeo de duplicados) ni en
+`resolveMembershipClientTenantId()` (necesitan la verdad completa, no la
+vista filtrada de un caller puntual). `listMine()` en sí queda sin tocar,
+siempre devuelve todo con el array completo de asignados - el filtro es
+una capa aparte por-callsite, no un parámetro nuevo de la función.
+
+**Frontend** (`PortfolioSection.tsx`): cada tarjeta de cliente gana un
+multi-select "Asignado a" (sólo visible/editable para OWNER/ADMIN del
+estudio, vía el mismo `profile.role` que ya usan otras partes de
+`AppShell`) - opciones = cada miembro del propio equipo, reusando
+`teamApi.list()` (`apps/web/src/lib/team.ts`, ya existe, sin endpoint
+nuevo de listado); ninguna opción tildada = "todo el estudio" (estado por
+defecto, retrocompatible). Un `<select multiple>` nativo alcanza para
+esta sub-fase (mismo criterio de simplicidad que el resto del frontend de
+este módulo - sin librería de multi-select nueva). Nuevo
+`membershipsApi.setAssignments(id, studioUserIds)`.
+
+## Sub-secuenciado (mismo criterio que la Fase 1: de menor a mayor riesgo)
+
+1. **2a** — Distinguir contador externo en Equipo (sin schema nuevo).
+2. **2b** — Cancelar solicitud pendiente (sin schema nuevo, extiende
+   `revoke()`).
+3. **2c** — Notificaciones por email (sin schema nuevo).
+4. **2d** — Reparto de cartera (única con migración + función SQL nueva
+   - la de mayor superficie, al final).
+
+## Verificación (por cada sub-fase, mismo patrón que la Fase 1)
+
+1. Tests unitarios nuevos/actualizados con mocks de `tenantContextStorage`
+   (mismo patrón que `memberships.service.spec.ts` ya tiene).
+2. `nx run-many -t lint,test,build` de los proyectos tocados
+   (`database`, `users` si aplica, `api`, `web`, `auth-email`).
+3. Para 2d específicamente: `nx run database:test-rls` (la tabla no
+   cambia de forma RLS-relevante, pero confirma que nada se rompió).
+4. Prueba manual en vivo contra el servidor real (curl para 2a-2c,
+   navegador real vía Chrome para el frontend de cada una - mismo rigor
+   que mostró los 3 bugs reales de la Fase 1) con datos de prueba
+   sembrados a mano y limpiados después.

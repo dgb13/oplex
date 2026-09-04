@@ -84,6 +84,7 @@ export type {
   CashMovement,
   TenantMembership,
   TenantMembershipLink,
+  TenantMembershipAssignment,
   PlatformSettings,
   TaxDeadline,
 } from './generated/client.js';

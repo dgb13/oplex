@@ -77,3 +77,46 @@ describe('ResendAuthEmailSender.sendPasswordResetLink', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('ResendAuthEmailSender.sendMembershipNotice', () => {
+  beforeEach(() => {
+    sendMock.mockReset();
+  });
+
+  it('sends with the portal URL and both tenant names in the body, wording varying by kind', async () => {
+    sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null });
+    const sender = new ResendAuthEmailSender('re_test_key', 'auth@plexo.demo');
+
+    await sender.sendMembershipNotice({
+      to: 'admin@estudio.com',
+      tenantName: 'Estudio Contable SRL',
+      counterpartName: 'Cliente Demo SA',
+      kind: 'invited',
+      portalUrl: 'https://app.oplex.com.ar/accountants',
+    });
+
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: 'auth@plexo.demo',
+        to: 'admin@estudio.com',
+        subject: expect.stringContaining('Cliente Demo SA'),
+        text: expect.stringContaining('https://app.oplex.com.ar/accountants'),
+      }),
+    );
+  });
+
+  it('logs instead of throwing when Resend returns an error', async () => {
+    sendMock.mockResolvedValue({ data: null, error: { message: 'Invalid from address' } });
+    const sender = new ResendAuthEmailSender('re_test_key', 'auth@plexo.demo');
+
+    await expect(
+      sender.sendMembershipNotice({
+        to: 'admin@estudio.com',
+        tenantName: 'Estudio Contable SRL',
+        counterpartName: 'Cliente Demo SA',
+        kind: 'accepted',
+        portalUrl: 'https://app.oplex.com.ar/accountants',
+      }),
+    ).resolves.toBeUndefined();
+  });
+});
