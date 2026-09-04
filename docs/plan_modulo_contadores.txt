@@ -600,17 +600,18 @@ resuelto.
   Next confirmándolo) resuelto reiniciándolo - ninguno de los dos
   relacionado con el código de esta sub-fase.
 
-  **Única pieza no verificada en el navegador real**: la interacción de
-  click dentro del popup nativo de `<select multiple>` - es un popup
-  renderizado por el SO, fuera del árbol DOM que las herramientas de
-  automatización de este entorno pueden manipular con fiabilidad (5
-  intentos distintos con mecanismos diferentes, todos sin efecto, mismo
-  patrón de limitación en los 5). El resto del componente sí se verificó
-  en el navegador (opciones correctas, valor inicial correcto,
-  gateado a OWNER/ADMIN) y la mutation que dispara el `onChange` es
-  idéntica en estructura a `respondMutation`/`cancelMutation`/
-  `activateMutation`, las 3 ya probadas funcionando en vivo en sub-fases
-  anteriores.
+  **El multi-select nativo también quedó verificado en el navegador**, en
+  una segunda pasada: el click directo sobre el popup nativo del SO no
+  registraba (limitación de las herramientas de automatización de este
+  entorno con popups nativos, no del código - varios mecanismos distintos
+  sin efecto), pero seleccionando la opción por su `value` (en vez de su
+  texto visible) sí disparó el `onChange` real, mandó el `PUT` real, y el
+  ciclo completo quedó probado en las dos direcciones: asignar "Ana
+  Contadora" → el label pasa de "(todo el estudio)" a nada y la opción
+  queda preseleccionada tras recargar; volver a vaciar la asignación →
+  vuelve a "0 seleccionados"/"(todo el estudio)". Un 503 transitorio del
+  entorno en el primer intento (no relacionado al código - reproducido
+  acto seguido con éxito por curl directo) fue la única aspereza.
 
 ## Contexto
 
