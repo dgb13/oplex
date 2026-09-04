@@ -1,0 +1,335 @@
+OPLEX — RESUMEN DEL PRODUCTO PARA LANDING PAGE
+(texto plano, pensado como insumo para copy, no como copy final)
+Actualizado septiembre 2026 — incorpora Caja/POS, Ajuste por Inflación
+Contable, Conciliación Bancaria semi-automática y Cobro por Mercado
+Pago, ninguno de los cuales existía en la versión anterior de este
+resumen.
+
+===========================================================
+QUÉ ES
+===========================================================
+
+Oplex es un ERP (sistema de gestión) integral en la nube, pensado para
+pequeñas y medianas empresas argentinas. Cubre en una sola aplicación
+todo el ciclo de un negocio: inventario, ventas y facturación
+electrónica AFIP, punto de venta / caja de mostrador, compras, cuentas
+a cobrar y a pagar, tesorería, contabilidad, impuestos y reportes
+gerenciales.
+
+Es un producto SaaS multi-empresa: cada cliente (tenant) tiene sus
+datos completamente aislados de los demás, no solo a nivel de
+aplicación sino a nivel de base de datos (seguridad Row Level
+Security de PostgreSQL) — el mismo nivel de aislamiento que usan
+plataformas bancarias y fintech, no un simple filtro de "empresa_id"
+como suelen tener los sistemas de gestión tradicionales.
+
+Se accede desde el navegador, sin instalar nada, con onboarding
+self-service: cualquiera puede registrarse, verificar su email y
+empezar a usar el sistema con una prueba gratuita, sin depender de
+que un vendedor le instale algo.
+
+
+===========================================================
+A QUIÉN ESTÁ DIRIGIDO
+===========================================================
+
+Pymes y comercios argentinos que hoy facturan con planillas de
+Excel, sistemas de escritorio viejos, o combinan tres o cuatro
+herramientas sueltas (una para facturar, otra para stock, un Excel
+para cuentas corrientes) y no tienen una foto unificada del negocio.
+También sirve para comercios con mostrador propio (el módulo de Caja
+está pensado para venta rápida sin pasar por todo el circuito de
+factura), y para estudios contables que atienden a varios clientes
+chicos (el rol "contador externo" está pensado para eso).
+
+
+===========================================================
+MÓDULOS Y FUNCIONALIDADES
+===========================================================
+
+TABLERO (dashboard)
+Vista en tiempo real al iniciar sesión: facturado hoy, cobrado hoy,
+alertas de stock bajo mínimo, gráfico de ventas de los últimos 7
+días y stock por depósito. Se actualiza solo, en vivo, si hay varios
+usuarios de la misma empresa conectados a la vez.
+
+INVENTARIO
+Artículos con variantes (talle, color, cualquier combinación de
+atributos), categorías, múltiples depósitos, movimientos de stock,
+stock mínimo con alertas y reposición automática programable.
+Catálogo visual tipo e-commerce (grilla con imagen/precio/stock) con
+un carrito de compras interno: se arma un pedido mezclando artículos
+de distintos proveedores y el sistema lo reparte solo en un Pedido
+de Cotización por proveedor. Cada artículo admite imagen, folleto en
+PDF, archivos adjuntos, descripción larga y % de remarcado propio.
+Importación masiva desde Excel.
+
+VENTAS Y FACTURACIÓN ELECTRÓNICA (AFIP)
+Facturación con los comprobantes argentinos reales: A, B, C y Notas
+de Crédito, con la letra sugerida o forzada automáticamente según la
+condición de IVA de emisor y cliente (para evitar errores fiscales).
+IVA desglosado por línea, soporte de artículos exentos / no
+gravados, distintos conceptos de factura (productos, servicios,
+mixto) con sus reglas AFIP correspondientes, y multi-moneda con tipo
+de cambio (sincronizado con la cotización del Banco Nación).
+Integración real con el webservice de AFIP (WSFE): certificado y
+clave propios por empresa, cifrados: no es un mock ni un stub, es el
+protocolo real de factura electrónica. También hay búsqueda de datos
+fiscales por CUIT contra el padrón de AFIP para autocompletar altas
+de clientes. El PDF de la factura sigue el formato vigente de ARCA
+con código QR (RG 4892), en 3 formatos de papel (A4, A5 y Ticket
+térmico angosto, pensado para impresora de mostrador).
+
+Además, cualquier factura o presupuesto se puede cobrar generando un
+link/QR de pago de Mercado Pago: el sistema concilia el cobro solo
+en cuanto Mercado Pago avisa que se acreditó, sin que nadie tenga que
+marcarlo a mano ni ir a revisar.
+
+CAJA / PUNTO DE VENTA (POS)
+Pantalla de venta rápida para mostrador, pensada para no pasar por
+todo el circuito de facturación completa cuando no hace falta:
+buscador de artículos con lectura de código de barras, carrito, y
+cobro con selección de cliente y método de pago.
+
+Soporta varias cajas simultáneas (por ejemplo, dos puestos de
+mostrador abiertos al mismo tiempo), cada una con su propio turno:
+apertura y cierre de caja con arqueo por desglose de billetes y
+monedas (denominaciones ARS reales, no un monto único a ojo — el
+sistema recalcula el total contado a partir del desglose, nunca
+confía en un número suelto). Al abrir un turno nuevo, el cajero ve
+cómo cerró el turno anterior de esa misma caja como referencia, con
+una diferencia calculada en vivo mientras cuenta el efectivo inicial
+— no bloquea la apertura, pero deja un registro auditable pensado
+para que un faltante de caja no termine siendo la palabra de un
+cajero contra la del otro.
+
+Historial de turnos con filtros por caja y rango de fechas, export a
+Excel, y una posición de caja consolidada en vivo (cuántas cajas
+están abiertas, cuánto se espera encontrar en total, cuánto se contó
+hoy) visible desde la pantalla principal del módulo. El mostrador
+tiene su propio selector de estilo visual (claro, oscuro, alto
+contraste para luz fuerte, y una variante con acento verde),
+independiente del tema del resto del sistema, para que cada cajero
+elija el que mejor le funcione en su puesto.
+
+COTIZACIONES
+Presupuestos a clientes con numeración propia, flujo
+Borrador → Enviada → Aceptada / Rechazada / Cancelada, envío directo
+por email o WhatsApp, y exportación a PDF en varios estilos visuales
+a elección del usuario.
+
+CUENTAS A COBRAR
+Saldos pendientes por cliente, reporte de antigüedad de deuda,
+cuenta corriente completa por cliente, y recordatorios automáticos
+recurrentes (no de una sola vez) a clientes con facturas vencidas,
+configurables por empresa.
+
+COMPRAS
+El espejo de Ventas del lado del proveedor: pedidos de cotización a
+varios proveedores en simultáneo con comparación de precios artículo
+por artículo, órdenes de compra, recepción de mercadería (que sí
+mueve el stock real, a diferencia de la orden), facturas de compra y
+notas de crédito de compra. Contabiliza automáticamente Cuentas a
+Pagar, IVA Crédito Fiscal y una cuenta puente de mercadería recibida
+no facturada para cuando la mercadería llega antes que la factura
+del proveedor.
+
+CUENTAS A PAGAR
+Saldos, antigüedad de deuda y cuenta corriente por proveedor.
+
+TESORERÍA
+Cartera de cheques, propios y de terceros (recibidos, depositados,
+rechazados), transferencias entre cuentas propias, e importación del
+extracto bancario con conciliación semi-automática: el sistema
+matchea solo, por monto y fecha, contra los movimientos ya cargados,
+y deja sólo las excepciones para revisar a mano — incluyendo generar
+el movimiento y el asiento contable directo desde una línea del
+extracto que no tenía nada cargado todavía. Todo reflejado en los
+movimientos financieros de Contabilidad.
+
+CONTABILIDAD
+Plan de cuentas configurable, asientos automáticos generados por
+Ventas, Compras, Cobros y Pagos (sin que el usuario tenga que
+asentar nada a mano en el día a día), asientos manuales cuando hacen
+falta, libro mayor por cuenta y balance de sumas y saldos con filtro
+de rango de fechas.
+
+Incluye Ajuste por Inflación Contable (RT 6/NC 39): clasificación de
+cuentas en monetarias/no monetarias, sincronización automática del
+índice de precios oficial, vista previa del RECPAM (resultado por
+exposición a la inflación) mes a mes, y emisión del asiento
+definitivo con un clic cuando el usuario confirma el período — con
+control para no emitir dos veces el mismo rango de fechas.
+
+IMPUESTOS
+Catálogo de impuestos con alícuotas versionadas en el tiempo (un
+cambio de tasa no altera retroactivamente facturas ya emitidas),
+regímenes de retención configurables, y el Libro de IVA Digital
+(ventas y compras, formato RG 4597) exportable a Excel y PDF, listo
+para la presentación ante AFIP.
+
+REPORTES
+Estado de resultados, ventas por cliente y por producto, y un libro
+de caja/banco — todos con filtros de rango de fechas con atajos
+(este mes, mes anterior, trimestre, año).
+
+EMPRESAS (clientes y proveedores)
+Gestión separada de Clientes, Proveedores y Sucursales propias, con
+sus contactos, condición fiscal, domicilio, y detección de CUIT
+duplicado para no cargar la misma empresa dos veces con roles
+distintos.
+
+GESTIÓN DE EQUIPO
+Invitación de compañeros por email con rol asignado (dueño,
+administrador, ventas, compras, inventario, etc.), permisos
+verificados del lado del servidor (no solo ocultando botones),
+suspensión/reactivación de cuentas, reseteo de contraseñas de otros
+usuarios, y registro de actividad por persona.
+
+ONBOARDING Y CUENTA
+Alta pública con prueba gratuita, verificación de email por código,
+login que reconoce automáticamente a qué empresa pertenece cada
+usuario, recuperación de contraseña, e inicio de sesión social con
+Google, Microsoft y Apple.
+
+BACKOFFICE PARA EL EQUIPO DE OPLEX (SuperAdmin)
+Panel interno para operar la plataforma: listado de todas las
+empresas clientes con su plan y uso, activar o suspender cuentas,
+soporte por "impersonación" (entrar como si fuera esa empresa para
+ayudar sin pedirle la contraseña), gestión de planes comerciales,
+feed de actividad global, monitoreo de errores, y un panel de estado
+del sistema que muestra en verde/rojo si cada integración externa
+(Mercado Pago, login social, email transaccional, backups) tiene sus
+credenciales cargadas.
+
+FUNCIONES TRANSVERSALES
+Presencia online (ver qué compañeros están conectados), historial de
+auditoría con el detalle de qué campo cambió en cada edición, envío
+de emails transaccionales con remitente propio del dominio de cada
+empresa, exportación a PDF con varios estilos visuales, backups
+automáticos diarios de la base de datos, y envío directo de
+documentos por WhatsApp.
+
+
+===========================================================
+VIRTUDES FRENTE A LA COMPETENCIA
+===========================================================
+
+1. AISLAMIENTO DE DATOS DE NIVEL BANCARIO, NO UN FILTRO DE APLICACIÓN
+   La mayoría de los sistemas de gestión multi-empresa separan los
+   datos con una simple condición "WHERE empresa_id = X" en el
+   código. Un bug en una sola consulta puede filtrar datos de una
+   empresa a otra. En Oplex el aislamiento está impuesto por la base
+   de datos misma (Row Level Security de PostgreSQL): aunque el
+   código tuviera un error, la base de datos igual impide ver datos
+   de otra empresa. Es el mismo estándar de seguridad que usan
+   productos financieros, no algo habitual en un ERP pyme.
+
+2. FACTURACIÓN ELECTRÓNICA AFIP REAL, NO UN AGREGADO POR FUERA
+   La integración con AFIP no es una planilla que se sube a mano ni
+   un servicio tercerizado aparte: está integrada en el flujo de
+   venta, con certificado propio por empresa, obtención de CAE
+   directamente contra el webservice, y mensajes de error reales de
+   AFIP en vez de fallas genéricas.
+
+3. 100% EN LA NUBE, SIN INSTALACIÓN NI SERVIDOR PROPIO
+   A diferencia de buena parte del software de gestión usado en
+   Argentina (históricamente de escritorio, con base de datos local
+   e instalación por técnico), Oplex se usa desde cualquier
+   navegador, con altas de cuenta 100% self-service y sin depender
+   de un instalador ni de un servidor físico en la empresa.
+
+4. PERMISOS GRANULARES DE VERDAD
+   Los roles y permisos se verifican en el servidor, no solo
+   ocultando botones en la pantalla — un empleado de Ventas
+   literalmente no puede ejecutar una acción de Compras aunque
+   intente llamar a la API directamente.
+
+5. TRABAJO EN EQUIPO EN TIEMPO REAL
+   Varias personas de la misma empresa pueden estar trabajando a la
+   vez y ver el tablero, el stock y la actividad de sus compañeros
+   actualizarse en vivo, sin recargar la página.
+
+6. UN SOLO SISTEMA EN VEZ DE VARIOS PARCHADOS ENTRE SÍ
+   Inventario, ventas, caja de mostrador, compras, cuentas
+   corrientes, tesorería, contabilidad e impuestos comparten la
+   misma base de datos y se actualizan solos entre sí (por ejemplo:
+   una venta genera el asiento contable y el movimiento de stock
+   automáticamente, y un cobro por Mercado Pago concilia solo) — no
+   hace falta re-cargar lo mismo en dos sistemas distintos ni
+   conciliarlos a mano a fin de mes.
+
+7. AUDITORÍA COMPLETA DE SERIE
+   Cada cambio queda registrado con el detalle exacto de qué campo
+   se modificó, quién lo hizo y cuándo — sin necesidad de contratar
+   un módulo aparte de auditoría. El mismo criterio de trazabilidad
+   se extiende al arqueo de caja del mostrador: cada apertura de
+   turno queda comparada contra el cierre anterior, no sólo el
+   cierre contra lo esperado.
+
+8. CONTABILIDAD LISTA PARA UN CONTEXTO DE INFLACIÓN ALTA
+   El Ajuste por Inflación Contable (RT 6/NC 39) no es una planilla
+   aparte: usa el mismo plan de cuentas y los mismos asientos que ya
+   genera el resto del sistema, con el índice de precios
+   sincronizado solo y el asiento de RECPAM emitido con un clic —
+   una función que hoy sólo ofrecen los jugadores más establecidos
+   del mercado (Colppy en su plan más alto, Tango), no la mayoría de
+   los ERP cloud más nuevos.
+
+9. PENSADO PARA CRECER SIN CAMBIAR DE SISTEMA
+   El modelo de planes (Basic, Silver, Diamond) permite empezar
+   chico y crecer sin migrar de plataforma; y estar armado como
+   multi-empresa desde el día uno también sirve para quien maneja
+   más de una razón social o quiere ofrecer el sistema a sus propios
+   clientes (estudios contables, franquicias).
+
+
+===========================================================
+NOTAS INTERNAS — NO USAR TAL CUAL EN LA LANDING PAGE
+===========================================================
+
+Estado real de madurez a tener en cuenta antes de prometer algo en
+la landing, para no generar una expectativa que hoy no está 100%
+confirmada:
+
+- La emisión de factura con CAE real de AFIP está implementada de
+  punta a punta y verificada contra el ambiente de homologación de
+  AFIP, pero todavía no se confirmó con un certificado de producción
+  real emitido por AFIP (hoy se prueba con un certificado autofirmado
+  de test, que AFIP rechaza correctamente por no ser válido — el
+  circuito funciona, falta el certificado real de un cliente). Esto
+  mismo es lo que hoy impide probar un cobro real de punta a punta en
+  el mostrador (Caja/POS) contra el tenant de demostración interno —
+  el checkout del POS funciona hasta el punto de facturar, y ahí
+  frena por el mismo motivo, no por un bug del módulo de Caja.
+- El cobro de la suscripción del propio tenant (pasarela de pago) no
+  está integrado todavía — los planes hoy son informativos, no se
+  cobra la suscripción de forma automática.
+- El cobro de facturas/presupuestos por Mercado Pago está construido
+  de punta a punta (vinculación de cuenta por OAuth, generación de
+  link/QR, conciliación automática por webhook con verificación de
+  firma) pero todavía no se activó con credenciales reales de
+  producción: falta un túnel público (tipo ngrok) para probar el
+  callback en desarrollo, y el panel de Mercado Pago le dio un error
+  al usuario al intentar activar las credenciales de la app real —
+  reproducido varias veces, confirmado que es un problema del lado de
+  Mercado Pago, no del código de Oplex, y quedó en pausa a la espera
+  de resolverlo con soporte de MP o probando desde otra cuenta/app.
+- La sincronización con Tiendanube (catálogo, stock, pedidos) todavía
+  no tiene código escrito — el diseño y el reconocimiento técnico ya
+  están hechos y aprobados, pero es sólo un plan por ahora
+  (`PLAN_TIENDANUBE.md`), no una función real del producto.
+- La conciliación bancaria es semi-automática (importar un extracto
+  con una plantilla propia de Oplex, tipo Excel, y matching
+  automático por monto y fecha) — todavía no hay integración directa
+  con el banco ni parsers para el formato real que exporta cada banco
+  argentino, así que hoy el usuario tiene que pasar el extracto a la
+  plantilla de Oplex antes de importarlo.
+- El login social (Google/Microsoft/Apple) funciona técnicamente
+  pero necesita que se carguen credenciales reales de cada proveedor
+  para activarse en producción.
+
+Ninguno de estos puntos invalida las virtudes de arriba — son
+simplemente los próximos pasos antes de un lanzamiento comercial
+100% cerrado, y conviene tenerlos presentes para no prometer en la
+landing algo que el producto todavía no cumple de punta a punta.

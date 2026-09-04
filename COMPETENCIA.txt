@@ -1,0 +1,309 @@
+OPLEX — ANÁLISIS COMPETITIVO (ERP/gestión pyme, mercado argentino)
+Investigación de competidores basada en sitios oficiales, páginas de
+precios y notas comparativas públicas de cada proveedor (agosto 2026,
+sin re-investigar en esta actualización — ver nota abajo). Los precios
+son orientativos y cambian trimestralmente en varios de estos
+jugadores — usar como referencia de rango, no como cotización exacta.
+
+Actualización (septiembre 2026): esta versión revisa únicamente la
+COLUMNA DE OPLEX y las secciones de brechas/recomendaciones, para
+reflejar avances reales del producto entre agosto y septiembre 2026
+(ajuste por inflación contable, conciliación bancaria semi-automática,
+cobro por Mercado Pago, y el módulo de Caja/POS completo). La
+información de los demás proveedores NO se volvió a investigar — sigue
+siendo la misma de agosto 2026, con el mismo riesgo de quedar
+desactualizada que ya advertía la nota original.
+
+===========================================================
+QUIÉNES SON LOS COMPETIDORES RELEVANTES
+===========================================================
+
+- Xubio: contable/facturación en la nube, muy fuerte en monotributistas,
+  profesionales y estudios contables. +50.000 empresas, 6.000 estudios
+  contables (AR, CO, MX). Plan gratis con 10 comprobantes/mes.
+- Colppy: gestión contable/administrativa en la nube, orientado a pymes
+  y estudios contables. El más completo "de fábrica" en funciones
+  contables finas (ajuste por inflación, conciliación bancaria, sueldos).
+- Contabilium: ERP cloud con foco fuerte en e-commerce/retail
+  (integración nativa con Mercado Libre, Tiendanube, Shopify).
+- Tango Gestión (Axoft): el histórico "de escritorio" argentino, ahora
+  también en versión Live/cloud. Módulos maduros pero venta consultiva
+  (cotización a medida, no autoservicio), fuerte en empresas medianas
+  ya establecidas y estudios que ya lo conocen hace 20+ años.
+- Bejerman ERP (Thomson Reuters): similar categoría que Tango, apunta
+  a pymes medianas, con on-premise/virtual/suscripción y IA para
+  automatizar carga de comprobantes. Venta consultiva, sin autoservicio.
+- Alegra: jugador regional (LatAm) más económico, foco en facturación
+  simple + contabilidad básica, autoservicio con prueba gratis.
+- Odoo: suite modular open-source internacional, requiere integrador
+  local para la localización argentina (AFIP/ARCA vía módulo de la
+  comunidad, no nativo). Más flexible pero con costo de implementación
+  aparte (USD 600 – 15.000+) y curva de aprendizaje mayor.
+- SAP Business One / Softland / Sage / otros: nivel enterprise, fuera
+  del segmento pyme chica/mediana que hoy ataca Oplex — se mencionan
+  como techo de mercado, no como comparables directos.
+
+
+===========================================================
+CUADRO COMPARATIVO
+===========================================================
+
+Eje                          | Oplex        | Xubio        | Colppy         | Contabilium    | Tango Gestión      | Alegra        | Odoo (+ loc. AR)
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Modelo de acceso             | SaaS         | SaaS         | SaaS           | SaaS           | Venta consultiva,  | SaaS          | Self-hosted/cloud,
+                              | autoservicio,| autoservicio,| autoservicio   | autoservicio   | licencia perpetua  | autoservicio, | requiere
+                              | prueba       | plan gratis  |                |                | o anual, sin       | prueba 15 días| integrador local
+                              | gratuita     | + trial      |                |                | alta online        |               |
+Facturación electrónica      | Sí, WSFE real| Sí (ARCA)    | Sí (ARCA)      | Sí (ARCA)      | Sí, directo con    | Sí (ARCA)     | Sí, vía módulo
+AFIP/ARCA                    | por tenant   |              |                |                | AFIP, sin costo    |               | de la comunidad
+                              |              |              |                |                | extra de servicio  |               | (no oficial)
+Letra de comprobante         | Sí, sugerida/| No confirmado| No confirmado  | No confirmado  | Manual             | No confirmado | Manual
+sugerida automáticamente     | forzada auto.|              |                |                |                    |               |
+Multi-moneda                 | Sí (con      | Sí (cuenta   | Sí (Full/      | No confirmado  | Sí                 | No confirmado | Sí
+                              | sync BNA)    | corriente)   | Enterprise)    |                |                    |               |
+Cuenta corriente cliente/    | Sí           | Sí           | Sí             | Sí             | Sí                 | Básico        | Sí
+proveedor con aging          |              |              |                |                |                    |               |
+Cartera de cheques (propios  | Sí           | Sí           | Sí             | Sí (Tesorería) | Sí (Tesorería)     | No confirmado | Parcial
+y de terceros)                |              |              |                |                |                    |               |
+Conciliación bancaria        | Semi-        | No confirmado| Sí, automática | No confirmado  | Sí                 | No confirmado | Sí
+                              | automática   |              | (desde Platinum)|               |                    |               |
+                              | (import      |              |                |                |                    |               |
+                              | extracto +   |              |                |                |                    |               |
+                              | matching)    |              |                |                |                    |               |
+Ajuste por inflación         | Sí (RT6/     | No confirmado| Sí (desde      | No confirmado  | Sí                 | No confirmado | Parcial (módulo)
+contable                     | NC39, RECPAM |              | Platinum)      |                |                    |               |
+                              | automático)  |              |                |                |                    |               |
+Libro IVA Digital (RG 4597)  | Sí, export   | Sí (vía ARCA)| Sí (vía ARCA)  | No confirmado  | Sí                 | No confirmado | Sí (con loc. AR)
+exportable                   | Excel/PDF    |              |                |                |                    |               |
+Variantes de producto        | Sí (matriz de| No confirmado| No confirmado  | No confirmado  | No confirmado      | No confirmado | Sí (nativo)
+(talle/color/atributos)      | atributos)   |              |                |                |                    |               |
+Cobro con Mercado Pago       | Sí (link de  | No confirmado| Sí             | Sí, fuerte:    | No nativo          | No confirmado | Sí (módulo
+(checkout + conciliación     | pago +       |              |                | ML/Tiendanube/ |                    |               | ecommerce propio)
+automática del cobro)        | concilia solo|              |                | Shopify        |                    |               |
+Integración e-commerce       | No (Mercado  | Sí (conexión | Sí (Mercado    | Sí, fuerte:    | No nativo          | No confirmado | Sí (módulo
+(Mercado Libre / Tiendanube) | Pago sí, ver | e-commerce)  | Pago)          | ML/Tiendanube/ |                    |               | ecommerce propio)
+                              | fila arriba) |              |                | Shopify        |                    |               |
+Nómina / sueldos             | No           | No confirmado| Sí (add-on     | No confirmado  | Sí (Tango Sueldos) | No confirmado | Sí (módulo HR)
+                              |              |              | e-Sueldos)     |                |                    |               |
+App móvil nativa             | No (web      | No confirmado| Sí (iOS/       | No confirmado  | No confirmado      | No confirmado | Sí
+                              | responsive)  |              | Android)       |                |                    |               |
+Multi-punto de venta / POS   | Sí (multi-   | No confirmado| Sí (desde      | Sí             | Sí (módulo aparte) | No confirmado | Sí (módulo POS)
+                              | caja, arqueo |              | Enterprise)    |                |                    |               |
+                              | por          |              |                |                |                    |               |
+                              | denominación,|              |                |                |                    |               |
+                              | verificación |              |                |                |                    |               |
+                              | contra turno |              |                |                |                    |               |
+                              | anterior)    |              |                |                |                    |               |
+Aislamiento de datos a nivel | Sí (RLS de   | No publicado | No publicado   | No publicado   | No aplica (on-     | No publicado  | No publicado
+de base de datos (multi-     | PostgreSQL,  |              |                |                | premise/mono-      |               |
+tenant)                      | verificado   |              |                |                | empresa típico)    |               |
+                              | con tests)   |              |                |                |                    |               |
+Permisos por rol verificados | Sí (backend, | No publicado | Sí (roles      | No publicado   | Sí (perfiles de    | No publicado  | Sí
+del lado servidor            | no solo UI)  |              | multiusuario)  |                | usuario)           |               |
+Auditoría campo a campo de   | Sí, de serie | No publicado | No publicado   | No publicado   | Parcial            | No publicado  | Parcial (log
+cada cambio                  |              |              |                |                |                    |               | genérico)
+Colaboración en tiempo real  | Sí (WebSocket| No publicado | No publicado   | No publicado   | No (arquitectura   | No publicado  | No publicado
+(presencia, tablero en vivo) |              |              |                |                | de escritorio)     |               |
+Backoffice propio para       | Sí (/admin:  | N/A (interno | N/A            | N/A            | N/A                | N/A           | N/A (requiere
+gestionar tenants/planes     | impersonar,  | del proveedor)|               |                |                    |               | infraestructura
+                              | suspender)   |              |                |                |                    |               | propia)
+Automatización con IA (OCR   | No           | No confirmado| No confirmado  | No confirmado  | No confirmado      | No confirmado | No confirmado
+de comprobantes, etc.)       |              |              |                |                |                    |               | (Bejerman sí)
+Rango de precio orientativo  | A definir    | ARS 39.100 – | ARS 106.500 –  | ARS ~98.000+   | Cotización a       | Desde ARS     | Implementación
+(ARS+IVA/mes, ago-2026)      |              | 231.400+     | 627.500 (según | (+IVA)         | medida (suele      | 59.999+       | USD 600-15.000+
+                              |              | (según plan) | plan/add-ons)  |                | superar $500.000)  | (+IVA)        | + hosting
+
+Nota sobre las celdas "No confirmado" / "No publicado": significa que
+la investigación pública no encontró mención de esa función en el
+sitio del proveedor, no que el proveedor definitivamente no la tenga
+— varias de estas empresas no publican el detalle técnico de su
+arquitectura (seguridad, permisos, tiempo real), así que esas celdas
+son el punto más débil del cuadro y conviene no citarlas como hechos
+absolutos en una landing pública ("somos los únicos que...").
+
+
+===========================================================
+DÓNDE OPLEX GANA HOY (diferenciales defendibles)
+===========================================================
+
+1. Facturación AFIP realmente integrada en el flujo de venta, con
+   letra de comprobante sugerida/forzada automáticamente según
+   condición de IVA — ningún competidor investigado publicita esto
+   como función explícita; en la mayoría es un campo manual.
+
+2. Arquitectura de aislamiento multi-tenant a nivel de base de datos
+   (RLS), con una suite de tests de seguridad dedicada. Es un
+   argumento técnico fuerte para vender a estudios contables que
+   manejan varios clientes en la misma cuenta, o a franquicias.
+
+3. Permisos por rol verificados en el servidor y auditoría de cambios
+   campo a campo de serie, sin plan "premium" aparte para tenerlo.
+
+4. Backoffice SaaS propio (impersonar tenant para soporte, suspender,
+   ver errores 5xx, gestionar planes) — funciona como plataforma para
+   operar el negocio de Oplex mismo, no solo como producto para el
+   cliente final. Ningún competidor expone esto porque es interno de
+   cada uno, pero para Oplex como empresa es una ventaja operativa real
+   (soporte más rápido, menos fricción para dar de alta un cliente).
+
+5. Colaboración en tiempo real (tablero y presencia en vivo) — encaja
+   con el patrón moderno de apps colaborativas, algo que los jugadores
+   más viejos (Tango, Bejerman) por arquitectura de escritorio no
+   ofrecen, y que los cloud nuevos no publicitan.
+
+6. Ajuste por inflación contable (RT6/NC39) con cálculo automático de
+   RECPAM (resultado por exposición a la inflación) y emisión del
+   asiento definitivo con un clic — empareja a Oplex con Colppy
+   (Platinum) y Tango en la función contable que más pesa a la hora
+   de convencer a un estudio contable de migrar, y lo hace disponible
+   sin plan premium aparte.
+
+7. Conciliación bancaria semi-automática — importar el extracto (con
+   una plantilla propia) y el sistema matchea automáticamente por
+   monto y ventana de fecha contra los movimientos ya cargados,
+   dejando sólo las excepciones para revisión manual, con generación
+   de asiento contable directa desde una línea sin match. Cierra la
+   fricción diaria que antes obligaba a marcar "conciliado" a mano
+   movimiento por movimiento.
+
+8. Módulo de Caja/POS multi-caja completo — apertura/cierre de turno
+   por caja, arqueo con desglose de billetes y monedas (denominación
+   ARS real, no un monto único a ojo), historial con filtros y export
+   a Excel, y una posición de caja consolidada en vivo cuando hay
+   varias cajas abiertas a la vez. Incluye un control que no se
+   confirmó publicado por ningún competidor investigado: al abrir un
+   turno, el cajero ve el cierre del turno anterior de esa misma caja
+   como referencia y una diferencia calculada en vivo mientras cuenta
+   — deja un rastro auditable pensado para que un faltante no termine
+   siendo la palabra de un cajero contra la del otro.
+
+9. Cobro por Mercado Pago integrado al flujo de venta — génera un
+   link/QR de cobro por factura o presupuesto y concilia el pago
+   automáticamente al acreditarse (webhook con verificación de firma,
+   reintentos con backoff, sin depender de que alguien lo marque a
+   mano). Mismo terreno que ya cubren Colppy y Contabilium, con el
+   agregado de que también puede originarse desde un Presupuesto, no
+   sólo desde una Factura ya emitida.
+
+
+===========================================================
+DÓNDE LA COMPETENCIA GANA HOY (brechas reales a cerrar)
+===========================================================
+
+1. INTEGRACIÓN CON MERCADO LIBRE / TIENDANUBE (sincronización de
+   catálogo, stock y pedidos de un canal de venta online) — Contabilium
+   la tiene de fábrica (Mercado Libre, Tiendanube, Shopify) y Colppy
+   cubre al menos Mercado Pago. Oplex ya resolvió el cobro con Mercado
+   Pago (ver arriba), pero la sincronización de pedidos/stock con un
+   canal de e-commerce todavía no — el diseño de la integración con
+   Tiendanube ya está reconocido y aprobado con el usuario
+   (`PLAN_TIENDANUBE.md`), pero sin una sola línea de código escrita
+   todavía.
+
+2. NÓMINA / SUELDOS — Colppy, Tango y Bejerman lo ofrecen (como
+   add-on la mayoría). No es core del producto pero es un motivo real
+   de venta cruzada ("todo en un solo lugar") y de retención de
+   clientes que hoy usan otro sistema solo para sueldos.
+
+3. APP MÓVIL NATIVA — Colppy tiene apps iOS/Android. Oplex es web
+   responsive, funcional pero no lo mismo para un dueño de pyme que
+   quiere chequear el negocio desde el celular con notificaciones
+   push.
+
+4. AUTOMATIZACIÓN CON IA — Bejerman ya publicita carga automática de
+   comprobantes de compra vía IA (OCR + interpretación). Es una
+   tendencia que va a crecer rápido en esta categoría y hoy nadie
+   más la tiene consolidada — ventana de oportunidad más que brecha
+   urgente, ver recomendaciones abajo.
+
+Cerradas desde la versión de agosto 2026 de este documento (quedan
+fuera de esta lista, ver la sección de arriba): ajuste por inflación
+contable, conciliación bancaria (semi-automática), cobro por Mercado
+Pago, y multi-punto de venta/Caja.
+
+
+===========================================================
+RECOMENDACIONES — QUÉ HARÍA A CONTINUACIÓN
+===========================================================
+
+Corto plazo (cierran brechas que un contador o un comercio nota en la
+primera demo):
+
+- Terminar de activar Mercado Pago en producción: el flujo OAuth +
+  checkout + conciliación automática ya está construido de punta a
+  punta, pero quedó frenado por dos bloqueos operativos (falta un
+  túnel público tipo ngrok/cloudflared para que MP le pegue al
+  callback en desarrollo, y un error del lado del panel de Mercado
+  Pago al activar las credenciales reales de la app) — no es trabajo
+  de código nuevo, es destrabar la activación real.
+- Conectar el diseño ya aprobado de Tiendanube (`PLAN_TIENDANUBE.md`)
+  con código: es la brecha de e-commerce más citable que queda
+  abierta, y el reconocimiento/diseño ya está hecho, sólo falta
+  escribir la Fase 1.
+- Parsers nativos por banco para la conciliación bancaria (hoy usa una
+  plantilla propia tipo Excel en vez del formato real que exporta cada
+  banco argentino) — cierra el último tramo de fricción de esa función
+  para que el usuario no tenga que transcribir el extracto a la
+  plantilla de Oplex a mano.
+
+Mediano plazo (para competir de igual a igual en el segmento pyme
+con canal de venta propio):
+
+- Sincronización de stock/pedidos con Mercado Libre además de
+  Tiendanube — Contabilium ya lo usa como gancho comercial fuerte
+  para retail.
+- App/PWA instalable con notificaciones push (alertas de stock,
+  facturas vencidas) — más barato que una app nativa y cubre buena
+  parte del caso de uso "chequear desde el celular".
+- Ajustes de UX del lector de código de barras del POS según uso real
+  con un lector físico — quedó deliberadamente pendiente en la última
+  sesión del módulo de Caja por no haber todavía feedback de uso real
+  con hardware, no por falta de diseño.
+
+Largo plazo / apuesta diferencial (donde Oplex podría adelantarse en
+vez de solo emparejar a la competencia):
+
+- Carga de comprobantes de compra por foto/PDF con IA (OCR +
+  interpretación de proveedor/CUIT/importe/IVA), auto-completando el
+  formulario de Factura de Compra — mismo terreno que Bejerman está
+  empezando a pisar, pero todavía nadie lo tiene resuelto del todo
+  bien en el segmento pyme chica.
+- Explotar el diferencial de multi-tenant real (RLS) como producto
+  para estudios contables: un panel donde un contador ve varios
+  clientes (tenants) desde una sola cuenta, con el aislamiento de
+  datos ya garantizado por diseño — hoy ese es el público que más
+  paga (Colppy/Xubio lo cortejan fuerte) y es exactamente donde la
+  arquitectura de Oplex ya es más sólida que la de casi todos los
+  competidores investigados.
+- Módulo de nómina básico (o integración con un proveedor de nómina
+  vía API) para poder vender "todo en un solo lugar" sin construir
+  el módulo más complejo y regulado (SICOSS, cargas sociales) desde
+  cero.
+
+
+===========================================================
+FUENTES CONSULTADAS
+===========================================================
+
+Competidores (agosto 2026, sin re-investigar en esta actualización):
+- https://app.spomsolutions.com/blog/cuanto-cuesta-erp-argentina-2026
+- https://commercy.com.ar/blog/mejores-erp-argentina
+- https://colppy.com/planes-y-precios-pymes
+- https://xubio.com/ar/precios-emprendedores
+- https://contabilium.com/ar/planes
+- https://www.axoft.com/tango/software-de-gestion/soluciones/
+- https://www.thomsonreuters.com.ar/es/soluciones-fiscales-contables-gestion/soluciones-de-gestion-para-pymes/bejerman-erp.html
+- https://alegra.com/argentina/facturacion-electronica/
+- https://www.odoo.com/documentation/18.0/es_419/applications/finance/accounting/customer_invoices/electronic_invoicing/argentina.html
+- https://ayuda.xubio.com/es-ar/gestion-de-cheques-en-xubio/
+- Búsquedas complementarias sobre variantes de producto/matriz de
+  talles-colores en software de gestión argentino (Dux, Sistar, EGA
+  Futura, PowerGest) para contexto de mercado, no como comparables
+  directos (son nichos de indumentaria, no ERPs generales).
+
+Oplex (columna propia, actualización septiembre 2026): estado real del
+proyecto según `PROGRESS.md` (bitácora de sesiones de desarrollo,
+commits `87a60b3`/`56f34d9`/`90e590d` para el módulo de Caja/POS,
+sesiones de Ajuste por Inflación y Conciliación Bancaria del
+2026-09-02, sesiones de Mercado Pago del 2026-08-29/30), no
+investigación externa nueva.
