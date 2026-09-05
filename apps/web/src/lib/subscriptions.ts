@@ -29,10 +29,20 @@ export interface TenantSubscription {
   promoExpiresAt: string | null;
 }
 
+export interface PlanSla {
+  key: string;
+  name: string;
+  slaMarkdown: string | null;
+  slaUpdatedAt: string | null;
+}
+
 // Público - no requiere sesión (usado en el landing/onboarding además de
 // dentro de la app, ver /settings/billing).
 export const plansApi = {
   list: () => api.get<Plan[]>('/plans').then((r) => r.data),
+  // Público, consumido por /sla/[planKey] - contenido editable desde
+  // /admin/plans (campo "SLA"), no el catálogo comercial completo.
+  getSla: (key: string) => api.get<PlanSla>(`/plans/${key}/sla`).then((r) => r.data),
 };
 
 export const subscriptionsApi = {

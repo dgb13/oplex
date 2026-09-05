@@ -166,6 +166,8 @@ export interface AdminPlan {
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
   isActive: boolean;
+  slaMarkdown: string | null;
+  slaUpdatedAt: string | null;
 }
 
 export interface CreatePlanInput {
@@ -178,6 +180,7 @@ export interface CreatePlanInput {
   maxMonthlyInvoices: number;
   debitDiscountPercent?: number;
   isActive?: boolean;
+  slaMarkdown?: string;
 }
 
 export type UpdatePlanInput = Partial<Omit<CreatePlanInput, 'key'>>;

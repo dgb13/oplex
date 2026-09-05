@@ -40,4 +40,11 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  // Contenido del SLA público de este plan, en Markdown. Ver
+  // GET /plans/:key/sla (público, sin login). String vacía borra el SLA
+  // publicado (vuelve a "aún no publicado").
+  @IsOptional()
+  @IsString()
+  slaMarkdown?: string;
 }

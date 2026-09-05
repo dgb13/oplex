@@ -4,6 +4,7 @@ import { adminPlansApi, type AdminPlan, type CreatePlanInput, type UpdatePlanInp
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 // Same extraction as CompanyFormModal/LoginPage: surface the backend's own
 // validation message (e.g. "maxUsers must not be less than 0", "Ya existe
@@ -25,6 +26,7 @@ const EMPTY_FORM: CreatePlanInput = {
   maxMonthlyInvoices: 10,
   debitDiscountPercent: 0,
   isActive: true,
+  slaMarkdown: '',
 };
 
 export default function AdminPlansPage() {
@@ -93,6 +95,7 @@ export default function AdminPlansPage() {
                   <th className="p-3 text-right">Facturas/mes</th>
                   <th className="p-3 text-right">Desc. débito</th>
                   <th className="p-3">Activo</th>
+                  <th className="p-3">SLA</th>
                   <th className="p-3">Acciones</th>
                 </tr>
               </thead>
@@ -102,7 +105,7 @@ export default function AdminPlansPage() {
                   .map((plan) =>
                     editingId === plan.id ? (
                       <tr key={plan.id} className="border-b border-slate-800/50">
-                        <td colSpan={9} className="p-3">
+                        <td colSpan={10} className="p-3">
                           <PlanForm
                             initial={plan}
                             saving={updateMutation.isPending}
@@ -135,6 +138,22 @@ export default function AdminPlansPage() {
                           >
                             {plan.isActive ? 'Sí' : 'No'}
                           </span>
+                        </td>
+                        <td className="p-3">
+                          {plan.slaMarkdown ? (
+                            <a
+                              href={`/sla/${plan.key}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded bg-emerald-900/50 px-2 py-0.5 text-xs font-medium text-emerald-300 hover:underline"
+                            >
+                              Publicado
+                            </a>
+                          ) : (
+                            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-500">
+                              Sin publicar
+                            </span>
+                          )}
                         </td>
                         <td className="p-3">
                           <button
@@ -182,7 +201,9 @@ function PlanForm({
     maxMonthlyInvoices: initial.maxMonthlyInvoices,
     debitDiscountPercent: Number(initial.debitDiscountPercent ?? 0),
     isActive: initial.isActive ?? true,
+    slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
   });
+  const [slaPreview, setSlaPreview] = useState(false);
 
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
@@ -233,6 +254,41 @@ function PlanForm({
         </Field>
       </div>
 
+      <div className="mt-4">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[11px] text-slate-500">SLA (Markdown) — página pública en /sla/{form.key || '(key)'}</span>
+          <button
+            type="button"
+            onClick={() => setSlaPreview((v) => !v)}
+            className="rounded px-2 py-0.5 text-[11px] text-indigo-400 hover:text-indigo-300"
+          >
+            {slaPreview ? 'Editar' : 'Vista previa'}
+          </button>
+        </div>
+        {slaPreview ? (
+          <div
+            className="max-w-none rounded border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-200
+              [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-slate-100
+              [&_h2]:mb-1.5 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-slate-100
+              [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1 [&_strong]:text-slate-100"
+          >
+            {form.slaMarkdown ? (
+              <ReactMarkdown>{form.slaMarkdown}</ReactMarkdown>
+            ) : (
+              <p className="text-slate-500">Sin contenido todavía.</p>
+            )}
+          </div>
+        ) : (
+          <textarea
+            value={form.slaMarkdown}
+            onChange={(e) => setForm({ ...form, slaMarkdown: e.target.value })}
+            rows={10}
+            placeholder="# SLA de [nombre del plan]&#10;&#10;Escribí acá el Acuerdo de Nivel de Servicio de este plan, en Markdown..."
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-slate-100"
+          />
+        )}
+      </div>
+
       {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
 
       <div className="mt-3 flex items-center gap-2">
@@ -252,6 +308,7 @@ function PlanForm({
                     maxMonthlyInvoices: form.maxMonthlyInvoices,
                     debitDiscountPercent: form.debitDiscountPercent,
                     isActive: form.isActive,
+                    slaMarkdown: form.slaMarkdown,
                   },
             )
           }

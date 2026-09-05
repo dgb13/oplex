@@ -39,4 +39,10 @@ export class CreatePlanDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  // Contenido del SLA público de este plan, en Markdown. Ver
+  // GET /plans/:key/sla (público, sin login).
+  @IsOptional()
+  @IsString()
+  slaMarkdown?: string;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { Public } from '@plexo/auth';
 import { SubscriptionService } from './subscription.service.js';
 
@@ -13,5 +13,13 @@ export class PlansController {
   @Get()
   list() {
     return this.subscriptionService.listActivePlans();
+  }
+
+  // Público, consumido por /sla/[planKey] en el frontend - devuelve sólo el
+  // documento de SLA (Markdown) de ese plan, no el Plan comercial completo.
+  @Public()
+  @Get(':key/sla')
+  getSla(@Param('key') key: string) {
+    return this.subscriptionService.getPlanSla(key);
   }
 }

@@ -168,6 +168,8 @@ export class SubscriptionService {
         maxMonthlyInvoices: dto.maxMonthlyInvoices,
         debitDiscountPercent: new Prisma.Decimal(dto.debitDiscountPercent ?? 0),
         isActive: dto.isActive ?? true,
+        slaMarkdown: dto.slaMarkdown,
+        slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
       },
     });
   }
@@ -189,7 +191,31 @@ export class SubscriptionService {
         debitDiscountPercent:
           dto.debitDiscountPercent === undefined ? undefined : new Prisma.Decimal(dto.debitDiscountPercent),
         isActive: dto.isActive,
+        // slaUpdatedAt sólo se toca cuando el contenido del SLA cambia de
+        // verdad (dto.slaMarkdown viene seteado) - no en cada guardado del
+        // formulario de Planes, que puede tocar sólo precio/cupos.
+        slaMarkdown: dto.slaMarkdown,
+        slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
       },
     });
+  }
+
+  // Público (ver PlansController) - devuelve sólo lo que la página pública
+  // /sla/[planKey] necesita, no el Plan completo (evita mezclar datos
+  // comerciales internos con contenido público).
+  async getPlanSla(key: string): Promise<{
+    key: string;
+    name: string;
+    slaMarkdown: string | null;
+    slaUpdatedAt: Date | null;
+  }> {
+    const plan = await this.prisma.plan.findUnique({
+      where: { key },
+      select: { key: true, name: true, isActive: true, slaMarkdown: true, slaUpdatedAt: true },
+    });
+    if (!plan || !plan.isActive) {
+      throw new NotFoundException('Plan not found');
+    }
+    return { key: plan.key, name: plan.name, slaMarkdown: plan.slaMarkdown, slaUpdatedAt: plan.slaUpdatedAt };
   }
 }

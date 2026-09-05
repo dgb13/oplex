@@ -197,4 +197,78 @@ describe('SubscriptionService plan catalog (global, no tenant context)', () => {
 
     await expect(service.updatePlan('missing', { name: 'x' })).rejects.toThrow(NotFoundException);
   });
+
+  it('createPlan sets slaUpdatedAt when slaMarkdown is provided', async () => {
+    const create = jest.fn().mockResolvedValue(makePlan());
+    const prisma = {
+      plan: { findUnique: jest.fn().mockResolvedValue(null), create },
+    } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await service.createPlan({
+      key: 'NEW',
+      name: 'Nuevo',
+      priceMonthly: 500,
+      maxUsers: 2,
+      maxClients: 2,
+      maxMonthlyInvoices: 2,
+      slaMarkdown: '# SLA de prueba',
+    });
+
+    const data = create.mock.calls[0][0].data;
+    expect(data.slaMarkdown).toBe('# SLA de prueba');
+    expect(data.slaUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it('updatePlan only touches slaUpdatedAt when slaMarkdown is part of the payload (not on an unrelated field update)', async () => {
+    const update = jest.fn().mockResolvedValue(makePlan());
+    const prisma = {
+      plan: { findUnique: jest.fn().mockResolvedValue(makePlan()), update },
+    } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await service.updatePlan('plan-1', { priceMonthly: 999 });
+    expect(update.mock.calls[0][0].data.slaUpdatedAt).toBeUndefined();
+
+    await service.updatePlan('plan-1', { slaMarkdown: '## Nuevo contenido' });
+    expect(update.mock.calls[1][0].data.slaMarkdown).toBe('## Nuevo contenido');
+    expect(update.mock.calls[1][0].data.slaUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it('getPlanSla returns the public shape for an active plan', async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      key: 'GOLD',
+      name: 'Gold',
+      isActive: true,
+      slaMarkdown: '# SLA Gold',
+      slaUpdatedAt: new Date('2026-09-01'),
+    });
+    const prisma = { plan: { findUnique } } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    const result = await service.getPlanSla('GOLD');
+
+    expect(result).toEqual({
+      key: 'GOLD',
+      name: 'Gold',
+      slaMarkdown: '# SLA Gold',
+      slaUpdatedAt: new Date('2026-09-01'),
+    });
+  });
+
+  it('getPlanSla throws NotFoundException for an unknown key', async () => {
+    const prisma = { plan: { findUnique: jest.fn().mockResolvedValue(null) } } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await expect(service.getPlanSla('MISSING')).rejects.toThrow(NotFoundException);
+  });
+
+  it('getPlanSla throws NotFoundException for an inactive plan (never leaks a discontinued plan\'s SLA)', async () => {
+    const prisma = {
+      plan: { findUnique: jest.fn().mockResolvedValue({ key: 'OLD', name: 'Old', isActive: false, slaMarkdown: 'x', slaUpdatedAt: null }) },
+    } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await expect(service.getPlanSla('OLD')).rejects.toThrow(NotFoundException);
+  });
 });
