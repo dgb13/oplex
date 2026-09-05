@@ -1,7 +1,15 @@
 import { BadRequestException, Controller, Get, Post, Req } from '@nestjs/common';
+import { LongRunningTransaction } from '@plexo/database';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
 import { AiInvoiceScanService } from './ai-invoice-scan.service.js';
+
+// Una llamada de vision a Claude puede tardar bastante más que el default
+// de transacción de Prisma (5s) - sin esto, TenantContextInterceptor corta
+// la transacción del request a los 5s aunque Claude siga respondiendo
+// (encontrado en vivo, ver PROGRESS.md). 30s da margen real sin dejar la
+// conexión del pool abierta indefinidamente si algo se cuelga.
+const AI_EXTRACT_TIMEOUT_MS = 30_000;
 
 // Semáforo + extracción, consumidos por la pantalla "Carga con IA" de
 // Compras (ver docs/plan-carga-comprobantes-ia.md). Requiere sesión (no
@@ -20,6 +28,7 @@ export class AiInvoiceScanController {
     return this.aiInvoiceScanService.getAvailability();
   }
 
+  @LongRunningTransaction(AI_EXTRACT_TIMEOUT_MS)
   @Post('extract')
   async extract(@Req() req: FastifyRequest) {
     const data = await req.file();

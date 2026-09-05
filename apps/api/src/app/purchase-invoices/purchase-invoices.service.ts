@@ -4,6 +4,7 @@ import { getTenantDb, getUserId, Prisma } from '@plexo/database';
 import {
   PurchaseInvoiceService,
   type CreatePurchaseInvoiceDto,
+  type ListPurchaseInvoicesQueryDto,
   type RecordSupplierPaymentDto,
 } from '@plexo/purchases';
 import { CheckService } from '@plexo/treasury';
@@ -32,8 +33,8 @@ export class PurchaseInvoicesService {
     private readonly checkService: CheckService,
   ) {}
 
-  list() {
-    return this.purchaseInvoiceService.list();
+  list(query?: ListPurchaseInvoicesQueryDto) {
+    return this.purchaseInvoiceService.list(query);
   }
 
   get(id: string) {

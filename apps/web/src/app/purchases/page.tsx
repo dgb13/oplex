@@ -5,6 +5,7 @@ import CargaIaTab from './CargaIaTab';
 import CatalogosTab from './CatalogosTab';
 import ConfiguracionTab from './ConfiguracionTab';
 import FacturasTab from './FacturasTab';
+import GaleriaIaTab from './GaleriaIaTab';
 import OrdenesTab from './OrdenesTab';
 import PedidosTab from './PedidosTab';
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'ordenes', label: 'Órdenes de Compra' },
   { id: 'facturas', label: 'Facturas' },
   { id: 'carga-ia', label: 'Carga con IA' },
+  { id: 'galeria-ia', label: 'Galería IA' },
   { id: 'catalogos', label: 'Catálogos' },
   { id: 'configuracion', label: 'Configuración' },
 ] as const;
@@ -46,6 +48,7 @@ export default function PurchasesPage() {
       {tab === 'ordenes' && <OrdenesTab />}
       {tab === 'facturas' && <FacturasTab />}
       {tab === 'carga-ia' && <CargaIaTab />}
+      {tab === 'galeria-ia' && <GaleriaIaTab />}
       {tab === 'catalogos' && <CatalogosTab />}
       {tab === 'configuracion' && <ConfiguracionTab />}
     </div>

@@ -21,6 +21,58 @@ function digitsOnly(s: string | null): string {
   return (s ?? '').replace(/\D/g, '');
 }
 
+type ConfidenceLevel = 'alta' | 'media' | 'baja';
+
+/** Confianza GLOBAL del escaneo (no por campo) - toma el MÍNIMO de confianza
+ * entre todos los campos que vinieron de la IA, no el promedio: un solo
+ * campo mal leído (foto borrosa, manchada, doblada, poca luz) tiene que
+ * bajar la confianza general, no diluirse entre el resto de campos que sí
+ * salieron bien. Los campos con source:'qr' no entran en la cuenta (son
+ * verdad absoluta, no tienen confidence). Mismos umbrales que ya usa
+ * SourceBadge por campo (0.6), más un escalón extra en 0.85 para poder
+ * distinguir "revisar todo" de "revisar sólo lo marcado". */
+function overallConfidence(extraction: AiInvoiceExtractionResult): { level: ConfidenceLevel; min: number } {
+  const aiFields: ExtractedField<unknown>[] = [
+    extraction.supplierCuit,
+    extraction.supplierName,
+    extraction.supplierInvoiceNumber,
+    extraction.supplierInvoiceDate,
+    extraction.documentLetter,
+    extraction.pointOfSale,
+    extraction.number,
+    extraction.currencyCode,
+    extraction.subtotal,
+    ...extraction.taxLines.flatMap((t) => [t.concept, t.amount, t.netAmount, t.taxRate]),
+  ];
+  const confidences = aiFields
+    .filter((f) => f.source === 'ai' && f.confidence !== undefined)
+    .map((f) => f.confidence as number);
+  const min = confidences.length > 0 ? Math.min(...confidences) : 1;
+  const level: ConfidenceLevel = min >= 0.85 ? 'alta' : min >= 0.6 ? 'media' : 'baja';
+  return { level, min };
+}
+
+const CONFIDENCE_BANNER: Record<ConfidenceLevel, { label: string; detail: string; className: string }> = {
+  alta: {
+    label: '🟢 Confianza alta',
+    detail: 'La imagen se leyó con claridad. Igual, dale una repasada antes de confirmar.',
+    className:
+      'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+  },
+  media: {
+    label: '🟡 Confianza media',
+    detail: 'Algunos campos (marcados en amarillo) no se leyeron con total claridad - revisalos con atención.',
+    className:
+      'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+  baja: {
+    label: '🔴 Confianza baja',
+    detail:
+      'La foto puede estar borrosa, manchada, doblada o con poca luz - revisá TODOS los campos antes de confirmar, no sólo los marcados.',
+    className: 'border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+  },
+};
+
 /** Badge de origen del campo - QR (candado, verdad absoluta) vs IA
  * (editable, con su confianza). Ver docs/plan-carga-comprobantes-ia.md,
  * punto 5. */
@@ -32,14 +84,16 @@ function SourceBadge({ field }: { field: ExtractedField<unknown> }) {
       </span>
     );
   }
-  const lowConfidence = (field.confidence ?? 1) < 0.6;
+  const confidence = field.confidence ?? 1;
+  const colorClass =
+    confidence >= 0.85
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+      : confidence >= 0.6
+        ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
   return (
     <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-        lowConfidence
-          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-          : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-      }`}
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${colorClass}`}
       title={field.confidence !== undefined ? `Confianza: ${Math.round(field.confidence * 100)}%` : undefined}
     >
       IA {field.confidence !== undefined ? `${Math.round(field.confidence * 100)}%` : ''}
@@ -91,6 +145,38 @@ function toReviewForm(result: AiInvoiceExtractionResult): ReviewForm {
       taxRate: t.taxRate.value ?? undefined,
     })),
   };
+}
+
+/** true si el usuario tocó algún campo editable de la pantalla de revisión
+ * antes de confirmar (comparado contra lo que la IA/QR leyó originalmente) -
+ * alimenta PurchaseInvoice.aiScanEdited, usado para filtrar "Galería IA".
+ * supplierCuit/supplierName quedan afuera a propósito: no son campos
+ * editables en esta pantalla (sólo resuelven el proveedor). */
+function wasFormEdited(form: ReviewForm, extraction: AiInvoiceExtractionResult): boolean {
+  if (
+    form.supplierInvoiceNumber !== extraction.supplierInvoiceNumber.value ||
+    form.supplierInvoiceDate !== extraction.supplierInvoiceDate.value ||
+    form.documentLetter !== (extraction.documentLetter.value ?? '') ||
+    form.pointOfSale !== (extraction.pointOfSale.value ?? '') ||
+    form.number !== (extraction.number.value ?? '') ||
+    form.currencyCode !== extraction.currencyCode.value ||
+    form.subtotal !== extraction.subtotal.value
+  ) {
+    return true;
+  }
+  if (form.taxLines.length !== extraction.taxLines.length) {
+    return true;
+  }
+  return form.taxLines.some((line, i) => {
+    const original = extraction.taxLines[i];
+    return (
+      line.type !== original.type ||
+      line.concept !== original.concept.value ||
+      line.amount !== original.amount.value ||
+      line.netAmount !== original.netAmount.value ||
+      (line.taxRate ?? null) !== original.taxRate.value
+    );
+  });
 }
 
 /**
@@ -160,7 +246,7 @@ export default function CargaIaTab() {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      if (!form) throw new Error('Sin datos para confirmar');
+      if (!form || !extraction) throw new Error('Sin datos para confirmar');
       const resolvedSupplierId = supplierId ?? matchedSupplier?.id;
       if (!resolvedSupplierId) throw new Error('Falta resolver el proveedor');
       const currency = currenciesQuery.data?.find((c) => c.code === form.currencyCode);
@@ -176,6 +262,8 @@ export default function CargaIaTab() {
         pointOfSale: form.pointOfSale || undefined,
         number: form.number || undefined,
         taxLines: form.taxLines.filter((t) => t.concept && t.amount > 0),
+        aiScanConfidence: overallConfidence(extraction).min,
+        aiScanEdited: wasFormEdited(form, extraction),
       });
       if (uploadedFile) {
         await purchaseInvoicesApi.uploadAttachment(invoice.id, uploadedFile);
@@ -206,6 +294,8 @@ export default function CargaIaTab() {
   if (form && extraction) {
     const taxTotal = form.taxLines.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
     const total = form.subtotal + taxTotal;
+    const confidence = overallConfidence(extraction);
+    const banner = CONFIDENCE_BANNER[confidence.level];
 
     return (
       <div className="flex flex-col gap-6">
@@ -222,6 +312,11 @@ export default function CargaIaTab() {
           >
             Cancelar y volver a subir
           </button>
+        </div>
+
+        <div className={`rounded-lg border px-4 py-2.5 text-sm ${banner.className}`}>
+          <span className="font-semibold">{banner.label}</span>
+          <span className="ml-2">{banner.detail}</span>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

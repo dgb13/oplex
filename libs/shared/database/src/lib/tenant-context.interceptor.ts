@@ -4,9 +4,11 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyRequest } from 'fastify';
 import { from, lastValueFrom, Observable } from 'rxjs';
+import { LONG_RUNNING_TRANSACTION_KEY } from './long-running-transaction.decorator.js';
 import { PrismaService } from './prisma.service.js';
 import { withTenantContext } from './tenant-context.js';
 
@@ -29,7 +31,10 @@ type RequestWithUser = FastifyRequest & { user?: AuthenticatedUser };
  */
 @Injectable()
 export class TenantContextInterceptor implements NestInterceptor {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
@@ -39,6 +44,11 @@ export class TenantContextInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    const timeoutMs = this.reflector.getAllAndOverride<number | undefined>(
+      LONG_RUNNING_TRANSACTION_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
     return from(
       withTenantContext(
         this.prisma,
@@ -46,6 +56,7 @@ export class TenantContextInterceptor implements NestInterceptor {
         () => lastValueFrom(next.handle(), { defaultValue: undefined }),
         request.user?.sub,
         request.user?.role,
+        timeoutMs,
       ),
     );
   }

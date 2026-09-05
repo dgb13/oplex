@@ -2715,6 +2715,18 @@ model PurchaseInvoice {
   // Photo or scan of the supplier's invoice - same pattern as
   // GoodsReceipt.attachmentUrl.
   attachmentUrl         String?
+  // null = cargada a mano (NewPurchaseInvoiceModal); no-null = vino de
+  // "Carga con IA" (ver CargaIaTab) - un Decimal(0-1), el mínimo de
+  // confianza entre los campos que la IA leyó (no el promedio - un solo
+  // campo mal leído importa más que 10 bien leídos), mismo cálculo que
+  // overallConfidence() del frontend. Alimenta "Galería IA"
+  // (/purchases → Galería IA): la grilla de facturas que vinieron de IA,
+  // filtrable por nivel de confianza.
+  aiScanConfidence      Decimal?              @db.Decimal(4, 3)
+  // true si el usuario tocó algún campo en la pantalla de revisión antes de
+  // confirmar (calculado en el frontend comparando contra lo que la IA leyó
+  // originalmente) - null junto con aiScanConfidence null si no vino de IA.
+  aiScanEdited          Boolean?
   notes                 String?
   createdByUserId       String
   createdBy             User                  @relation(fields: [createdByUserId], references: [id])

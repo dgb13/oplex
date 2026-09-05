@@ -545,15 +545,23 @@ export interface PurchaseInvoiceSummary {
   total: string;
   balanceDue: string;
   status: PurchaseInvoiceStatus;
+  supplierId: string;
   supplierName: string;
   createdAt: string;
   // Null = factura de compra directa, sin OC (ver "Carga de comprobantes IA").
   purchaseOrder: { id: string; number: string } | null;
   taxLines: PurchaseInvoiceTaxLineDetail[];
+  // Ambos null = cargada a mano. Ambos no-null = vino de "Carga con IA" -
+  // alimenta "Galería IA" (GaleriaIaTab). Ver PurchaseInvoice.aiScanConfidence
+  // en el schema del backend.
+  aiScanConfidence: string | null;
+  aiScanEdited: boolean | null;
+  // En el summary (no sólo el detalle) para poder mostrar la miniatura en
+  // la grilla de "Galería IA" sin pedir el detalle completo de cada una.
+  attachmentUrl: string | null;
 }
 
 export interface PurchaseInvoiceDetail extends PurchaseInvoiceSummary {
-  attachmentUrl: string | null;
   notes: string | null;
   createdBy: { id: string; name: string | null; email: string };
   receiptLinks: { id: string; goodsReceipt: { id: string; supplierDocNumber: string | null; receivedAt: string } }[];
@@ -578,6 +586,19 @@ export interface CreatePurchaseInvoiceInput {
   documentLetter?: DocumentLetter;
   pointOfSale?: string;
   number?: string;
+  // Ver PurchaseInvoiceSummary.aiScanConfidence/aiScanEdited - los manda
+  // CargaIaTab al confirmar, nunca NewPurchaseInvoiceModal (carga manual).
+  aiScanConfidence?: number;
+  aiScanEdited?: boolean;
+}
+
+export interface ListPurchaseInvoicesFilters {
+  aiScannedOnly?: boolean;
+  supplierId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  confidenceLevel?: 'alta' | 'media' | 'baja';
+  edited?: boolean;
 }
 
 export interface OwnCheckInput {
@@ -601,7 +622,10 @@ export interface RecordSupplierPaymentInput {
 }
 
 export const purchaseInvoicesApi = {
-  list: () => api.get<PurchaseInvoiceSummary[]>('/purchases/purchase-invoices').then((r) => r.data),
+  list: (filters?: ListPurchaseInvoicesFilters) =>
+    api
+      .get<PurchaseInvoiceSummary[]>('/purchases/purchase-invoices', { params: filters })
+      .then((r) => r.data),
   get: (id: string) => api.get<PurchaseInvoiceDetail>(`/purchases/purchase-invoices/${id}`).then((r) => r.data),
   create: (dto: CreatePurchaseInvoiceInput) =>
     api.post<PurchaseInvoiceDetail>('/purchases/purchase-invoices', dto).then((r) => r.data),

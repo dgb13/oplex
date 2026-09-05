@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
 import { Roles } from '@plexo/auth';
 import { AuditEntity } from '@plexo/database';
 import {
   CreatePurchaseInvoiceDto,
+  ListPurchaseInvoicesQueryDto,
   PurchaseInvoiceAttachmentService,
   RecordSupplierPaymentDto,
 } from '@plexo/purchases';
@@ -23,8 +24,8 @@ export class PurchaseInvoicesController {
   ) {}
 
   @Get()
-  list() {
-    return this.purchaseInvoicesService.list();
+  list(@Query() query: ListPurchaseInvoicesQueryDto) {
+    return this.purchaseInvoicesService.list(query);
   }
 
   @Get(':id')

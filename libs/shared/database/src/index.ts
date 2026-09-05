@@ -3,6 +3,7 @@ export * from './lib/tenant-context.js';
 export * from './lib/tenant-context.interceptor.js';
 export * from './lib/activity-log.interceptor.js';
 export * from './lib/audit-entity.decorator.js';
+export * from './lib/long-running-transaction.decorator.js';
 export * from './lib/audit-diff.js';
 export * from './lib/database.module.js';
 export * from './lib/account-balance.js';

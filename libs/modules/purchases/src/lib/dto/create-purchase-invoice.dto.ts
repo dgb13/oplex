@@ -2,6 +2,7 @@ import { DocumentLetter } from '@plexo/database';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -9,6 +10,8 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Max,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -95,4 +98,17 @@ export class CreatePurchaseInvoiceDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Ambos ausentes = cargada a mano. Ambos presentes = vino de "Carga con
+  // IA" (CargaIaTab), alimenta "Galería IA" - ver PurchaseInvoice.aiScanConfidence/
+  // aiScanEdited en schema.prisma.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  aiScanConfidence?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  aiScanEdited?: boolean;
 }

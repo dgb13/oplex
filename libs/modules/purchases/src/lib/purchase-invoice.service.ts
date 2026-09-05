@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
 import type { CreatePurchaseInvoiceDto } from './dto/create-purchase-invoice.dto.js';
+import type { ListPurchaseInvoicesQueryDto } from './dto/list-purchase-invoices-query.dto.js';
 import type { RecordSupplierPaymentDto } from './dto/record-supplier-payment.dto.js';
 import { getReturnedQuantitiesByGoodsReceiptLine } from './supplier-return.service.js';
 
@@ -46,8 +47,37 @@ export interface CreatedPurchaseInvoice {
  */
 @Injectable()
 export class PurchaseInvoiceService {
-  list() {
+  /** Un único listado para "Facturas" (sin query, como siempre) y "Galería
+   * IA" (con filtros) - ver ListPurchaseInvoicesQueryDto. confidenceLevel
+   * implica aiScannedOnly (una factura cargada a mano no tiene
+   * aiScanConfidence que filtrar). */
+  list(query: ListPurchaseInvoicesQueryDto = {}) {
+    const where: Prisma.PurchaseInvoiceWhereInput = {};
+    if (query.aiScannedOnly || query.confidenceLevel || query.edited !== undefined) {
+      where.aiScanConfidence = { not: null };
+    }
+    if (query.supplierId) {
+      where.supplierId = query.supplierId;
+    }
+    if (query.dateFrom || query.dateTo) {
+      where.supplierInvoiceDate = {
+        gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+        lte: query.dateTo ? new Date(query.dateTo) : undefined,
+      };
+    }
+    if (query.confidenceLevel === 'alta') {
+      where.aiScanConfidence = { gte: 0.85 };
+    } else if (query.confidenceLevel === 'media') {
+      where.aiScanConfidence = { gte: 0.6, lt: 0.85 };
+    } else if (query.confidenceLevel === 'baja') {
+      where.aiScanConfidence = { lt: 0.6 };
+    }
+    if (query.edited !== undefined) {
+      where.aiScanEdited = query.edited;
+    }
+
     return getTenantDb().purchaseInvoice.findMany({
+      where,
       include: LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
@@ -193,6 +223,8 @@ export class PurchaseInvoiceService {
         total,
         balanceDue: total,
         notes: dto.notes,
+        aiScanConfidence: dto.aiScanConfidence === undefined ? undefined : new Prisma.Decimal(dto.aiScanConfidence),
+        aiScanEdited: dto.aiScanEdited,
         createdByUserId,
         taxLines: {
           createMany: {

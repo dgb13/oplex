@@ -282,6 +282,103 @@ describe('PurchaseInvoiceService.create', () => {
       ),
     ).rejects.toThrow('requires a purchaseOrderId');
   });
+
+  it('persists aiScanConfidence/aiScanEdited when the invoice came from "Carga con IA"', async () => {
+    const db = makeDb({
+      company: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-2', name: 'X', taxId: null, active: true }) },
+    });
+    const service = new PurchaseInvoiceService();
+
+    await runAsUser(db, () =>
+      service.create({
+        supplierId: 'supplier-2',
+        currencyId: 'currency-1',
+        supplierInvoiceNumber: '0001-1',
+        supplierInvoiceDate: '2026-09-05',
+        subtotal: 1000,
+        aiScanConfidence: 0.72,
+        aiScanEdited: true,
+      }),
+    );
+
+    const data = db.purchaseInvoice.create.mock.calls[0][0].data;
+    expect(data.aiScanConfidence.toNumber()).toBe(0.72);
+    expect(data.aiScanEdited).toBe(true);
+  });
+
+  it('leaves aiScanConfidence/aiScanEdited undefined for a manually-entered invoice', async () => {
+    const db = makeDb();
+    const service = new PurchaseInvoiceService();
+
+    await runAsUser(db, () =>
+      service.create({
+        purchaseOrderId: 'po-1',
+        supplierInvoiceNumber: '0001-1',
+        supplierInvoiceDate: '2026-07-29',
+        subtotal: 1000,
+      }),
+    );
+
+    const data = db.purchaseInvoice.create.mock.calls[0][0].data;
+    expect(data.aiScanConfidence).toBeUndefined();
+    expect(data.aiScanEdited).toBeUndefined();
+  });
+});
+
+describe('PurchaseInvoiceService.list', () => {
+  it('lists everything with no filters (Facturas tab, unchanged)', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { purchaseInvoice: { findMany } };
+
+    await runAsUser(db, () => new PurchaseInvoiceService().list());
+
+    expect(findMany.mock.calls[0][0].where).toEqual({});
+  });
+
+  it('aiScannedOnly filters to invoices with a non-null aiScanConfidence', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { purchaseInvoice: { findMany } };
+
+    await runAsUser(db, () => new PurchaseInvoiceService().list({ aiScannedOnly: true }));
+
+    expect(findMany.mock.calls[0][0].where).toEqual({ aiScanConfidence: { not: null } });
+  });
+
+  it('confidenceLevel maps to the same 0.85/0.6 thresholds as the frontend banner', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { purchaseInvoice: { findMany } };
+    const service = new PurchaseInvoiceService();
+
+    await runAsUser(db, () => service.list({ confidenceLevel: 'alta' }));
+    expect(findMany.mock.calls[0][0].where.aiScanConfidence).toEqual({ gte: 0.85 });
+
+    await runAsUser(db, () => service.list({ confidenceLevel: 'media' }));
+    expect(findMany.mock.calls[1][0].where.aiScanConfidence).toEqual({ gte: 0.6, lt: 0.85 });
+
+    await runAsUser(db, () => service.list({ confidenceLevel: 'baja' }));
+    expect(findMany.mock.calls[2][0].where.aiScanConfidence).toEqual({ lt: 0.6 });
+  });
+
+  it('combines supplierId, date range, and edited filters', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { purchaseInvoice: { findMany } };
+
+    await runAsUser(db, () =>
+      new PurchaseInvoiceService().list({
+        supplierId: 'supplier-1',
+        dateFrom: '2026-09-01',
+        dateTo: '2026-09-30',
+        edited: false,
+      }),
+    );
+
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      supplierId: 'supplier-1',
+      supplierInvoiceDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-30') },
+      aiScanConfidence: { not: null },
+      aiScanEdited: false,
+    });
+  });
 });
 
 describe('PurchaseInvoiceService.recordPayment', () => {

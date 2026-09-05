@@ -80,12 +80,21 @@ export async function withTenantContext<T>(
   fn: () => Promise<T>,
   userId?: string,
   role?: UserRole,
+  // Prisma corta la transacción a los 5000ms (su default) sin importar si
+  // hay actividad de DB en el medio - sólo hace falta cuando fn() hace una
+  // llamada de red lenta adentro (ver @LongRunningTransaction). Nunca subir
+  // el default global: mantiene el resto de las rutas fallando rápido si
+  // algo se cuelga, en vez de retener conexiones del pool más tiempo.
+  timeoutMs?: number,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    if (userId) {
-      await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-    }
-    return tenantContextStorage.run({ tenantId, userId, role, tx }, fn);
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      if (userId) {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+      }
+      return tenantContextStorage.run({ tenantId, userId, role, tx }, fn);
+    },
+    timeoutMs === undefined ? undefined : { timeout: timeoutMs },
+  );
 }

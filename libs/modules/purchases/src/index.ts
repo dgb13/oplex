@@ -18,6 +18,7 @@ export * from './lib/dto/supplier-return-line.dto.js';
 export * from './lib/purchase-invoice.service.js';
 export * from './lib/purchase-invoice-attachment.service.js';
 export * from './lib/dto/create-purchase-invoice.dto.js';
+export * from './lib/dto/list-purchase-invoices-query.dto.js';
 export * from './lib/dto/purchase-invoice-tax-line.dto.js';
 export * from './lib/dto/record-supplier-payment.dto.js';
 export * from './lib/purchase-credit-note.service.js';
