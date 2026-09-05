@@ -137,6 +137,42 @@ describe('SubscriptionService quota checks', () => {
     );
     expect(count).not.toHaveBeenCalled();
   });
+
+  it('assertCanUseAiInvoiceScan rejects without counting when the plan does not include the feature (quota null)', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiInvoiceScanMonthlyQuota: null }) }));
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAiInvoiceScan())).rejects.toThrow(
+      /no incluye la carga de comprobantes con IA/,
+    );
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('assertCanUseAiInvoiceScan allows when under the plan quota', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiInvoiceScanMonthlyQuota: 50 }) }));
+    const count = jest.fn().mockResolvedValue(10);
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAiInvoiceScan())).resolves.toBeUndefined();
+  });
+
+  it('assertCanUseAiInvoiceScan rejects once the monthly quota is reached', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiInvoiceScanMonthlyQuota: 50 }) }));
+    const count = jest.fn().mockResolvedValue(50);
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAiInvoiceScan())).rejects.toThrow(ForbiddenException);
+  });
 });
 
 describe('SubscriptionService plan catalog (global, no tenant context)', () => {

@@ -175,6 +175,113 @@ describe('PurchaseInvoiceService.create', () => {
     expect(result.grniClearedAmount.toNumber()).toBe(0);
     expect(result.nonGrniAmount.toNumber()).toBe(1000);
   });
+
+  it('creates a direct expense invoice (no purchaseOrderId) with grniClearedAmount 0 and the full subtotal as nonGrniAmount', async () => {
+    const db = makeDb({
+      company: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'supplier-2', name: 'Ferretería Norte', taxId: '20-11111111-2', active: true }),
+      },
+    });
+    const service = new PurchaseInvoiceService();
+
+    const result = await runAsUser(db, () =>
+      service.create({
+        supplierId: 'supplier-2',
+        currencyId: 'currency-1',
+        supplierInvoiceNumber: '0001-99999999',
+        supplierInvoiceDate: '2026-09-05',
+        subtotal: 5000,
+      }),
+    );
+
+    expect(result.grniClearedAmount.toNumber()).toBe(0);
+    expect(result.nonGrniAmount.toNumber()).toBe(5000);
+    expect(db.purchaseOrder.findUnique).not.toHaveBeenCalled();
+    expect(db.purchaseInvoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          purchaseOrderId: undefined,
+          supplierId: 'supplier-2',
+          supplierName: 'Ferretería Norte',
+          supplierTaxId: '20-11111111-2',
+          currencyId: 'currency-1',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a direct expense invoice missing supplierId/currencyId', async () => {
+    const db = makeDb();
+    const service = new PurchaseInvoiceService();
+
+    await expect(
+      runAsUser(db, () =>
+        service.create({
+          supplierInvoiceNumber: '0001-1',
+          supplierInvoiceDate: '2026-09-05',
+          subtotal: 1000,
+        }),
+      ),
+    ).rejects.toThrow('supplierId and currencyId are required');
+  });
+
+  it('rejects a direct expense invoice for an inactive supplier', async () => {
+    const db = makeDb({
+      company: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-2', name: 'X', taxId: null, active: false }) },
+    });
+    const service = new PurchaseInvoiceService();
+
+    await expect(
+      runAsUser(db, () =>
+        service.create({
+          supplierId: 'supplier-2',
+          currencyId: 'currency-1',
+          supplierInvoiceNumber: '0001-1',
+          supplierInvoiceDate: '2026-09-05',
+          subtotal: 1000,
+        }),
+      ),
+    ).rejects.toThrow('inactive');
+  });
+
+  it('rejects a direct expense invoice for an unknown supplierId', async () => {
+    const db = makeDb({ company: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const service = new PurchaseInvoiceService();
+
+    await expect(
+      runAsUser(db, () =>
+        service.create({
+          supplierId: 'missing',
+          currencyId: 'currency-1',
+          supplierInvoiceNumber: '0001-1',
+          supplierInvoiceDate: '2026-09-05',
+          subtotal: 1000,
+        }),
+      ),
+    ).rejects.toThrow('Supplier not found');
+  });
+
+  it('rejects goodsReceiptIds when there is no purchaseOrderId (no GRNI to clear)', async () => {
+    const db = makeDb({
+      company: { findUnique: jest.fn().mockResolvedValue({ id: 'supplier-2', name: 'X', taxId: null, active: true }) },
+    });
+    const service = new PurchaseInvoiceService();
+
+    await expect(
+      runAsUser(db, () =>
+        service.create({
+          supplierId: 'supplier-2',
+          currencyId: 'currency-1',
+          supplierInvoiceNumber: '0001-1',
+          supplierInvoiceDate: '2026-09-05',
+          subtotal: 1000,
+          goodsReceiptIds: ['receipt-1'],
+        }),
+      ),
+    ).rejects.toThrow('requires a purchaseOrderId');
+  });
 });
 
 describe('PurchaseInvoiceService.recordPayment', () => {

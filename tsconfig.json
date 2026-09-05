@@ -98,6 +98,9 @@
     },
     {
       "path": "./libs/modules/pos"
+    },
+    {
+      "path": "./libs/modules/ai-invoice-scan"
     }
   ],
   "compilerOptions": {}

@@ -215,7 +215,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                   );
                 })()}
               </Info>
-              <Info label="Orden de Compra">{data.purchaseOrder.number}</Info>
+              {data.purchaseOrder && <Info label="Orden de Compra">{data.purchaseOrder.number}</Info>}
               <Info label="Fecha de factura">
                 {new Date(data.supplierInvoiceDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
               </Info>

@@ -129,6 +129,32 @@ export class SubscriptionService {
     }
   }
 
+  /** "Carga de comprobantes IA" (ver docs/plan-carga-comprobantes-ia.md) -
+   * mismo recipe que assertCanIssueInvoiceThisMonth (gateado detrás de
+   * assertSubscriptionActive, .count() sobre defaultMonthRange()), salvo
+   * que acá el cupo mismo puede no estar incluido en el plan
+   * (aiInvoiceScanMonthlyQuota null = la función no existe para ese plan,
+   * a diferencia de maxMonthlyInvoices que siempre es un entero real).
+   * Única fuente de verdad de disponibilidad: AiInvoiceScanService.getAvailability()
+   * (apps/api) llama este mismo método y traduce la excepción a "rojo" en
+   * vez de reimplementar el chequeo aparte - evita que el semáforo y el
+   * gate real de confirmar se desincronicen. */
+  async assertCanUseAiInvoiceScan(): Promise<void> {
+    const { plan } = await this.assertSubscriptionActive();
+    if (plan.aiInvoiceScanMonthlyQuota == null) {
+      throw new ForbiddenException(`Tu plan actual (${plan.name}) no incluye la carga de comprobantes con IA`);
+    }
+    const { from, to } = defaultMonthRange();
+    const count = await getTenantDb().aiInvoiceScanAttempt.count({
+      where: { createdAt: { gte: from, lte: to } },
+    });
+    if (count >= plan.aiInvoiceScanMonthlyQuota) {
+      throw new ForbiddenException(
+        `Alcanzaste el límite mensual de carga de comprobantes con IA de tu plan actual (${plan.name}: ${plan.aiInvoiceScanMonthlyQuota})`,
+      );
+    }
+  }
+
   /** Allowlist, not a blocklist for EXPIRED alone: CANCELLED has no write
    * path today (only reachable by hand in the DB, see SubscriptionsSchedulerService's
    * docstring), but a billing gate should fail closed for any status that
@@ -170,6 +196,7 @@ export class SubscriptionService {
         isActive: dto.isActive ?? true,
         slaMarkdown: dto.slaMarkdown,
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
+        aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
       },
     });
   }
@@ -196,6 +223,7 @@ export class SubscriptionService {
         // formulario de Planes, que puede tocar sólo precio/cupos.
         slaMarkdown: dto.slaMarkdown,
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
+        aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
       },
     });
   }

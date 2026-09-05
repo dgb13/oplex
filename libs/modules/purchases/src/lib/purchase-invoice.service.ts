@@ -69,59 +69,94 @@ export class PurchaseInvoiceService {
     const tenantId = getTenantId();
     const createdByUserId = requireUserId();
 
-    const purchaseOrder = await db.purchaseOrder.findUnique({
-      where: { id: dto.purchaseOrderId },
-      include: {
-        supplier: true,
-        receipts: {
-          include: {
-            lines: { include: { purchaseOrderLine: { select: { id: true, unitCost: true } } } },
+    const goodsReceiptIds = dto.goodsReceiptIds ?? [];
+
+    // Dos modos: con OC (camino de siempre, GRNI real) o factura de compra
+    // directa (sin OC - ver "Carga de comprobantes IA",
+    // docs/plan-carga-comprobantes-ia.md). Nunca ambos ni ninguno.
+    let supplierId: string;
+    let supplierName: string;
+    let supplierTaxId: string | null;
+    let currencyId: string;
+    let grniClearedAmount = new Prisma.Decimal(0);
+
+    if (dto.purchaseOrderId) {
+      const purchaseOrder = await db.purchaseOrder.findUnique({
+        where: { id: dto.purchaseOrderId },
+        include: {
+          supplier: true,
+          receipts: {
+            include: {
+              lines: { include: { purchaseOrderLine: { select: { id: true, unitCost: true } } } },
+            },
           },
         },
-      },
-    });
-    if (!purchaseOrder) {
-      throw new NotFoundException('Purchase order not found');
-    }
-    if (!purchaseOrder.supplier.active) {
-      throw new BadRequestException('This supplier is inactive');
-    }
-
-    const goodsReceiptIds = dto.goodsReceiptIds ?? [];
-    const selectedReceipts = purchaseOrder.receipts.filter((r) => goodsReceiptIds.includes(r.id));
-    if (selectedReceipts.length !== goodsReceiptIds.length) {
-      throw new BadRequestException('One or more goods receipts do not belong to this purchase order');
-    }
-
-    // No FOR UPDATE lock here (unlike GoodsReceiptService/
-    // SupplierReturnService's quantity-accumulation races) - the @@unique
-    // on purchase_invoice_receipts(tenantId, goodsReceiptId) is the real
-    // backstop against a genuine concurrent double-invoice; this check is
-    // only so the common case gets a legible 400 instead of a raw P2002.
-    if (goodsReceiptIds.length > 0) {
-      const alreadyInvoiced = await db.purchaseInvoiceReceipt.findMany({
-        where: { goodsReceiptId: { in: goodsReceiptIds } },
-        select: { goodsReceiptId: true },
       });
-      if (alreadyInvoiced.length > 0) {
-        throw new BadRequestException(
-          `Goods receipt(s) already invoiced: ${alreadyInvoiced.map((r) => r.goodsReceiptId).join(', ')}`,
-        );
+      if (!purchaseOrder) {
+        throw new NotFoundException('Purchase order not found');
       }
-    }
-
-    // Recomputed from the receipts' own lines net of returns, never cached
-    // - same criterion as PurchaseOrderService.attachReceivingInfo.
-    const allLineIds = selectedReceipts.flatMap((r) => r.lines.map((l) => l.id));
-    const returnedByLine = await getReturnedQuantitiesByGoodsReceiptLine(allLineIds);
-
-    let grniClearedAmount = new Prisma.Decimal(0);
-    for (const receipt of selectedReceipts) {
-      for (const line of receipt.lines) {
-        const returned = returnedByLine.get(line.id) ?? new Prisma.Decimal(0);
-        const netQuantity = line.quantity.sub(returned);
-        grniClearedAmount = grniClearedAmount.add(netQuantity.mul(line.purchaseOrderLine.unitCost));
+      if (!purchaseOrder.supplier.active) {
+        throw new BadRequestException('This supplier is inactive');
       }
+
+      const selectedReceipts = purchaseOrder.receipts.filter((r) => goodsReceiptIds.includes(r.id));
+      if (selectedReceipts.length !== goodsReceiptIds.length) {
+        throw new BadRequestException('One or more goods receipts do not belong to this purchase order');
+      }
+
+      // No FOR UPDATE lock here (unlike GoodsReceiptService/
+      // SupplierReturnService's quantity-accumulation races) - the @@unique
+      // on purchase_invoice_receipts(tenantId, goodsReceiptId) is the real
+      // backstop against a genuine concurrent double-invoice; this check is
+      // only so the common case gets a legible 400 instead of a raw P2002.
+      if (goodsReceiptIds.length > 0) {
+        const alreadyInvoiced = await db.purchaseInvoiceReceipt.findMany({
+          where: { goodsReceiptId: { in: goodsReceiptIds } },
+          select: { goodsReceiptId: true },
+        });
+        if (alreadyInvoiced.length > 0) {
+          throw new BadRequestException(
+            `Goods receipt(s) already invoiced: ${alreadyInvoiced.map((r) => r.goodsReceiptId).join(', ')}`,
+          );
+        }
+      }
+
+      // Recomputed from the receipts' own lines net of returns, never
+      // cached - same criterion as PurchaseOrderService.attachReceivingInfo.
+      const allLineIds = selectedReceipts.flatMap((r) => r.lines.map((l) => l.id));
+      const returnedByLine = await getReturnedQuantitiesByGoodsReceiptLine(allLineIds);
+
+      for (const receipt of selectedReceipts) {
+        for (const line of receipt.lines) {
+          const returned = returnedByLine.get(line.id) ?? new Prisma.Decimal(0);
+          const netQuantity = line.quantity.sub(returned);
+          grniClearedAmount = grniClearedAmount.add(netQuantity.mul(line.purchaseOrderLine.unitCost));
+        }
+      }
+
+      supplierId = purchaseOrder.supplierId;
+      supplierName = purchaseOrder.supplier.name;
+      supplierTaxId = purchaseOrder.supplier.taxId;
+      currencyId = purchaseOrder.currencyId;
+    } else {
+      if (goodsReceiptIds.length > 0) {
+        throw new BadRequestException('goodsReceiptIds requires a purchaseOrderId - there is no GRNI to clear otherwise');
+      }
+      if (!dto.supplierId || !dto.currencyId) {
+        throw new BadRequestException('supplierId and currencyId are required when purchaseOrderId is not set');
+      }
+      const supplier = await db.company.findUnique({ where: { id: dto.supplierId } });
+      if (!supplier) {
+        throw new NotFoundException('Supplier not found');
+      }
+      if (!supplier.active) {
+        throw new BadRequestException('This supplier is inactive');
+      }
+      supplierId = supplier.id;
+      supplierName = supplier.name;
+      supplierTaxId = supplier.taxId;
+      currencyId = dto.currencyId;
+      // grniClearedAmount ya queda en 0 - todo el subtotal es nonGrniAmount.
     }
 
     const subtotal = new Prisma.Decimal(dto.subtotal);
@@ -143,16 +178,16 @@ export class PurchaseInvoiceService {
       data: {
         tenantId,
         purchaseOrderId: dto.purchaseOrderId,
-        supplierId: purchaseOrder.supplierId,
-        supplierName: purchaseOrder.supplier.name,
-        supplierTaxId: purchaseOrder.supplier.taxId,
+        supplierId,
+        supplierName,
+        supplierTaxId,
         supplierInvoiceNumber: dto.supplierInvoiceNumber,
         documentLetter: dto.documentLetter,
         pointOfSale: dto.pointOfSale,
         number: dto.number,
         supplierInvoiceDate: new Date(dto.supplierInvoiceDate),
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-        currencyId: purchaseOrder.currencyId,
+        currencyId,
         subtotal,
         taxTotal,
         total,

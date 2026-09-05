@@ -59,6 +59,7 @@ export default [
                 'scope:mercadopago',
                 'scope:bank-reconciliation',
                 'scope:pos',
+                'scope:ai-invoice-scan',
               ],
             },
             {

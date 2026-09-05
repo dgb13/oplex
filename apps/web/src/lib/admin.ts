@@ -168,6 +168,7 @@ export interface AdminPlan {
   isActive: boolean;
   slaMarkdown: string | null;
   slaUpdatedAt: string | null;
+  aiInvoiceScanMonthlyQuota: number | null;
 }
 
 export interface CreatePlanInput {
@@ -181,12 +182,26 @@ export interface CreatePlanInput {
   debitDiscountPercent?: number;
   isActive?: boolean;
   slaMarkdown?: string;
+  // null = sacar al plan de "Carga de comprobantes IA" (no incluida).
+  aiInvoiceScanMonthlyQuota?: number | null;
 }
 
 export type UpdatePlanInput = Partial<Omit<CreatePlanInput, 'key'>>;
 
 // Conecta AdminPlansController (@plexo/subscriptions), ya funcional del lado
 // del backend desde la sesión del SaaS Engine pero sin frontend hasta ahora.
+export interface AiInvoiceScanSettings {
+  aiInvoiceScanEnabled: boolean;
+}
+
+// "Escaneo IA" en Admin - kill-switch global, mismo GET+PATCH que
+// adminMembershipSettingsApi (apps/web/src/lib/memberships.ts).
+export const adminAiInvoiceScanApi = {
+  getSettings: () => api.get<AiInvoiceScanSettings>('/admin/ai-invoice-scan-settings').then((r) => r.data),
+  updateSettings: (enabled: boolean) =>
+    api.patch<AiInvoiceScanSettings>('/admin/ai-invoice-scan-settings', { enabled }).then((r) => r.data),
+};
+
 export const adminPlansApi = {
   listAll: () => api.get<AdminPlan[]>('/admin/plans').then((r) => r.data),
   create: (dto: CreatePlanInput) => api.post<AdminPlan>('/admin/plans', dto).then((r) => r.data),

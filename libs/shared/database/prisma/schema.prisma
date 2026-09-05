@@ -319,6 +319,12 @@ model Plan {
   // updatedAt (que cambia también por precio/cupos).
   slaMarkdown   String?   @db.Text
   slaUpdatedAt  DateTime?
+  // Cupo mensual de "Carga de comprobantes IA" (ver
+  // docs/plan-carga-comprobantes-ia.md) - null significa que este plan NO
+  // incluye la función (mismo criterio de "null = afuera" que
+  // slaMarkdown), un entero es el tope mensual real - ver
+  // SubscriptionService.assertCanUseAiInvoiceScan().
+  aiInvoiceScanMonthlyQuota Int?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -348,6 +354,11 @@ model PlatformSettings {
   // ya tiene la impersonación), por eso queda acotado y configurable en vez
   // de fijo.
   membershipSessionDurationHours Int @default(2)
+  // Kill-switch global de "Carga de comprobantes IA" (ver
+  // docs/plan-carga-comprobantes-ia.md) - mismo criterio que bnaSyncEnabled:
+  // apaga el escaneo para TODA la plataforma (ej. incidente del proveedor de
+  // IA), independiente de la cuota por tenant/plan (Plan.aiInvoiceScanMonthlyQuota).
+  aiInvoiceScanEnabled Boolean @default(true)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
@@ -2629,15 +2640,20 @@ model SupplierReturnLine {
 
 // --- Cuentas a Pagar (@plexo/purchases + @plexo/payables) ---
 //
-// Factura de Compra: the supplier's own fiscal document, always tied to a
-// PurchaseOrder (that's where the article-level detail/cost already lives -
-// see PurchaseOrderLine.unitCost). Deliberately header-level, not
-// line-by-line like Invoice/InvoiceLine: the user is transcribing totals
-// off a piece of paper the supplier already priced and taxed, not
-// recalculating per-article pricing again (that's what makes entry fast -
-// see PurchaseInvoiceService). Zero or more GoodsReceipts can be linked
-// (PurchaseInvoiceReceipt) to clear their GRNI accrual; zero is valid for a
-// pure-services PurchaseOrder (Article.isService never gets a remito).
+// Factura de Compra: the supplier's own fiscal document. Two modes: (1) tied
+// to a PurchaseOrder (that's where the article-level detail/cost already
+// lives - see PurchaseOrderLine.unitCost), with zero or more GoodsReceipts
+// linked (PurchaseInvoiceReceipt) to clear their GRNI accrual - zero is
+// valid for a pure-services PurchaseOrder (Article.isService never gets a
+// remito); (2) a direct expense with no PurchaseOrder at all (see "Carga de
+// comprobantes IA", docs/plan-carga-comprobantes-ia.md) - grniClearedAmount
+// is always 0 for these, the whole subtotal posts as nonGrniAmount
+// (AccountingService.postPurchaseInvoiceJournalEntry is already agnostic to
+// which mode produced these two numbers). Deliberately header-level, not
+// line-by-line like Invoice/InvoiceLine: the user (or the AI scan) is
+// transcribing totals off a piece of paper the supplier already priced and
+// taxed, not recalculating per-article pricing again (see
+// PurchaseInvoiceService).
 enum PurchaseInvoiceStatus {
   ISSUED
   PARTIALLY_PAID
@@ -2653,8 +2669,11 @@ enum PurchaseInvoiceTaxLineType {
 model PurchaseInvoice {
   id                    String                @id @default(uuid())
   tenantId              String
-  purchaseOrderId       String
-  purchaseOrder         PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  // Null = factura de compra directa, sin OC (ver comentario arriba del
+  // modelo). Índice ([tenantId, purchaseOrderId]) sigue siendo válido con
+  // null - Postgres simplemente no las agrupa entre sí.
+  purchaseOrderId       String?
+  purchaseOrder         PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
   supplierId            String
   supplier              Company               @relation(fields: [supplierId], references: [id])
   // Snapshot at entry time - same reasoning as Invoice.customerName/
@@ -2764,6 +2783,33 @@ model PurchaseInvoiceReceipt {
   @@unique([tenantId, goodsReceiptId])
   @@index([tenantId, purchaseInvoiceId])
   @@map("purchase_invoice_receipts")
+}
+
+enum AiInvoiceScanStatus {
+  SUCCESS
+  FAILURE
+}
+
+// Registro de cada intento de "Carga de comprobantes IA" (ver
+// docs/plan-carga-comprobantes-ia.md), RLS estándar. Cumple doble
+// propósito, a propósito - no hay dos tablas separadas para lo mismo:
+// (1) contador de cupo mensual (SubscriptionService.assertCanUseAiInvoiceScan,
+// .count() sobre el mes vía defaultMonthRange(), mismo patrón que
+// assertCanIssueInvoiceThisMonth); (2) fuente del circuit breaker (si las
+// últimas N filas de un tenant en los últimos M minutos son todas FAILURE,
+// el servicio se muestra "rojo" para ese tenant en
+// GET /purchase-invoices/ai-scan/status). No persiste nada del contenido
+// extraído (eso vive directo en el PurchaseInvoice si el usuario confirma) -
+// sólo éxito/fallo para cupo y salud.
+model AiInvoiceScanAttempt {
+  id           String              @id @default(uuid())
+  tenantId     String
+  status       AiInvoiceScanStatus
+  errorReason  String?
+  createdAt    DateTime            @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("ai_invoice_scan_attempts")
 }
 
 // Nota de Crédito de Compra: a credit note the SUPPLIER issues to the

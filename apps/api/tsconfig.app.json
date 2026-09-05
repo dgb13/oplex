@@ -31,6 +31,9 @@
       "path": "../../libs/shared/connectors/tsconfig.lib.json"
     },
     {
+      "path": "../../libs/modules/pos/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/modules/bank-reconciliation/tsconfig.lib.json"
     },
     {
@@ -41,6 +44,9 @@
     },
     {
       "path": "../../libs/modules/inventory-cart/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/modules/ai-invoice-scan/tsconfig.lib.json"
     },
     {
       "path": "../../libs/shared/subscriptions/tsconfig.lib.json"
@@ -101,9 +107,6 @@
     },
     {
       "path": "../../libs/modules/accounting/tsconfig.lib.json"
-    },
-    {
-      "path": "../../libs/modules/pos/tsconfig.lib.json"
     }
   ]
 }

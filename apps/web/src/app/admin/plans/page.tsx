@@ -202,6 +202,13 @@ function PlanForm({
     debitDiscountPercent: Number(initial.debitDiscountPercent ?? 0),
     isActive: initial.isActive ?? true,
     slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
+    // Texto, no número: "" representa null (función no incluida en este
+    // plan) - un <input type="number"> no distingue "vacío" de "0" con la
+    // misma claridad.
+    aiInvoiceScanMonthlyQuota:
+      'aiInvoiceScanMonthlyQuota' in initial && initial.aiInvoiceScanMonthlyQuota != null
+        ? String(initial.aiInvoiceScanMonthlyQuota)
+        : '',
   });
   const [slaPreview, setSlaPreview] = useState(false);
 
@@ -241,6 +248,15 @@ function PlanForm({
         </Field>
         <Field label="Desc. débito %">
           <NumberInput value={form.debitDiscountPercent} onChange={(v) => setForm({ ...form, debitDiscountPercent: v })} />
+        </Field>
+        <Field label="Cupo IA/mes (vacío = no incluido)">
+          <input
+            type="number"
+            min={0}
+            value={form.aiInvoiceScanMonthlyQuota}
+            onChange={(e) => setForm({ ...form, aiInvoiceScanMonthlyQuota: e.target.value })}
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+          />
         </Field>
         <Field label="Activo">
           <select
@@ -295,10 +311,12 @@ function PlanForm({
         <button
           type="button"
           disabled={saving || !form.name || (showKey && !form.key)}
-          onClick={() =>
+          onClick={() => {
+            const aiInvoiceScanMonthlyQuota =
+              form.aiInvoiceScanMonthlyQuota === '' ? null : Number(form.aiInvoiceScanMonthlyQuota);
             onSave(
               showKey
-                ? { ...form }
+                ? { ...form, aiInvoiceScanMonthlyQuota }
                 : {
                     name: form.name,
                     sortOrder: form.sortOrder,
@@ -309,9 +327,10 @@ function PlanForm({
                     debitDiscountPercent: form.debitDiscountPercent,
                     isActive: form.isActive,
                     slaMarkdown: form.slaMarkdown,
+                    aiInvoiceScanMonthlyQuota,
                   },
-            )
-          }
+            );
+          }}
           className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
         >
           {saving ? 'Guardando...' : 'Guardar'}

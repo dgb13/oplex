@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import CargaIaTab from './CargaIaTab';
 import CatalogosTab from './CatalogosTab';
 import ConfiguracionTab from './ConfiguracionTab';
 import FacturasTab from './FacturasTab';
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'pedidos', label: 'Pedidos de Cotización' },
   { id: 'ordenes', label: 'Órdenes de Compra' },
   { id: 'facturas', label: 'Facturas' },
+  { id: 'carga-ia', label: 'Carga con IA' },
   { id: 'catalogos', label: 'Catálogos' },
   { id: 'configuracion', label: 'Configuración' },
 ] as const;
@@ -43,6 +45,7 @@ export default function PurchasesPage() {
       {tab === 'pedidos' && <PedidosTab />}
       {tab === 'ordenes' && <OrdenesTab />}
       {tab === 'facturas' && <FacturasTab />}
+      {tab === 'carga-ia' && <CargaIaTab />}
       {tab === 'catalogos' && <CatalogosTab />}
       {tab === 'configuracion' && <ConfiguracionTab />}
     </div>

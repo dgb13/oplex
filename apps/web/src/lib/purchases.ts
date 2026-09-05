@@ -547,7 +547,8 @@ export interface PurchaseInvoiceSummary {
   status: PurchaseInvoiceStatus;
   supplierName: string;
   createdAt: string;
-  purchaseOrder: { id: string; number: string };
+  // Null = factura de compra directa, sin OC (ver "Carga de comprobantes IA").
+  purchaseOrder: { id: string; number: string } | null;
   taxLines: PurchaseInvoiceTaxLineDetail[];
 }
 
@@ -560,7 +561,11 @@ export interface PurchaseInvoiceDetail extends PurchaseInvoiceSummary {
 }
 
 export interface CreatePurchaseInvoiceInput {
-  purchaseOrderId: string;
+  // Requeridos sólo cuando purchaseOrderId no viene (ver
+  // CreatePurchaseInvoiceDto del backend) - factura de compra directa.
+  purchaseOrderId?: string;
+  supplierId?: string;
+  currencyId?: string;
   supplierInvoiceNumber: string;
   supplierInvoiceDate: string;
   dueDate?: string;

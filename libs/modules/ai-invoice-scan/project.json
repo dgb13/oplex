@@ -1,0 +1,9 @@
+{
+  "name": "ai-invoice-scan",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/modules/ai-invoice-scan/src",
+  "projectType": "library",
+  "tags": ["scope:ai-invoice-scan", "type:feature"],
+  "// targets": "to see all targets run: nx show project ai-invoice-scan --web",
+  "targets": {}
+}

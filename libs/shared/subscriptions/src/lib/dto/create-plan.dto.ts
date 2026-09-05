@@ -45,4 +45,11 @@ export class CreatePlanDto {
   @IsOptional()
   @IsString()
   slaMarkdown?: string;
+
+  // Cupo mensual de "Carga de comprobantes IA" - ausente/null = el plan no
+  // incluye la función. Ver SubscriptionService.assertCanUseAiInvoiceScan().
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  aiInvoiceScanMonthlyQuota?: number;
 }

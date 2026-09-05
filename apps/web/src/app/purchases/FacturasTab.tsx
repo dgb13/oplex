@@ -55,7 +55,7 @@ export default function FacturasTab() {
                       {inv.supplierInvoiceNumber}
                     </td>
                     <td className="p-3 text-slate-800 dark:text-slate-200">{inv.supplierName}</td>
-                    <td className="p-3 text-slate-600 dark:text-slate-400">{inv.purchaseOrder.number}</td>
+                    <td className="p-3 text-slate-600 dark:text-slate-400">{inv.purchaseOrder?.number ?? '—'}</td>
                     <td className="p-3 text-slate-600 dark:text-slate-400">
                       {new Date(inv.supplierInvoiceDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                     </td>

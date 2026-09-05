@@ -15,15 +15,31 @@ import {
 import { PurchaseInvoiceTaxLineDto } from './purchase-invoice-tax-line.dto.js';
 
 /**
- * Factura de Compra - the supplier's own fiscal document, always tied to a
- * PurchaseOrder (see PurchaseInvoiceService). Header-level on purpose, no
- * article-level lines: the user is transcribing what's already priced and
- * taxed on a piece of paper, not recalculating per-article amounts again
- * (that detail already lives on PurchaseOrderLine).
+ * Factura de Compra - the supplier's own fiscal document. Two modes (see
+ * PurchaseInvoiceService.create): tied to a PurchaseOrder (article-level
+ * cost detail lives on PurchaseOrderLine), or a direct expense with no OC -
+ * in that second mode, supplierId/currencyId must be sent directly (no PO
+ * to derive them from) and goodsReceiptIds must be empty. Header-level on
+ * purpose, no article-level lines: the user (or the AI scan) is
+ * transcribing what's already priced and taxed on a piece of paper, not
+ * recalculating per-article amounts again.
  */
 export class CreatePurchaseInvoiceDto {
+  @IsOptional()
   @IsUUID()
-  purchaseOrderId!: string;
+  purchaseOrderId?: string;
+
+  // Requeridos sólo cuando no hay purchaseOrderId (validados en el service,
+  // no acá - class-validator no tiene una forma limpia de expresar "A o B
+  // pero no ninguno de los dos"). Con purchaseOrderId presente, se ignoran
+  // si vienen (siempre se derivan de la orden, igual que hoy).
+  @IsOptional()
+  @IsUUID()
+  supplierId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  currencyId?: string;
 
   // The supplier's own invoice number - free text, not a Plexo-generated
   // series (see GoodsReceipt.supplierDocNumber for the same convention).
