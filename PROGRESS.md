@@ -729,4 +729,16 @@ Con esto, la Fase 1 completa (backend + frontend) del modulo para estudios conta
 
 Con 2a/2b/2c/2d cerradas, la Fase 2 completa del modulo para estudios contables queda cerrada.
 
+**Sesion 2026-09-05 (PC_CORRALITOS) - Modulo para estudios contables, Fase 3 (3a+3b+3c)**: a pedido del usuario ("continuemos"), tras cerrarse la Fase 2 se le pregunto que seguia y eligio "Fase 3 del modulo contadores". Se investigaron huecos concretos ya documentados en el propio plan y se confirmo el alcance con el usuario: (1) arreglar el bug cosmetico de nombres en invite (heredado de 1b), (2) tests RLS dedicados para las 2 funciones SECURITY DEFINER nuevas (prometidos en el plan original de Fase 1, nunca entregados), (3) email tambien al revocar/cancelar (dejado afuera a proposito en 2c).
+
+**3a**: `inviteFromClient()` devolvia `clientTenantName` con el nombre del ESTUDIO invitado en vez del propio - corregido usando `clientTenant.name` (ya se resolvia para la notificacion de 2c, sin query nueva). `requestFromStudio()` confirmado que ya estaba bien. 1 test actualizado. Verificado en vivo: el campo ahora muestra el nombre propio correcto.
+
+**3b**: `membership-functions.rls-spec.ts` nuevo ("Vector 5" del suite de RLS) - primera cobertura real contra Postgres para `list_studio_memberships()`/`find_tenant_by_tax_id()`, hasta ahora solo probadas con `$queryRaw` mockeado. 5 tests con 2 estudios/tenants reales compitiendo entre si (incluye CUIT con guiones vs sin formato). Limpieza explicita de las filas de `tenants` de prueba (a diferencia del resto del suite, que las deja sembradas - esta base tambien se usa para pruebas manuales en esta sesion).
+
+**3c**: `revoke()` ahora notifica a la CONTRAPARTE (nunca a quien revoca/cancela) - 2 kinds nuevos (`revoked`/`cancelled`) con redaccion propia. 2 tests nuevos en el service + 1 en el sender. Probado en vivo (invite→cancel, invite→accept→revoke, ambos sin romperse) pero la confirmacion del contenido exacto del email en vivo quedo incompleta - **el entorno de dev tuvo varios crashes/reinicios del servidor de API durante esta sesion** (proceso muriendo solo, sin relacion aparente al codigo tocado - ya habia pasado antes en 2d) que dejaron los logs de esa ventana especifica sin capturar; la logica en si queda probada con los tests unitarios dedicados, que si corren de punta a punta contra el codigo real.
+
+**Verificado (3a+3b+3c)**: `nx run-many -t lint,test,build -p api auth-email database` 100% verde + `nx run database:test-rls`. Datos de prueba limpiados en cada sub-fase.
+
+Con 3a/3b/3c cerradas, la Fase 3 del modulo para estudios contables queda completa.
+
 **Backend**: nuevo lib module `libs/modules/bank-reconciliation` (parseo/validacion todo-o-nada con `exceljs`, mismo molde que `ArticleImportService`) + composition-root `apps/api/src/app/bank-reconciliation/` (no podia vivir en el lib module - regla del repo, necesita `ReportsFinancialService`+`AccountingService`). Algoritmo de matching: monto exacto + `

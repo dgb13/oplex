@@ -33,5 +33,15 @@ export function buildMembershipNoticeCopy(payload: {
         subject: `${counterpartName} rechazó tu solicitud en Oplex`,
         text: `Hola, equipo de ${tenantName}: ${counterpartName} rechazó tu invitación/solicitud de acceso en Oplex. Podés verlo desde ${portalUrl}.`,
       };
+    case 'revoked':
+      return {
+        subject: `${counterpartName} cortó la relación en Oplex`,
+        text: `Hola, equipo de ${tenantName}: ${counterpartName} revocó su relación activa con vos en Oplex. Podés verlo desde ${portalUrl}.`,
+      };
+    case 'cancelled':
+      return {
+        subject: `${counterpartName} canceló su solicitud en Oplex`,
+        text: `Hola, equipo de ${tenantName}: ${counterpartName} canceló la invitación/solicitud que te había mandado en Oplex. Podés verlo desde ${portalUrl}.`,
+      };
   }
 }

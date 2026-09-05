@@ -910,3 +910,48 @@ este módulo - sin librería de multi-select nueva). Nuevo
    navegador real vía Chrome para el frontend de cada una - mismo rigor
    que mostró los 3 bugs reales de la Fase 1) con datos de prueba
    sembrados a mano y limpiados después.
+
+---
+
+# Fase 3 — Módulo para estudios contables
+
+## Estado
+
+- **3a — Arreglar el bug cosmético de nombres en invite: HECHO** (sesión
+  2026-09-05). `inviteFromClient()` devolvía `clientTenantName` con el
+  nombre del ESTUDIO invitado en vez del propio (heredado de 1b, ver nota
+  al margen de 1e). Corregido: ahora usa `clientTenant.name` (el nombre
+  propio, ya resuelto para la notificación de 2c). `requestFromStudio()`
+  ya estaba bien - no tenía el bug (el `resolved` de ese método SÍ es el
+  cliente). 1 test actualizado, verificado en vivo (`clientTenantName`
+  ahora muestra el nombre propio del que llama).
+
+- **3b — Tests RLS dedicados para las funciones SECURITY DEFINER: HECHO**
+  (sesión 2026-09-05). Nuevo `membership-functions.rls-spec.ts` ("Vector
+  5"), prometido en el plan original de Fase 1 pero nunca entregado a
+  nivel Postgres real (sólo había tests unitarios con `$queryRaw`
+  mockeado). Prueba `list_studio_memberships()` y `find_tenant_by_tax_id()`
+  contra 2 tenants/estudios reales compitiendo entre sí - cada función
+  filtra correctamente por su parámetro y nunca devuelve de más (incluye
+  el caso de CUIT con guiones/espacios vs. sin formato). 5 tests nuevos,
+  limpieza explícita de todas las filas de prueba (a diferencia del resto
+  del suite, que deja las filas de `tenants` sembradas - esta base
+  también se usa para pruebas manuales en esta sesión).
+
+- **3c — Email también al revocar/cancelar: HECHO** (sesión 2026-09-05).
+  `revoke()` ahora notifica a la CONTRAPARTE (nunca a quien acaba de
+  revocar/cancelar) - 2 kinds nuevos en `MembershipNoticeKind`:
+  `revoked` (relación ACCEPTED cortada) y `cancelled` (solicitud PENDING
+  cancelada por el iniciador), con redacción propia en
+  `membership-notice-template.ts`. Mismo criterio de try/catch que 2c -
+  nunca tumba la revocación/cancelación real. 2 tests nuevos en
+  `memberships.service.spec.ts` + 1 en `resend-auth-email-sender.spec.ts`.
+  Probado en vivo de punta a punta (invite→cancel y invite→accept→revoke,
+  ambos 200/201 sin romperse con el side-effect nuevo) - la confirmación
+  del contenido exacto del email quedó a nivel de test unitario esta vez:
+  el entorno de dev tuvo varios reinicios/crashes del servidor de API
+  durante esta verificación (no relacionados al código, ver PROGRESS.md)
+  que dejaron los logs de esa sesión de curl específica sin capturar.
+
+Con 3a/3b/3c cerradas, la Fase 3 del módulo para estudios contables queda
+completa.

@@ -18,7 +18,7 @@ export interface SendInvitationPayload {
   expiresInMinutes: number;
 }
 
-export type MembershipNoticeKind = 'invited' | 'requested' | 'accepted' | 'declined';
+export type MembershipNoticeKind = 'invited' | 'requested' | 'accepted' | 'declined' | 'revoked' | 'cancelled';
 
 export interface SendMembershipNoticePayload {
   to: string;

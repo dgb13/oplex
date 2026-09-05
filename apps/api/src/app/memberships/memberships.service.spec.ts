@@ -360,7 +360,10 @@ describe('MembershipsService.inviteFromClient', () => {
         respondedAt: null,
       }),
     );
-    const db = { tenantMembership: { findFirst: jest.fn().mockResolvedValue(null), create } };
+    const db = {
+      tenantMembership: { findFirst: jest.fn().mockResolvedValue(null), create },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Cliente Demo SA' }) },
+    };
 
     const result = await runInClientTenant(db, () =>
       service.inviteFromClient('contador@estudio.com', 'client-1', 'client-user-1'),
@@ -376,7 +379,10 @@ describe('MembershipsService.inviteFromClient', () => {
         initiatedByUserId: 'client-user-1',
       },
     });
-    expect(result.clientTenantName).toBe('Estudio Contable SRL');
+    // clientTenantName es el nombre PROPIO (del cliente que llama), nunca el
+    // del estudio invitado ("Estudio Contable SRL") - bug real corregido en
+    // la Fase 3, ver docs/plan_modulo_contadores.txt.
+    expect(result.clientTenantName).toBe('Cliente Demo SA');
   });
 
   it('rechaza invitarse a si mismo', async () => {
@@ -739,6 +745,72 @@ describe('MembershipsService.revoke', () => {
       data: { status: 'REVOKED', respondedAt: expect.any(Date) },
     });
     expect(result.status).toBe('REVOKED');
+  });
+
+  it('notifica a la CONTRAPARTE (no a quien revoca) cuando corta una relacion ACCEPTED (ver docs/plan_modulo_contadores.txt Fase 3)', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'membership-1', tenantId: 'client-1', homeTenantId: 'studio-1', status: 'ACCEPTED' }),
+        update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ id: 'membership-1', tenantId: 'client-1', direction: 'CLIENT_INVITED', status: data['status'], inviteeIdentifier: null, createdAt: new Date('2026-09-01'), respondedAt: data['respondedAt'] }),
+        ),
+      },
+      tenantMembershipLink: { findMany: jest.fn().mockResolvedValue([]) },
+      user: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), findMany: jest.fn().mockResolvedValue([{ email: 'owner@estudio.com' }]) },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Cliente Demo SA' }) },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const authEmailSender = makeAuthEmailSender();
+    const service = new MembershipsService(prisma, makeAuthService(), authEmailSender);
+    // El CLIENTE revoca (callerTenantId='client-1') - la contraparte a
+    // notificar es el ESTUDIO (homeTenantId).
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    await runInClientTenant(dbClient, () => service.revoke('membership-1', 'client-1'));
+
+    expect(authEmailSender.sendMembershipNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'owner@estudio.com', counterpartName: 'Cliente Demo SA', kind: 'revoked' }),
+    );
+  });
+
+  it('notifica a quien iba a responder cuando se cancela una PENDING (kind "cancelled", no "revoked")', async () => {
+    const fakeTx = {
+      tenantMembership: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'membership-1', tenantId: 'client-1', homeTenantId: 'studio-1', direction: 'CLIENT_INVITED', status: 'PENDING' }),
+        update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ id: 'membership-1', tenantId: 'client-1', direction: 'CLIENT_INVITED', status: data['status'], inviteeIdentifier: null, createdAt: new Date('2026-09-01'), respondedAt: data['respondedAt'] }),
+        ),
+      },
+      tenantMembershipLink: { findMany: jest.fn() },
+      user: { findMany: jest.fn().mockResolvedValue([{ email: 'owner@estudio.com' }]) },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Cliente Demo SA' }) },
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+    } as unknown as PrismaService;
+    const authEmailSender = makeAuthEmailSender();
+    const service = new MembershipsService(prisma, makeAuthService(), authEmailSender);
+    // El CLIENTE inicio (CLIENT_INVITED) y cancela - la contraparte a
+    // notificar (quien iba a responder) es el ESTUDIO.
+    const dbClient = {
+      tenantMembership: { findUnique: jest.fn().mockResolvedValue({ id: 'membership-1', tenantId: 'client-1' }) },
+    };
+
+    await runInClientTenant(dbClient, () => service.revoke('membership-1', 'client-1'));
+
+    expect(authEmailSender.sendMembershipNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'owner@estudio.com', counterpartName: 'Cliente Demo SA', kind: 'cancelled' }),
+    );
   });
 
   it('rechaza revocar una membership que no esta ACCEPTED ni PENDING (ej. DECLINED)', async () => {

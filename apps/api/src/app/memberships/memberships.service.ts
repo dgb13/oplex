@@ -434,18 +434,24 @@ export class MembershipsService {
       },
     });
 
-    // Resolver el nombre propio + notificar nunca debe tumbar la invitación
-    // que ya se escribió arriba - mismo espíritu que notifyTenantAdmins,
-    // repetido acá porque ese try/catch no cubre este lookup previo (el
-    // nombre del CLIENTE, no del estudio destino).
+    // El nombre propio (del CLIENTE que llama) - StudioMembershipSummary
+    // siempre etiqueta clientTenantId/clientTenantName con la identidad del
+    // tenant cliente de la relación, sin importar desde qué lado se arma el
+    // objeto (ver docs/plan_modulo_contadores.txt, Fase 3 - antes se pasaba
+    // por error resolved.tenantName acá, que es el nombre del ESTUDIO
+    // invitado, no el propio). Se busca fuera del try/catch de abajo porque
+    // hace falta para el valor de retorno incluso si notificar falla.
+    const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
+
+    // Notificar nunca debe tumbar la invitación que ya se escribió arriba -
+    // mismo espíritu que notifyTenantAdmins.
     try {
-      const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
       await this.notifyTenantAdmins(resolved.tenantId, 'invited', clientTenant.name);
     } catch (err) {
       this.logger.error(`Failed to notify studio ${resolved.tenantId} of invitation: ${(err as Error).message}`);
     }
 
-    return this.toSummary(created, resolved.tenantName);
+    return this.toSummary(created, clientTenant.name);
   }
 
   /** "Pide acceso" (ACCOUNTANT_REQUESTED) - a diferencia de inviteFromClient,
@@ -588,38 +594,70 @@ export class MembershipsService {
   async revoke(membershipId: string, callerTenantId: string): Promise<StudioMembershipSummary> {
     const clientTenantId = await this.resolveMembershipClientTenantId(membershipId, callerTenantId);
 
-    return withTenantContext(this.prisma, clientTenantId, async () => {
-      const db = getTenantDb();
-      const membership = await db.tenantMembership.findUnique({ where: { id: membershipId } });
-      if (!membership) {
-        throw new NotFoundException('Membership not found');
-      }
-
-      if (membership.status === 'ACCEPTED') {
-        const links = await db.tenantMembershipLink.findMany({ where: { membershipId } });
-        if (links.length) {
-          await db.user.updateMany({
-            where: { id: { in: links.map((l) => l.linkedUserId) } },
-            data: { status: 'SUSPENDED' },
-          });
+    const { summary, wasAccepted, homeTenantId, clientTenantName } = await withTenantContext(
+      this.prisma,
+      clientTenantId,
+      async () => {
+        const db = getTenantDb();
+        const membership = await db.tenantMembership.findUnique({ where: { id: membershipId } });
+        if (!membership) {
+          throw new NotFoundException('Membership not found');
         }
-      } else if (membership.status === 'PENDING') {
-        const expectedInitiatorTenantId =
-          membership.direction === 'CLIENT_INVITED' ? membership.tenantId : membership.homeTenantId;
-        if (expectedInitiatorTenantId !== callerTenantId) {
-          throw new ForbiddenException('No podés cancelar una solicitud que no iniciaste vos');
-        }
-      } else {
-        throw new BadRequestException('Esta relación no se puede revocar/cancelar en su estado actual');
-      }
 
-      const updated = await db.tenantMembership.update({
-        where: { id: membershipId },
-        data: { status: 'REVOKED', respondedAt: new Date() },
-      });
-      const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
-      return this.toSummary(updated, clientTenant.name);
-    });
+        if (membership.status === 'ACCEPTED') {
+          const links = await db.tenantMembershipLink.findMany({ where: { membershipId } });
+          if (links.length) {
+            await db.user.updateMany({
+              where: { id: { in: links.map((l) => l.linkedUserId) } },
+              data: { status: 'SUSPENDED' },
+            });
+          }
+        } else if (membership.status === 'PENDING') {
+          const expectedInitiatorTenantId =
+            membership.direction === 'CLIENT_INVITED' ? membership.tenantId : membership.homeTenantId;
+          if (expectedInitiatorTenantId !== callerTenantId) {
+            throw new ForbiddenException('No podés cancelar una solicitud que no iniciaste vos');
+          }
+        } else {
+          throw new BadRequestException('Esta relación no se puede revocar/cancelar en su estado actual');
+        }
+
+        const wasAccepted = membership.status === 'ACCEPTED';
+        const updated = await db.tenantMembership.update({
+          where: { id: membershipId },
+          data: { status: 'REVOKED', respondedAt: new Date() },
+        });
+        const clientTenant = await db.tenant.findUniqueOrThrow({ where: { id: clientTenantId } });
+        return {
+          summary: this.toSummary(updated, clientTenant.name),
+          wasAccepted,
+          homeTenantId: membership.homeTenantId,
+          clientTenantName: clientTenant.name,
+        };
+      },
+    );
+
+    // Avisa a la CONTRAPARTE (no a quien acaba de revocar/cancelar, que ya
+    // lo sabe) - mismo espíritu que respond(), ver
+    // docs/plan_modulo_contadores.txt Fase 3. callerTenantId es siempre uno
+    // de los dos lados (clientTenantId o homeTenantId, ya validado arriba);
+    // la contraparte es el otro.
+    try {
+      const otherTenantId = callerTenantId === clientTenantId ? homeTenantId : clientTenantId;
+      const callerName =
+        callerTenantId === clientTenantId
+          ? clientTenantName
+          : (
+              await withTenantContext(this.prisma, callerTenantId, () =>
+                getTenantDb().tenant.findUniqueOrThrow({ where: { id: callerTenantId } }),
+              )
+            ).name;
+      await this.notifyTenantAdmins(otherTenantId, wasAccepted ? 'revoked' : 'cancelled', callerName);
+    } catch (err) {
+      this.logger.error(`Failed to notify counterpart of revoke/cancel on membership ${membershipId}: ${(err as Error).message}`);
+    }
+
+    return summary;
   }
 
   /**

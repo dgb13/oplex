@@ -105,6 +105,31 @@ describe('ResendAuthEmailSender.sendMembershipNotice', () => {
     );
   });
 
+  it('sends distinct wording for revoked vs cancelled (Fase 3)', async () => {
+    sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null });
+    const sender = new ResendAuthEmailSender('re_test_key', 'auth@plexo.demo');
+
+    await sender.sendMembershipNotice({
+      to: 'admin@estudio.com',
+      tenantName: 'Estudio Contable SRL',
+      counterpartName: 'Cliente Demo SA',
+      kind: 'revoked',
+      portalUrl: 'https://app.oplex.com.ar/accountants',
+    });
+    await sender.sendMembershipNotice({
+      to: 'admin@estudio.com',
+      tenantName: 'Estudio Contable SRL',
+      counterpartName: 'Cliente Demo SA',
+      kind: 'cancelled',
+      portalUrl: 'https://app.oplex.com.ar/accountants',
+    });
+
+    const [revokedCall, cancelledCall] = sendMock.mock.calls;
+    expect(revokedCall[0].subject).not.toBe(cancelledCall[0].subject);
+    expect(revokedCall[0].subject).toContain('cortó la relación');
+    expect(cancelledCall[0].subject).toContain('canceló su solicitud');
+  });
+
   it('logs instead of throwing when Resend returns an error', async () => {
     sendMock.mockResolvedValue({ data: null, error: { message: 'Invalid from address' } });
     const sender = new ResendAuthEmailSender('re_test_key', 'auth@plexo.demo');
