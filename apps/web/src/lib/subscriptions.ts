@@ -13,6 +13,7 @@ export interface Plan {
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
   isActive: boolean;
+  aiInvoiceScanMonthlyQuota: number | null;
 }
 
 export interface TenantSubscription {

@@ -61,6 +61,11 @@ export default function BillingPage() {
                   <li>{plan.maxUsers} usuario{plan.maxUsers === 1 ? '' : 's'}</li>
                   <li>{plan.maxClients} clientes</li>
                   <li>{plan.maxMonthlyInvoices.toLocaleString('es-AR')} facturas/mes</li>
+                  <li>
+                    {plan.aiInvoiceScanMonthlyQuota != null
+                      ? `${plan.aiInvoiceScanMonthlyQuota.toLocaleString('es-AR')} comprobantes IA/mes`
+                      : 'Sin carga de comprobantes con IA'}
+                  </li>
                 </ul>
               </div>
             );

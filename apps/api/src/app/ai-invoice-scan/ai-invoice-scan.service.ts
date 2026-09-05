@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { AiInvoiceExtractionService, type AiInvoiceExtractionResult } from '@plexo/ai-invoice-scan';
 import { getTenantDb, getTenantId, PrismaService, withTenantContext } from '@plexo/database';
-import { SubscriptionService } from '@plexo/subscriptions';
+import { SubscriptionService, type AiInvoiceScanUsage } from '@plexo/subscriptions';
 
 // Fila única de PlatformSettings - mismo criterio que
 // ExchangeRateSchedulerService/MembershipsService.getSettings.
@@ -16,10 +16,17 @@ const RECENT_WINDOW_MINUTES = 15;
 const RECENT_ATTEMPTS_SAMPLE = 5;
 const MIN_FAILURES_FOR_RED = 3;
 
+// upgradeRecommended distingue un rojo "andá a Mejorar plan" (cupo agotado,
+// plan sin la función, suscripción vencida - todo lo que
+// SubscriptionService.assertCanUseAiInvoiceScan() puede rechazar) de un
+// rojo puramente operativo (kill-switch global, circuit breaker por fallas
+// recientes de Claude) donde ofrecer upgrade no tiene sentido. usage viaja
+// en los 3 casos salvo el kill-switch (ahí no hace falta ni pedirlo - el
+// escaneo está apagado para toda la plataforma, no por plan).
 export type AiInvoiceScanAvailability =
-  | { available: 'green' }
-  | { available: 'yellow'; reason: string }
-  | { available: 'red'; reason: string };
+  | { available: 'green'; usage: AiInvoiceScanUsage }
+  | { available: 'yellow'; reason: string; usage: AiInvoiceScanUsage }
+  | { available: 'red'; reason: string; upgradeRecommended: boolean; usage?: AiInvoiceScanUsage };
 
 export interface AiInvoiceScanSettings {
   aiInvoiceScanEnabled: boolean;
@@ -81,13 +88,20 @@ export class AiInvoiceScanService {
   async getAvailability(): Promise<AiInvoiceScanAvailability> {
     const settings = await this.getSettings();
     if (!settings.aiInvoiceScanEnabled) {
-      return { available: 'red', reason: 'El escaneo automático no está disponible en este momento.' };
+      return { available: 'red', reason: 'El escaneo automático no está disponible en este momento.', upgradeRecommended: false };
     }
+
+    // Se calcula ANTES del assert de cupo/plan (no adentro del catch de
+    // abajo) - así la UI puede mostrar el % usado incluso cuando el
+    // resultado es rojo por cupo agotado o plan sin la función, que es
+    // justo cuando más hace falta el número para explicar el "Mejorar
+    // plan". getAiInvoiceScanUsage() nunca lanza (a diferencia del assert).
+    const usage = await this.subscriptionService.getAiInvoiceScanUsage();
 
     try {
       await this.subscriptionService.assertCanUseAiInvoiceScan();
     } catch (err) {
-      return { available: 'red', reason: (err as Error).message };
+      return { available: 'red', reason: (err as Error).message, upgradeRecommended: true, usage };
     }
 
     const since = new Date(Date.now() - RECENT_WINDOW_MINUTES * 60_000);
@@ -103,12 +117,14 @@ export class AiInvoiceScanService {
       return {
         available: 'red',
         reason: 'El escaneo automático no está disponible en este momento. Podés cargar la factura manualmente.',
+        upgradeRecommended: false,
+        usage,
       };
     }
     if (failures > 0) {
-      return { available: 'yellow', reason: 'El escaneo automático está más lento de lo normal.' };
+      return { available: 'yellow', reason: 'El escaneo automático está más lento de lo normal.', usage };
     }
-    return { available: 'green' };
+    return { available: 'green', usage };
   }
 
   /** Reusa exactamente el mismo chequeo de disponibilidad que el semáforo

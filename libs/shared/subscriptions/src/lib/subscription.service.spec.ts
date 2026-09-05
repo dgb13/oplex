@@ -173,6 +173,48 @@ describe('SubscriptionService quota checks', () => {
 
     await expect(runInTenant(db, () => service.assertCanUseAiInvoiceScan())).rejects.toThrow(ForbiddenException);
   });
+
+  it('getAiInvoiceScanUsage returns quota:null without counting when the plan does not include the feature', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Basic', aiInvoiceScanMonthlyQuota: null }) }));
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    const result = await runInTenant(db, () => service.getAiInvoiceScanUsage());
+
+    expect(result).toEqual({ planName: 'Basic', quota: null, used: 0 });
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('getAiInvoiceScanUsage returns the plan quota and the real monthly count', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Gold', aiInvoiceScanMonthlyQuota: 100 }) }));
+    const count = jest.fn().mockResolvedValue(42);
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    const result = await runInTenant(db, () => service.getAiInvoiceScanUsage());
+
+    expect(result).toEqual({ planName: 'Gold', quota: 100, used: 42 });
+  });
+
+  it('getAiInvoiceScanUsage does not gate on subscription status - still reports usage for an EXPIRED tenant', async () => {
+    const findUniqueOrThrow = jest.fn().mockResolvedValue(
+      makeActiveSubscription({ status: 'EXPIRED', plan: makePlan({ name: 'Gold', aiInvoiceScanMonthlyQuota: 100 }) }),
+    );
+    const count = jest.fn().mockResolvedValue(5);
+    const db = { tenantSubscription: { findUniqueOrThrow }, aiInvoiceScanAttempt: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.getAiInvoiceScanUsage())).resolves.toEqual({
+      planName: 'Gold',
+      quota: 100,
+      used: 5,
+    });
+  });
 });
 
 describe('SubscriptionService plan catalog (global, no tenant context)', () => {

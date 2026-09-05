@@ -1,9 +1,17 @@
 import { api } from '@/lib/api';
 
+export interface AiInvoiceScanUsage {
+  planName: string;
+  quota: number | null;
+  used: number;
+}
+
+// upgradeRecommended/usage: ver el comentario homónimo en
+// AiInvoiceScanService.getAvailability() (backend) - misma forma exacta.
 export type AiInvoiceScanAvailability =
-  | { available: 'green' }
-  | { available: 'yellow'; reason: string }
-  | { available: 'red'; reason: string };
+  | { available: 'green'; usage: AiInvoiceScanUsage }
+  | { available: 'yellow'; reason: string; usage: AiInvoiceScanUsage }
+  | { available: 'red'; reason: string; upgradeRecommended: boolean; usage?: AiInvoiceScanUsage };
 
 export type ExtractionSource = 'qr' | 'ai';
 

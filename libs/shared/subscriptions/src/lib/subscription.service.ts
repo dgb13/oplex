@@ -17,6 +17,15 @@ const TRIAL_DAYS = 7;
 // queries return, same reasoning as CompaniesService's CompanyWithRoles.
 export type TenantSubscriptionWithPlan = TenantSubscription & { plan: Plan };
 
+/** quota:null = el plan no incluye la función (mismo significado en toda la
+ * app, ver assertCanUseAiInvoiceScan). used siempre es 0 en ese caso, no se
+ * cuenta nada porque no hay tope contra el cual medir. */
+export interface AiInvoiceScanUsage {
+  planName: string;
+  quota: number | null;
+  used: number;
+}
+
 function defaultMonthRange(): { from: Date; to: Date } {
   const to = new Date();
   // Same UTC-boundary recipe as ReportsSalesService.defaultRange() - never
@@ -153,6 +162,27 @@ export class SubscriptionService {
         `Alcanzaste el límite mensual de carga de comprobantes con IA de tu plan actual (${plan.name}: ${plan.aiInvoiceScanMonthlyQuota})`,
       );
     }
+  }
+
+  /** Usado por AiInvoiceScanService.getAvailability() (apps/api) para
+   * mostrarle al usuario cuánto cupo mensual lleva usado, no sólo si
+   * todavía puede o no - a diferencia de assertCanUseAiInvoiceScan() de
+   * arriba, ESTE método nunca lanza: usa getCurrentForTenant() (sin el
+   * gate de assertSubscriptionActive) a propósito, para que la UI pueda
+   * mostrar "tu plan no incluye esto" o "cupo agotado" con el link a
+   * Mejorar plan incluso con una suscripción vencida - justo el caso en el
+   * que más se necesita el link. quota:null replica el mismo significado
+   * que en el resto del catálogo: la función no existe en ese plan. */
+  async getAiInvoiceScanUsage(): Promise<AiInvoiceScanUsage> {
+    const { plan } = await this.getCurrentForTenant();
+    if (plan.aiInvoiceScanMonthlyQuota == null) {
+      return { planName: plan.name, quota: null, used: 0 };
+    }
+    const { from, to } = defaultMonthRange();
+    const used = await getTenantDb().aiInvoiceScanAttempt.count({
+      where: { createdAt: { gte: from, lte: to } },
+    });
+    return { planName: plan.name, quota: plan.aiInvoiceScanMonthlyQuota, used };
   }
 
   /** Allowlist, not a blocklist for EXPIRED alone: CANCELLED has no write

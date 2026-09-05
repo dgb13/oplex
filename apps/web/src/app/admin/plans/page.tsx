@@ -93,6 +93,7 @@ export default function AdminPlansPage() {
                   <th className="p-3 text-right">Usuarios</th>
                   <th className="p-3 text-right">Clientes</th>
                   <th className="p-3 text-right">Facturas/mes</th>
+                  <th className="p-3 text-right">Cupo IA/mes</th>
                   <th className="p-3 text-right">Desc. débito</th>
                   <th className="p-3">Activo</th>
                   <th className="p-3">SLA</th>
@@ -105,7 +106,7 @@ export default function AdminPlansPage() {
                   .map((plan) =>
                     editingId === plan.id ? (
                       <tr key={plan.id} className="border-b border-slate-800/50">
-                        <td colSpan={10} className="p-3">
+                        <td colSpan={11} className="p-3">
                           <PlanForm
                             initial={plan}
                             saving={updateMutation.isPending}
@@ -129,6 +130,11 @@ export default function AdminPlansPage() {
                         <td className="p-3 text-right text-slate-300">{plan.maxUsers}</td>
                         <td className="p-3 text-right text-slate-300">{plan.maxClients}</td>
                         <td className="p-3 text-right text-slate-300">{plan.maxMonthlyInvoices.toLocaleString('es-AR')}</td>
+                        <td className="p-3 text-right text-slate-300">
+                          {plan.aiInvoiceScanMonthlyQuota != null
+                            ? plan.aiInvoiceScanMonthlyQuota.toLocaleString('es-AR')
+                            : '—'}
+                        </td>
                         <td className="p-3 text-right text-slate-300">{Number(plan.debitDiscountPercent)}%</td>
                         <td className="p-3">
                           <span

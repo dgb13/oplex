@@ -1,6 +1,6 @@
 'use client';
 
-import { aiInvoiceScanApi, type AiInvoiceExtractionResult, type ExtractedField } from '@/lib/ai-invoice-scan';
+import { aiInvoiceScanApi, type AiInvoiceExtractionResult, type AiInvoiceScanUsage, type ExtractedField } from '@/lib/ai-invoice-scan';
 import { companiesApi, type Company } from '@/lib/companies';
 import type { DocumentLetter } from '@/lib/documentLetter';
 import { invoicingApi } from '@/lib/invoicing';
@@ -98,6 +98,51 @@ function SourceBadge({ field }: { field: ExtractedField<unknown> }) {
     >
       IA {field.confidence !== undefined ? `${Math.round(field.confidence * 100)}%` : ''}
     </span>
+  );
+}
+
+/** Cupo mensual del plan + link "Mejorar plan" - separado del semáforo a
+ * propósito: el semáforo habla de si Claude/la plataforma están
+ * respondiendo bien AHORA, esto habla de cuánto cupo del PLAN queda este
+ * mes. Un tenant puede estar en verde (Claude anda perfecto) y a la vez
+ * casi sin cupo, o en rojo por cupo agotado - son dos ejes distintos, no
+ * se puede colapsar uno en el otro. */
+function UsageBanner({ usage }: { usage: AiInvoiceScanUsage }) {
+  if (usage.quota == null) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-slate-800 dark:bg-slate-900">
+        <span className="text-slate-500 dark:text-slate-400">
+          Tu plan actual ({usage.planName}) no incluye la carga de comprobantes con IA.
+        </span>
+        <a href="/settings/billing" className="whitespace-nowrap font-semibold text-indigo-500 hover:text-indigo-400">
+          Mejorar plan →
+        </a>
+      </div>
+    );
+  }
+
+  const availablePercent = Math.max(0, Math.min(100, Math.round(((usage.quota - usage.used) / usage.quota) * 100)));
+  const low = availablePercent <= 20;
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="text-slate-600 dark:text-slate-400">
+          Cupo IA ({usage.planName}): {usage.used}/{usage.quota} usados este mes — {availablePercent}% disponible
+        </span>
+        {low && (
+          <a href="/settings/billing" className="whitespace-nowrap font-semibold text-indigo-500 hover:text-indigo-400">
+            Mejorar plan →
+          </a>
+        )}
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div
+          className={`h-full rounded-full ${low ? 'bg-red-500' : 'bg-indigo-500'}`}
+          style={{ width: `${100 - availablePercent}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -534,6 +579,8 @@ export default function CargaIaTab() {
                 : `🔴 ${availability && 'reason' in availability ? availability.reason : 'No disponible'}`}
         </span>
       </div>
+
+      {availability && 'usage' in availability && availability.usage && <UsageBanner usage={availability.usage} />}
 
       {!canUpload ? (
         <p className="text-sm text-slate-500">

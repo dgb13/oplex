@@ -8,9 +8,12 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
 }
 
+const DEFAULT_USAGE = { planName: 'Gold', quota: 100, used: 0 };
+
 function makeService(opts: {
   aiInvoiceScanEnabled?: boolean;
   assertCanUseAiInvoiceScan?: () => Promise<void>;
+  getAiInvoiceScanUsage?: () => Promise<unknown>;
   extract?: () => Promise<unknown>;
   // recordAttempt() abre su PROPIA $transaction (ver el comentario en el
   // service - a propósito, para que sobreviva un rollback de la request
@@ -31,6 +34,7 @@ function makeService(opts: {
   } as unknown as PrismaService;
   const subscriptionService = {
     assertCanUseAiInvoiceScan: opts.assertCanUseAiInvoiceScan ?? jest.fn().mockResolvedValue(undefined),
+    getAiInvoiceScanUsage: opts.getAiInvoiceScanUsage ?? jest.fn().mockResolvedValue(DEFAULT_USAGE),
   } as unknown as SubscriptionService;
   const aiInvoiceExtractionService = {
     extract: opts.extract ?? jest.fn().mockResolvedValue({}),
@@ -39,17 +43,43 @@ function makeService(opts: {
 }
 
 describe('AiInvoiceScanService.getAvailability', () => {
-  it('is red when the platform kill-switch is off, without even checking the plan/quota', async () => {
+  it('is red when the platform kill-switch is off, without even checking the plan/quota, and does not recommend upgrading (not a plan issue)', async () => {
     const assertCanUseAiInvoiceScan = jest.fn();
-    const service = makeService({ aiInvoiceScanEnabled: false, assertCanUseAiInvoiceScan });
+    const getAiInvoiceScanUsage = jest.fn();
+    const service = makeService({ aiInvoiceScanEnabled: false, assertCanUseAiInvoiceScan, getAiInvoiceScanUsage });
 
     const result = await runInTenant({}, () => service.getAvailability());
 
-    expect(result.available).toBe('red');
+    expect(result).toEqual({
+      available: 'red',
+      reason: 'El escaneo automático no está disponible en este momento.',
+      upgradeRecommended: false,
+    });
     expect(assertCanUseAiInvoiceScan).not.toHaveBeenCalled();
+    expect(getAiInvoiceScanUsage).not.toHaveBeenCalled();
   });
 
-  it('is red with the exact message from SubscriptionService when the plan/quota check fails', async () => {
+  it('is red without recommending upgrade when the circuit breaker trips (Claude flaky, not a plan issue) - still carries usage', async () => {
+    const service = makeService({});
+    const db = {
+      aiInvoiceScanAttempt: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ status: 'FAILURE' }, { status: 'FAILURE' }, { status: 'FAILURE' }]),
+      },
+    };
+
+    const result = await runInTenant(db, () => service.getAvailability());
+
+    expect(result).toEqual({
+      available: 'red',
+      reason: expect.any(String),
+      upgradeRecommended: false,
+      usage: DEFAULT_USAGE,
+    });
+  });
+
+  it('is red with the exact message from SubscriptionService when the plan/quota check fails, and recommends upgrading', async () => {
     const service = makeService({
       assertCanUseAiInvoiceScan: jest.fn().mockRejectedValue(new Error('Alcanzaste el límite mensual')),
     });
@@ -57,16 +87,21 @@ describe('AiInvoiceScanService.getAvailability', () => {
 
     const result = await runInTenant(db, () => service.getAvailability());
 
-    expect(result).toEqual({ available: 'red', reason: 'Alcanzaste el límite mensual' });
+    expect(result).toEqual({
+      available: 'red',
+      reason: 'Alcanzaste el límite mensual',
+      upgradeRecommended: true,
+      usage: DEFAULT_USAGE,
+    });
   });
 
-  it('is green when there are no recent failures', async () => {
+  it('is green when there are no recent failures, and carries the usage from SubscriptionService', async () => {
     const service = makeService({});
     const db = { aiInvoiceScanAttempt: { findMany: jest.fn().mockResolvedValue([]) } };
 
     const result = await runInTenant(db, () => service.getAvailability());
 
-    expect(result).toEqual({ available: 'green' });
+    expect(result).toEqual({ available: 'green', usage: DEFAULT_USAGE });
   });
 
   it('is yellow when some but not all recent attempts failed', async () => {
