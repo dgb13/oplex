@@ -49,6 +49,22 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+// Etiqueta liviana en español que el widget muestra mientras la
+// herramienta corre (docs/plan-asistente-ia-conversacional.md, sección 7:
+// "mostrar de forma liviana 'consultando ventas…'"), en vez del nombre
+// técnico de la tool. Un fallback genérico cubre cualquier tool nueva que
+// se agregue al catálogo sin agregarla acá.
+export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
+  ventas_por_articulo: 'Consultando ventas…',
+  deuda_por_cliente: 'Consultando cuentas a cobrar…',
+  saldo_caja: 'Consultando caja…',
+  stock_articulo: 'Consultando stock…',
+};
+
+export function labelForTool(toolName: string): string {
+  return ASSISTANT_TOOL_LABELS[toolName] ?? 'Consultando…';
+}
+
 export interface ToolExecutionResult {
   content: string;
   isError: boolean;

@@ -4,6 +4,7 @@ import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs
 import type Anthropic from '@anthropic-ai/sdk';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import type { HistoryMessage } from './assistant-conversation.service.js';
+import type { AssistantStreamChunk } from './assistant-stream.types.js';
 
 const DEFAULT_HELP_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 512;
@@ -41,9 +42,25 @@ export class AssistantHelpService {
 
   constructor(@Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic) {}
 
+  /** Variante sin streaming, usada por el endpoint JSON de siempre
+   * (`POST /assistant/message`) - drena answerStream() y concatena el
+   * texto. */
   async answer(history: HistoryMessage[], question: string): Promise<string> {
+    let text = '';
+    for await (const chunk of this.answerStream(history, question)) {
+      if (chunk.type === 'text') {
+        text += chunk.text;
+      }
+    }
+    return text.trim();
+  }
+
+  /** Streaming token a token (docs/plan-asistente-ia-conversacional.md,
+   * sección 7) - usado por `POST /assistant/message/stream`. Sin tool use
+   * acá, así que no hay eventos `tool_start` posibles - sólo `text`. */
+  async *answerStream(history: HistoryMessage[], question: string): AsyncGenerator<AssistantStreamChunk> {
     try {
-      const response = await this.anthropic.messages.create({
+      const stream = this.anthropic.messages.stream({
         model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL ?? DEFAULT_HELP_MODEL,
         max_tokens: MAX_TOKENS,
         system: [
@@ -55,11 +72,11 @@ export class AssistantHelpService {
         ],
         messages: [...history.map((h): Anthropic.Messages.MessageParam => ({ role: h.role, content: h.content })), { role: 'user', content: question }],
       });
-      return response.content
-        .filter((block): block is Anthropic.Messages.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n')
-        .trim();
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          yield { type: 'text', text: event.delta.text };
+        }
+      }
     } catch (err) {
       this.logger.error('Falló la llamada a Claude (ayuda)', err instanceof Error ? err.stack : err);
       throw new ServiceUnavailableException('El asistente no está disponible en este momento. Probá de nuevo en un rato.');

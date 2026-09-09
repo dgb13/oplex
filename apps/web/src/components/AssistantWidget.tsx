@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { assistantApi, FALLBACK_ASSISTANT_NAME, type AssistantMessageFeedback } from '@/lib/assistant';
+import { assistantApi, FALLBACK_ASSISTANT_NAME, streamAssistantMessage, type AssistantMessageFeedback } from '@/lib/assistant';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AxiosError } from 'axios';
 import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 
@@ -13,6 +12,12 @@ interface ChatMessage {
   text: string;
   feedback?: AssistantMessageFeedback | null;
 }
+
+// Compartido entre la burbuja de un mensaje ya cerrado (MessageBubble) y la
+// burbuja "en vivo" mientras el texto sigue llegando por streaming (ver
+// isStreaming más abajo) - mismo estilo de markdown para las dos.
+const ASSISTANT_BUBBLE_CLASS =
+  'max-w-[85%] rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 [&_p]:mb-2 last:[&_p]:mb-0 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5 [&_strong]:font-semibold [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_a]:underline';
 
 const DEFAULT_QUESTIONS = [
   '¿Qué artículos se vendieron más este mes?',
@@ -63,6 +68,15 @@ export default function AssistantWidget() {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Estado de la respuesta en curso (docs/plan-asistente-ia-conversacional.md,
+  // sección 7): streamingTool es la etiqueta liviana ("Consultando
+  // ventas…") mientras corre una tool call, streamingText es el texto de
+  // la respuesta final acumulado a medida que llega. Ninguno de los dos
+  // vive en `messages` hasta que llega el evento `done` - recién ahí se
+  // convierte en un ChatMessage con id real (para poder calificarlo).
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingTool, setStreamingTool] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -89,17 +103,6 @@ export default function AssistantWidget() {
     }
   }, [conversation, historyLoaded]);
 
-  const sendMutation = useMutation({
-    mutationFn: assistantApi.sendMessage,
-    onSuccess: (data) =>
-      setMessages((prev) => [...prev, { id: data.messageId, role: 'assistant', text: data.reply, feedback: null }]),
-    onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const raw = err.response?.data?.message;
-      const message = Array.isArray(raw) ? raw.join(' ') : raw ?? 'No se pudo consultar al asistente. Probá de nuevo.';
-      setMessages((prev) => [...prev, { role: 'error', text: message }]);
-    },
-  });
-
   const feedbackMutation = useMutation({
     mutationFn: ({ messageId, feedback }: { messageId: string; feedback: AssistantMessageFeedback }) =>
       assistantApi.setFeedback(messageId, feedback),
@@ -115,14 +118,47 @@ export default function AssistantWidget() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, sendMutation.isPending]);
+  }, [messages, isStreaming, streamingText]);
 
   function handleSend(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || sendMutation.isPending) return;
+    if (!trimmed || isStreaming) return;
     setMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
     setDraft('');
-    sendMutation.mutate(trimmed);
+    setIsStreaming(true);
+    setStreamingTool(null);
+    setStreamingText('');
+
+    // Acumulado en una variable local, no en el state `streamingText`: el
+    // handler de 'done' de más abajo necesita el texto completo apenas
+    // llega, sin esperar el próximo render (leer el state acá adentro
+    // devolvería el valor de la clausura del momento en que se llamó a
+    // handleSend, no el actualizado).
+    let fullText = '';
+    streamAssistantMessage(trimmed, (event) => {
+      if (event.type === 'tool_start') {
+        setStreamingTool(event.label);
+      } else if (event.type === 'text') {
+        fullText += event.text;
+        setStreamingTool(null);
+        setStreamingText(fullText);
+      } else if (event.type === 'done') {
+        setMessages((prev) => [...prev, { id: event.messageId, role: 'assistant', text: fullText, feedback: null }]);
+        setIsStreaming(false);
+        setStreamingTool(null);
+        setStreamingText('');
+      } else if (event.type === 'error') {
+        setMessages((prev) => [...prev, { role: 'error', text: event.message }]);
+        setIsStreaming(false);
+        setStreamingTool(null);
+        setStreamingText('');
+      }
+    }).catch(() => {
+      setMessages((prev) => [...prev, { role: 'error', text: 'No se pudo consultar al asistente. Probá de nuevo.' }]);
+      setIsStreaming(false);
+      setStreamingTool(null);
+      setStreamingText('');
+    });
   }
 
   function handleFeedback(messageId: string, feedback: AssistantMessageFeedback) {
@@ -176,11 +212,17 @@ export default function AssistantWidget() {
             {messages.map((m, i) => (
               <MessageBubble key={m.id ?? i} message={m} onFeedback={handleFeedback} />
             ))}
-            {sendMutation.isPending && (
+            {isStreaming && (
               <div className="flex justify-start">
-                <div className="rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
-                  Pensando…
-                </div>
+                {streamingText ? (
+                  <div className={ASSISTANT_BUBBLE_CLASS}>
+                    <ReactMarkdown>{streamingText}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm italic text-slate-500 dark:text-slate-400">
+                    {streamingTool ?? 'Pensando…'}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -197,12 +239,12 @@ export default function AssistantWidget() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Escribí tu consulta..."
-              disabled={sendMutation.isPending}
+              disabled={isStreaming}
               className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={sendMutation.isPending || draft.trim() === ''}
+              disabled={isStreaming || draft.trim() === ''}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
             >
               Enviar
@@ -247,11 +289,7 @@ function MessageBubble({
   }
   return (
     <div className="flex flex-col items-start gap-1">
-      <div
-        className="max-w-[85%] rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200
-          [&_p]:mb-2 last:[&_p]:mb-0 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5
-          [&_strong]:font-semibold [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_a]:underline"
-      >
+      <div className={ASSISTANT_BUBBLE_CLASS}>
         <ReactMarkdown>{message.text}</ReactMarkdown>
       </div>
       {message.id && (
