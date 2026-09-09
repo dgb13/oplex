@@ -130,8 +130,22 @@ export class AssistantController {
     // request como fallida (error de red al leer el stream), sin ningún
     // log del lado del servidor porque Fastify no considera eso un error
     // de la aplicación.
+    //
+    // `reply.getHeaders()` ANTES de escribir nada: @fastify/cors corre en
+    // un hook `onRequest` (antes de que este método arranque a ejecutar)
+    // que deja `Access-Control-Allow-Origin`/`Vary` ya bufferizados en
+    // `reply` - sin este merge, `writeHead()` de abajo los pisa por
+    // completo y la respuesta real (200 con el stream) sale sin headers
+    // de CORS. Encontrado en vivo: el preflight OPTIONS salía perfecto
+    // (ese lo maneja el propio plugin de CORS, ajeno al hijack), pero el
+    // POST real fallaba en el browser con "Failed to fetch" - un error de
+    // red genérico sin ningún detalle server-side porque el request se
+    // procesó 100% bien, sólo que el browser bloqueó la respuesta por
+    // CORS antes de dejarle leer nada a este código.
+    const corsHeaders = reply.getHeaders();
     reply.hijack();
     reply.raw.writeHead(200, {
+      ...corsHeaders,
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
