@@ -17,12 +17,21 @@ export interface AssistantMessage {
   createdAt: string;
 }
 
+// Mismo shape que AiInvoiceScanUsage (apps/web/src/lib/ai-invoice-scan.ts) -
+// quota:null significa que el plan actual no incluye el asistente.
+export interface AssistantUsage {
+  planName: string;
+  quota: number | null;
+  used: number;
+}
+
 // Widget de chat (docs/plan-asistente-ia-conversacional.md) - Fase 3 suma
 // historial persistente (la conversación activa se carga al montar el
 // widget, ver AssistantConversationService en el backend) y feedback
 // 👍/👎 por respuesta.
 export const assistantApi = {
   getSettings: () => api.get<AssistantSettings>('/assistant/settings').then((r) => r.data),
+  getUsage: () => api.get<AssistantUsage>('/assistant/usage').then((r) => r.data),
   getConversation: () => api.get<{ messages: AssistantMessage[] }>('/assistant/conversation').then((r) => r.data),
   startNewConversation: () => api.post<{ messages: AssistantMessage[] }>('/assistant/conversation/new').then((r) => r.data),
   sendMessage: (message: string) =>

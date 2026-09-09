@@ -86,6 +86,13 @@ export default function AssistantWidget() {
 
   const { data: conversation } = useQuery({ queryKey: ['assistant-conversation'], queryFn: assistantApi.getConversation });
 
+  // Línea fina de consumo bajo el header (a pedido del usuario) - mismo
+  // dato que ya expone el semáforo de Carga de comprobantes IA
+  // (SubscriptionService.getAssistantUsage()), pero acá sin banner ni
+  // texto, sólo la barra. Se re-lee después de cada respuesta (ver
+  // handleSend) porque cada pregunta consume una unidad del cupo mensual.
+  const { data: usage } = useQuery({ queryKey: ['assistant-usage'], queryFn: assistantApi.getUsage });
+
   // Se carga UNA vez al llegar - si el usuario ya mandó algo antes de que
   // la respuesta vuelva (poco probable, pero posible), no se pisa lo que
   // ya está en pantalla.
@@ -147,6 +154,7 @@ export default function AssistantWidget() {
         setIsStreaming(false);
         setStreamingTool(null);
         setStreamingText('');
+        void queryClient.invalidateQueries({ queryKey: ['assistant-usage'] });
       } else if (event.type === 'error') {
         setMessages((prev) => [...prev, { role: 'error', text: event.message }]);
         setIsStreaming(false);
@@ -166,11 +174,18 @@ export default function AssistantWidget() {
     feedbackMutation.mutate({ messageId, feedback });
   }
 
+  // Barra fina de cupo bajo el header, en vez del border-b liso de antes -
+  // 0% (línea vacía) cuando el plan no incluye el asistente (usage.quota
+  // null) o mientras carga: no hay nada que medir todavía.
+  const usagePercent =
+    usage && usage.quota != null && usage.quota > 0 ? Math.max(0, Math.min(100, Math.round((usage.used / usage.quota) * 100))) : 0;
+  const usageCritical = usagePercent >= 80;
+
   return (
     <>
       {open && (
         <div className="fixed bottom-20 right-6 z-40 flex h-[32rem] w-96 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3">
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{assistantName}</p>
             <div className="flex items-center gap-1">
               {messages.length > 0 && (
@@ -192,6 +207,16 @@ export default function AssistantWidget() {
                 <CloseIcon />
               </button>
             </div>
+          </div>
+
+          <div
+            className="h-1 w-full bg-slate-200 dark:bg-slate-800"
+            title={usage?.quota != null ? `${usage.used}/${usage.quota} consultas usadas este mes` : undefined}
+          >
+            <div
+              className={`h-full transition-all ${usageCritical ? 'bg-red-500' : 'bg-indigo-500'}`}
+              style={{ width: `${usagePercent}%` }}
+            />
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">

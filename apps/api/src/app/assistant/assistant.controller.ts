@@ -42,6 +42,15 @@ export class AssistantController {
     return this.assistantSettingsService.getSettings();
   }
 
+  // Cupo mensual restante - el widget lo pinta como una línea fina bajo el
+  // header (ver AssistantWidget.tsx), mismo dato que ya usa el semáforo de
+  // Carga de comprobantes IA (SubscriptionService.getAssistantUsage() nunca
+  // lanza, a diferencia de assertCanUseAssistant()).
+  @Get('usage')
+  getUsage() {
+    return this.subscriptionService.getAssistantUsage();
+  }
+
   // Fase 3 - el widget carga esto al montar para no arrancar en blanco
   // cada vez que se abre la página (docs/plan-asistente-ia-conversacional.md,
   // sección 9).
