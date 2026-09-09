@@ -24,6 +24,7 @@ import { TaxesModule } from '@plexo/taxes';
 import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { AdminModule } from './admin/admin.module.js';
 import { AiInvoiceScanModule } from './ai-invoice-scan/ai-invoice-scan.module.js';
+import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -84,6 +85,7 @@ import { MercadoPagoWebhookModule } from './webhooks/mercadopago-webhook.module.
     UsersModule,
     MembershipsModule,
     AiInvoiceScanModule,
+    AssistantModule,
   ],
   controllers: [AppController],
   providers: [

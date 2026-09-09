@@ -56,4 +56,9 @@ export class UpdatePlanDto {
   @IsInt()
   @Min(0)
   aiInvoiceScanMonthlyQuota?: number | null;
+
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(0)
+  aiAssistantMonthlyQueryQuota?: number | null;
 }

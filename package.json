@@ -111,5 +111,16 @@
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "zod": "^4.4.3"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.8.0": true,
+    "@swc/core@1.15.8": true,
+    "esbuild@0.28.1": true,
+    "nx@23.1.0": true,
+    "prisma@7.8.0": true,
+    "sharp@0.34.5": true,
+    "@parcel/watcher@2.6.0": true,
+    "unrs-resolver@1.12.2": true,
+    "less@4.5.1": true
   }
 }

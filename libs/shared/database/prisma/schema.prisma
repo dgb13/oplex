@@ -325,6 +325,12 @@ model Plan {
   // slaMarkdown), un entero es el tope mensual real - ver
   // SubscriptionService.assertCanUseAiInvoiceScan().
   aiInvoiceScanMonthlyQuota Int?
+  // Cupo mensual de preguntas al Asistente de IA conversacional (ver
+  // docs/plan-asistente-ia-conversacional.md, sección 8) - mismo criterio
+  // "null = el plan no incluye la función" que aiInvoiceScanMonthlyQuota.
+  // Cuenta AssistantMessage con role USER del tenant en el mes, ver
+  // SubscriptionService.assertCanUseAssistant().
+  aiAssistantMonthlyQueryQuota Int?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -359,6 +365,18 @@ model PlatformSettings {
   // apaga el escaneo para TODA la plataforma (ej. incidente del proveedor de
   // IA), independiente de la cuota por tenant/plan (Plan.aiInvoiceScanMonthlyQuota).
   aiInvoiceScanEnabled Boolean @default(true)
+  // Nombre mostrado del asistente de IA conversacional (botón del widget,
+  // saludo/firma de WhatsApp cuando exista) - ver
+  // docs/plan-asistente-ia-conversacional.md, sección 1. Deliberadamente NO
+  // hardcodeado en ningún componente: null/vacío cae a un genérico en el
+  // frontend ("Asistente Oplex"), nunca a un string vacío visible.
+  assistantDisplayName String?
+  // Rate limit del Asistente de IA (docs/plan-asistente-ia-conversacional.md,
+  // sección 8.2) - configurable por el SuperAdmin en vez de fijo en código,
+  // mismo criterio que bnaSyncHour/membershipSessionDurationHours arriba.
+  // Ver AssistantConversationService.assertNotRateLimited.
+  assistantRateLimitWindowMinutes Int @default(5)
+  assistantRateLimitMaxMessages   Int @default(20)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
@@ -3116,4 +3134,55 @@ model WebhookEvent {
   @@unique([provider, externalId, type])
   @@index([tenantId, processed])
   @@map("webhook_events")
+}
+
+// Asistente de IA conversacional (ver docs/plan-asistente-ia-conversacional.md).
+// Fase 0: sólo el canal web existe todavía - deliberadamente sin ningún
+// campo de canal/teléfono acá (agregar recién en la Fase 5, cuando WhatsApp
+// exista de verdad, mismo criterio que el resto del proyecto de no
+// construir para un caso que todavía no llegó).
+enum AssistantMessageRole {
+  USER
+  ASSISTANT
+}
+
+model AssistantConversation {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AssistantMessage[]
+
+  @@index([tenantId, userId, updatedAt])
+  @@map("assistant_conversations")
+}
+
+model AssistantMessage {
+  id             String                 @id @default(uuid())
+  tenantId       String
+  conversationId String
+  conversation   AssistantConversation  @relation(fields: [conversationId], references: [id])
+  role           AssistantMessageRole
+  content        String                 @db.Text
+  // Nombre(s) de herramienta invocada y su resultado crudo, sólo para
+  // auditoría/diagnóstico (ver sección 3.5 del plan) - nunca se le vuelve a
+  // dar de comer al modelo desde acá, se recalcula en cada turno.
+  toolCalls      Json?
+  // 👍/👎 del usuario sobre una respuesta del asistente - null hasta que
+  // alguien vota, sólo tiene sentido en mensajes role=ASSISTANT (no
+  // forzado por constraint, sólo por convención de quién lo escribe). Fase
+  // 3 (sección 7 del plan) - insumo para priorizar qué artículos de ayuda
+  // faltan o qué herramienta de datos agregar, no dispara nada automático.
+  feedback       AssistantMessageFeedback?
+  createdAt      DateTime               @default(now())
+
+  @@index([tenantId, conversationId, createdAt])
+  @@map("assistant_messages")
+}
+
+enum AssistantMessageFeedback {
+  UP
+  DOWN
 }

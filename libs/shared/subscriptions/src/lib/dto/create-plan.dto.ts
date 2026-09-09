@@ -52,4 +52,9 @@ export class CreatePlanDto {
   @IsInt()
   @Min(0)
   aiInvoiceScanMonthlyQuota?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  aiAssistantMonthlyQueryQuota?: number;
 }

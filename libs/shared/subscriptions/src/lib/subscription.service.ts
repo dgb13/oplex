@@ -26,6 +26,14 @@ export interface AiInvoiceScanUsage {
   used: number;
 }
 
+/** Mismo significado que AiInvoiceScanUsage - ver
+ * docs/plan-asistente-ia-conversacional.md, sección 8. */
+export interface AssistantUsage {
+  planName: string;
+  quota: number | null;
+  used: number;
+}
+
 function defaultMonthRange(): { from: Date; to: Date } {
   const to = new Date();
   // Same UTC-boundary recipe as ReportsSalesService.defaultRange() - never
@@ -185,6 +193,43 @@ export class SubscriptionService {
     return { planName: plan.name, quota: plan.aiInvoiceScanMonthlyQuota, used };
   }
 
+  /** Mismo criterio exacto que assertCanUseAiInvoiceScan - reusar esta
+   * función en vez de reimplementar el chequeo en el controller del
+   * asistente, para que el gate real y cualquier semáforo futuro nunca se
+   * desincronicen. Cuenta AssistantMessage role=USER del mes - un mensaje
+   * de usuario es una "pregunta", sin importar si terminó yendo a la
+   * Capacidad 1 (ayuda) o 2 (datos), ambas cuestan lo mismo en cupo. */
+  async assertCanUseAssistant(): Promise<void> {
+    const { plan } = await this.assertSubscriptionActive();
+    if (plan.aiAssistantMonthlyQueryQuota == null) {
+      throw new ForbiddenException(`Tu plan actual (${plan.name}) no incluye el Asistente de IA`);
+    }
+    const { from, to } = defaultMonthRange();
+    const count = await getTenantDb().assistantMessage.count({
+      where: { role: 'USER', createdAt: { gte: from, lte: to } },
+    });
+    if (count >= plan.aiAssistantMonthlyQueryQuota) {
+      throw new ForbiddenException(
+        `Alcanzaste el límite mensual de preguntas al Asistente de IA de tu plan actual (${plan.name}: ${plan.aiAssistantMonthlyQueryQuota})`,
+      );
+    }
+  }
+
+  /** Mismo criterio exacto que getAiInvoiceScanUsage - nunca lanza, para
+   * que la UI pueda mostrar el cupo/link de upgrade incluso con
+   * suscripción vencida. */
+  async getAssistantUsage(): Promise<AssistantUsage> {
+    const { plan } = await this.getCurrentForTenant();
+    if (plan.aiAssistantMonthlyQueryQuota == null) {
+      return { planName: plan.name, quota: null, used: 0 };
+    }
+    const { from, to } = defaultMonthRange();
+    const used = await getTenantDb().assistantMessage.count({
+      where: { role: 'USER', createdAt: { gte: from, lte: to } },
+    });
+    return { planName: plan.name, quota: plan.aiAssistantMonthlyQueryQuota, used };
+  }
+
   /** Allowlist, not a blocklist for EXPIRED alone: CANCELLED has no write
    * path today (only reachable by hand in the DB, see SubscriptionsSchedulerService's
    * docstring), but a billing gate should fail closed for any status that
@@ -227,6 +272,7 @@ export class SubscriptionService {
         slaMarkdown: dto.slaMarkdown,
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
+        aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
       },
     });
   }
@@ -254,6 +300,7 @@ export class SubscriptionService {
         slaMarkdown: dto.slaMarkdown,
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
+        aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
       },
     });
   }

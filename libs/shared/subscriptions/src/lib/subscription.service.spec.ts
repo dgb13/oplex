@@ -215,6 +215,67 @@ describe('SubscriptionService quota checks', () => {
       used: 5,
     });
   });
+
+  it('assertCanUseAssistant rejects without counting when the plan does not include the feature (quota null)', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiAssistantMonthlyQueryQuota: null }) }));
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAssistant())).rejects.toThrow(/no incluye el Asistente de IA/);
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('assertCanUseAssistant allows when under the plan quota', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiAssistantMonthlyQueryQuota: 200 }) }));
+    const count = jest.fn().mockResolvedValue(10);
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAssistant())).resolves.toBeUndefined();
+  });
+
+  it('assertCanUseAssistant rejects once the monthly quota is reached', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ aiAssistantMonthlyQueryQuota: 200 }) }));
+    const count = jest.fn().mockResolvedValue(200);
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAssistant())).rejects.toThrow(ForbiddenException);
+  });
+
+  it('getAssistantUsage returns quota:null without counting when the plan does not include the feature', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Basic', aiAssistantMonthlyQueryQuota: null }) }));
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    const result = await runInTenant(db, () => service.getAssistantUsage());
+
+    expect(result).toEqual({ planName: 'Basic', quota: null, used: 0 });
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('getAssistantUsage returns the plan quota and the real monthly count', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Gold', aiAssistantMonthlyQueryQuota: 300 }) }));
+    const count = jest.fn().mockResolvedValue(77);
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    const result = await runInTenant(db, () => service.getAssistantUsage());
+
+    expect(result).toEqual({ planName: 'Gold', quota: 300, used: 77 });
+  });
 });
 
 describe('SubscriptionService plan catalog (global, no tenant context)', () => {

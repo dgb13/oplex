@@ -59,6 +59,11 @@ export class AdminSystemStatusService {
         'APPLE_PRIVATE_KEY',
       ]),
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
+      // API key propia del asistente de IA conversacional, separada de
+      // ANTHROPIC_API_KEY (Carga de Comprobantes IA) - ver
+      // docs/plan-asistente-ia-conversacional.md, sección 2: son dos
+      // consumos de facturación de Anthropic distintos a propósito.
+      this.checkGroup('assistant', 'Asistente de IA (Anthropic)', ['ANTHROPIC_ASSISTANT_API_KEY']),
       await this.checkBackups(),
     ];
   }

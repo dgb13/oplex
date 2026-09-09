@@ -18,6 +18,7 @@ const ALL_MANAGED_VARS = [
   'RESEND_API_KEY',
   'EMAIL_FROM',
   'BACKUP_STORAGE_DIR',
+  'ANTHROPIC_ASSISTANT_API_KEY',
 ];
 
 describe('AdminSystemStatusService.getStatus', () => {
@@ -63,6 +64,27 @@ describe('AdminSystemStatusService.getStatus', () => {
     const status = await service.getStatus();
 
     expect(status.find((s) => s.key === 'mercadopago')?.configured).toBe(false);
+  });
+
+  it('reports the assistant as configured only when ANTHROPIC_ASSISTANT_API_KEY is set', async () => {
+    const service = new AdminSystemStatusService();
+
+    const unconfigured = await service.getStatus();
+    expect(unconfigured.find((s) => s.key === 'assistant')).toEqual({
+      key: 'assistant',
+      label: 'Asistente de IA (Anthropic)',
+      configured: false,
+      detail: 'Falta: ANTHROPIC_ASSISTANT_API_KEY',
+    });
+
+    process.env['ANTHROPIC_ASSISTANT_API_KEY'] = 'sk-ant-x';
+    const configured = await service.getStatus();
+    expect(configured.find((s) => s.key === 'assistant')).toEqual({
+      key: 'assistant',
+      label: 'Asistente de IA (Anthropic)',
+      configured: true,
+      detail: undefined,
+    });
   });
 
   it('never lists ENCRYPTION_MASTER_KEY/JWT_SECRET/DATABASE_URL - they are boot-required, not optional', async () => {

@@ -94,6 +94,7 @@ export default function AdminPlansPage() {
                   <th className="p-3 text-right">Clientes</th>
                   <th className="p-3 text-right">Facturas/mes</th>
                   <th className="p-3 text-right">Cupo IA/mes</th>
+                  <th className="p-3 text-right">Cupo Asistente/mes</th>
                   <th className="p-3 text-right">Desc. débito</th>
                   <th className="p-3">Activo</th>
                   <th className="p-3">SLA</th>
@@ -106,7 +107,7 @@ export default function AdminPlansPage() {
                   .map((plan) =>
                     editingId === plan.id ? (
                       <tr key={plan.id} className="border-b border-slate-800/50">
-                        <td colSpan={11} className="p-3">
+                        <td colSpan={12} className="p-3">
                           <PlanForm
                             initial={plan}
                             saving={updateMutation.isPending}
@@ -133,6 +134,11 @@ export default function AdminPlansPage() {
                         <td className="p-3 text-right text-slate-300">
                           {plan.aiInvoiceScanMonthlyQuota != null
                             ? plan.aiInvoiceScanMonthlyQuota.toLocaleString('es-AR')
+                            : '—'}
+                        </td>
+                        <td className="p-3 text-right text-slate-300">
+                          {plan.aiAssistantMonthlyQueryQuota != null
+                            ? plan.aiAssistantMonthlyQueryQuota.toLocaleString('es-AR')
                             : '—'}
                         </td>
                         <td className="p-3 text-right text-slate-300">{Number(plan.debitDiscountPercent)}%</td>
@@ -215,6 +221,10 @@ function PlanForm({
       'aiInvoiceScanMonthlyQuota' in initial && initial.aiInvoiceScanMonthlyQuota != null
         ? String(initial.aiInvoiceScanMonthlyQuota)
         : '',
+    aiAssistantMonthlyQueryQuota:
+      'aiAssistantMonthlyQueryQuota' in initial && initial.aiAssistantMonthlyQueryQuota != null
+        ? String(initial.aiAssistantMonthlyQueryQuota)
+        : '',
   });
   const [slaPreview, setSlaPreview] = useState(false);
 
@@ -261,6 +271,15 @@ function PlanForm({
             min={0}
             value={form.aiInvoiceScanMonthlyQuota}
             onChange={(e) => setForm({ ...form, aiInvoiceScanMonthlyQuota: e.target.value })}
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+          />
+        </Field>
+        <Field label="Cupo Asistente/mes (vacío = no incluido)">
+          <input
+            type="number"
+            min={0}
+            value={form.aiAssistantMonthlyQueryQuota}
+            onChange={(e) => setForm({ ...form, aiAssistantMonthlyQueryQuota: e.target.value })}
             className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
           />
         </Field>
@@ -320,9 +339,11 @@ function PlanForm({
           onClick={() => {
             const aiInvoiceScanMonthlyQuota =
               form.aiInvoiceScanMonthlyQuota === '' ? null : Number(form.aiInvoiceScanMonthlyQuota);
+            const aiAssistantMonthlyQueryQuota =
+              form.aiAssistantMonthlyQueryQuota === '' ? null : Number(form.aiAssistantMonthlyQueryQuota);
             onSave(
               showKey
-                ? { ...form, aiInvoiceScanMonthlyQuota }
+                ? { ...form, aiInvoiceScanMonthlyQuota, aiAssistantMonthlyQueryQuota }
                 : {
                     name: form.name,
                     sortOrder: form.sortOrder,
@@ -334,6 +355,7 @@ function PlanForm({
                     isActive: form.isActive,
                     slaMarkdown: form.slaMarkdown,
                     aiInvoiceScanMonthlyQuota,
+                    aiAssistantMonthlyQueryQuota,
                   },
             );
           }}

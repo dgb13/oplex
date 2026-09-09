@@ -169,6 +169,7 @@ export interface AdminPlan {
   slaMarkdown: string | null;
   slaUpdatedAt: string | null;
   aiInvoiceScanMonthlyQuota: number | null;
+  aiAssistantMonthlyQueryQuota: number | null;
 }
 
 export interface CreatePlanInput {
@@ -184,6 +185,8 @@ export interface CreatePlanInput {
   slaMarkdown?: string;
   // null = sacar al plan de "Carga de comprobantes IA" (no incluida).
   aiInvoiceScanMonthlyQuota?: number | null;
+  // null = sacar al plan del Asistente de IA conversacional (no incluido).
+  aiAssistantMonthlyQueryQuota?: number | null;
 }
 
 export type UpdatePlanInput = Partial<Omit<CreatePlanInput, 'key'>>;
@@ -200,6 +203,27 @@ export const adminAiInvoiceScanApi = {
   getSettings: () => api.get<AiInvoiceScanSettings>('/admin/ai-invoice-scan-settings').then((r) => r.data),
   updateSettings: (enabled: boolean) =>
     api.patch<AiInvoiceScanSettings>('/admin/ai-invoice-scan-settings', { enabled }).then((r) => r.data),
+};
+
+export interface AssistantSettings {
+  assistantDisplayName: string | null;
+  assistantRateLimitWindowMinutes: number;
+  assistantRateLimitMaxMessages: number;
+}
+
+export interface UpdateAssistantSettingsInput {
+  assistantDisplayName?: string | null;
+  assistantRateLimitWindowMinutes?: number;
+  assistantRateLimitMaxMessages?: number;
+}
+
+// Nombre + rate limit del Asistente de IA conversacional - configurable
+// sin deploy (ver docs/plan-asistente-ia-conversacional.md, secciones 1 y
+// 8.2), mismo GET+PATCH que adminAiInvoiceScanApi de arriba.
+export const adminAssistantApi = {
+  getSettings: () => api.get<AssistantSettings>('/admin/assistant-settings').then((r) => r.data),
+  updateSettings: (patch: UpdateAssistantSettingsInput) =>
+    api.patch<AssistantSettings>('/admin/assistant-settings', patch).then((r) => r.data),
 };
 
 export const adminPlansApi = {

@@ -16,6 +16,7 @@ const NAV_ENTRIES = [
   { href: '/admin/price-index-sync', label: 'Índices de Inflación' },
   { href: '/admin/membership-settings', label: 'Sesión de contadores' },
   { href: '/admin/ai-invoice-scan', label: 'Escaneo IA' },
+  { href: '/admin/assistant', label: 'Asistente de IA' },
   { href: '/admin/system-status', label: 'Configuración del sistema' },
 ];
 

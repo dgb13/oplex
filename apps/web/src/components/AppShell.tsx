@@ -2,6 +2,7 @@
 
 import { initials, profileApi } from '@/lib/profile';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
+import AssistantWidget from './AssistantWidget';
 import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
 import MembershipSessionBanner from './MembershipSessionBanner';
@@ -185,6 +186,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <MembershipSessionBanner />
       <TrialBanner />
       <main className="p-6">{children}</main>
+      <AssistantWidget />
     </div>
   );
 }
