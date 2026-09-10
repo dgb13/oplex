@@ -680,6 +680,8 @@ model User {
   emailVerificationCode      EmailVerificationCode?
   passwordResetTokens        PasswordResetToken[]
   oauthAccounts              OAuthAccount[]
+  whatsAppLinkRequest        WhatsAppLinkRequest?
+  whatsAppLink               WhatsAppLink?
   cashSessionsOpened         CashSession[] @relation("CashSessionOpenedBy")
   cashSessionsClosed         CashSession[] @relation("CashSessionClosedBy")
   cashMovements              CashMovement[]
@@ -729,6 +731,54 @@ model PasswordResetToken {
   @@index([userId])
   @@index([tenantId])
   @@map("password_reset_tokens")
+}
+
+// Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+// sección 3.3) - código de un solo uso que el usuario YA logueado en la
+// web genera y confirma mandándolo por WhatsApp al número de Oplex
+// (nunca al revés: WhatsApp por sí solo no prueba identidad). Mismo
+// criterio que EmailVerificationCode (codeHash sha256 - la defensa real
+// es attemptCount, no el costo de hashing; un pending activo por usuario,
+// reintentar sobreescribe el mismo row). Separado de WhatsAppLink en vez
+// de campos sueltos ahí porque acá puede haber varios intentos/expiraciones
+// antes de que llegue a existir un link verificado.
+model WhatsAppLinkRequest {
+  id           String   @id @default(uuid())
+  tenantId     String
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  phoneE164    String
+  codeHash     String
+  expiresAt    DateTime
+  attemptCount Int      @default(0)
+  lastSentAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("whatsapp_link_requests")
+}
+
+// El link YA verificado - recién se crea acá cuando el código de
+// WhatsAppLinkRequest coincide (esa fila se borra en el mismo momento).
+// phoneE164 único GLOBAL, no por tenant (mismo criterio que
+// oauth_accounts_provider_providerAccountId_key): un número de WhatsApp
+// resuelve a un único tenant+usuario en toda la plataforma - v1 no
+// soporta que la misma persona lo use para más de una empresa (sección
+// 3.3 del plan). Fase 5b agrega la función SECURITY DEFINER que el
+// webhook real usa para resolver tenant a partir de un phoneE164
+// entrante, antes de que exista contexto de tenant - mismo mecanismo que
+// find_tenants_by_email/find_tenant_by_oauth_account.
+model WhatsAppLink {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  phoneE164  String   @unique
+  verifiedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("whatsapp_links")
 }
 
 // Mismo patrón append-only que PasswordResetToken: invitar de nuevo al mismo

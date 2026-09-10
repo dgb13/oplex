@@ -3,6 +3,7 @@
 import { activityLogApi } from '@/lib/activityLog';
 import { initials, profileApi, type UserProfile } from '@/lib/profile';
 import { disconnectSocket } from '@/lib/socket';
+import { whatsAppLinkApi, type WhatsAppLinkRequestResult } from '@/lib/whatsappLink';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ export default function ProfilePage() {
             onSaved={() => void queryClient.invalidateQueries({ queryKey: ['profile-me'] })}
           />
           <PasswordCard />
+          <WhatsAppLinkCard />
           <ActivityCard />
         </>
       )}
@@ -265,6 +267,132 @@ function PasswordCard() {
           {mutation.isPending ? 'Actualizando...' : 'Cambiar contraseña'}
         </button>
       </form>
+    </div>
+  );
+}
+
+/** Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+ * sección 3.3) - genera un código, lo muestra en pantalla para que el
+ * usuario lo mande por WhatsApp al número de Oplex. Todavía no hay
+ * ningún lado que reciba ese mensaje (Fase 5b, pendiente de credenciales
+ * de Meta) - por ahora esta tarjeta sólo cubre la mitad "pedir código"
+ * del flujo; nunca acepta el código escrito acá mismo, porque eso no
+ * probaría que el usuario tiene acceso real a ese WhatsApp. */
+function WhatsAppLinkCard() {
+  const queryClient = useQueryClient();
+  const [phone, setPhone] = useState('');
+  const [generated, setGenerated] = useState<WhatsAppLinkRequestResult | null>(null);
+  const [error, setError] = useState('');
+
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['whatsapp-link-status'],
+    queryFn: whatsAppLinkApi.getStatus,
+  });
+
+  function invalidateStatus() {
+    void queryClient.invalidateQueries({ queryKey: ['whatsapp-link-status'] });
+  }
+
+  const requestMutation = useMutation({
+    mutationFn: () => whatsAppLinkApi.requestLink(phone),
+    onSuccess: (result) => {
+      setError('');
+      setGenerated(result);
+      invalidateStatus();
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      setGenerated(null);
+      const message = err.response?.data?.message ?? 'No se pudo generar el código';
+      setError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: whatsAppLinkApi.unlink,
+    onSuccess: () => {
+      setError('');
+      setGenerated(null);
+      invalidateStatus();
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    requestMutation.mutate();
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
+      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">WhatsApp</h2>
+      <p className="mb-4 text-xs text-slate-500">
+        Vinculá tu número para consultarle al asistente de IA por WhatsApp más adelante - todavía no está activa la
+        recepción de mensajes, esto sólo prepara la vinculación.
+      </p>
+
+      {isLoading || !status ? (
+        <p className="text-sm text-slate-500">Cargando...</p>
+      ) : status.linked ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+            Vinculado
+          </span>
+          <span className="text-sm text-slate-700 dark:text-slate-300">{status.phoneE164}</span>
+          <button
+            type="button"
+            onClick={() => unlinkMutation.mutate()}
+            disabled={unlinkMutation.isPending}
+            className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
+          >
+            {unlinkMutation.isPending ? 'Desvinculando...' : 'Desvincular'}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+            <Field label="Número de WhatsApp">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+54 9 11 1234-5678"
+                className={`${inputClass} w-52`}
+                required
+              />
+            </Field>
+            <button
+              type="submit"
+              disabled={!phone.trim() || requestMutation.isPending}
+              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {requestMutation.isPending ? 'Generando...' : generated || status.pending ? 'Generar otro código' : 'Generar código'}
+            </button>
+          </form>
+
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+          {generated ? (
+            <div className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950 p-4 text-sm">
+              <p className="text-slate-700 dark:text-slate-300">
+                Mandá este código por WhatsApp <span className="font-semibold">al número de Oplex</span> desde{' '}
+                <span className="font-mono">{generated.phoneE164}</span>:
+              </p>
+              <p className="mt-2 font-mono text-2xl font-bold tracking-widest text-indigo-700 dark:text-indigo-400">{generated.code}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Vence a las {new Date(generated.expiresAt).toLocaleTimeString('es-AR')}. La recepción del mensaje todavía no está
+                activa en esta versión.
+              </p>
+            </div>
+          ) : (
+            status.pending && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Ya generaste un código para {status.pending.phoneE164}, vence a las{' '}
+                {new Date(status.pending.expiresAt).toLocaleTimeString('es-AR')}. Generá uno nuevo si no llegás a mandarlo a tiempo.
+              </p>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }
