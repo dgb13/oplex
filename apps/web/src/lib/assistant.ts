@@ -9,12 +9,21 @@ export const FALLBACK_ASSISTANT_NAME = 'Asistente Oplex';
 export type AssistantMessageRole = 'USER' | 'ASSISTANT';
 export type AssistantMessageFeedback = 'UP' | 'DOWN';
 
+// Dato crudo que devolvió una herramienta durante ese turno (docs/plan-asistente-ia-conversacional.md,
+// sección 5.3) - el widget lo usa para el mini-gráfico/tabla embebido en
+// la burbuja de respuesta, ver AssistantChart.tsx.
+export interface AssistantToolCall {
+  tool: string;
+  data: unknown;
+}
+
 export interface AssistantMessage {
   id: string;
   role: AssistantMessageRole;
   content: string;
   feedback: AssistantMessageFeedback | null;
   createdAt: string;
+  toolCalls?: AssistantToolCall[] | null;
 }
 
 // Mismo shape que AiInvoiceScanUsage (apps/web/src/lib/ai-invoice-scan.ts) -
@@ -43,6 +52,7 @@ export const assistantApi = {
 export type AssistantStreamEvent =
   | { type: 'text'; text: string }
   | { type: 'tool_start'; tool: string; label: string }
+  | { type: 'tool_result'; tool: string; data: unknown }
   | { type: 'done'; messageId: string }
   | { type: 'error'; message: string };
 

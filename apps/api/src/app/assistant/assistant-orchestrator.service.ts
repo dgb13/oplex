@@ -135,6 +135,12 @@ export class AssistantOrchestratorService {
       for (const t of toolUses) {
         const input = t.inputJson ? JSON.parse(t.inputJson) : {};
         const result = await executeAssistantTool(this.assistantToolsService, user, t.name, input);
+        if (!result.isError) {
+          // Mismo dato que se le manda a Claude en el tool_result de abajo,
+          // pero sin stringificar - el widget lo usa para el mini-gráfico/tabla
+          // (docs/plan-asistente-ia-conversacional.md, sección 5.3).
+          yield { type: 'tool_result', tool: t.name, data: result.raw };
+        }
         toolResults.push({
           type: 'tool_result',
           tool_use_id: t.id,

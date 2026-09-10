@@ -162,6 +162,10 @@ export class AssistantController {
     const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
     let fullText = '';
+    // Se persiste junto con el mensaje (columna `toolCalls`, ya existía sin
+    // usarse) para que el mini-gráfico/tabla siga apareciendo al recargar
+    // la página, no sólo mientras se recibe el stream en vivo.
+    const toolCallsForPersist: Array<{ tool: string; data: unknown }> = [];
     try {
       const chunks =
         intent === 'ayuda'
@@ -170,10 +174,17 @@ export class AssistantController {
       for await (const chunk of chunks) {
         if (chunk.type === 'text') {
           fullText += chunk.text;
+        } else if (chunk.type === 'tool_result') {
+          toolCallsForPersist.push({ tool: chunk.tool, data: chunk.data });
         }
         send(chunk.type, chunk);
       }
-      const saved = await this.assistantConversationService.appendMessage(conversationId, 'ASSISTANT', fullText.trim());
+      const saved = await this.assistantConversationService.appendMessage(
+        conversationId,
+        'ASSISTANT',
+        fullText.trim(),
+        toolCallsForPersist.length ? toolCallsForPersist : undefined,
+      );
       send('done', { type: 'done', messageId: saved.id });
     } catch (err) {
       // Los headers ya salieron con 200 - no hay forma de devolver un

@@ -1,16 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { assistantApi, FALLBACK_ASSISTANT_NAME, streamAssistantMessage, type AssistantMessageFeedback } from '@/lib/assistant';
+import {
+  assistantApi,
+  FALLBACK_ASSISTANT_NAME,
+  streamAssistantMessage,
+  type AssistantMessageFeedback,
+  type AssistantToolCall,
+} from '@/lib/assistant';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import AssistantToolChart from './AssistantToolChart';
 
 interface ChatMessage {
   id?: string;
   role: 'user' | 'assistant' | 'error';
   text: string;
   feedback?: AssistantMessageFeedback | null;
+  toolCalls?: AssistantToolCall[];
 }
 
 // Compartido entre la burbuja de un mensaje ya cerrado (MessageBubble) y la
@@ -77,6 +85,11 @@ export default function AssistantWidget() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingTool, setStreamingTool] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState('');
+  // Datos crudos de las tools ya resueltas en esta vuelta (docs/plan-asistente-ia-conversacional.md,
+  // sección 5.3) - alimenta AssistantToolChart mientras la respuesta sigue
+  // en curso, para que el mini-gráfico aparezca apenas la tool termina, sin
+  // esperar a que Claude termine de redactar el texto.
+  const [streamingToolCalls, setStreamingToolCalls] = useState<AssistantToolCall[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -104,6 +117,7 @@ export default function AssistantWidget() {
           role: m.role === 'USER' ? 'user' : 'assistant',
           text: m.content,
           feedback: m.feedback,
+          toolCalls: m.toolCalls ?? undefined,
         })),
       );
       setHistoryLoaded(true);
@@ -135,37 +149,48 @@ export default function AssistantWidget() {
     setIsStreaming(true);
     setStreamingTool(null);
     setStreamingText('');
+    setStreamingToolCalls([]);
 
-    // Acumulado en una variable local, no en el state `streamingText`: el
-    // handler de 'done' de más abajo necesita el texto completo apenas
+    // Acumulados en variables locales, no en el state: los handlers de
+    // 'done'/'error' de más abajo necesitan el valor completo apenas
     // llega, sin esperar el próximo render (leer el state acá adentro
     // devolvería el valor de la clausura del momento en que se llamó a
     // handleSend, no el actualizado).
     let fullText = '';
+    let toolCallsAcc: AssistantToolCall[] = [];
     streamAssistantMessage(trimmed, (event) => {
       if (event.type === 'tool_start') {
         setStreamingTool(event.label);
+      } else if (event.type === 'tool_result') {
+        toolCallsAcc = [...toolCallsAcc, { tool: event.tool, data: event.data }];
+        setStreamingToolCalls(toolCallsAcc);
       } else if (event.type === 'text') {
         fullText += event.text;
         setStreamingTool(null);
         setStreamingText(fullText);
       } else if (event.type === 'done') {
-        setMessages((prev) => [...prev, { id: event.messageId, role: 'assistant', text: fullText, feedback: null }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: event.messageId, role: 'assistant', text: fullText, feedback: null, toolCalls: toolCallsAcc.length ? toolCallsAcc : undefined },
+        ]);
         setIsStreaming(false);
         setStreamingTool(null);
         setStreamingText('');
+        setStreamingToolCalls([]);
         void queryClient.invalidateQueries({ queryKey: ['assistant-usage'] });
       } else if (event.type === 'error') {
         setMessages((prev) => [...prev, { role: 'error', text: event.message }]);
         setIsStreaming(false);
         setStreamingTool(null);
         setStreamingText('');
+        setStreamingToolCalls([]);
       }
     }).catch(() => {
       setMessages((prev) => [...prev, { role: 'error', text: 'No se pudo consultar al asistente. Probá de nuevo.' }]);
       setIsStreaming(false);
       setStreamingTool(null);
       setStreamingText('');
+      setStreamingToolCalls([]);
     });
   }
 
@@ -238,7 +263,7 @@ export default function AssistantWidget() {
               <MessageBubble key={m.id ?? i} message={m} onFeedback={handleFeedback} />
             ))}
             {isStreaming && (
-              <div className="flex justify-start">
+              <div className="flex flex-col items-start gap-1">
                 {streamingText ? (
                   <div className={ASSISTANT_BUBBLE_CLASS}>
                     <ReactMarkdown>{streamingText}</ReactMarkdown>
@@ -248,6 +273,7 @@ export default function AssistantWidget() {
                     {streamingTool ?? 'Pensando…'}
                   </div>
                 )}
+                {streamingToolCalls.length > 0 && <AssistantToolChart toolCalls={streamingToolCalls} />}
               </div>
             )}
           </div>
@@ -317,6 +343,7 @@ function MessageBubble({
       <div className={ASSISTANT_BUBBLE_CLASS}>
         <ReactMarkdown>{message.text}</ReactMarkdown>
       </div>
+      {message.toolCalls && message.toolCalls.length > 0 && <AssistantToolChart toolCalls={message.toolCalls} />}
       {message.id && (
         <div className="flex items-center gap-1 pl-1">
           <button

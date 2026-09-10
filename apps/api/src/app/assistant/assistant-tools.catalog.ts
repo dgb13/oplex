@@ -68,6 +68,12 @@ export function labelForTool(toolName: string): string {
 export interface ToolExecutionResult {
   content: string;
   isError: boolean;
+  // El objeto devuelto por el Service ANTES de stringificarlo para el
+  // tool_result de Claude - el orquestador lo reenvía tal cual al frontend
+  // como evento `tool_result` (docs/plan-asistente-ia-conversacional.md,
+  // sección 5.3: tabla/mini-gráfico embebido) para no tener que
+  // parsear de nuevo el JSON del lado del cliente. `undefined` en error.
+  raw?: unknown;
 }
 
 /**
@@ -88,7 +94,7 @@ export async function executeAssistantTool(
 ): Promise<ToolExecutionResult> {
   try {
     const result = await dispatch(toolsService, user, toolName, input);
-    return { content: JSON.stringify(result), isError: false };
+    return { content: JSON.stringify(result), isError: false, raw: result };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido ejecutando la herramienta';
     return { content: message, isError: true };
