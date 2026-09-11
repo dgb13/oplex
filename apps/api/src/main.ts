@@ -17,9 +17,20 @@ import fastifyStatic from '@fastify/static';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
+  // rawBody: true - el webhook de WhatsApp (Fase 5b del asistente de IA)
+  // necesita los bytes crudos del POST para verificar `X-Hub-Signature-256`
+  // (HMAC sobre el body tal cual, no sobre el JSON ya parseado - ver
+  // whatsapp-webhook-signature.util.ts). No afecta a ninguna otra ruta: Nest
+  // sigue parseando `request.body` normalmente, esto sólo AGREGA
+  // `request.rawBody` (Buffer) al lado. Va como 3er argumento de
+  // NestFactory.create (NestApplicationOptions), NO como opción del
+  // constructor de FastifyAdapter - ese constructor no tiene ningún efecto
+  // sobre esto (confirmado leyendo NestApplication.registerParserMiddleware,
+  // que lee `this.appOptions.rawBody`, no nada del adapter).
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
+    { rawBody: true },
   );
   // 20MB - antes 5MB, insuficiente para el folleto (PDF) y adjunto ZIP de
   // artículo (hasta 10MB/20MB respectivamente, ver ArticleAttachmentsService)

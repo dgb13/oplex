@@ -37,8 +37,11 @@ function hashCode(code: string): string {
 /** Normaliza a dígitos + "+" adelante (E.164) - mismo "sólo dígitos" que ya
  * usa PurchaseOrderService.buildWhatsappLink para el link de wa.me, acá se
  * le suma el "+" porque esto se guarda como identificador único, no como
- * un link efímero. */
-function normalizePhone(raw: string): string {
+ * un link efímero. Exportada: el webhook de Fase 5b (whatsapp-webhook.service.ts)
+ * la reusa para que el "from" que manda Meta (sólo dígitos, sin "+") resuelva
+ * al mismo phoneE164 ya guardado - una sola función de normalización, no dos
+ * que puedan divergir. */
+export function normalizePhone(raw: string): string {
   const digits = raw.replace(/[^0-9]/g, '');
   if (digits.length < 8 || digits.length > 15) {
     throw new BadRequestException('Número de teléfono inválido');
