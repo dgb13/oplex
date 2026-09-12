@@ -1,6 +1,8 @@
 'use client';
 
 import { api } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getSocket } from '@/lib/socket';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -146,132 +148,144 @@ export default function DashboardPage() {
 
       {/* Sales chart + low stock */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-          <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Ventas últimos 7 días</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={salesLast7Days}>
-              <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#1e293b' : '#e2e8f0'} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }}
-                tickFormatter={(v: string) => v.slice(5)}
-              />
-              <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }} width={60} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: theme === 'dark' ? '#0f172a' : '#ffffff',
-                  border: `1px solid ${theme === 'dark' ? '#1e293b' : '#e2e8f0'}`,
-                }}
-                labelStyle={{ color: theme === 'dark' ? '#94a3b8' : '#475569' }}
-                formatter={(v) => [`$${Number(v ?? 0).toFixed(2)}`, 'Total']}
-              />
-              <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <Card className="col-span-2">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Ventas últimos 7 días</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={salesLast7Days}>
+                <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#1e293b' : '#e2e8f0'} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }}
+                  tickFormatter={(v: string) => v.slice(5)}
+                />
+                <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#94a3b8' : '#475569' }} width={60} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: theme === 'dark' ? '#0f172a' : '#ffffff',
+                    border: `1px solid ${theme === 'dark' ? '#1e293b' : '#e2e8f0'}`,
+                  }}
+                  labelStyle={{ color: theme === 'dark' ? '#94a3b8' : '#475569' }}
+                  formatter={(v) => [`$${Number(v ?? 0).toFixed(2)}`, 'Total']}
+                />
+                <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">Alertas de stock</h2>
-          {lowStockAlerts.length === 0 ? (
-            <p className="text-sm text-slate-400 dark:text-slate-600">Sin alertas</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {lowStockAlerts.map((a, i) => (
-                <li key={i} className="rounded-lg bg-red-50 dark:bg-red-950 p-3">
-                  <p className="text-sm font-medium text-red-700 dark:text-red-300">{a.sku}</p>
-                  <p className="text-xs text-red-600 dark:text-red-400">{a.articleName}</p>
-                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                    {a.currentQuantity} / {a.minimumQuantity} mín · {a.warehouseName}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Alertas de stock</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {lowStockAlerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin alertas</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {lowStockAlerts.map((a, i) => (
+                  <li key={i} className="rounded-lg bg-destructive/10 p-3">
+                    <p className="text-sm font-medium text-destructive">{a.sku}</p>
+                    <p className="text-xs text-destructive/80">{a.articleName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {a.currentQuantity} / {a.minimumQuantity} mín · {a.warehouseName}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Stock by warehouse */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Stock por depósito</h2>
-        {stockByWarehouse.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin depósitos creados</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {stockByWarehouse.map((wh) => (
-              <div key={wh.warehouseId} className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{wh.warehouseName}</span>
-                  <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{wh.totalItems}</span>
-                </div>
-                {wh.items.length === 0 ? (
-                  <p className="text-xs text-slate-400 dark:text-slate-600">Sin stock</p>
-                ) : (
-                  <ul className="flex flex-col gap-1">
-                    {wh.items.slice(0, 5).map((item) => (
-                      <li key={item.articleVariantId} className="flex justify-between text-xs">
-                        <span className="text-slate-600 dark:text-slate-400 truncate">{item.sku}</span>
-                        <span className="ml-2 text-slate-700 dark:text-slate-300 shrink-0">{item.quantity}</span>
-                      </li>
-                    ))}
-                    {wh.items.length > 5 && (
-                      <li className="text-xs text-slate-400 dark:text-slate-600">+{wh.items.length - 5} más</li>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Stock por depósito</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {stockByWarehouse.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin depósitos creados</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {stockByWarehouse.map((wh) => (
+                <Card key={wh.warehouseId} size="sm" className="bg-muted/40">
+                  <CardContent>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-medium">{wh.warehouseName}</span>
+                      <span className="text-lg font-bold text-primary">{wh.totalItems}</span>
+                    </div>
+                    {wh.items.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Sin stock</p>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {wh.items.slice(0, 5).map((item) => (
+                          <li key={item.articleVariantId} className="flex justify-between text-xs">
+                            <span className="truncate text-muted-foreground">{item.sku}</span>
+                            <span className="ml-2 shrink-0">{item.quantity}</span>
+                          </li>
+                        ))}
+                        {wh.items.length > 5 && (
+                          <li className="text-xs text-muted-foreground">+{wh.items.length - 5} más</li>
+                        )}
+                      </ul>
                     )}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent invoices */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Últimas facturas</h2>
-        {recentInvoices.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin facturas</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
-                  <th className="pb-2 pr-4">Número</th>
-                  <th className="pb-2 pr-4">Cliente</th>
-                  <th className="pb-2 pr-4">Fecha</th>
-                  <th className="pb-2 pr-4 text-right">Total</th>
-                  <th className="pb-2 pr-4 text-right">Saldo</th>
-                  <th className="pb-2">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-200/40 dark:hover:bg-slate-800/40">
-                    <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">
-                      {inv.documentLetter}-{inv.number}
-                    </td>
-                    <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{inv.customerName}</td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
-                      {new Date(inv.issueDate).toLocaleDateString('es-AR')}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-slate-800 dark:text-slate-200">
-                      ${inv.total.toFixed(2)}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-slate-600 dark:text-slate-400">
-                      ${inv.balanceDue.toFixed(2)}
-                    </td>
-                    <td className="py-2">
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[inv.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
-                      >
-                        {STATUS_LABELS[inv.status] ?? inv.status}
-                      </span>
-                    </td>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Últimas facturas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentInvoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin facturas</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-4">Número</th>
+                    <th className="pb-2 pr-4">Cliente</th>
+                    <th className="pb-2 pr-4">Fecha</th>
+                    <th className="pb-2 pr-4 text-right">Total</th>
+                    <th className="pb-2 pr-4 text-right">Saldo</th>
+                    <th className="pb-2">Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {recentInvoices.map((inv) => (
+                    <tr key={inv.id} className="border-b border-border/50 hover:bg-muted/40">
+                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">
+                        {inv.documentLetter}-{inv.number}
+                      </td>
+                      <td className="py-2 pr-4">{inv.customerName}</td>
+                      <td className="py-2 pr-4 text-muted-foreground">
+                        {new Date(inv.issueDate).toLocaleDateString('es-AR')}
+                      </td>
+                      <td className="py-2 pr-4 text-right">${inv.total.toFixed(2)}</td>
+                      <td className="py-2 pr-4 text-right text-muted-foreground">${inv.balanceDue.toFixed(2)}</td>
+                      <td className="py-2">
+                        <Badge className={STATUS_COLORS[inv.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}>
+                          {STATUS_LABELS[inv.status] ?? inv.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -288,14 +302,12 @@ function KpiCard({
   alert?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-xl border p-4 ${alert ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950' : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900'}`}
-    >
-      <p className="text-xs text-slate-600 dark:text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${alert ? 'text-red-700 dark:text-red-300' : 'text-slate-900 dark:text-slate-100'}`}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500">{sub}</p>
-    </div>
+    <Card className={alert ? 'bg-destructive/5 ring-destructive/30' : undefined}>
+      <CardContent>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className={`mt-1 text-2xl font-bold ${alert ? 'text-destructive' : ''}`}>{value}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
+      </CardContent>
+    </Card>
   );
 }

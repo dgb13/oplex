@@ -2,9 +2,9 @@
 
 import { AuthCard } from '@/components/auth/AuthCard';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/FormField';
-import { Input } from '@/components/ui/Input';
+import { Input } from '@/components/ui/input';
 import { getAuthErrorBody } from '@/lib/auth';
 import { teamApi } from '@/lib/team';
 import { zodResolver } from '@hookform/resolvers/zod';

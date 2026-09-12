@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Label } from './label';
 
 interface FormFieldProps {
   label: string;
@@ -17,14 +18,12 @@ interface FormFieldProps {
 export function FormField({ label, htmlFor, error, hint, children }: FormFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-slate-700 dark:text-slate-300">
-        {label}
-      </label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {error ? (
-        <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        <p className="text-xs text-destructive">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       ) : null}
     </div>
   );

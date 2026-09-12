@@ -2,9 +2,9 @@
 
 import { AuthCard } from '@/components/auth/AuthCard';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/FormField';
-import { Input } from '@/components/ui/Input';
+import { Input } from '@/components/ui/input';
 import { getAuthErrorBody, login, resolveTenant, type TenantCandidate } from '@/lib/auth';
 import { getPostLoginRedirect } from '@/lib/jwt';
 import { zodResolver } from '@hookform/resolvers/zod';

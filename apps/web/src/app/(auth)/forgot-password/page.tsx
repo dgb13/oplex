@@ -1,9 +1,9 @@
 'use client';
 
 import { AuthCard } from '@/components/auth/AuthCard';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/FormField';
-import { Input } from '@/components/ui/Input';
+import { Input } from '@/components/ui/input';
 import { forgotPassword } from '@/lib/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';

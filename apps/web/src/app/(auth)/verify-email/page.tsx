@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthCard } from '@/components/auth/AuthCard';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { getAuthErrorBody, resendCode, verifyEmail } from '@/lib/auth';
 import { getPostLoginRedirect } from '@/lib/jwt';
 import { useQueryClient } from '@tanstack/react-query';

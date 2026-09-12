@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { cartApi, CART_QUERY_KEY } from '@/lib/inventoryCart';
 import { useQuery } from '@tanstack/react-query';
 import { ShoppingBasket } from 'lucide-react';
@@ -27,18 +28,20 @@ export default function CartButton() {
 
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={() => setOpen(true)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+        className="relative rounded-full text-muted-foreground hover:text-foreground"
         aria-label="Listado de artículos"
       >
         <ShoppingBasket className="h-5 w-5" />
         {itemCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
             {itemCount > 99 ? '99+' : itemCount}
           </span>
         )}
-      </button>
+      </Button>
 
       <CartDrawer open={open} onClose={() => setOpen(false)} lines={lines ?? []} />
     </>

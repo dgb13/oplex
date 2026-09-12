@@ -151,8 +151,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-3">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="flex items-center justify-between border-b px-6 py-3">
         <div className="flex items-center gap-6">
           <PlexoLogo size={22} />
           <nav className="flex items-center gap-4">
@@ -162,9 +162,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   key={entry.href}
                   href={entry.href}
                   className={`flex items-center gap-1.5 text-sm transition ${
-                    pathname?.startsWith(entry.href)
-                      ? 'font-medium text-slate-900 dark:text-slate-100'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    pathname?.startsWith(entry.href) ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <entry.icon className="h-4 w-4" />
@@ -198,9 +196,7 @@ function NavDropdown({ group, active }: { group: NavGroup; active: string }) {
     <Menu as="div" className="relative">
       <MenuButton
         className={`flex items-center gap-1.5 text-sm transition ${
-          isActive
-            ? 'font-medium text-slate-900 dark:text-slate-100'
-            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+          isActive ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <group.icon className="h-4 w-4" />
@@ -209,18 +205,14 @@ function NavDropdown({ group, active }: { group: NavGroup; active: string }) {
       </MenuButton>
       <MenuItems
         anchor="bottom start"
-        className="z-20 mt-2 w-48 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2 shadow-xl focus:outline-none"
+        className="z-20 mt-2 w-48 rounded-xl border bg-popover py-2 text-popover-foreground shadow-xl focus:outline-none"
       >
         {group.items.map((item) => (
           <MenuItem key={item.href}>
             {({ focus }) => (
               <Link
                 href={item.href}
-                className={`block px-4 py-2 text-sm transition ${
-                  active.startsWith(item.href)
-                    ? 'font-medium text-slate-900 dark:text-slate-100'
-                    : 'text-slate-700 dark:text-slate-300'
-                } ${focus ? 'bg-slate-100 dark:bg-slate-800' : ''}`}
+                className={`block px-4 py-2 text-sm transition ${active.startsWith(item.href) ? 'font-medium text-foreground' : 'text-muted-foreground'} ${focus ? 'bg-muted' : ''}`}
               >
                 {item.label}
               </Link>
@@ -268,29 +260,23 @@ function OnlineColleagues({ users }: { users: PresenceUser[] }) {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+        className="flex items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
       >
         <span className="h-2 w-2 rounded-full bg-green-500" />
         {users.length} compañero{users.length !== 1 ? 's' : ''} en línea
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2 shadow-xl">
-          <p className="px-4 pb-2 text-xs font-medium text-slate-500 dark:text-slate-500">
-            En línea ahora
-          </p>
+        <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border bg-popover py-2 text-popover-foreground shadow-xl">
+          <p className="px-4 pb-2 text-xs font-medium text-muted-foreground">En línea ahora</p>
           {users.map((u) => (
             <div key={u.userId} className="flex items-center gap-3 px-4 py-2">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-semibold text-white">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                 {initials(u.name, u.email)}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm text-slate-800 dark:text-slate-200">
-                  {u.name || u.email}
-                </p>
-                {u.name && (
-                  <p className="truncate text-xs text-slate-500">{u.email}</p>
-                )}
+                <p className="truncate text-sm">{u.name || u.email}</p>
+                {u.name && <p className="truncate text-xs text-muted-foreground">{u.email}</p>}
               </div>
             </div>
           ))}
@@ -348,7 +334,7 @@ function UserMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-transparent transition hover:ring-indigo-500/50"
+        className="flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-transparent transition hover:ring-ring/50"
         aria-label="Menú de usuario"
       >
         {profile?.avatarUrl ? (
@@ -358,35 +344,29 @@ function UserMenu() {
             className="h-9 w-9 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
             {profile ? initials(profile.name, profile.email) : '·'}
           </div>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2 shadow-xl">
+        <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border bg-popover py-2 text-popover-foreground shadow-xl">
           {profile && (
-            <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-3">
-              <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                {profile.name || profile.email}
-              </p>
-              <p className="truncate text-xs text-slate-600 dark:text-slate-400">{profile.email}</p>
+            <div className="border-b px-4 py-3">
+              <p className="truncate text-sm font-medium">{profile.name || profile.email}</p>
+              <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
             </div>
           )}
 
-          <Link
-            href="/profile"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
+          <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2 text-sm hover:bg-muted">
             Perfil
           </Link>
 
           <Link
             href="/settings/billing"
             onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="block px-4 py-2 text-sm hover:bg-muted"
           >
             Planes y facturación
           </Link>
@@ -398,7 +378,7 @@ function UserMenu() {
             <Link
               href="/settings/team"
               onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="block px-4 py-2 text-sm hover:bg-muted"
             >
               Equipo
             </Link>
@@ -410,7 +390,7 @@ function UserMenu() {
             <Link
               href="/settings/pos"
               onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="block px-4 py-2 text-sm hover:bg-muted"
             >
               Cajas (POS)
             </Link>
@@ -423,7 +403,7 @@ function UserMenu() {
             <Link
               href="/preferences"
               onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="block px-4 py-2 text-sm hover:bg-muted"
             >
               Preferencias
             </Link>
@@ -433,7 +413,7 @@ function UserMenu() {
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
             title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            className="flex w-full items-center gap-3 px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="flex w-full items-center gap-3 px-4 py-2 hover:bg-muted"
           >
             {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
           </button>
@@ -442,16 +422,13 @@ function UserMenu() {
             onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
             aria-label={density === 'compact' ? 'Cambiar a vista cómoda' : 'Cambiar a vista compacta'}
             title={density === 'compact' ? 'Cambiar a vista cómoda' : 'Cambiar a vista compacta'}
-            className="flex w-full items-center gap-3 px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="flex w-full items-center gap-3 px-4 py-2 hover:bg-muted"
           >
             {density === 'compact' ? <CompactRowsIcon /> : <ComfortableRowsIcon />}
           </button>
 
-          <div className="mt-1 border-t border-slate-200 dark:border-slate-800 pt-1">
-            <button
-              onClick={handleLogout}
-              className="block w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
+          <div className="mt-1 border-t pt-1">
+            <button onClick={handleLogout} className="block w-full px-4 py-2 text-left text-sm hover:bg-muted">
               Cerrar sesión
             </button>
           </div>
