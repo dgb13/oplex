@@ -1,5 +1,8 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { remindersApi, tenantSettingsApi, type TenantSettings } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -7,14 +10,11 @@ import { useEffect, useState } from 'react';
 
 const PRESETS = [3, 5, 10];
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
-
 function pillClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
     active
-      ? 'bg-indigo-600 text-white'
-      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+      ? 'bg-primary text-primary-foreground'
+      : 'bg-muted text-muted-foreground hover:text-foreground'
   }`;
 }
 
@@ -54,7 +54,7 @@ export default function RecordatoriosTab() {
   return (
     <div className="flex items-start gap-6">
       {isLoading || !settings ? (
-        <div className="text-slate-500">Cargando...</div>
+        <div className="text-muted-foreground">Cargando...</div>
       ) : (
         <div className="flex-1">
           <ArReminderCard settings={settings} onSaved={invalidateBoth} />
@@ -118,59 +118,55 @@ function ArReminderCard({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Recordatorio de facturas vencidas
-      </h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Recordar facturas vencidas de forma recurrente (por defecto se avisa una sola vez)
-        </label>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Recordatorio de facturas vencidas</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            Recordar facturas vencidas de forma recurrente (por defecto se avisa una sola vez)
+          </label>
 
-        {enabled && (
-          <div className="flex flex-col gap-2 pl-6">
-            <p className="text-sm text-slate-600 dark:text-slate-400">Revisar cuentas a cobrar cada</p>
-            <div className="flex flex-wrap items-center gap-2">
-              {PRESETS.map((days) => (
-                <button
-                  key={days}
-                  type="button"
-                  onClick={() => setPreset(days)}
-                  className={pillClass(preset === days)}
-                >
-                  {days} días
+          {enabled && (
+            <div className="flex flex-col gap-2 pl-6">
+              <p className="text-sm text-muted-foreground">Revisar cuentas a cobrar cada</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {PRESETS.map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setPreset(days)}
+                    className={pillClass(preset === days)}
+                  >
+                    {days} días
+                  </button>
+                ))}
+                <button type="button" onClick={() => setPreset('custom')} className={pillClass(preset === 'custom')}>
+                  Otra
                 </button>
-              ))}
-              <button type="button" onClick={() => setPreset('custom')} className={pillClass(preset === 'custom')}>
-                Otra
-              </button>
-              {preset === 'custom' && (
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={customDays}
-                  onChange={(e) => setCustomDays(e.target.value)}
-                  placeholder="días"
-                  className={`${inputClass} w-20`}
-                />
-              )}
+                {preset === 'custom' && (
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={customDays}
+                    onChange={(e) => setCustomDays(e.target.value)}
+                    placeholder="días"
+                    className="w-20"
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
-        </button>
-      </form>
-    </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
+          <Button type="submit" disabled={mutation.isPending} className="self-start">
+            {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -219,51 +215,39 @@ function ReminderStatusCard() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Estado del recordatorio automático
-      </h2>
-      {!status ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
-      ) : (
-        <div className="flex flex-col gap-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Recordatorio recurrente</span>
-            <span className="text-slate-800 dark:text-slate-200">
-              {status.recurringEnabled
-                ? `Cada ${status.arReminderIntervalDays} días`
-                : 'Desactivado (solo alerta única)'}
-            </span>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Estado del recordatorio automático</h2>
+        {!status ? (
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        ) : (
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Recordatorio recurrente</span>
+              <span>
+                {status.recurringEnabled
+                  ? `Cada ${status.arReminderIntervalDays} días`
+                  : 'Desactivado (solo alerta única)'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Próxima corrida del cron</span>
+              <span>{formatRemaining(status.nextCronRunAt, now)} (todos los días a la 01:00)</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Próxima corrida del cron</span>
-            <span className="text-slate-800 dark:text-slate-200">
-              {formatRemaining(status.nextCronRunAt, now)} (todos los días a la 01:00)
-            </span>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-4">
-        <button
-          type="button"
-          onClick={() => runNowMutation.mutate()}
-          disabled={runNowMutation.isPending}
-          className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-        >
-          {runNowMutation.isPending ? 'Ejecutando...' : 'Ejecutar recordatorio ahora'}
-        </button>
-        <button
-          type="button"
-          onClick={() => resetMutation.mutate()}
-          disabled={resetMutation.isPending}
-          className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-        >
-          {resetMutation.isPending ? 'Reiniciando...' : 'Reiniciar conteo (sin enviar mails)'}
-        </button>
-      </div>
-      {actionError && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{actionError}</p>}
-      {actionMessage && <p className="mt-3 text-xs text-slate-500 dark:text-slate-500">{actionMessage}</p>}
-    </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t pt-4">
+          <Button size="sm" variant="outline" onClick={() => runNowMutation.mutate()} disabled={runNowMutation.isPending}>
+            {runNowMutation.isPending ? 'Ejecutando...' : 'Ejecutar recordatorio ahora'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => resetMutation.mutate()} disabled={resetMutation.isPending}>
+            {resetMutation.isPending ? 'Reiniciando...' : 'Reiniciar conteo (sin enviar mails)'}
+          </Button>
+        </div>
+        {actionError && <p className="mt-3 text-xs text-destructive">{actionError}</p>}
+        {actionMessage && <p className="mt-3 text-xs text-muted-foreground">{actionMessage}</p>}
+      </CardContent>
+    </Card>
   );
 }

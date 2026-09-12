@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { receivablesApi } from '@/lib/receivables';
 import { useDensity } from '@/providers/DensityProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,32 +34,29 @@ export default function GestionTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {balances.length} cliente{balances.length !== 1 ? 's' : ''} con saldo pendiente
         </p>
         <div className="flex items-center gap-3">
-          {refreshMessage && <span className="text-xs text-slate-500">{refreshMessage}</span>}
-          <button
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
+          {refreshMessage && <span className="text-xs text-muted-foreground">{refreshMessage}</span>}
+          <Button variant="outline" onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
             {refreshMutation.isPending ? 'Actualizando...' : 'Actualizar vencidos'}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Saldos y límite de crédito</h2>
+      <Card>
+        <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Saldos y límite de crédito</h2>
         {balancesQuery.isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-32 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : balances.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin saldos pendientes</p>
+          <p className="text-sm text-muted-foreground">Sin saldos pendientes</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className={`${headY} pr-4`}>Cliente</th>
                   <th className={`${headY} pr-4 text-right`}>Límite de crédito</th>
                   <th className={`${headY} pr-4 text-right`}>Saldo</th>
@@ -69,17 +68,17 @@ export default function GestionTab() {
                   <tr
                     key={row.customerId}
                     onClick={() => setStatementFor(row.customerId)}
-                    className="cursor-pointer border-b border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-200/40 dark:hover:bg-slate-800/40"
+                    className="cursor-pointer border-b border-border/50 hover:bg-muted/40 dark:hover:bg-muted/40"
                   >
-                    <td className={`${cellY} pr-4 text-slate-800 dark:text-slate-200`}>{row.customerName}</td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4`}>{row.customerName}</td>
+                    <td className={`${cellY} pr-4 text-right`}>
                       ${Number(row.creditLimit).toFixed(2)}
                     </td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4 text-right`}>
                       ${Number(row.outstanding).toFixed(2)}
                     </td>
                     <td
-                      className={`${cellY} pr-4 text-right font-semibold ${Number(row.availableCredit) < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+                      className={`${cellY} pr-4 text-right font-semibold ${Number(row.availableCredit) < 0 ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}
                     >
                       ${Number(row.availableCredit).toFixed(2)}
                     </td>
@@ -89,7 +88,8 @@ export default function GestionTab() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {statementFor && (
         <StatementModal customerId={statementFor} onClose={() => setStatementFor(null)} />
