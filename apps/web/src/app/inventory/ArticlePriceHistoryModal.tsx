@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { inventoryApi } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,9 +19,6 @@ interface Props {
   };
   onClose: () => void;
 }
-
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
 
 /** Historial de precios (siempre visible) + edición de precio de venta y
  * % de remarca del artículo (antes no existía NINGUNA UI para editar el
@@ -84,24 +83,24 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Precio</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-lg font-semibold">Precio</h2>
+            <p className="text-xs text-muted-foreground">
               {variant.articleName} · <span className="font-mono">{variant.sku}</span>
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="mb-6 flex flex-col gap-3 rounded-lg border border-slate-300 dark:border-slate-700 p-4">
-          <p className="text-xs text-slate-500">
+        <form onSubmit={handleSave} className="mb-6 flex flex-col gap-3 rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground">
             Costo actual:{' '}
             {latestCost !== null ? (
-              <span className="font-medium text-slate-700 dark:text-slate-300">${Number(latestCost).toFixed(2)}</span>
+              <span className="font-medium text-foreground">${Number(latestCost).toFixed(2)}</span>
             ) : (
               'sin costo registrado todavía (ninguna compra real todavía)'
             )}{' '}
@@ -110,8 +109,8 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-sm text-slate-600 dark:text-slate-400">% de remarca del artículo</span>
-              <input
+              <span className="text-sm text-muted-foreground">% de remarca del artículo</span>
+              <Input
                 type="number"
                 min={0}
                 step="any"
@@ -122,60 +121,44 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
                     ? `Default: ${settingsQuery.data.defaultMarkupPercent}`
                     : 'Sin default configurado'
                 }
-                className={inputClass}
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Precio de venta</span>
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                className={inputClass}
-              />
+              <span className="text-sm text-muted-foreground">Precio de venta</span>
+              <Input type="number" min={0} step="any" value={priceInput} onChange={(e) => setPriceInput(e.target.value)} />
             </label>
           </div>
 
           {suggestedPrice !== null && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Sugerido según costo × remarca: <span className="font-medium">${suggestedPrice.toFixed(2)}</span>{' '}
-              <button
-                type="button"
-                onClick={() => setPriceInput(suggestedPrice.toFixed(2))}
-                className="text-indigo-600 dark:text-indigo-400 hover:underline"
-              >
+              <button type="button" onClick={() => setPriceInput(suggestedPrice.toFixed(2))} className="text-primary hover:underline">
                 Usar sugerido
               </button>
             </p>
           )}
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Guardando...' : 'Guardar'}
-            </button>
+            </Button>
           </div>
         </form>
 
-        <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Historial</h3>
+        <h3 className="mb-2 text-sm font-medium text-muted-foreground">Historial</h3>
         {historyQuery.isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-32 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : entries.length === 0 ? (
-          <div className="flex h-32 items-center justify-center text-slate-400 dark:text-slate-600">
+          <div className="flex h-32 items-center justify-center text-muted-foreground">
             Sin registros de precio todavía
           </div>
         ) : (
           <div className="max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-4">Fecha</th>
                   <th className="pb-2 pr-4 text-right">Precio venta</th>
                   <th className="pb-2 pr-4 text-right">Costo</th>
@@ -184,19 +167,15 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
               </thead>
               <tbody>
                 {entries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                  <tr key={entry.id} className="border-b border-border/50">
+                    <td className="py-2 pr-4 text-muted-foreground">
                       {new Date(entry.effectiveAt).toLocaleDateString('es-AR')}
                     </td>
-                    <td className="py-2 pr-4 text-right text-slate-800 dark:text-slate-200">
-                      ${Number(entry.unitPrice).toFixed(2)}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-slate-600 dark:text-slate-400">
+                    <td className="py-2 pr-4 text-right">${Number(entry.unitPrice).toFixed(2)}</td>
+                    <td className="py-2 pr-4 text-right text-muted-foreground">
                       {entry.costPrice !== null ? `$${Number(entry.costPrice).toFixed(2)}` : '—'}
                     </td>
-                    <td className="py-2 text-slate-600 dark:text-slate-400">
-                      {entry.purchaseOrderNumber ?? '—'}
-                    </td>
+                    <td className="py-2 text-muted-foreground">{entry.purchaseOrderNumber ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -205,13 +184,9 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
         )}
 
         <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-          >
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cerrar
-          </button>
+          </Button>
         </div>
       </div>
     </div>

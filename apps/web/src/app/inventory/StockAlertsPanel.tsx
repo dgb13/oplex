@@ -1,6 +1,7 @@
 'use client';
 
 import QuoteRequestFormModal from '@/app/purchases/QuoteRequestFormModal';
+import { Button } from '@/components/ui/button';
 import { inventoryApi, resolveUploadUrl, type ReorderSuggestion } from '@/lib/inventory';
 import { invoicingApi } from '@/lib/invoicing';
 import { quoteRequestsApi } from '@/lib/purchases';
@@ -97,14 +98,12 @@ export default function StockAlertsPanel() {
   }
 
   if (alertsQuery.isLoading) {
-    return (
-      <div className="flex h-40 items-center justify-center text-slate-500">Cargando alertas...</div>
-    );
+    return <div className="flex h-40 items-center justify-center text-muted-foreground">Cargando alertas...</div>;
   }
 
   if (alertsQuery.error) {
     return (
-      <div className="flex h-40 items-center justify-center text-red-600 dark:text-red-400">
+      <div className="flex h-40 items-center justify-center text-destructive">
         Error al cargar las alertas de stock
       </div>
     );
@@ -112,7 +111,7 @@ export default function StockAlertsPanel() {
 
   if (alerts.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center text-slate-400 dark:text-slate-600">
+      <div className="flex h-40 items-center justify-center text-muted-foreground">
         Sin alertas — todo está por encima del mínimo configurado en cada depósito.
       </div>
     );
@@ -124,23 +123,19 @@ export default function StockAlertsPanel() {
     <>
       {selectableAlerts.length > 0 && (
         <div className="mb-3 flex items-center gap-3 text-sm">
-          <label className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+          <label className="flex items-center gap-2 text-muted-foreground">
             <input
               type="checkbox"
               checked={selectedKeys.size > 0 && selectedKeys.size === selectableAlerts.length}
               onChange={toggleAll}
-              className="h-4 w-4 accent-indigo-600"
+              className="h-4 w-4 accent-primary"
             />
             Seleccionar todas con proveedor ({selectableAlerts.length})
           </label>
           {selectedKeys.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setBulkOpen(true)}
-              className="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
-            >
+            <Button size="sm" className="ml-auto" onClick={() => setBulkOpen(true)}>
               Crear pedidos de cotización ({selectedKeys.size})
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -212,42 +207,42 @@ function AlertRow({
   });
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3">
+    <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
       <input
         type="checkbox"
         checked={selected}
         onChange={onToggleSelect}
         disabled={!a.preferredSupplierId}
         title={a.preferredSupplierId ? undefined : 'Sin proveedor preferido - asignalo en Inventario'}
-        className="h-4 w-4 shrink-0 accent-indigo-600 disabled:opacity-30"
+        className="h-4 w-4 shrink-0 accent-primary disabled:opacity-30"
       />
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-200 dark:bg-slate-800">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
         {a.imageUrl ? (
           <img src={resolveUploadUrl(a.imageUrl) ?? undefined} alt="" className="h-full w-full object-cover" />
         ) : (
-          <ShoppingBasket className="h-5 w-5 text-slate-400 dark:text-slate-600" />
+          <ShoppingBasket className="h-5 w-5 text-muted-foreground" />
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+        <p className="truncate text-sm font-medium">
           {a.articleName}
-          {a.variantLabel && <span className="text-slate-500"> · {a.variantLabel}</span>}
+          {a.variantLabel && <span className="text-muted-foreground"> · {a.variantLabel}</span>}
         </p>
-        <p className="truncate text-xs text-slate-500">
+        <p className="truncate text-xs text-muted-foreground">
           {a.sku} · {a.warehouseName}
         </p>
         {a.preferredSupplierName && (
-          <p className="truncate text-xs text-slate-500">Proveedor preferido: {a.preferredSupplierName}</p>
+          <p className="truncate text-xs text-muted-foreground">Proveedor preferido: {a.preferredSupplierName}</p>
         )}
       </div>
-      <div className="shrink-0 text-right text-xs text-red-700 dark:text-red-300">
+      <div className="shrink-0 text-right text-xs text-destructive">
         <p>
           {a.currentQuantity} / {a.minimumQuantity} mín
         </p>
         <p className="font-semibold">Pedir {a.suggestedQuantity}</p>
       </div>
       <label
-        className="flex shrink-0 items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"
+        className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
         title={
           a.preferredSupplierId
             ? 'Crea el pedido de cotización solo, una vez por día, sin que nadie entre a esta pantalla'
@@ -259,17 +254,13 @@ function AlertRow({
           checked={a.autoReplenish}
           onChange={() => toggleAuto.mutate()}
           disabled={!a.preferredSupplierId || toggleAuto.isPending}
-          className="h-4 w-4 accent-indigo-600 disabled:opacity-30"
+          className="h-4 w-4 accent-primary disabled:opacity-30"
         />
         Automático
       </label>
-      <button
-        type="button"
-        onClick={onQuoteRequest}
-        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
-      >
+      <Button size="sm" className="shrink-0" onClick={onQuoteRequest}>
         Pedir cotización
-      </button>
+      </Button>
     </div>
   );
 }
@@ -311,26 +302,26 @@ function BulkQuoteRequestModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold">
             Crear {groups.length} pedido{groups.length !== 1 ? 's' : ''} de cotización
           </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-500">
+        <p className="mb-3 text-xs text-muted-foreground">
           Un pedido independiente por proveedor, con estas líneas. Podés ajustar moneda, notas u otros
           datos después, editando cada pedido en Compras.
         </p>
 
         <div className="flex flex-col gap-3">
           {groups.map((g) => (
-            <div key={g.supplierId} className="rounded-lg border border-slate-300 dark:border-slate-700 p-3">
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{g.supplierName}</p>
-              <ul className="mt-1 flex flex-col gap-0.5 text-xs text-slate-600 dark:text-slate-400">
+            <div key={g.supplierId} className="rounded-lg border p-3">
+              <p className="text-sm font-semibold">{g.supplierName}</p>
+              <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
                 {g.lines.map((l) => (
                   <li key={l.articleVariantId}>
                     {l.sku} — {l.articleName}
@@ -347,26 +338,17 @@ function BulkQuoteRequestModal({
             No hay ninguna moneda configurada todavía - no se puede crear el pedido.
           </p>
         )}
-        {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
         <div className="mt-4 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-          >
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || !currencyId}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-          >
+          </Button>
+          <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending || !currencyId}>
             {mutation.isPending
               ? 'Creando...'
               : `Crear ${groups.length} pedido${groups.length !== 1 ? 's' : ''}`}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

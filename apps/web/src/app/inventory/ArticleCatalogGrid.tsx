@@ -1,5 +1,9 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { resolveUploadUrl } from '@/lib/inventory';
 import { cartApi, CART_QUERY_KEY } from '@/lib/inventoryCart';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +29,7 @@ export interface CatalogCardRow {
 export default function ArticleCatalogGrid({ rows }: { rows: CatalogCardRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center text-slate-400 dark:text-slate-600">
+      <div className="flex h-40 items-center justify-center text-muted-foreground">
         Sin artículos que coincidan con la búsqueda
       </div>
     );
@@ -56,49 +60,41 @@ function ArticleCard({ row }: { row: CatalogCardRow }) {
   });
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
-      <div className="flex h-28 items-center justify-center bg-slate-200 dark:bg-slate-800">
+    <Card className="overflow-hidden py-0">
+      <div className="flex h-28 items-center justify-center bg-muted">
         {row.imageUrl ? (
           <img src={resolveUploadUrl(row.imageUrl) ?? undefined} alt="" className="h-full w-full object-cover" />
         ) : (
-          <ShoppingBasket className="h-8 w-8 text-slate-400 dark:text-slate-600" />
+          <ShoppingBasket className="h-8 w-8 text-muted-foreground" />
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        {row.categoryName && (
-          <span className="w-fit rounded-full bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">
-            {row.categoryName}
-          </span>
-        )}
-        <p className="text-sm font-medium leading-tight text-slate-900 dark:text-slate-100">{row.articleName}</p>
-        {row.variantLabel && <p className="text-xs text-slate-500 dark:text-slate-400">{row.variantLabel}</p>}
-        <p className="text-xs text-slate-500 dark:text-slate-400">{row.sku}</p>
+        {row.categoryName && <Badge variant="secondary" className="w-fit">{row.categoryName}</Badge>}
+        <p className="text-sm font-medium leading-tight">{row.articleName}</p>
+        {row.variantLabel && <p className="text-xs text-muted-foreground">{row.variantLabel}</p>}
+        <p className="text-xs text-muted-foreground">{row.sku}</p>
         <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            ${row.unitPrice.toFixed(2)}
-          </span>
-          <span className="text-xs text-slate-500 dark:text-slate-400">Stock: {row.totalStock}</span>
+          <span className="text-sm font-semibold">${row.unitPrice.toFixed(2)}</span>
+          <span className="text-xs text-muted-foreground">Stock: {row.totalStock}</span>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Input
             type="number"
             min={1}
             value={quantity}
             onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-            className="w-14 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-center text-sm"
+            className="w-14 text-center"
             aria-label="Cantidad"
           />
-          <button
+          <Button
             onClick={() => addItem.mutate()}
             disabled={addItem.isPending}
-            className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-medium text-white transition ${
-              justAdded ? 'bg-green-600' : 'bg-indigo-600 hover:bg-indigo-700'
-            } disabled:opacity-50`}
+            className={`flex-1 ${justAdded ? 'bg-green-600 text-white hover:bg-green-600' : ''}`}
           >
             {justAdded ? 'Agregado ✓' : 'Agregar'}
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

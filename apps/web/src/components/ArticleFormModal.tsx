@@ -44,13 +44,11 @@ interface MatrixRow {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function tabClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-    active
-      ? 'bg-indigo-600 text-white'
-      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+    active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
   }`;
 }
 
@@ -513,10 +511,10 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
-      <div className="flex h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="flex h-[85vh] w-full max-w-3xl flex-col rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nuevo artículo</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold  ">Nuevo artículo</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:  dark:hover: ">
             ✕
           </button>
         </div>
@@ -533,7 +531,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'general' && (
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Nombre</span>
+                <span className="text-sm text-muted-foreground">Nombre</span>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -545,12 +543,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Categoría</span>
+                  <span className="text-sm text-muted-foreground">Categoría</span>
                   {!creatingCategory && (
                     <button
                       type="button"
                       onClick={() => setCreatingCategory(true)}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                      className="text-xs text-primary hover:text-primary"
                     >
                       + nueva categoría
                     </button>
@@ -569,7 +567,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       type="button"
                       onClick={() => createCategoryMutation.mutate()}
                       disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
-                      className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                      className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-50"
                     >
                       {createCategoryMutation.isPending ? 'Creando...' : 'Crear'}
                     </button>
@@ -579,7 +577,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                         setCreatingCategory(false);
                         setNewCategoryName('');
                       }}
-                      className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      className="text-sm text-muted-foreground hover:  dark:hover: "
                     >
                       Cancelar
                     </button>
@@ -597,7 +595,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </div>
 
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Descripción</span>
+                <span className="text-sm text-muted-foreground">Descripción</span>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -607,42 +605,42 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 />
               </label>
 
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-                <span className="text-sm text-slate-700 dark:text-slate-300">
+              <label className="flex items-center justify-between rounded-lg border border p-3">
+                <span className="text-sm  ">
                   Es servicio
-                  <span className="block text-xs text-slate-500">No lleva stock ni depósito</span>
+                  <span className="block text-xs text-muted-foreground">No lleva stock ni depósito</span>
                 </span>
                 <input
                   type="checkbox"
                   checked={isService}
                   onChange={(e) => setIsService(e.target.checked)}
-                  className="h-5 w-5 accent-indigo-600"
+                  className="h-5 w-5 accent-primary"
                 />
               </label>
 
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-                <span className="text-sm text-slate-700 dark:text-slate-300">
+              <label className="flex items-center justify-between rounded-lg border border p-3">
+                <span className="text-sm  ">
                   Publicado
-                  <span className="block text-xs text-slate-500">Visible en el catálogo</span>
+                  <span className="block text-xs text-muted-foreground">Visible en el catálogo</span>
                 </span>
                 <input
                   type="checkbox"
                   checked={isPublished}
                   onChange={(e) => setIsPublished(e.target.checked)}
-                  className="h-5 w-5 accent-indigo-600"
+                  className="h-5 w-5 accent-primary"
                 />
               </label>
 
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-                <span className="text-sm text-slate-700 dark:text-slate-300">
+              <label className="flex items-center justify-between rounded-lg border border p-3">
+                <span className="text-sm  ">
                   ¿Este artículo tiene variantes?
-                  <span className="block text-xs text-slate-500">Ej: Talles, Colores - carga varios SKU a la vez</span>
+                  <span className="block text-xs text-muted-foreground">Ej: Talles, Colores - carga varios SKU a la vez</span>
                 </span>
                 <input
                   type="checkbox"
                   checked={hasVariants}
                   onChange={(e) => setHasVariants(e.target.checked)}
-                  className="h-5 w-5 accent-indigo-600"
+                  className="h-5 w-5 accent-primary"
                 />
               </label>
             </div>
@@ -652,11 +650,11 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Proveedor preferido</span>
+                  <span className="text-sm text-muted-foreground">Proveedor preferido</span>
                   <button
                     type="button"
                     onClick={() => setCreatingSupplier(true)}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    className="text-xs text-primary hover:text-primary"
                   >
                     + nuevo proveedor
                   </button>
@@ -677,7 +675,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
               <div className={`grid ${hasVariants ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Costo inicial</span>
+                  <span className="text-sm text-muted-foreground">Costo inicial</span>
                   <input
                     type="number"
                     min={0}
@@ -689,7 +687,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">% remarca</span>
+                  <span className="text-sm text-muted-foreground">% remarca</span>
                   <input
                     type="number"
                     min={0}
@@ -702,7 +700,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 </label>
                 {!hasVariants && (
                   <label className="flex flex-col gap-1">
-                    <span className="text-sm text-slate-600 dark:text-slate-400">Precio de venta</span>
+                    <span className="text-sm text-muted-foreground">Precio de venta</span>
                     <input
                       type="number"
                       min={0}
@@ -716,18 +714,18 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </div>
 
               {hasVariants ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   El precio de venta se carga por variante en la pestaña &quot;Variantes&quot; - costo y % remarca de
                   acá sólo alimentan el precio sugerido de cada fila.
                 </p>
               ) : (
                 suggestedPrice !== null && (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Sugerido según costo × remarca: <span className="font-medium">${suggestedPrice.toFixed(2)}</span>{' '}
                     <button
                       type="button"
                       onClick={() => setPriceInput(suggestedPrice.toFixed(2))}
-                      className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                      className="text-primary hover:underline"
                     >
                       Usar sugerido
                     </button>
@@ -740,7 +738,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'variant' && !hasVariants && (
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">SKU</span>
+                <span className="text-sm text-muted-foreground">SKU</span>
                 <input
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
@@ -749,7 +747,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Unidad de medida</span>
+                <span className="text-sm text-muted-foreground">Unidad de medida</span>
                 <select value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)} className={inputClass}>
                   {UNIT_OF_MEASURE_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
@@ -764,7 +762,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'variant' && hasVariants && (
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Unidad de medida</span>
+                <span className="text-sm text-muted-foreground">Unidad de medida</span>
                 <select value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)} className={`${inputClass} w-full`}>
                   {UNIT_OF_MEASURE_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
@@ -775,9 +773,9 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </label>
 
               <div className="flex flex-col gap-2">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Atributos (ej: Color, Talle)</span>
+                <span className="text-sm text-muted-foreground">Atributos (ej: Color, Talle)</span>
                 {variantAttributes.map((attr, i) => (
-                  <div key={i} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                  <div key={i} className="rounded-lg border border p-3">
                     <div className="mb-2 flex items-center gap-2">
                       <input
                         value={attr.name}
@@ -788,7 +786,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       <button
                         type="button"
                         onClick={() => removeAttribute(i)}
-                        className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                        className="text-xs text-destructive hover:underline"
                       >
                         Quitar atributo
                       </button>
@@ -798,13 +796,13 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                         {attr.values.map((v) => (
                           <span
                             key={v}
-                            className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
                           >
                             {v}
                             <button
                               type="button"
                               onClick={() => removeAttributeValue(i, v)}
-                              className="text-indigo-500 hover:text-indigo-800 dark:hover:text-indigo-100"
+                              className="text-primary hover:text-primary"
                             >
                               ✕
                             </button>
@@ -829,7 +827,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 <button
                   type="button"
                   onClick={addAttribute}
-                  className="self-start text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="self-start text-xs text-primary hover:text-primary"
                 >
                   + agregar atributo
                 </button>
@@ -837,7 +835,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
               <div className="flex flex-wrap items-end gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">SKU base</span>
+                  <span className="text-sm text-muted-foreground">SKU base</span>
                   <input
                     value={skuBase}
                     onChange={(e) => setSkuBase(e.target.value)}
@@ -849,12 +847,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   type="button"
                   onClick={handleGenerateMatrix}
                   disabled={pendingCombos.length === 0 || pendingCombos.length > MAX_VARIANT_COMBOS}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-50"
                 >
                   Generar combinaciones {pendingCombos.length > 0 ? `(${pendingCombos.length})` : ''}
                 </button>
                 {pendingCombos.length > MAX_VARIANT_COMBOS && (
-                  <p className="text-xs text-red-600 dark:text-red-400">
+                  <p className="text-xs text-destructive">
                     Máximo {MAX_VARIANT_COMBOS} variantes por artículo - sacá algún atributo o valor.
                   </p>
                 )}
@@ -862,7 +860,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   <button
                     type="button"
                     onClick={applySuggestedPriceToAll}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                    className="text-xs text-primary hover:underline"
                   >
                     Aplicar precio sugerido (${suggestedPrice.toFixed(2)}) a todas
                   </button>
@@ -870,9 +868,9 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </div>
 
               {matrixRows.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                <div className="overflow-x-auto rounded-lg border border">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    <thead className="bg-muted text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2">Combinación</th>
                         <th className="px-3 py-2">SKU</th>
@@ -890,8 +888,8 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       {matrixRows.map((row) => {
                         const done = row.status === 'done';
                         return (
-                          <tr key={row.key} className="border-t border-slate-200 dark:border-slate-800">
-                            <td className="px-3 py-2 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                          <tr key={row.key} className="border-t border">
+                            <td className="px-3 py-2 whitespace-nowrap  ">
                               {Object.values(row.values).join(' / ')}
                             </td>
                             <td className="px-3 py-2">
@@ -944,11 +942,11 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                             <td className="px-3 py-2">
                               {row.status === 'done' && <span className="text-green-600 dark:text-green-400">✓ creada</span>}
                               {row.status === 'error' && (
-                                <span className="text-red-600 dark:text-red-400" title={row.error}>
+                                <span className="text-destructive" title={row.error}>
                                   ⚠ {row.error}
                                 </span>
                               )}
-                              {row.status === 'pending' && <span className="text-slate-400">—</span>}
+                              {row.status === 'pending' && <span className="text-muted-foreground">—</span>}
                             </td>
                           </tr>
                         );
@@ -963,7 +961,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'stock' && !isService && !hasVariants && (
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Depósito inicial</span>
+                <span className="text-sm text-muted-foreground">Depósito inicial</span>
                 <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={inputClass}>
                   <option value="">— Elegir depósito —</option>
                   {warehouses.map((w) => (
@@ -975,7 +973,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Stock inicial</span>
+                  <span className="text-sm text-muted-foreground">Stock inicial</span>
                   <input
                     type="number"
                     min={0}
@@ -987,7 +985,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Stock mínimo para alertas</span>
+                  <span className="text-sm text-muted-foreground">Stock mínimo para alertas</span>
                   <input
                     type="number"
                     min={0}
@@ -1000,7 +998,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 </label>
               </div>
               {stockQuantity > 0 && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Se registra como un movimiento de compra (entrada) - por eso necesita el costo inicial cargado
                   en &quot;Precios y proveedor&quot;.
                 </p>
@@ -1011,7 +1009,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'stock' && !isService && hasVariants && (
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Depósito inicial</span>
+                <span className="text-sm text-muted-foreground">Depósito inicial</span>
                 <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={inputClass}>
                   <option value="">— Elegir depósito —</option>
                   {warehouses.map((w) => (
@@ -1021,7 +1019,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   ))}
                 </select>
               </label>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 La cantidad y el mínimo de cada variante se cargan por fila en la pestaña &quot;Variantes&quot; - este
                 depósito se usa para todas.
               </p>
@@ -1031,46 +1029,46 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           {tab === 'media' && (
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Imagen principal</span>
+                <span className="text-sm text-muted-foreground">Imagen principal</span>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                  className="text-sm text-slate-700 dark:text-slate-300"
+                  className="text-sm  "
                 />
-                {imageFile && <span className="text-xs text-slate-500">{imageFile.name}</span>}
+                {imageFile && <span className="text-xs text-muted-foreground">{imageFile.name}</span>}
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Folleto (PDF)</span>
+                <span className="text-sm text-muted-foreground">Folleto (PDF)</span>
                 <input
                   type="file"
                   accept="application/pdf"
                   onChange={(e) => setBrochureFile(e.target.files?.[0] ?? null)}
-                  className="text-sm text-slate-700 dark:text-slate-300"
+                  className="text-sm  "
                 />
-                {brochureFile && <span className="text-xs text-slate-500">{brochureFile.name}</span>}
+                {brochureFile && <span className="text-xs text-muted-foreground">{brochureFile.name}</span>}
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Adjunto (ZIP)</span>
+                <span className="text-sm text-muted-foreground">Adjunto (ZIP)</span>
                 <input
                   type="file"
                   accept=".zip,application/zip,application/x-zip-compressed"
                   onChange={(e) => setZipFile(e.target.files?.[0] ?? null)}
-                  className="text-sm text-slate-700 dark:text-slate-300"
+                  className="text-sm  "
                 />
-                {zipFile && <span className="text-xs text-slate-500">{zipFile.name}</span>}
+                {zipFile && <span className="text-xs text-muted-foreground">{zipFile.name}</span>}
               </label>
             </div>
           )}
         </div>
 
-        {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-        <div className="mt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+        <div className="mt-4 flex justify-end gap-3 border-t border pt-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+            className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:  dark:hover: "
           >
             Cancelar
           </button>
@@ -1078,7 +1076,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             type="button"
             onClick={handleSubmit}
             disabled={mutation.isPending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-50"
           >
             {mutation.isPending ? 'Creando...' : 'Crear artículo'}
           </button>

@@ -2,6 +2,9 @@
 
 import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
 import { getSocket } from '@/lib/socket';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Info, LayoutGrid, List } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,9 +73,7 @@ function SortableHeader({
     <th className={`pb-2 pr-4 ${align === 'right' ? 'text-right' : 'text-left'}`}>
       <button
         onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-300 ${
-          isActive ? 'text-slate-700 dark:text-slate-300' : ''
-        }`}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${isActive ? 'text-foreground' : ''}`}
       >
         {label}
         <span className="text-[10px] leading-none">
@@ -215,45 +216,34 @@ export default function InventoryPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Inventario</h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <h1 className="text-xl font-semibold">Inventario</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
             {rows.length} variante{rows.length !== 1 ? 's' : ''} · {warehouses.length} depósito
             {warehouses.length !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={() => setImportModalOpen(true)}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
-          >
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
             Importar desde Excel
-          </button>
-          <button
-            onClick={() => setCreatingArticle(true)}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
-          >
+          </Button>
+          <Button variant="outline" onClick={() => setCreatingArticle(true)}>
             + Nuevo artículo
-          </button>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-          >
-            + Nuevo movimiento
-          </button>
+          </Button>
+          <Button onClick={() => setModalOpen(true)}>+ Nuevo movimiento</Button>
         </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por artículo o SKU..."
-          className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 sm:max-w-sm"
+          className="w-full sm:max-w-sm"
         />
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">Todas las categorías</option>
           {categories.map((c) => (
@@ -262,77 +252,69 @@ export default function InventoryPage() {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={onlyServices}
             onChange={(e) => setOnlyServices(e.target.checked)}
-            className="h-4 w-4 accent-indigo-600"
+            className="h-4 w-4 accent-primary"
           />
           Sólo servicios
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={onlyPublished}
             onChange={(e) => setOnlyPublished(e.target.checked)}
-            className="h-4 w-4 accent-indigo-600"
+            className="h-4 w-4 accent-primary"
           />
           Sólo publicados
         </label>
-        <div className="flex gap-1 rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 sm:ml-auto">
-          <button
+        <div className="flex gap-1 rounded-lg border p-0.5 sm:ml-auto">
+          <Button
+            variant={view === 'table' ? 'default' : 'ghost'}
+            size="icon-sm"
             onClick={() => setView('table')}
             title="Vista de lista"
             aria-label="Vista de lista"
-            className={`flex h-7 w-7 items-center justify-center rounded ${
-              view === 'table'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-            }`}
           >
             <List className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={view === 'catalog' ? 'default' : 'ghost'}
+            size="icon-sm"
             onClick={() => setView('catalog')}
             title="Vista de catálogo"
             aria-label="Vista de catálogo"
-            className={`flex h-7 w-7 items-center justify-center rounded ${
-              view === 'catalog'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-            }`}
           >
             <LayoutGrid className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={view === 'alerts' ? 'default' : 'ghost'}
+            size="icon-sm"
             onClick={() => setView('alerts')}
             title="Alertas de stock"
             aria-label="Alertas de stock"
-            className={`flex h-7 w-7 items-center justify-center rounded ${
-              view === 'alerts'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-            }`}
           >
             <AlertTriangle className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
+      <Card>
+        <CardContent>
         {view === 'alerts' ? (
           <StockAlertsPanel />
         ) : isLoading ? (
-          <div className="flex h-40 items-center justify-center text-slate-500">
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
             Cargando inventario...
           </div>
         ) : articlesQuery.error ? (
-          <div className="flex h-40 items-center justify-center text-red-600 dark:text-red-400">
+          <div className="flex h-40 items-center justify-center text-destructive">
             Error al cargar el inventario
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-slate-400 dark:text-slate-600">
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
             Sin artículos que coincidan con la búsqueda
           </div>
         ) : view === 'catalog' ? (
@@ -353,7 +335,7 @@ export default function InventoryPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-2" />
                   <SortableHeader label="Artículo" sortKey="articleName" currentSort={sort} onSort={handleSort} />
                   <SortableHeader label="SKU" sortKey="sku" currentSort={sort} onSort={handleSort} />
@@ -392,9 +374,7 @@ export default function InventoryPage() {
                   return (
                     <tr
                       key={row.variantId}
-                      className={`border-b border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-200/40 dark:hover:bg-slate-800/40 ${
-                        belowMinimum ? 'bg-red-50 dark:bg-red-950/30' : ''
-                      }`}
+                      className={`border-b border-border/50 hover:bg-muted/40 ${belowMinimum ? 'bg-destructive/5' : ''}`}
                     >
                       <td className="py-2 pr-2">
                         <button
@@ -403,7 +383,7 @@ export default function InventoryPage() {
                             setImageArticle({ id: row.articleId, name: row.articleName, imageUrl: row.imageUrl })
                           }
                           title="Imagen del artículo"
-                          className="block h-8 w-8 overflow-hidden rounded border border-slate-300 dark:border-slate-700"
+                          className="block h-8 w-8 overflow-hidden rounded border"
                         >
                           {row.imageUrl ? (
                             <img
@@ -412,17 +392,15 @@ export default function InventoryPage() {
                               className="h-8 w-8 object-cover"
                             />
                           ) : (
-                            <span className="flex h-8 w-8 items-center justify-center bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600">
+                            <span className="flex h-8 w-8 items-center justify-center bg-muted text-muted-foreground">
                               <NoImageIcon />
                             </span>
                           )}
                         </button>
                       </td>
                       <td className="py-2 pr-4">
-                        <p className="text-slate-800 dark:text-slate-200">{row.articleName}</p>
-                        {row.variantLabel && (
-                          <p className="text-xs text-slate-500">{row.variantLabel}</p>
-                        )}
+                        <p>{row.articleName}</p>
+                        {row.variantLabel && <p className="text-xs text-muted-foreground">{row.variantLabel}</p>}
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -433,7 +411,7 @@ export default function InventoryPage() {
                                 preferredSupplierId: row.preferredSupplierId,
                               })
                             }
-                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                            className="text-xs text-primary hover:underline"
                           >
                             {row.preferredSupplierName ?? '+ proveedor'}
                           </button>
@@ -441,15 +419,15 @@ export default function InventoryPage() {
                             type="button"
                             onClick={() => setDetailsArticleId(row.articleId)}
                             title="Detalles (descripción, folleto, adjunto)"
-                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                            className="text-muted-foreground hover:text-primary"
                           >
                             <Info className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{row.sku}</td>
-                      <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">{row.categoryName ?? '—'}</td>
-                      <td className="py-2 pr-4 text-right text-slate-800 dark:text-slate-200">
+                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{row.sku}</td>
+                      <td className="py-2 pr-4 text-muted-foreground">{row.categoryName ?? '—'}</td>
+                      <td className="py-2 pr-4 text-right">
                         <button
                           type="button"
                           onClick={() =>
@@ -469,23 +447,17 @@ export default function InventoryPage() {
                         </button>
                       </td>
                       {warehouses.map((w) => (
-                        <td key={w.id} className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                        <td key={w.id} className="py-2 pr-4 text-right">
                           {row.stockByWarehouseId[w.id] ?? 0}
                         </td>
                       ))}
                       <td
-                        className={`py-2 pr-4 text-right font-semibold ${
-                          belowMinimum
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-indigo-600 dark:text-indigo-400'
-                        }`}
+                        className={`py-2 pr-4 text-right font-semibold ${belowMinimum ? 'text-destructive' : 'text-primary'}`}
                       >
                         {row.totalStock}
                         {belowMinimum && <span title="Por debajo del stock mínimo"> ⚠</span>}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-600 dark:text-slate-400">
-                        {row.minimumStock ?? '—'}
-                      </td>
+                      <td className="py-2 pr-4 text-right text-muted-foreground">{row.minimumStock ?? '—'}</td>
                     </tr>
                   );
                 })}
@@ -493,7 +465,8 @@ export default function InventoryPage() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {modalOpen && (
         <StockMovementModal warehouses={warehouses} onClose={() => setModalOpen(false)} />

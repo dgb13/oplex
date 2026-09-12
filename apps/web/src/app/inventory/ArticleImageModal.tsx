@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { inventoryApi, resolveUploadUrl } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -52,19 +53,19 @@ export default function ArticleImageModal({ article, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Imagen de {article.name}</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Imagen de {article.name}</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
-        <div className="mb-4 flex h-40 items-center justify-center overflow-hidden rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800">
+        <div className="mb-4 flex h-40 items-center justify-center overflow-hidden rounded-lg border bg-muted">
           {previewUrl ? (
             <img src={previewUrl} alt="" className="h-full w-full object-contain" />
           ) : (
-            <span className="text-xs text-slate-500">Sin imagen</span>
+            <span className="text-xs text-muted-foreground">Sin imagen</span>
           )}
         </div>
 
@@ -72,32 +73,28 @@ export default function ArticleImageModal({ article, onClose }: Props) {
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="mb-4 w-full text-sm text-slate-700 dark:text-slate-300"
+          className="mb-4 w-full text-sm"
         />
 
-        {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
         <div className="flex justify-between gap-3">
           {article.imageUrl && !file ? (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
               onClick={() => removeMutation.mutate()}
               disabled={removeMutation.isPending}
-              className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
             >
               {removeMutation.isPending ? 'Quitando...' : 'Quitar imagen'}
-            </button>
+            </Button>
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            onClick={() => file && uploadMutation.mutate(file)}
-            disabled={!file || uploadMutation.isPending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-          >
+          <Button type="button" onClick={() => file && uploadMutation.mutate(file)} disabled={!file || uploadMutation.isPending}>
             {uploadMutation.isPending ? 'Subiendo...' : 'Guardar'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

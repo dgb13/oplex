@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { inventoryApi, type ImportResult } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -51,34 +52,27 @@ export default function ImportArticlesModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Importar artículos desde Excel
-          </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Importar artículos desde Excel</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         <div className="flex flex-col gap-4">
           <div>
-            <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+            <p className="mb-2 text-sm text-muted-foreground">
               1. Descargá la plantilla y completá tus artículos siguiendo las indicaciones de la
               primera fila.
             </p>
-            <button
-              type="button"
-              onClick={() => downloadMutation.mutate()}
-              disabled={downloadMutation.isPending}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-            >
+            <Button variant="outline" onClick={() => downloadMutation.mutate()} disabled={downloadMutation.isPending}>
               {downloadMutation.isPending ? 'Descargando...' : 'Descargar plantilla'}
-            </button>
+            </Button>
           </div>
 
           <div>
-            <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+            <p className="mb-2 text-sm text-muted-foreground">
               2. Subí el archivo completo (hasta 100 filas por vez).
             </p>
             <input
@@ -89,20 +83,20 @@ export default function ImportArticlesModal({ onClose }: Props) {
                 setResult(null);
                 setError('');
               }}
-              className="w-full text-sm text-slate-700 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 dark:file:bg-slate-800 file:px-3 file:py-2 file:text-sm file:text-slate-700 dark:file:text-slate-300"
+              className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           {result && result.errors.length > 0 && (
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3">
-              <p className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="mb-2 text-sm font-semibold text-destructive">
                 {result.errors.length} error{result.errors.length !== 1 ? 'es' : ''} encontrado
                 {result.errors.length !== 1 ? 's' : ''} - no se importó nada, corregí y volvé a
                 subir el archivo:
               </p>
-              <ul className="flex flex-col gap-1 text-xs text-red-700 dark:text-red-400">
+              <ul className="flex flex-col gap-1 text-xs text-destructive">
                 {result.errors.map((e, i) => (
                   <li key={i}>
                     {e.row > 0 ? `Fila ${e.row}: ` : ''}
@@ -120,22 +114,13 @@ export default function ImportArticlesModal({ onClose }: Props) {
           )}
 
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               {success ? 'Cerrar' : 'Cancelar'}
-            </button>
+            </Button>
             {!success && (
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={importMutation.isPending || !file}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-              >
+              <Button type="button" onClick={handleImport} disabled={importMutation.isPending || !file}>
                 {importMutation.isPending ? 'Importando...' : 'Importar'}
-              </button>
+              </Button>
             )}
           </div>
         </div>

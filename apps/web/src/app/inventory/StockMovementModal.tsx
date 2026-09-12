@@ -1,6 +1,8 @@
 'use client';
 
 import ArticlePicker from '@/components/ArticlePicker';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { inventoryApi, MOVEMENT_TYPES, type MovementType, type Warehouse } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -12,7 +14,7 @@ interface Props {
 }
 
 const selectClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Freeform stock entry - NOT the way to receive against an Orden de
  * Compra anymore (see PurchaseOrderDetailPanel's "Recibir mercadería" /
@@ -81,10 +83,10 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nuevo movimiento de stock</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nuevo movimiento de stock</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
@@ -128,10 +130,9 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
           </Field>
 
           <Field label={isAdjustment ? 'Cantidad (+ entrada / − salida)' : 'Cantidad'}>
-            <input
+            <Input
               type="number"
               step="any"
-              className={selectClass}
               value={form.quantity}
               onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               placeholder={isAdjustment ? 'p. ej. -3 o 5' : 'p. ej. 10'}
@@ -140,11 +141,10 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
 
           {needsCost && (
             <Field label="Costo unitario">
-              <input
+              <Input
                 type="number"
                 step="any"
                 min="0"
-                className={selectClass}
                 value={form.unitCost}
                 onChange={(e) => setForm({ ...form, unitCost: e.target.value })}
                 placeholder="p. ej. 100.50"
@@ -153,30 +153,22 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
           )}
 
           {isPurchase && (
-            <p className="text-xs text-slate-500 dark:text-slate-500">
+            <p className="text-xs text-muted-foreground">
               ¿Esta compra viene de una Orden de Compra ya enviada? Usá "Recibir mercadería" desde el
               detalle de esa orden en Compras, no este formulario — ahí el sistema valida la cantidad
               contra lo pendiente y toma el costo de la orden.
             </p>
           )}
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending || warehouses.length === 0}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending || warehouses.length === 0}>
               {mutation.isPending ? 'Guardando...' : 'Registrar'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -187,7 +179,7 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );
