@@ -326,8 +326,7 @@ function WhatsAppLinkCard() {
     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
       <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">WhatsApp</h2>
       <p className="mb-4 text-xs text-slate-500">
-        Vinculá tu número para consultarle al asistente de IA por WhatsApp más adelante - todavía no está activa la
-        recepción de mensajes, esto sólo prepara la vinculación.
+        Vinculá tu número para consultarle al asistente de IA por WhatsApp.
       </p>
 
       {isLoading || !status ? (
@@ -359,6 +358,10 @@ function WhatsAppLinkCard() {
                 className={`${inputClass} w-52`}
                 required
               />
+              <p className="mt-1 text-xs text-slate-500">
+                Formato internacional completo, con código de país. Si es un celular argentino, incluí el "9" después
+                del 54 (ej: +54 9 11 1234-5678) - sin eso el asistente no va a poder responderte por WhatsApp.
+              </p>
             </Field>
             <button
               type="submit"
@@ -374,14 +377,18 @@ function WhatsAppLinkCard() {
           {generated ? (
             <div className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950 p-4 text-sm">
               <p className="text-slate-700 dark:text-slate-300">
-                Mandá este código por WhatsApp <span className="font-semibold">al número de Oplex</span> desde{' '}
-                <span className="font-mono">{generated.phoneE164}</span>:
+                Desde <span className="font-mono">{generated.phoneE164}</span>, mandale este código por WhatsApp{' '}
+                {generated.businessPhoneDisplay ? (
+                  <>
+                    al número de Oplex <span className="font-semibold font-mono">{generated.businessPhoneDisplay}</span>
+                  </>
+                ) : (
+                  <span className="font-semibold">al número de Oplex</span>
+                )}
+                :
               </p>
               <p className="mt-2 font-mono text-2xl font-bold tracking-widest text-indigo-700 dark:text-indigo-400">{generated.code}</p>
-              <p className="mt-2 text-xs text-slate-500">
-                Vence a las {new Date(generated.expiresAt).toLocaleTimeString('es-AR')}. La recepción del mensaje todavía no está
-                activa en esta versión.
-              </p>
+              <p className="mt-2 text-xs text-slate-500">Vence a las {new Date(generated.expiresAt).toLocaleTimeString('es-AR')}.</p>
             </div>
           ) : (
             status.pending && (

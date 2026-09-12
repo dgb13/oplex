@@ -4,13 +4,14 @@ export interface WhatsAppLinkStatus {
   linked: boolean;
   phoneE164: string | null;
   verifiedAt: string | null;
-  pending: { phoneE164: string; expiresAt: string } | null;
+  pending: { phoneE164: string; expiresAt: string; businessPhoneDisplay: string | null } | null;
 }
 
 export interface WhatsAppLinkRequestResult {
   phoneE164: string;
   code: string;
   expiresAt: string;
+  businessPhoneDisplay: string | null;
 }
 
 // Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,

@@ -11,19 +11,28 @@ const CODE_EXPIRY_MINUTES = Number(process.env['WHATSAPP_LINK_CODE_EXPIRY_MINUTE
 const CODE_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
+// Número de WhatsApp del negocio al que el usuario tiene que mandarle el
+// código (display, con formato humano) - la Cloud API de Meta no deja que
+// el negocio inicie una conversación de texto libre con un número que
+// nunca le escribió antes, así que el flujo es necesariamente "el usuario
+// nos escribe primero" y no al revés. Una sola env var porque hoy es un
+// único número para toda la plataforma, no por tenant.
+const BUSINESS_DISPLAY_NUMBER = process.env['WHATSAPP_BUSINESS_DISPLAY_NUMBER'] ?? null;
+
 export type WhatsAppLinkConfirmOutcome = 'ok' | 'invalid' | 'too-many-attempts' | 'not-found';
 
 export interface WhatsAppLinkRequestResult {
   phoneE164: string;
   code: string;
   expiresAt: Date;
+  businessPhoneDisplay: string | null;
 }
 
 export interface WhatsAppLinkStatus {
   linked: boolean;
   phoneE164: string | null;
   verifiedAt: Date | null;
-  pending: { phoneE164: string; expiresAt: Date } | null;
+  pending: { phoneE164: string; expiresAt: Date; businessPhoneDisplay: string | null } | null;
 }
 
 function generateCode(): string {
@@ -96,7 +105,7 @@ export class WhatsAppLinkService {
     // todavía (eso es justamente lo que falta para vincular): mostrárselo
     // en pantalla a un usuario que ya probó su identidad con su contraseña
     // ES la entrega (sección 3.3 del plan, paso 2).
-    return { phoneE164, code, expiresAt };
+    return { phoneE164, code, expiresAt, businessPhoneDisplay: BUSINESS_DISPLAY_NUMBER };
   }
 
   async getStatus(user: AuthenticatedUser): Promise<WhatsAppLinkStatus> {
@@ -109,7 +118,10 @@ export class WhatsAppLinkService {
       linked: !!link,
       phoneE164: link?.phoneE164 ?? null,
       verifiedAt: link?.verifiedAt ?? null,
-      pending: pending && pending.expiresAt > new Date() ? { phoneE164: pending.phoneE164, expiresAt: pending.expiresAt } : null,
+      pending:
+        pending && pending.expiresAt > new Date()
+          ? { phoneE164: pending.phoneE164, expiresAt: pending.expiresAt, businessPhoneDisplay: BUSINESS_DISPLAY_NUMBER }
+          : null,
     };
   }
 
