@@ -8,12 +8,12 @@ import { useState } from 'react';
 import PurchaseInvoiceDetailPanel from './PurchaseInvoiceDetailPanel';
 
 const selectClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const CONFIDENCE_LABELS: Record<'alta' | 'media' | 'baja', { label: string; className: string }> = {
   alta: { label: '🟢 Alta', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
   media: { label: '🟡 Media', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
-  baja: { label: '🔴 Baja', className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+  baja: { label: '🔴 Baja', className: 'bg-destructive/10 text-destructive dark:bg-destructive/10 dark:text-destructive' },
 };
 
 function confidenceLevelOf(confidence: string | null): 'alta' | 'media' | 'baja' | null {
@@ -58,7 +58,7 @@ export default function GaleriaIaTab() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">Proveedor</span>
+          <span className="text-[11px] text-muted-foreground">Proveedor</span>
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectClass}>
             <option value="">Todos</option>
             {(suppliersQuery.data ?? []).map((c) => (
@@ -69,15 +69,15 @@ export default function GaleriaIaTab() {
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">Desde</span>
+          <span className="text-[11px] text-muted-foreground">Desde</span>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={selectClass} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">Hasta</span>
+          <span className="text-[11px] text-muted-foreground">Hasta</span>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={selectClass} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">Confianza</span>
+          <span className="text-[11px] text-muted-foreground">Confianza</span>
           <select
             value={confidenceLevel}
             onChange={(e) => setConfidenceLevel(e.target.value as typeof confidenceLevel)}
@@ -90,7 +90,7 @@ export default function GaleriaIaTab() {
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">Editada antes de confirmar</span>
+          <span className="text-[11px] text-muted-foreground">Editada antes de confirmar</span>
           <select value={edited} onChange={(e) => setEdited(e.target.value as typeof edited)} className={selectClass}>
             <option value="">Todas</option>
             <option value="true">Sí, se corrigió algo</option>
@@ -107,7 +107,7 @@ export default function GaleriaIaTab() {
               setConfidenceLevel('');
               setEdited('');
             }}
-            className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             Limpiar filtros
           </button>
@@ -115,9 +115,9 @@ export default function GaleriaIaTab() {
       </div>
 
       {invoicesQuery.isLoading ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : invoices.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-600">
+        <p className="text-sm text-muted-foreground">
           Ninguna factura cargada con IA coincide con estos filtros.
         </p>
       ) : (
@@ -130,9 +130,9 @@ export default function GaleriaIaTab() {
                 key={inv.id}
                 type="button"
                 onClick={() => setDetailId(inv.id)}
-                className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-indigo-400 dark:border-slate-800 dark:bg-slate-900"
+                className="flex flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary"
               >
-                <div className="flex aspect-[4/3] items-center justify-center bg-slate-100 dark:bg-slate-950">
+                <div className="flex aspect-[4/3] items-center justify-center bg-muted">
                   {thumbUrl ? (
                     <img src={thumbUrl} alt={inv.supplierInvoiceNumber} className="h-full w-full object-cover" />
                   ) : (
@@ -140,9 +140,9 @@ export default function GaleriaIaTab() {
                   )}
                 </div>
                 <div className="flex flex-col gap-1 p-3">
-                  <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{inv.supplierName}</p>
-                  <p className="truncate font-mono text-xs text-slate-500">{inv.supplierInvoiceNumber}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="truncate text-sm font-medium">{inv.supplierName}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">{inv.supplierInvoiceNumber}</p>
+                  <p className="text-xs text-muted-foreground">
                     {new Date(inv.supplierInvoiceDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })} · $
                     {Number(inv.total).toLocaleString('es-AR')}
                   </p>
@@ -153,7 +153,7 @@ export default function GaleriaIaTab() {
                       </span>
                     )}
                     {inv.aiScanEdited && (
-                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         Editada
                       </span>
                     )}

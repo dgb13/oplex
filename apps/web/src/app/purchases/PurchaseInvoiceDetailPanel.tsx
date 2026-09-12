@@ -21,7 +21,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** One "Agregar retención" row in the payment form - regimeId is required
  * (no free-text taxType/jurisdiction/concept here, unlike percepciones on
@@ -184,24 +184,24 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
       <div
-        className={`flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl transition-transform duration-200 ${
+        className={`flex h-full w-full max-w-lg flex-col overflow-y-auto border-l bg-card p-6 shadow-2xl transition-transform duration-200 ${
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-semibold">
               {data?.supplierInvoiceNumber ?? '...'}
             </h2>
-            {data && <p className="text-xs text-slate-500">{data.supplierName}</p>}
+            {data && <p className="text-xs text-muted-foreground">{data.supplierName}</p>}
           </div>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {isLoading || !data ? (
-          <div className="flex h-40 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-40 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : (
           <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -231,7 +231,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                     href={resolveUploadUrl(data.attachmentUrl) ?? '#'}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    className="text-primary hover:text-primary"
                   >
                     Ver
                   </a>
@@ -240,17 +240,17 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
             </div>
 
             <section>
-              <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">IVA / Percepciones</h3>
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">IVA / Percepciones</h3>
               {data.taxLines.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin impuestos cargados</p>
+                <p className="text-sm text-muted-foreground">Sin impuestos cargados</p>
               ) : (
                 <div className="flex flex-col gap-1 text-sm">
                   {data.taxLines.map((line) => (
-                    <div key={line.id} className="flex justify-between text-slate-700 dark:text-slate-300">
+                    <div key={line.id} className="flex justify-between">
                       <span>
                         {line.concept}
                         {line.netAmount != null && (
-                          <span className="text-xs text-slate-500"> — Neto ${Number(line.netAmount).toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground"> — Neto ${Number(line.netAmount).toFixed(2)}</span>
                         )}
                       </span>
                       <span>${Number(line.amount).toFixed(2)}</span>
@@ -258,12 +258,12 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                   ))}
                 </div>
               )}
-              <div className="mt-3 flex flex-col gap-1 border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
+              <div className="mt-3 flex flex-col gap-1 border-t pt-2 text-sm">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
                   <span>${Number(data.subtotal).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100">
+                <div className="flex justify-between font-semibold">
                   <span>Total</span>
                   <span>${Number(data.total).toFixed(2)}</span>
                 </div>
@@ -276,8 +276,8 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 
             {data.receiptLinks.length > 0 && (
               <section>
-                <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Remitos cubiertos</h3>
-                <ul className="flex flex-col gap-1 text-sm text-slate-700 dark:text-slate-300">
+                <h3 className="mb-2 text-sm font-medium text-muted-foreground">Remitos cubiertos</h3>
+                <ul className="flex flex-col gap-1 text-sm">
                   {data.receiptLinks.map((link) => (
                     <li key={link.id}>
                       {new Date(link.goodsReceipt.receivedAt).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
@@ -290,20 +290,20 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 
             {data.notes && (
               <section>
-                <h3 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">Notas</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300">{data.notes}</p>
+                <h3 className="mb-1 text-sm font-medium text-muted-foreground">Notas</h3>
+                <p className="text-sm">{data.notes}</p>
               </section>
             )}
 
             <section>
-              <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Pagos</h3>
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">Pagos</h3>
               {data.payments.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin pagos registrados</p>
+                <p className="text-sm text-muted-foreground">Sin pagos registrados</p>
               ) : (
                 <div className="flex flex-col gap-1 text-sm">
                   {data.payments.map((p) => (
                     <div key={p.id} className="flex flex-col gap-0.5">
-                      <div className="flex justify-between text-slate-700 dark:text-slate-300">
+                      <div className="flex justify-between">
                         <span>
                           {new Date(p.paidAt).toLocaleDateString('es-AR')} — {p.method}
                         </span>
@@ -325,8 +325,8 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 
               {Number(data.balanceDue) > 0 &&
                 (paying ? (
-                  <div className="mt-3 flex flex-col gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-                    <label className="flex flex-col gap-1 text-xs text-slate-500">
+                  <div className="mt-3 flex flex-col gap-3 rounded-lg border p-3">
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                       Forma de pago
                       <select
                         className={inputClass}
@@ -343,7 +343,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                     </label>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <label className="flex flex-col gap-1 text-xs text-slate-500">
+                      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                         {payMode === 'ENDORSE' ? 'Monto (según el cheque)' : 'Efectivo/banco a pagar'}
                         <input
                           type="number"
@@ -356,7 +356,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                         />
                       </label>
                       {payMode === 'CASH' && (
-                        <label className="flex flex-col gap-1 text-xs text-slate-500">
+                        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                           Método
                           <input
                             type="text"
@@ -371,7 +371,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 
                     {payMode === 'ENDORSE' && (
                       <div className="flex flex-col gap-1">
-                        <label className="text-xs text-slate-500">Cheque a endosar</label>
+                        <label className="text-xs text-muted-foreground">Cheque a endosar</label>
                         {endorsableChecks.length === 0 ? (
                           <p className="text-xs text-amber-600 dark:text-amber-400">
                             No hay cheques de tercero en cartera disponibles para endosar.
@@ -396,7 +396,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                     {payMode === 'OWN_CHECK' && (
                       <div className="flex flex-col gap-2">
                         <div className="grid grid-cols-2 gap-2">
-                          <label className="flex flex-col gap-1 text-xs text-slate-500">
+                          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                             Número
                             <input
                               className={inputClass}
@@ -404,7 +404,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                               onChange={(e) => setOwnCheck((prev) => ({ ...prev, number: e.target.value }))}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500">
+                          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                             Banco
                             <input
                               className={inputClass}
@@ -414,7 +414,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                           </label>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <label className="flex flex-col gap-1 text-xs text-slate-500">
+                          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                             Fecha de emisión
                             <input
                               type="date"
@@ -423,7 +423,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                               onChange={(e) => setOwnCheck((prev) => ({ ...prev, issueDate: e.target.value }))}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500">
+                          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                             Fecha de vencimiento
                             <input
                               type="date"
@@ -433,7 +433,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                             />
                           </label>
                         </div>
-                        <label className="flex flex-col gap-1 text-xs text-slate-500">
+                        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                           Cuenta bancaria que lo respalda
                           {(financialAccounts ?? []).length === 0 ? (
                             <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -461,18 +461,18 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Retenciones</span>
+                        <span className="text-xs text-muted-foreground">Retenciones</span>
                         <button
                           type="button"
                           onClick={addWithholdingRow}
                           disabled={availableRegimes.length === 0}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+                          className="text-xs text-primary hover:text-primary disabled:opacity-50"
                         >
                           + agregar retención
                         </button>
                       </div>
                       {availableRegimes.length === 0 && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-muted-foreground">
                           No hay regímenes de retención activos habilitados (ver Preferencias e
                           Impuestos → Retenciones).
                         </p>
@@ -517,34 +517,34 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                             <button
                               type="button"
                               onClick={() => removeWithholdingRow(row.key)}
-                              className="text-slate-500 hover:text-red-600 dark:hover:text-red-400"
+                              className="text-muted-foreground hover:text-destructive"
                             >
                               ✕
                             </button>
                             {regime?.jurisdiction && (
-                              <span className="text-xs text-slate-500">{regime.jurisdiction}</span>
+                              <span className="text-xs text-muted-foreground">{regime.jurisdiction}</span>
                             )}
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-2 text-xs">
-                      <span className="text-slate-500">
+                    <div className="flex justify-between border-t pt-2 text-xs">
+                      <span className="text-muted-foreground">
                         Pagás ${amount.toFixed(2)} + retenés ${totalWithheld.toFixed(2)} =
                       </span>
                       <span
                         className={`font-semibold ${
                           appliedAmount > Number(data.balanceDue)
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-slate-800 dark:text-slate-200'
+                            ? 'text-destructive'
+                            : ' '
                         }`}
                       >
                         ${appliedAmount.toFixed(2)} aplicado a la factura
                       </span>
                     </div>
 
-                    {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+                    {error && <p className="text-sm text-destructive">{error}</p>}
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
@@ -554,7 +554,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                           setPayMode('CASH');
                           setEndorseCheckId('');
                         }}
-                        className="rounded-lg px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400"
+                        className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground"
                       >
                         Cancelar
                       </button>
@@ -576,7 +576,7 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                               !ownCheck.dueDate ||
                               !ownCheck.financialAccountId))
                         }
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                       >
                         {paymentMutation.isPending ? 'Registrando...' : 'Confirmar pago'}
                       </button>
@@ -602,8 +602,8 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="text-slate-800 dark:text-slate-200">{children}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="">{children}</p>
     </div>
   );
 }

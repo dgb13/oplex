@@ -6,7 +6,7 @@ import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function ConfiguracionTab() {
   const queryClient = useQueryClient();
@@ -48,7 +48,7 @@ export default function ConfiguracionTab() {
   });
 
   if (isLoading || !data) {
-    return <p className="text-sm text-slate-500">Cargando...</p>;
+    return <p className="text-sm text-muted-foreground">Cargando...</p>;
   }
 
   function preview(prefix: string, nextNumber: number): string {
@@ -57,17 +57,17 @@ export default function ConfiguracionTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-        <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">
           Numeración de tus documentos
         </h2>
-        <p className="mb-4 text-xs text-slate-500 dark:text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Cada usuario elige cómo identifica sus propios pedidos y órdenes — cada uno lleva su
           numeración correlativa por separado.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">
+            <label className="text-sm text-muted-foreground">
               Prefijo de Pedidos de Cotización
             </label>
             <input
@@ -77,12 +77,12 @@ export default function ConfiguracionTab() {
               placeholder="PED"
               maxLength={12}
             />
-            <p className="text-xs text-slate-500 dark:text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Así se verá: {preview(quoteRequestPrefix, data.quoteRequestNextNumber)}
             </p>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">
+            <label className="text-sm text-muted-foreground">
               Prefijo de Órdenes de Compra
             </label>
             <input
@@ -92,18 +92,18 @@ export default function ConfiguracionTab() {
               placeholder="OC"
               maxLength={12}
             />
-            <p className="text-xs text-slate-500 dark:text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Así se verá: {preview(purchaseOrderPrefix, data.purchaseOrderNextNumber)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-        <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
+      <div className="rounded-xl border bg-card p-6">
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">
           Estilo preferido de PDF
         </h2>
-        <p className="mb-4 text-xs text-slate-500 dark:text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Se usa por defecto al generar el PDF de un pedido u orden — se puede cambiar puntualmente
           al descargar.
         </p>
@@ -114,26 +114,24 @@ export default function ConfiguracionTab() {
               type="button"
               onClick={() => setPdfStyle(style.value)}
               className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 text-center transition ${
-                pdfStyle === style.value
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                pdfStyle === style.value ? 'border-primary bg-primary/5' : 'hover:border-ring'
               }`}
             >
               <PdfStyleMockup style={style.value} />
-              <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{style.label}</span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-500">{style.description}</span>
+              <span className="text-xs font-medium">{style.label}</span>
+              <span className="text-[10px] text-muted-foreground">{style.description}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
       <button
         type="button"
         onClick={() => mutation.mutate()}
         disabled={mutation.isPending}
-        className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+        className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
       >
         {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
       </button>
@@ -147,27 +145,27 @@ function PdfStyleMockup({ style }: { style: PdfStyle }) {
   switch (style) {
     case 'MODERNO':
       return (
-        <div className="h-16 w-12 rounded border border-slate-300 dark:border-slate-700 bg-white p-1 dark:bg-slate-950">
-          <div className="mb-1 h-2 rounded-sm bg-indigo-600" />
-          <div className="h-0.5 w-2/3 rounded-sm bg-slate-300 dark:bg-slate-700" />
-          <div className="mt-1 h-0.5 w-full rounded-sm bg-slate-200 dark:bg-slate-800" />
-          <div className="mt-0.5 h-0.5 w-full rounded-sm bg-slate-200 dark:bg-slate-800" />
+        <div className="h-16 w-12 rounded border border-slate-300 bg-white p-1">
+          <div className="mb-1 h-2 rounded-sm bg-primary" />
+          <div className="h-0.5 w-2/3 rounded-sm bg-slate-300" />
+          <div className="mt-1 h-0.5 w-full rounded-sm bg-slate-300" />
+          <div className="mt-0.5 h-0.5 w-full rounded-sm bg-slate-300" />
         </div>
       );
     case 'COMPACTO':
       return (
-        <div className="h-16 w-12 border border-slate-400 bg-white p-1 dark:bg-slate-950">
-          <div className="mb-0.5 h-0.5 w-full bg-slate-800 dark:bg-slate-300" />
+        <div className="h-16 w-12 border border-slate-400 bg-white p-1">
+          <div className="mb-0.5 h-0.5 w-full bg-slate-800" />
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="mt-0.5 h-0.5 w-full bg-slate-200 dark:bg-slate-800" />
+            <div key={i} className="mt-0.5 h-0.5 w-full bg-slate-300" />
           ))}
         </div>
       );
     case 'TRADICIONAL':
       return (
-        <div className="flex h-16 w-12 flex-col items-center border-2 border-slate-900 bg-white p-1 dark:border-slate-300 dark:bg-slate-950">
-          <div className="mb-1 h-1.5 w-8 bg-slate-900 dark:bg-slate-300" />
-          <div className="mt-auto h-4 w-full border border-slate-900 dark:border-slate-300" />
+        <div className="flex h-16 w-12 flex-col items-center border-2 border-slate-900 bg-white p-1">
+          <div className="mb-1 h-1.5 w-8 bg-slate-900" />
+          <div className="mt-auto h-4 w-full border border-slate-900" />
         </div>
       );
     case 'NATURAL':
@@ -179,9 +177,9 @@ function PdfStyleMockup({ style }: { style: PdfStyle }) {
       );
     case 'LETRAS_GRANDES':
       return (
-        <div className="flex h-16 w-12 flex-col justify-center gap-1 border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950">
-          <div className="h-2 w-full rounded-sm bg-slate-800 dark:bg-slate-200" />
-          <div className="h-2 w-full rounded-sm bg-slate-800 dark:bg-slate-200" />
+        <div className="flex h-16 w-12 flex-col justify-center gap-1 border border-slate-300 bg-white p-1">
+          <div className="h-2 w-full rounded-sm bg-slate-800" />
+          <div className="h-2 w-full rounded-sm bg-slate-800" />
         </div>
       );
   }

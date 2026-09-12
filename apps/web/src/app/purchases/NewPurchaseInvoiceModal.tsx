@@ -17,7 +17,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -195,10 +195,10 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nueva Factura de Compra</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nueva Factura de Compra</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
@@ -265,8 +265,8 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
             </Field>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-            <p className="text-xs text-slate-500">
+          <div className="flex flex-col gap-2 rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">
               Para el Libro de IVA Digital (opcional) - Tipo/Punto de Venta/Número tal como figuran en el
               comprobante del proveedor. Sin esto, el comprobante queda afuera del export CITI de Compras.
             </p>
@@ -308,12 +308,12 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 
           {purchaseOrderId && receipts.length > 0 && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-slate-600 dark:text-slate-400">
+              <label className="text-sm text-muted-foreground">
                 Remitos que cubre esta factura (opcional)
               </label>
-              <div className="flex flex-col gap-1 rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+              <div className="flex flex-col gap-1 rounded-lg border p-2">
                 {receipts.map((r) => (
-                  <label key={r.id} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                  <label key={r.id} className="flex items-center gap-2 text-xs">
                     <input
                       type="checkbox"
                       checked={selectedReceiptIds.includes(r.id)}
@@ -333,11 +333,11 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm text-slate-600 dark:text-slate-400">IVA / Percepciones</label>
+              <label className="text-sm text-muted-foreground">IVA / Percepciones</label>
               <button
                 type="button"
                 onClick={() => setTaxLines((prev) => [...prev, defaultIvaCreditoLine()])}
-                className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                className="text-xs text-primary hover:text-primary"
               >
                 + agregar fila
               </button>
@@ -345,7 +345,7 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
             {taxLines.map((line, i) => {
               const isStandardRate = line.taxRate !== undefined && STANDARD_VAT_RATES.includes(line.taxRate);
               return (
-                <div key={i} className="flex flex-col gap-1 rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+                <div key={i} className="flex flex-col gap-1 rounded-lg border p-2">
                   <div className="flex items-center gap-2">
                     <select
                       className={`${inputClass} w-40`}
@@ -387,7 +387,7 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => setTaxLines((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="ml-auto text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      className="ml-auto text-destructive hover:text-destructive"
                     >
                       ✕
                     </button>
@@ -462,7 +462,7 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
               type="file"
               accept="image/jpeg,image/png,image/webp,application/pdf"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-sm text-slate-700 dark:text-slate-300"
+              className="text-sm"
             />
           </Field>
 
@@ -470,24 +470,24 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
             <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
 
-          <p className="text-right text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <p className="text-right text-sm font-semibold">
             Total: ${total.toFixed(2)}
           </p>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="mt-2 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+              className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
             >
               {mutation.isPending ? 'Registrando...' : 'Registrar factura'}
             </button>
@@ -501,7 +501,7 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );

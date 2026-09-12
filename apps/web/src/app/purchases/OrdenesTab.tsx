@@ -18,9 +18,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300',
+  DRAFT: 'bg-muted',
   SENT: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
-  CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
+  CANCELLED: 'bg-muted text-muted-foreground',
 };
 
 export default function OrdenesTab() {
@@ -41,21 +41,21 @@ export default function OrdenesTab() {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
         >
           Nueva orden
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : !purchaseOrders || purchaseOrders.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-600">Todavía no hay órdenes de compra</p>
+        <p className="text-sm text-muted-foreground">Todavía no hay órdenes de compra</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-left text-slate-500">
+              <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                 <th className="p-3">Número</th>
                 <th className="p-3">Proveedor</th>
                 <th className="p-3">Fecha</th>
@@ -67,10 +67,10 @@ export default function OrdenesTab() {
             </thead>
             <tbody>
               {purchaseOrders.map((po) => (
-                <tr key={po.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                  <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">{po.number}</td>
-                  <td className="p-3 text-slate-800 dark:text-slate-200">{po.supplier.name}</td>
-                  <td className="p-3 text-slate-600 dark:text-slate-400">
+                <tr key={po.id} className="border-b border-border/50">
+                  <td className="p-3 font-mono text-xs">{po.number}</td>
+                  <td className="p-3">{po.supplier.name}</td>
+                  <td className="p-3 text-muted-foreground">
                     {new Date(po.createdAt).toLocaleDateString('es-AR')}
                   </td>
                   <td className="p-3">
@@ -90,11 +90,11 @@ export default function OrdenesTab() {
                         }
                         return (
                           <span
-                            className="relative overflow-hidden rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200"
+                            className="relative overflow-hidden rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
                             title={`${receipt.percent}% recibido`}
                           >
                             <span
-                              className="absolute inset-y-0 left-0 z-0 bg-indigo-300 dark:bg-indigo-700"
+                              className="absolute inset-y-0 left-0 z-0 bg-primary/30"
                               style={{ width: `${receipt.percent}%` }}
                             />
                             <span className="relative z-10">{receipt.label}</span>
@@ -110,7 +110,7 @@ export default function OrdenesTab() {
                       onFollowUp={() => setFollowUpId(po.id)}
                     />
                   </td>
-                  <td className="p-3 text-right text-slate-800 dark:text-slate-200">
+                  <td className="p-3 text-right">
                     ${Number(po.total).toFixed(2)} {po.currency.code}
                   </td>
                   <td className="p-3">
@@ -126,7 +126,7 @@ export default function OrdenesTab() {
                       )}
                       <button
                         onClick={() => setDetailId(po.id)}
-                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                        className="text-primary hover:text-primary"
                       >
                         Ver
                       </button>
@@ -183,7 +183,7 @@ function ReceiveGoodsLoader({ purchaseOrderId, onClose }: { purchaseOrderId: str
   if (isLoading || !data) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <p className="text-sm text-slate-300">Cargando...</p>
+        <p className="text-sm">Cargando...</p>
       </div>
     );
   }

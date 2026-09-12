@@ -26,17 +26,15 @@ export default function PurchasesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Compras</h1>
+      <h1 className="text-xl font-semibold">Compras</h1>
 
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex gap-2 border-b">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`px-3 py-2 text-sm font-medium transition ${
-              tab === t.id
-                ? 'border-b-2 border-indigo-500 text-slate-900 dark:text-slate-100'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              tab === t.id ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {t.label}

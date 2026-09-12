@@ -20,9 +20,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300',
+  DRAFT: 'bg-muted',
   SENT: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
-  CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
+  CANCELLED: 'bg-muted text-muted-foreground',
 };
 
 const CHANNEL_LABELS: Record<string, string> = { EMAIL: 'Email', WHATSAPP: 'WhatsApp' };
@@ -70,22 +70,22 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
       <div
-        className={`flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl transition-transform duration-200 ${
+        className={`flex h-full w-full max-w-lg flex-col overflow-y-auto border-l bg-card p-6 shadow-2xl transition-transform duration-200 ${
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{data?.number ?? '...'}</h2>
-            {data && <p className="text-xs text-slate-500">{data.supplier.name}</p>}
+            <h2 className="text-lg font-semibold">{data?.number ?? '...'}</h2>
+            {data && <p className="text-xs text-muted-foreground">{data.supplier.name}</p>}
           </div>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {isLoading || !data ? (
-          <div className="flex h-40 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-40 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : (
           <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -108,11 +108,11 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
             </div>
 
             <section>
-              <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Líneas</h3>
-              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">Líneas</h3>
+              <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-left text-slate-500">
+                    <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                       <th className="p-2">Artículo</th>
                       <th className="p-2 text-right">Cant.</th>
                       <th className="p-2 text-right">Costo</th>
@@ -122,23 +122,23 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                   </thead>
                   <tbody>
                     {data.lines.map((line) => (
-                      <tr key={line.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
+                      <tr key={line.id} className="border-b border-border/50">
                         <td className="p-2">
-                          <p className="text-slate-800 dark:text-slate-200">
+                          <p className="">
                             {line.articleVariant.article.name}
                             {buildVariantLabel(line.articleVariant) && (
-                              <span className="text-slate-500"> · {buildVariantLabel(line.articleVariant)}</span>
+                              <span className="text-muted-foreground"> · {buildVariantLabel(line.articleVariant)}</span>
                             )}
                           </p>
-                          <p className="font-mono text-[10px] text-slate-500">{line.articleVariant.sku}</p>
+                          <p className="font-mono text-[10px] text-muted-foreground">{line.articleVariant.sku}</p>
                         </td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">{line.quantity}</td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">
+                        <td className="p-2 text-right">{line.quantity}</td>
+                        <td className="p-2 text-right">
                           ${Number(line.unitCost).toFixed(2)}
                         </td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">{line.receivedQuantity}</td>
+                        <td className="p-2 text-right">{line.receivedQuantity}</td>
                         <td
-                          className={`p-2 text-right ${Number(line.pendingQuantity) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}
+                          className={`p-2 text-right ${Number(line.pendingQuantity) > 0 ? 'text-amber-600 dark:text-amber-400' : ' '}`}
                         >
                           {line.pendingQuantity}
                         </td>
@@ -147,29 +147,29 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-right text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <p className="mt-2 text-right text-sm font-semibold">
                 Total: ${Number(data.total).toFixed(2)} {data.currency.code}
               </p>
             </section>
 
             {data.notes && (
               <section>
-                <h3 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">Notas</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300">{data.notes}</p>
+                <h3 className="mb-1 text-sm font-medium text-muted-foreground">Notas</h3>
+                <p className="text-sm">{data.notes}</p>
               </section>
             )}
 
             {data.receipts.length > 0 && (
               <section>
-                <h3 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">Recepciones</h3>
+                <h3 className="mb-2 text-sm font-medium text-muted-foreground">Recepciones</h3>
                 <div className="flex flex-col gap-2">
                   {data.receipts.map((receipt) => (
                     <div
                       key={receipt.id}
-                      className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 text-xs"
+                      className="rounded-lg border p-3 text-xs"
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-slate-800 dark:text-slate-200">
+                        <p className="">
                           {/* receivedAt comes from a date-only <input type="date"> (ReceiveGoodsModal),
                               stored as UTC midnight - display with timeZone: 'UTC' too, otherwise a
                               viewer behind UTC (e.g. Argentina) sees it roll back a day. Same pitfall
@@ -182,20 +182,20 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                             href={resolveUploadUrl(receipt.attachmentUrl) ?? '#'}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                            className="text-primary hover:text-primary"
                           >
                             Ver comprobante
                           </a>
                         )}
                       </div>
-                      <p className="mt-1 text-slate-500">
+                      <p className="mt-1 text-muted-foreground">
                         {receipt.lines.length} línea{receipt.lines.length === 1 ? '' : 's'} · recibido por{' '}
                         {receipt.receivedBy.name ?? receipt.receivedBy.email}
                       </p>
-                      {receipt.notes && <p className="mt-1 text-slate-600 dark:text-slate-400">{receipt.notes}</p>}
+                      {receipt.notes && <p className="mt-1 text-muted-foreground">{receipt.notes}</p>}
 
                       {receipt.returns.length > 0 && (
-                        <div className="mt-2 flex flex-col gap-1 border-t border-slate-200/50 dark:border-slate-800/50 pt-2">
+                        <div className="mt-2 flex flex-col gap-1 border-t border-border/50 pt-2">
                           {receipt.returns.map((ret) => (
                             <p key={ret.id} className="text-amber-700 dark:text-amber-400">
                               Devuelto{' '}
@@ -210,7 +210,7 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                       <button
                         type="button"
                         onClick={() => setReturningReceiptId(receipt.id)}
-                        className="mt-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        className="mt-2 text-destructive hover:text-destructive"
                       >
                         Devolver mercadería
                       </button>
@@ -220,10 +220,10 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
               </section>
             )}
 
-            <section className="flex flex-col gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
+            <section className="flex flex-col gap-2 border-t pt-4">
               <div className="flex flex-wrap items-center gap-2">
                 <select
-                  className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                  className="rounded-lg border bg-muted px-2 py-1.5 text-xs"
                   value={pdfStyle}
                   onChange={(e) => {
                     setPdfStyle(e.target.value as PdfStyle);
@@ -239,7 +239,7 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                 <button
                   type="button"
                   onClick={() => void purchaseOrdersApi.openPdf(purchaseOrderId, pdfStyle)}
-                  className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
+                  className="rounded-lg border px-3 py-1.5 text-xs transition hover:bg-muted"
                 >
                   Descargar PDF
                 </button>
@@ -250,7 +250,7 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                   <button
                     type="button"
                     onClick={() => setSending(true)}
-                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"
                   >
                     {data.sentAt ? 'Reenviar' : 'Enviar'}
                   </button>
@@ -274,14 +274,14 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                         type="button"
                         onClick={() => cancelMutation.mutate()}
                         disabled={cancelMutation.isPending}
-                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
                       >
                         {cancelMutation.isPending ? 'Cancelando...' : 'Confirmar cancelación'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmingCancel(false)}
-                        className="rounded-lg px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+                        className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
                       >
                         Volver
                       </button>
@@ -290,7 +290,7 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
                     <button
                       type="button"
                       onClick={() => setConfirmingCancel(true)}
-                      className="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
+                      className="rounded-lg border border-destructive/30 px-3 py-1.5 text-xs text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
                     >
                       Cancelar orden
                     </button>
@@ -342,8 +342,8 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="text-slate-800 dark:text-slate-200">{children}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="">{children}</p>
     </div>
   );
 }

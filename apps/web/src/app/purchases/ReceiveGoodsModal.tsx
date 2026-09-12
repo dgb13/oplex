@@ -12,7 +12,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -99,18 +99,18 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold">
             Recibir mercadería — {purchaseOrder.number}
           </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {pendingLines.length === 0 ? (
-          <p className="py-10 text-center text-slate-500">Esta orden ya está recibida por completo.</p>
+          <p className="py-10 text-center text-muted-foreground">Esta orden ya está recibida por completo.</p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
@@ -146,7 +146,7 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   capture="environment"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="text-sm text-slate-700 dark:text-slate-300"
+                  className="text-sm"
                 />
               </Field>
             </div>
@@ -156,13 +156,13 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-slate-600 dark:text-slate-400">
+              <label className="text-sm text-muted-foreground">
                 Líneas pendientes — la cantidad no puede superar lo pendiente
               </label>
-              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-left text-slate-500">
+                    <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                       <th className="p-2">Artículo</th>
                       <th className="p-2 text-right">Pedido</th>
                       <th className="p-2 text-right">Recibido</th>
@@ -172,16 +172,16 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
                   </thead>
                   <tbody>
                     {pendingLines.map((line) => (
-                      <tr key={line.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
+                      <tr key={line.id} className="border-b border-border/50">
                         <td className="p-2">
-                          <p className="text-slate-800 dark:text-slate-200">{line.articleVariant.article.name}</p>
-                          <p className="font-mono text-[10px] text-slate-500">{line.articleVariant.sku}</p>
+                          <p className="">{line.articleVariant.article.name}</p>
+                          <p className="font-mono text-[10px] text-muted-foreground">{line.articleVariant.sku}</p>
                         </td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">{line.quantity}</td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">
+                        <td className="p-2 text-right">{line.quantity}</td>
+                        <td className="p-2 text-right">
                           {line.receivedQuantity}
                         </td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">
+                        <td className="p-2 text-right">
                           {line.pendingQuantity}
                         </td>
                         <td className="p-2 text-right">
@@ -204,20 +204,20 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
               </div>
             </div>
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="mt-2 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+                className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={mutation.isPending}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
               >
                 {mutation.isPending ? 'Registrando...' : 'Registrar recepción'}
               </button>
@@ -232,7 +232,7 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );

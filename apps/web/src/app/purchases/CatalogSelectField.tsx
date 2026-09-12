@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Shared by QuoteRequestFormModal and PurchaseOrderFormModal - a catalog
  * dropdown (transporte/forma de pago/plazo de entrega) with a "+ agregar"
@@ -44,11 +44,11 @@ export default function CatalogSelectField({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+        <label className="text-sm text-muted-foreground">{label}</label>
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
-          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+          className="text-xs text-primary hover:text-primary"
         >
           + agregar
         </button>
@@ -66,7 +66,7 @@ export default function CatalogSelectField({
             type="button"
             disabled={!newName.trim() || createMutation.isPending}
             onClick={() => createMutation.mutate(newName.trim())}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
           >
             Agregar
           </button>

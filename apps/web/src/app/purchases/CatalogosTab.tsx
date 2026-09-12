@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function CatalogosTab() {
   return (
@@ -54,8 +54,8 @@ function CatalogCard({ type, title }: { type: CatalogRouteType; title: string })
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-5">
-      <h2 className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">{title}</h2>
+    <div className="rounded-xl border bg-card p-5">
+      <h2 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h2>
 
       <form onSubmit={handleAdd} className="mb-3 flex gap-2">
         <input
@@ -67,13 +67,13 @@ function CatalogCard({ type, title }: { type: CatalogRouteType; title: string })
         <button
           type="submit"
           disabled={createMutation.isPending || !newName.trim()}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
         >
           +
         </button>
       </form>
 
-      <label className="mb-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500">
+      <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
         <input
           type="checkbox"
           checked={includeInactive}
@@ -83,7 +83,7 @@ function CatalogCard({ type, title }: { type: CatalogRouteType; title: string })
       </label>
 
       {isLoading ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : items && items.length > 0 ? (
         <ul className="flex flex-col gap-1">
           {items.map((item) => (
@@ -96,7 +96,7 @@ function CatalogCard({ type, title }: { type: CatalogRouteType; title: string })
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-slate-400 dark:text-slate-600">Todavía no hay nada cargado</p>
+        <p className="text-sm text-muted-foreground">Todavía no hay nada cargado</p>
       )}
     </div>
   );
@@ -149,7 +149,7 @@ function CatalogRow({
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="flex-1 truncate text-left text-sm text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+          className="flex-1 truncate text-left text-sm hover:text-primary"
         >
           {item.name}
         </button>

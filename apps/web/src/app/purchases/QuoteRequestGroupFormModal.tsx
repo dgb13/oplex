@@ -15,7 +15,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** "Pedir cotización a varios proveedores" - same lines/terms sent to N
  * suppliers at once (see QuoteRequestService.createGroup), so this is
@@ -110,36 +110,36 @@ export default function QuoteRequestGroupFormModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold">
             Pedir cotización a varios proveedores
           </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {!ready ? (
-          <div className="py-10 text-center text-slate-500">Cargando...</div>
+          <div className="py-10 text-center text-muted-foreground">Cargando...</div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <label className="text-sm text-slate-600 dark:text-slate-400">
+                <label className="text-sm text-muted-foreground">
                   Proveedores a cotizar ({supplierIds.length} elegidos)
                 </label>
                 <button
                   type="button"
                   onClick={() => setCreatingSupplier(true)}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-xs text-primary hover:text-primary"
                 >
                   + nuevo proveedor
                 </button>
               </div>
-              <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-slate-300 dark:border-slate-700 p-2">
+              <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
                 {suppliers.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-200">
+                  <label key={s.id} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={supplierIds.includes(s.id)}
@@ -200,11 +200,11 @@ export default function QuoteRequestGroupFormModal({ onClose }: Props) {
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm text-slate-600 dark:text-slate-400">Líneas (mismas para todos)</label>
+                <label className="text-sm text-muted-foreground">Líneas (mismas para todos)</label>
                 <button
                   type="button"
                   onClick={addLine}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-xs text-primary hover:text-primary"
                 >
                   + agregar línea
                 </button>
@@ -229,33 +229,33 @@ export default function QuoteRequestGroupFormModal({ onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => removeLine(index)}
-                      className="text-slate-500 hover:text-red-600 dark:hover:text-red-400"
+                      className="text-muted-foreground hover:text-destructive"
                     >
                       ✕
                     </button>
                   )}
                 </div>
               ))}
-              <p className="text-xs text-slate-500 dark:text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Se crea un pedido de cotización independiente por cada proveedor elegido, con estas
                 mismas líneas. Cada proveedor carga su propio costo por artículo antes de comparar.
               </p>
             </div>
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="mt-2 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+                className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={mutation.isPending}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
               >
                 {mutation.isPending ? 'Creando...' : 'Crear pedidos'}
               </button>
@@ -278,7 +278,7 @@ export default function QuoteRequestGroupFormModal({ onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );

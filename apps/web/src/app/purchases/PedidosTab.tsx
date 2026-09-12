@@ -42,28 +42,28 @@ export default function PedidosTab() {
         <button
           type="button"
           onClick={() => setCreatingGroup(true)}
-          className="rounded-lg border border-indigo-300 dark:border-indigo-700 px-4 py-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-50 dark:hover:bg-indigo-950"
+          className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/5"
         >
           Pedir a varios proveedores
         </button>
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
         >
           Nuevo pedido
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : !quoteRequests || quoteRequests.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-600">Todavía no hay pedidos de cotización</p>
+        <p className="text-sm text-muted-foreground">Todavía no hay pedidos de cotización</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-left text-slate-500">
+              <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                 <th className="p-3">Número</th>
                 <th className="p-3">Proveedor</th>
                 <th className="p-3">Fecha</th>
@@ -76,10 +76,10 @@ export default function PedidosTab() {
               {quoteRequests.map((qr) => {
                 const { label, colorClass, purchaseOrder } = describeQuoteRequestStatus(qr);
                 return (
-                  <tr key={qr.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">{qr.number}</td>
-                    <td className="p-3 text-slate-800 dark:text-slate-200">{qr.supplier.name}</td>
-                    <td className="p-3 text-slate-600 dark:text-slate-400">
+                  <tr key={qr.id} className="border-b border-border/50">
+                    <td className="p-3 font-mono text-xs">{qr.number}</td>
+                    <td className="p-3">{qr.supplier.name}</td>
+                    <td className="p-3 text-muted-foreground">
                       {new Date(qr.createdAt).toLocaleDateString('es-AR')}
                     </td>
                     <td className="p-3">
@@ -87,7 +87,7 @@ export default function PedidosTab() {
                       {purchaseOrder && (
                         <button
                           onClick={() => setViewOrderId(purchaseOrder.id)}
-                          className="ml-2 inline-flex items-center gap-1 font-mono text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                          className="ml-2 inline-flex items-center gap-1 font-mono text-xs text-primary hover:text-primary"
                         >
                           {resolveUploadUrl(purchaseOrder.sentToContactAvatarUrl) && (
                             <img
@@ -105,7 +105,7 @@ export default function PedidosTab() {
                         </span>
                       )}
                     </td>
-                    <td className="p-3 text-right text-slate-800 dark:text-slate-200">
+                    <td className="p-3 text-right">
                       {qr.estimatedTotal != null ? `$${Number(qr.estimatedTotal).toFixed(2)}` : '—'}{' '}
                       {qr.currency.code}
                     </td>
@@ -121,14 +121,14 @@ export default function PedidosTab() {
                         ) : null}
                         <button
                           onClick={() => setDetailId(qr.id)}
-                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                          className="text-primary hover:text-primary"
                         >
                           Ver
                         </button>
                         <button
                           onClick={() => cloneMutation.mutate(qr.id)}
                           disabled={cloneMutation.isPending}
-                          className="text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-50"
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
                         >
                           Clonar
                         </button>

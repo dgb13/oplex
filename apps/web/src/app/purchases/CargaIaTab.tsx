@@ -10,7 +10,7 @@ import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
 
 const inputClass =
-  'w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'w-full h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const TAX_LINE_TYPE_LABELS: Record<PurchaseInvoiceTaxLineType, string> = {
   IVA_CREDITO: 'IVA Crédito',
@@ -69,7 +69,7 @@ const CONFIDENCE_BANNER: Record<ConfidenceLevel, { label: string; detail: string
     label: '🔴 Confianza baja',
     detail:
       'La foto puede estar borrosa, manchada, doblada o con poca luz - revisá TODOS los campos antes de confirmar, no sólo los marcados.',
-    className: 'border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+    className: 'border-destructive/30 bg-destructive/5 text-destructive dark:border-destructive/30 dark:bg-destructive/10 dark:text-destructive',
   },
 };
 
@@ -89,8 +89,8 @@ function SourceBadge({ field }: { field: ExtractedField<unknown> }) {
     confidence >= 0.85
       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
       : confidence >= 0.6
-        ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+        ? 'bg-muted text-muted-foreground'
+        : 'bg-destructive/10 text-destructive';
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${colorClass}`}
@@ -110,11 +110,11 @@ function SourceBadge({ field }: { field: ExtractedField<unknown> }) {
 function UsageBanner({ usage }: { usage: AiInvoiceScanUsage }) {
   if (usage.quota == null) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-slate-800 dark:bg-slate-900">
-        <span className="text-slate-500 dark:text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-xs">
+        <span className="text-muted-foreground">
           Tu plan actual ({usage.planName}) no incluye la carga de comprobantes con IA.
         </span>
-        <a href="/settings/billing" className="whitespace-nowrap font-semibold text-indigo-500 hover:text-indigo-400">
+        <a href="/settings/billing" className="whitespace-nowrap font-semibold text-primary hover:text-primary">
           Mejorar plan →
         </a>
       </div>
@@ -125,20 +125,20 @@ function UsageBanner({ usage }: { usage: AiInvoiceScanUsage }) {
   const low = availablePercent <= 20;
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 px-4 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="text-slate-600 dark:text-slate-400">
+        <span className="text-muted-foreground">
           Cupo IA ({usage.planName}): {usage.used}/{usage.quota} usados este mes — {availablePercent}% disponible
         </span>
         {low && (
-          <a href="/settings/billing" className="whitespace-nowrap font-semibold text-indigo-500 hover:text-indigo-400">
+          <a href="/settings/billing" className="whitespace-nowrap font-semibold text-primary hover:text-primary">
             Mejorar plan →
           </a>
         )}
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className={`h-full rounded-full ${low ? 'bg-red-500' : 'bg-indigo-500'}`}
+          className={`h-full rounded-full ${low ? 'bg-destructive/50' : 'bg-primary'}`}
           style={{ width: `${100 - availablePercent}%` }}
         />
       </div>
@@ -149,7 +149,7 @@ function UsageBanner({ usage }: { usage: AiInvoiceScanUsage }) {
 function Field({ label, field, children }: { label: string; field: ExtractedField<unknown>; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-xs text-slate-500">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {label}
         <SourceBadge field={field} />
       </span>
@@ -345,7 +345,7 @@ export default function CargaIaTab() {
     return (
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Revisar comprobante</h2>
+          <h2 className="text-base font-semibold">Revisar comprobante</h2>
           <button
             type="button"
             onClick={() => {
@@ -353,7 +353,7 @@ export default function CargaIaTab() {
               setForm(null);
               setUploadedFile(null);
             }}
-            className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             Cancelar y volver a subir
           </button>
@@ -364,12 +364,12 @@ export default function CargaIaTab() {
           <span className="ml-2">{banner.detail}</span>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Proveedor</p>
+        <div className="rounded-xl border bg-card p-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proveedor</p>
           {matchedSupplier || supplierId ? (
-            <p className="text-sm text-slate-800 dark:text-slate-200">
+            <p className="text-sm">
               {(supplierId && suppliersQuery.data?.find((c) => c.id === supplierId)?.name) || matchedSupplier?.name}{' '}
-              <span className="text-xs text-slate-500">(vinculado por CUIT)</span>
+              <span className="text-xs text-muted-foreground">(vinculado por CUIT)</span>
             </p>
           ) : creatingSupplier ? (
             <div className="flex items-center gap-2">
@@ -383,7 +383,7 @@ export default function CargaIaTab() {
                 type="button"
                 disabled={!newSupplierName || createSupplierMutation.isPending}
                 onClick={() => createSupplierMutation.mutate(newSupplierName)}
-                className="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 Crear
               </button>
@@ -400,7 +400,7 @@ export default function CargaIaTab() {
                   setNewSupplierName(form.supplierName);
                   setCreatingSupplier(true);
                 }}
-                className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm hover:bg-muted"
               >
                 + Crear proveedor
               </button>
@@ -408,7 +408,7 @@ export default function CargaIaTab() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 rounded-xl border bg-card p-5 sm:grid-cols-4">
           <Field label="Nº de factura" field={extraction.supplierInvoiceNumber}>
             <input
               value={form.supplierInvoiceNumber}
@@ -467,8 +467,8 @@ export default function CargaIaTab() {
           </Field>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Impuestos</p>
+        <div className="rounded-xl border bg-card p-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Impuestos</p>
           <div className="flex flex-col gap-2">
             {form.taxLines.map((line, i) => {
               const extractedLine = extraction.taxLines[i];
@@ -517,7 +517,7 @@ export default function CargaIaTab() {
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, taxLines: form.taxLines.filter((_, j) => j !== i) })}
-                    className="mb-2 text-xs text-red-500 hover:text-red-400"
+                    className="mb-2 text-xs text-destructive hover:text-destructive"
                   >
                     Quitar
                   </button>
@@ -532,24 +532,24 @@ export default function CargaIaTab() {
                   taxLines: [...form.taxLines, { type: 'IVA_CREDITO', concept: '', amount: 0, netAmount: 0 }],
                 })
               }
-              className="mt-1 self-start text-xs text-indigo-500 hover:text-indigo-400"
+              className="mt-1 self-start text-xs text-primary hover:text-primary"
             >
               + Agregar línea
             </button>
           </div>
-          <p className="mt-4 text-right text-sm font-semibold text-slate-800 dark:text-slate-200">
+          <p className="mt-4 text-right text-sm font-semibold">
             Total: ${total.toFixed(2)}
           </p>
         </div>
 
-        {confirmError && <p className="text-sm text-red-500">{confirmError}</p>}
+        {confirmError && <p className="text-sm text-destructive">{confirmError}</p>}
 
         <div className="flex justify-end">
           <button
             type="button"
             disabled={confirmMutation.isPending || (!matchedSupplier && !supplierId)}
             onClick={() => confirmMutation.mutate()}
-            className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
           >
             {confirmMutation.isPending ? 'Confirmando...' : 'Confirmar y crear factura'}
           </button>
@@ -566,7 +566,7 @@ export default function CargaIaTab() {
             ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
             : availability?.available === 'yellow'
               ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
-              : 'border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
+              : 'border-destructive/30 bg-destructive/5 text-destructive dark:border-destructive/30 dark:bg-destructive/10 dark:text-destructive'
         }`}
       >
         <span>
@@ -583,7 +583,7 @@ export default function CargaIaTab() {
       {availability && 'usage' in availability && availability.usage && <UsageBanner usage={availability.usage} />}
 
       {!canUpload ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Podés seguir cargando facturas a mano desde la pestaña "Facturas" mientras tanto.
         </p>
       ) : (
@@ -600,20 +600,20 @@ export default function CargaIaTab() {
             if (file) handleFile(file);
           }}
           className={`flex flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition ${
-            dragOver ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-slate-300 dark:border-slate-700'
+            dragOver ? 'border-primary bg-primary/5' : ''
           }`}
         >
           {extractMutation.isPending ? (
-            <p className="text-sm text-slate-500">Leyendo el comprobante...</p>
+            <p className="text-sm text-muted-foreground">Leyendo el comprobante...</p>
           ) : (
             <>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-muted-foreground">
                 Arrastrá una foto o PDF de la factura acá, o
               </p>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
               >
                 Elegir archivo / sacar foto
               </button>
@@ -631,7 +631,7 @@ export default function CargaIaTab() {
               />
             </>
           )}
-          {extractError && <p className="text-sm text-red-500">{extractError}</p>}
+          {extractError && <p className="text-sm text-destructive">{extractError}</p>}
         </div>
       )}
     </div>

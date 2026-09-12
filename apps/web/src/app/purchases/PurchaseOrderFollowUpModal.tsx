@@ -12,7 +12,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function buildTemplates(contact: string, orderNumber: string, dateLabel: string): string[] {
   return [
@@ -67,14 +67,14 @@ export default function PurchaseOrderFollowUpModal({ order, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Mensaje rápido</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Mensaje rápido</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Para {contact} · OC {order.number}
         </p>
 
@@ -84,7 +84,7 @@ export default function PurchaseOrderFollowUpModal({ order, onClose }: Props) {
               key={i}
               type="button"
               onClick={() => setMessage(template)}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
+              className="rounded-lg border px-3 py-2 text-left text-xs transition hover:bg-muted"
             >
               {template}
             </button>
@@ -101,14 +101,14 @@ export default function PurchaseOrderFollowUpModal({ order, onClose }: Props) {
           placeholder="Elegí una de las opciones de arriba, o escribí tu propio mensaje..."
         />
 
-        {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         {sent && <p className="mt-2 text-xs text-green-600 dark:text-green-400">{sent}</p>}
 
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+            className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground"
           >
             Cerrar
           </button>
@@ -130,7 +130,7 @@ export default function PurchaseOrderFollowUpModal({ order, onClose }: Props) {
             }}
             disabled={!emailTarget || !message.trim() || emailMutation.isPending}
             title={!emailTarget ? 'Esta orden no tiene un email registrado' : undefined}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-40"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40"
           >
             {emailMutation.isPending ? 'Enviando...' : 'Enviar por correo'}
           </button>

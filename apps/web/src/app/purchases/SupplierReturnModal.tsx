@@ -13,7 +13,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Devolución al proveedor (p. ej. unidades defectuosas) de una recepción
  * puntual - no de la OC en general, siempre se elige de qué remito
@@ -94,16 +94,16 @@ export default function SupplierReturnModal({ purchaseOrderId, receipt, orderLin
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Devolver mercadería</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Devolver mercadería</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {returnableLines.length === 0 ? (
-          <p className="py-10 text-center text-slate-500">No queda nada disponible para devolver de esta recepción.</p>
+          <p className="py-10 text-center text-muted-foreground">No queda nada disponible para devolver de esta recepción.</p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Field label="Motivo">
@@ -121,13 +121,13 @@ export default function SupplierReturnModal({ purchaseOrderId, receipt, orderLin
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-slate-600 dark:text-slate-400">
+              <label className="text-sm text-muted-foreground">
                 Líneas de esta recepción — la cantidad no puede superar lo disponible
               </label>
-              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-left text-slate-500">
+                    <tr className="border-b bg-muted/40 text-left text-muted-foreground">
                       <th className="p-2">Artículo</th>
                       <th className="p-2 text-right">Recibido</th>
                       <th className="p-2 text-right">Disponible</th>
@@ -136,15 +136,15 @@ export default function SupplierReturnModal({ purchaseOrderId, receipt, orderLin
                   </thead>
                   <tbody>
                     {returnableLines.map(({ line, orderLine, available }) => (
-                      <tr key={line.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
+                      <tr key={line.id} className="border-b border-border/50">
                         <td className="p-2">
-                          <p className="text-slate-800 dark:text-slate-200">
+                          <p className="">
                             {orderLine?.articleVariant.article.name ?? '—'}
                           </p>
-                          <p className="font-mono text-[10px] text-slate-500">{orderLine?.articleVariant.sku}</p>
+                          <p className="font-mono text-[10px] text-muted-foreground">{orderLine?.articleVariant.sku}</p>
                         </td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">{line.quantity}</td>
-                        <td className="p-2 text-right text-slate-700 dark:text-slate-300">{available}</td>
+                        <td className="p-2 text-right">{line.quantity}</td>
+                        <td className="p-2 text-right">{available}</td>
                         <td className="p-2 text-right">
                           <input
                             type="number"
@@ -165,20 +165,20 @@ export default function SupplierReturnModal({ purchaseOrderId, receipt, orderLin
               </div>
             </div>
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="mt-2 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
+                className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={mutation.isPending}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
               >
                 {mutation.isPending ? 'Registrando...' : 'Registrar devolución'}
               </button>
@@ -193,7 +193,7 @@ export default function SupplierReturnModal({ purchaseOrderId, receipt, orderLin
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );
