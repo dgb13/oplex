@@ -1,5 +1,6 @@
 'use client';
 
+import { Card, CardContent } from '@/components/ui/card';
 import { invoicingApi } from '@/lib/invoicing';
 import { useQuery } from '@tanstack/react-query';
 
@@ -19,15 +20,11 @@ export default function ResumenTab() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex h-40 items-center justify-center text-slate-500">Cargando...</div>
-    );
+    return <div className="flex h-40 items-center justify-center text-muted-foreground">Cargando...</div>;
   }
   if (error || !data) {
     return (
-      <div className="flex h-40 items-center justify-center text-red-600 dark:text-red-400">
-        Error al cargar el resumen
-      </div>
+      <div className="flex h-40 items-center justify-center text-destructive">Error al cargar el resumen</div>
     );
   }
 
@@ -49,33 +46,34 @@ export default function ResumenTab() {
         <KpiCard label="Saldo pendiente" value={`$${totalPendiente.toFixed(2)}`} />
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">Facturas por estado</h2>
-        {data.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin facturas todavía</p>
-        ) : (
-          <div className="flex flex-wrap gap-3">
-            {Object.entries(countByStatus).map(([status, count]) => (
-              <div
-                key={status}
-                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 py-2"
-              >
-                <p className="text-xs text-slate-500">{STATUS_LABELS[status] ?? status}</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{count}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <Card>
+        <CardContent>
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Facturas por estado</h2>
+          {data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin facturas todavía</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(countByStatus).map(([status, count]) => (
+                <Card key={status} size="sm" className="bg-muted/40 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">{STATUS_LABELS[status] ?? status}</p>
+                  <p className="text-lg font-semibold">{count}</p>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 function KpiCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-      <p className="text-xs text-slate-600 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
-    </div>
+    <Card>
+      <CardContent>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-1 text-2xl font-bold">{value}</p>
+      </CardContent>
+    </Card>
   );
 }

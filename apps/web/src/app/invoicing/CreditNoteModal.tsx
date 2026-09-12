@@ -1,5 +1,8 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { invoicingApi, type Invoice } from '@/lib/invoicing';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,9 +14,6 @@ interface Props {
   invoice: Invoice;
   onClose: () => void;
 }
-
-const inputClass =
-  'w-24 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
 
 export default function CreditNoteModal({ invoice, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -75,39 +75,36 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nota de crédito</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nota de crédito</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Acreditá {invoice.documentLetter}-{invoice.number}: elegí cuánto devolver de cada línea. Dejar
           todas las cantidades como están acredita la factura completa.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {detailQuery.isLoading && <p className="text-sm text-slate-500">Cargando líneas...</p>}
+          {detailQuery.isLoading && <p className="text-sm text-muted-foreground">Cargando líneas...</p>}
           {detailQuery.data && (
             <div className="flex flex-col gap-2">
               {detailQuery.data.lines.map((line) => (
-                <div
-                  key={line.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2"
-                >
-                  <div className="text-sm text-slate-900 dark:text-slate-100">
+                <div key={line.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                  <div className="text-sm">
                     <div>{line.articleVariant.article.name}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       {line.articleVariant.sku} — vendidas: {line.quantity}
                     </div>
                   </div>
-                  <input
+                  <Input
                     type="number"
                     step="any"
                     min="0"
                     max={line.quantity}
-                    className={inputClass}
+                    className="w-24"
                     value={quantities[line.id] ?? ''}
                     onChange={(e) =>
                       setQuantities((prev) => ({ ...prev, [line.id]: e.target.value }))
@@ -119,14 +116,8 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Motivo</label>
-            <textarea
-              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Devolución de mercadería..."
-            />
+            <label className="text-sm text-muted-foreground">Motivo</label>
+            <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Devolución de mercadería..." />
           </div>
           {!afipConfigured && (
             <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -139,23 +130,19 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
             </p>
           )}
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={mutation.isPending || detailQuery.isLoading || !afipConfigured}
               title={!afipConfigured ? 'Configurá el certificado AFIP en Preferencias primero' : undefined}
-              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
+              className="bg-red-700 text-white hover:bg-red-600"
             >
               {mutation.isPending ? 'Emitiendo...' : 'Emitir nota de crédito'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

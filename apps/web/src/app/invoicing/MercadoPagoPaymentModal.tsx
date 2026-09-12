@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { mercadoPagoApi, type PaymentIntent } from '@/lib/mercadopago';
 import { getSocket } from '@/lib/socket';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -104,16 +106,14 @@ export default function MercadoPagoPaymentModal({ invoice, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Cobrar con Mercado Pago
-          </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Cobrar con Mercado Pago</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           {documentNumber} · saldo pendiente ${invoice.balanceDue}
         </p>
 
@@ -123,29 +123,26 @@ export default function MercadoPagoPaymentModal({ invoice, onClose }: Props) {
               ✓
             </span>
             <p className="text-sm font-medium text-green-700 dark:text-green-400">¡Pagado!</p>
-            <button
-              onClick={onClose}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-            >
-              Cerrar
-            </button>
+            <Button onClick={onClose}>Cerrar</Button>
           </div>
         ) : createMutation.isPending ? (
-          <div className="flex h-40 items-center justify-center text-sm text-slate-500">
+          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
             Generando link de cobro...
           </div>
         ) : error ? (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            <button
+            <p className="text-sm text-destructive">{error}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="self-start"
               onClick={() => {
                 setError('');
                 createMutation.mutate();
               }}
-              className="self-start rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
             >
               Reintentar
-            </button>
+            </Button>
           </div>
         ) : intent?.initPoint ? (
           <div className="flex flex-col items-center gap-4">
@@ -158,38 +155,28 @@ export default function MercadoPagoPaymentModal({ invoice, onClose }: Props) {
             )}
 
             <div className="flex w-full items-center gap-2">
-              <input
-                readOnly
-                value={intent.initPoint}
-                className="flex-1 truncate rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-xs text-slate-700 dark:text-slate-300"
-              />
-              <button
-                onClick={() => void copyLink()}
-                className="shrink-0 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
-              >
+              <Input readOnly value={intent.initPoint} className="flex-1 truncate text-xs" />
+              <Button size="sm" variant="outline" className="shrink-0" onClick={() => void copyLink()}>
                 {copied ? 'Copiado' : 'Copiar'}
-              </button>
+              </Button>
             </div>
 
             <div className="flex w-full gap-2">
-              <button
+              <Button
                 onClick={openWhatsapp}
-                className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-500"
+                className="flex-1 bg-green-600 text-white hover:bg-green-500"
               >
                 Enviar por WhatsApp
-              </button>
-              <button
-                onClick={openEmail}
-                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
-              >
+              </Button>
+              <Button size="default" variant="outline" className="flex-1" onClick={openEmail}>
                 Enviar por email
-              </button>
+              </Button>
             </div>
 
             <button
               onClick={() => cancelMutation.mutate()}
               disabled={cancelMutation.isPending}
-              className="mt-1 text-xs text-slate-500 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+              className="mt-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
             >
               {cancelMutation.isPending ? 'Cancelando...' : 'Cancelar este link de cobro'}
             </button>

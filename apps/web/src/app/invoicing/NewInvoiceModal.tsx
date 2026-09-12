@@ -1,6 +1,7 @@
 'use client';
 
 import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
+import { Button } from '@/components/ui/button';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
@@ -21,7 +22,7 @@ interface Props {
 }
 
 const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const DOCUMENT_LETTERS = ['A', 'B', 'C', 'M'] as const;
 
@@ -184,16 +185,16 @@ export default function NewInvoiceModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nueva factura</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nueva factura</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {!ready ? (
-          <div className="py-10 text-center text-slate-500">Cargando...</div>
+          <div className="py-10 text-center text-muted-foreground">Cargando...</div>
         ) : missingData ? (
           <p className="text-sm text-amber-600 dark:text-amber-400">
             Hace falta al menos un depósito antes de poder facturar (cliente y sucursal se pueden
@@ -208,7 +209,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   <button
                     type="button"
                     onClick={() => setCreatingCustomer(true)}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    className="text-xs text-primary hover:text-primary"
                   >
                     + nuevo cliente
                   </button>
@@ -232,7 +233,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   <button
                     type="button"
                     onClick={() => setCreatingBranch(true)}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    className="text-xs text-primary hover:text-primary"
                   >
                     + nueva sucursal
                   </button>
@@ -277,7 +278,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   ))}
                 </select>
                 <p
-                  className={`mt-1 text-xs ${letterSuggestion.locked ? 'text-slate-500' : 'text-amber-600 dark:text-amber-400'}`}
+                  className={`mt-1 text-xs ${letterSuggestion.locked ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
                 >
                   {letterSuggestion.reason}
                 </p>
@@ -313,8 +314,8 @@ export default function NewInvoiceModal({ onClose }: Props) {
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm text-slate-600 dark:text-slate-400">Líneas</label>
-                <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                <label className="text-sm text-muted-foreground">Líneas</label>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <ToggleSwitch
                     checked={pricesIncludeTax}
                     onChange={setPricesIncludeTax}
@@ -323,7 +324,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   <span>Precios con IVA incluido</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 {pricesIncludeTax
                   ? 'El precio unitario de cada línea es el precio final (con IVA) - se desglosa a neto solo.'
                   : 'El precio unitario de cada línea es neto (sin IVA) - se le suma el IVA de su alícuota.'}
@@ -361,7 +362,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => removeLine(index)}
-                      className="text-slate-500 hover:text-red-600 dark:hover:text-red-400"
+                      className="text-muted-foreground hover:text-destructive"
                     >
                       ✕
                     </button>
@@ -371,7 +372,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
               <button
                 type="button"
                 onClick={addLine}
-                className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 transition hover:border-indigo-400 hover:bg-indigo-50 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/30"
+                className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed py-2.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/5"
               >
                 + Agregar línea
               </button>
@@ -391,24 +392,19 @@ export default function NewInvoiceModal({ onClose }: Props) {
               </p>
             )}
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="mt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-              >
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={mutation.isPending || !afipConfigured}
                 title={!afipConfigured ? 'Configurá el certificado AFIP en Preferencias primero' : undefined}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
               >
                 {mutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -444,7 +440,7 @@ function Field({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+        <label className="text-sm text-muted-foreground">{label}</label>
         {action}
       </div>
       {children}

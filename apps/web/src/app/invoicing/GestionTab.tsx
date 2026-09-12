@@ -1,6 +1,10 @@
 'use client';
 
 import InvoiceDetailPanel from '@/components/InvoiceDetailPanel';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { invoicingApi, type Invoice } from '@/lib/invoicing';
 import { mercadoPagoApi } from '@/lib/mercadopago';
 import { getSocket } from '@/lib/socket';
@@ -89,42 +93,38 @@ export default function GestionTab() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {rows.length} factura{rows.length !== 1 ? 's' : ''}
         </p>
-        <button
-          onClick={() => setNewInvoiceOpen(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-        >
-          + Nueva factura
-        </button>
+        <Button onClick={() => setNewInvoiceOpen(true)}>+ Nueva factura</Button>
       </div>
 
-      <input
+      <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar por cliente o número..."
-        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 sm:max-w-sm"
+        className="w-full sm:max-w-sm"
       />
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
+      <Card>
+        <CardContent>
         {invoicesQuery.isLoading ? (
-          <div className="flex h-40 items-center justify-center text-slate-500">
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
             Cargando facturas...
           </div>
         ) : invoicesQuery.error ? (
-          <div className="flex h-40 items-center justify-center text-red-600 dark:text-red-400">
+          <div className="flex h-40 items-center justify-center text-destructive">
             Error al cargar las facturas
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-slate-400 dark:text-slate-600">
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
             Sin facturas que coincidan
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className={`${headY} pr-4`}>Número</th>
                   <th className={`${headY} pr-4`}>Cliente</th>
                   <th className={`${headY} pr-4`}>Fecha</th>
@@ -136,40 +136,30 @@ export default function GestionTab() {
               </thead>
               <tbody>
                 {rows.map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-200/40 dark:hover:bg-slate-800/40">
-                    <td className={`${cellY} pr-4 font-mono text-xs text-slate-600 dark:text-slate-400`}>
+                  <tr key={inv.id} className="border-b border-border/50 hover:bg-muted/40">
+                    <td className={`${cellY} pr-4 font-mono text-xs text-muted-foreground`}>
                       {inv.documentLetter}-{inv.number}
                     </td>
-                    <td className={`${cellY} pr-4 text-slate-800 dark:text-slate-200`}>{inv.customerName}</td>
-                    <td className={`${cellY} pr-4 text-slate-600 dark:text-slate-400`}>
+                    <td className={`${cellY} pr-4`}>{inv.customerName}</td>
+                    <td className={`${cellY} pr-4 text-muted-foreground`}>
                       {new Date(inv.issueDate).toLocaleDateString('es-AR')}
                     </td>
-                    <td className={`${cellY} pr-4 text-right text-slate-800 dark:text-slate-200`}>
-                      ${Number(inv.total).toFixed(2)}
-                    </td>
-                    <td className={`${cellY} pr-4 text-right text-slate-600 dark:text-slate-400`}>
+                    <td className={`${cellY} pr-4 text-right`}>${Number(inv.total).toFixed(2)}</td>
+                    <td className={`${cellY} pr-4 text-right text-muted-foreground`}>
                       ${Number(inv.balanceDue).toFixed(2)}
                     </td>
                     <td className={`${cellY} pr-4`}>
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[inv.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
-                      >
+                      <Badge className={STATUS_COLORS[inv.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}>
                         {STATUS_LABELS[inv.status] ?? inv.status}
-                      </span>
+                      </Badge>
                     </td>
                     <td className={cellY}>
                       <div className="flex gap-3">
-                        <button
-                          onClick={() => setDetailFor(inv)}
-                          className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-                        >
+                        <button onClick={() => setDetailFor(inv)} className="text-xs text-muted-foreground hover:text-foreground">
                           Ver detalle
                         </button>
                         {Number(inv.balanceDue) > 0 && inv.status !== 'CANCELLED' && (
-                          <button
-                            onClick={() => setReceiptFor(inv)}
-                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
-                          >
+                          <button onClick={() => setReceiptFor(inv)} className="text-xs text-primary hover:underline">
                             Cobrar
                           </button>
                         )}
@@ -182,10 +172,7 @@ export default function GestionTab() {
                           </button>
                         )}
                         {inv.afipCae && inv.status !== 'CANCELLED' && (
-                          <button
-                            onClick={() => setCreditNoteFor(inv)}
-                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                          >
+                          <button onClick={() => setCreditNoteFor(inv)} className="text-xs text-destructive hover:underline">
                             Nota de crédito
                           </button>
                         )}
@@ -197,7 +184,8 @@ export default function GestionTab() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {newInvoiceOpen && <NewInvoiceModal onClose={() => setNewInvoiceOpen(false)} />}
       {receiptFor && <ReceiptModal invoice={receiptFor} onClose={() => setReceiptFor(null)} />}
