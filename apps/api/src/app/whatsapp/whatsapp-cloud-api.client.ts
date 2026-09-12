@@ -30,8 +30,14 @@ export class WhatsAppCloudApiClient {
 
     // Meta espera el "to" sin el "+" del E.164 que usamos como identificador
     // interno (WhatsAppLink.phoneE164) - mismo formato en el que ya llega
-    // "from" en el webhook entrante.
-    const to = toE164.replace(/^\+/, '');
+    // "from" en el webhook entrante, CON UNA EXCEPCIÓN encontrada en vivo:
+    // para celulares argentinos el webhook de entrada reporta el "9" móvil
+    // (54 9 <área><número>), pero el endpoint de ENVÍO de la Cloud API
+    // rechaza ese mismo número con "(#131030) Recipient phone number not in
+    // allowed list" a menos que se le saque el "9" - aunque el número esté
+    // agregado y verificado tal cual en la lista de destinatarios de prueba.
+    const digits = toE164.replace(/^\+/, '');
+    const to = /^549\d{10}$/.test(digits) ? `54${digits.slice(3)}` : digits;
 
     try {
       const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
