@@ -125,8 +125,8 @@ describe('AssistantToolsService', () => {
         {
           name: 'Parlante Bluetooth',
           variants: [
-            { sku: 'PARL-NEG', color: 'Negro', size: null, totalStock: 5, minimumStock: 2 },
-            { sku: 'PARL-ROJ', color: 'Rojo', size: null, totalStock: 0, minimumStock: 2 },
+            { sku: 'PARL-NEG', color: 'Negro', size: null, unitPrice: 15000, totalStock: 5, minimumStock: 2 },
+            { sku: 'PARL-ROJ', color: 'Rojo', size: null, unitPrice: 15000, totalStock: 0, minimumStock: 2 },
           ],
         },
       ]);
@@ -138,8 +138,8 @@ describe('AssistantToolsService', () => {
         {
           nombre: 'Parlante Bluetooth',
           variantes: [
-            { sku: 'PARL-NEG', color: 'Negro', talle: null, stockTotal: 5, stockMinimo: 2 },
-            { sku: 'PARL-ROJ', color: 'Rojo', talle: null, stockTotal: 0, stockMinimo: 2 },
+            { sku: 'PARL-NEG', color: 'Negro', talle: null, precio: 15000, stockTotal: 5, stockMinimo: 2 },
+            { sku: 'PARL-ROJ', color: 'Rojo', talle: null, precio: 15000, stockTotal: 0, stockMinimo: 2 },
           ],
         },
       ]);

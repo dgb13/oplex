@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId } from '@plexo/database';
+import { AssistantIntent, getTenantDb, getTenantId } from '@plexo/database';
 import type { AuthenticatedUser } from '@plexo/types';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 
@@ -88,9 +88,15 @@ export class AssistantConversationService {
     }
   }
 
-  appendMessage(conversationId: string, role: 'USER' | 'ASSISTANT', content: string, toolCalls?: unknown) {
+  appendMessage(
+    conversationId: string,
+    role: 'USER' | 'ASSISTANT',
+    content: string,
+    toolCalls?: unknown,
+    intent?: AssistantIntent,
+  ) {
     return getTenantDb().assistantMessage.create({
-      data: { tenantId: getTenantId(), conversationId, role, content, toolCalls: toolCalls ?? undefined },
+      data: { tenantId: getTenantId(), conversationId, role, content, toolCalls: toolCalls ?? undefined, intent },
     });
   }
 

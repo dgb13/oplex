@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { isPlatformAdminEmail } from '@plexo/auth';
-import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
+import { AssistantIntent as PersistedAssistantIntent, getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser, ModuleAccessClaim } from '@plexo/types';
 import {
@@ -216,9 +216,15 @@ export class WhatsAppWebhookService {
       await this.assistantConversationService.appendMessage(conversationId, 'USER', text);
 
       const intent = await this.assistantIntentRouterService.classify(text);
-      const reply = await this.answer(identity, intent, history, text);
+      const { text: reply, toolNames } = await this.answer(identity, intent, history, text);
 
-      await this.assistantConversationService.appendMessage(conversationId, 'ASSISTANT', reply);
+      await this.assistantConversationService.appendMessage(
+        conversationId,
+        'ASSISTANT',
+        reply,
+        toolNames.length ? toolNames.map((tool) => ({ tool })) : undefined,
+        intent === 'ayuda' ? PersistedAssistantIntent.AYUDA : PersistedAssistantIntent.DATOS,
+      );
       await this.cloudApiClient.sendText(phoneE164, reply);
     } catch (err) {
       if (err instanceof ForbiddenException) {
@@ -230,9 +236,15 @@ export class WhatsAppWebhookService {
     }
   }
 
-  private answer(identity: AuthenticatedUser, intent: AssistantIntent, history: HistoryMessage[], text: string): Promise<string> {
-    return intent === 'ayuda'
-      ? this.assistantHelpService.answer(history, text)
-      : this.assistantOrchestratorService.chat(identity, history, text);
+  private async answer(
+    identity: AuthenticatedUser,
+    intent: AssistantIntent,
+    history: HistoryMessage[],
+    text: string,
+  ): Promise<{ text: string; toolNames: string[] }> {
+    if (intent === 'ayuda') {
+      return { text: await this.assistantHelpService.answer(history, text), toolNames: [] };
+    }
+    return this.assistantOrchestratorService.chat(identity, history, text);
   }
 }

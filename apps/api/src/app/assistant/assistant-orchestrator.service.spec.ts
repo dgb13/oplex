@@ -71,7 +71,7 @@ describe('AssistantOrchestratorService', () => {
 
     const reply = await service.chat(makeUser(), [], '¿Cuánto facturé este mes?');
 
-    expect(reply).toBe('Facturaste $10.000 este mes.');
+    expect(reply).toEqual({ text: 'Facturaste $10.000 este mes.', toolNames: [] });
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +101,7 @@ describe('AssistantOrchestratorService', () => {
 
     const reply = await service.chat(makeUser(), [], '¿Cuánto tengo en caja?');
 
-    expect(reply).toBe('Tenés 2 cajas abiertas.');
+    expect(reply).toEqual({ text: 'Tenés 2 cajas abiertas.', toolNames: ['saldo_caja'] });
     expect(toolsService.saldoCaja).toHaveBeenCalledTimes(1);
     expect(stream).toHaveBeenCalledTimes(2);
     // El segundo llamado debe llevar el resultado de la herramienta como tool_result.
@@ -138,7 +138,7 @@ describe('AssistantOrchestratorService', () => {
 
     const reply = await service.chat(makeUser(), [], '¿Cuánto tengo en caja?');
 
-    expect(reply).toBe('No tenés permiso para ver la caja.');
+    expect(reply).toEqual({ text: 'No tenés permiso para ver la caja.', toolNames: ['saldo_caja'] });
     const secondCallMessages = stream.mock.calls[1][0].messages;
     const toolResultMessage = secondCallMessages[secondCallMessages.length - 1];
     expect(toolResultMessage.content[0]).toMatchObject({ type: 'tool_result', is_error: true });
@@ -151,7 +151,8 @@ describe('AssistantOrchestratorService', () => {
 
     const reply = await service.chat(makeUser(), [], 'pregunta rara');
 
-    expect(reply).toMatch(/no pude/i);
+    expect(reply.text).toMatch(/no pude/i);
+    expect(reply.toolNames).toEqual(['saldo_caja']);
     expect(stream).toHaveBeenCalledTimes(4);
   });
 

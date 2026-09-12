@@ -217,6 +217,14 @@ export interface UpdateAssistantSettingsInput {
   assistantRateLimitMaxMessages?: number;
 }
 
+export interface UnansweredQuestion {
+  id: string;
+  tenantName: string;
+  question: string | null;
+  answer: string;
+  createdAt: string;
+}
+
 // Nombre + rate limit del Asistente de IA conversacional - configurable
 // sin deploy (ver docs/plan-asistente-ia-conversacional.md, secciones 1 y
 // 8.2), mismo GET+PATCH que adminAiInvoiceScanApi de arriba.
@@ -224,6 +232,10 @@ export const adminAssistantApi = {
   getSettings: () => api.get<AssistantSettings>('/admin/assistant-settings').then((r) => r.data),
   updateSettings: (patch: UpdateAssistantSettingsInput) =>
     api.patch<AssistantSettings>('/admin/assistant-settings', patch).then((r) => r.data),
+  // Preguntas de "datos" que el asistente respondió sin llamar a ninguna
+  // herramienta - señal de qué agregar al catálogo, ver
+  // AssistantSettingsService.getUnansweredQuestions().
+  getUnansweredQuestions: () => api.get<UnansweredQuestion[]>('/admin/assistant-settings/unanswered-questions').then((r) => r.data),
 };
 
 export const adminPlansApi = {

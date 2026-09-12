@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Logger, Param, Patch, Post, Res } from '@nestjs/common';
 import { CurrentUser } from '@plexo/auth';
-import { LongRunningTransaction } from '@plexo/database';
+import { AssistantIntent, LongRunningTransaction } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyReply } from 'fastify';
@@ -93,12 +93,23 @@ export class AssistantController {
     await this.assistantConversationService.appendMessage(conversationId, 'USER', dto.message);
 
     const intent = await this.assistantIntentRouterService.classify(dto.message);
-    const reply =
-      intent === 'ayuda'
-        ? await this.assistantHelpService.answer(history, dto.message)
-        : await this.assistantOrchestratorService.chat(user, history, dto.message);
+    let reply: string;
+    let toolCalls: Array<{ tool: string }> | undefined;
+    if (intent === 'ayuda') {
+      reply = await this.assistantHelpService.answer(history, dto.message);
+    } else {
+      const result = await this.assistantOrchestratorService.chat(user, history, dto.message);
+      reply = result.text;
+      toolCalls = result.toolNames.length ? result.toolNames.map((tool) => ({ tool })) : undefined;
+    }
 
-    const saved = await this.assistantConversationService.appendMessage(conversationId, 'ASSISTANT', reply);
+    const saved = await this.assistantConversationService.appendMessage(
+      conversationId,
+      'ASSISTANT',
+      reply,
+      toolCalls,
+      intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
+    );
     return { reply, messageId: saved.id };
   }
 
@@ -184,6 +195,7 @@ export class AssistantController {
         'ASSISTANT',
         fullText.trim(),
         toolCallsForPersist.length ? toolCallsForPersist : undefined,
+        intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
       );
       send('done', { type: 'done', messageId: saved.id });
     } catch (err) {

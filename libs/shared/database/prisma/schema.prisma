@@ -3196,6 +3196,18 @@ enum AssistantMessageRole {
   ASSISTANT
 }
 
+// Clasificación de AssistantIntentRouterService para el turno (ver ese
+// service) - se guarda SOLO en el mensaje role=ASSISTANT que responde, no
+// en el USER que la originó. Sirve para el reporte de "preguntas sin
+// responder" en Admin: un mensaje intent=DATOS con toolCalls=null es casi
+// siempre el asistente diciendo "no tengo una herramienta para esto" en
+// vez de responder con datos reales (intent=AYUDA nunca llama tools, así
+// que ese cruce no aplicaría ahí).
+enum AssistantIntent {
+  AYUDA
+  DATOS
+}
+
 model AssistantConversation {
   id        String   @id @default(uuid())
   tenantId  String
@@ -3220,6 +3232,10 @@ model AssistantMessage {
   // auditoría/diagnóstico (ver sección 3.5 del plan) - nunca se le vuelve a
   // dar de comer al modelo desde acá, se recalcula en cada turno.
   toolCalls      Json?
+  // Ver comentario del enum AssistantIntent más arriba - null en mensajes
+  // role=USER, siempre seteado en los role=ASSISTANT desde que existe esta
+  // columna (mensajes viejos, de antes, quedan en null).
+  intent         AssistantIntent?
   // 👍/👎 del usuario sobre una respuesta del asistente - null hasta que
   // alguien vota, sólo tiene sentido en mensajes role=ASSISTANT (no
   // forzado por constraint, sólo por convención de quién lo escribe). Fase
@@ -3229,6 +3245,10 @@ model AssistantMessage {
   createdAt      DateTime               @default(now())
 
   @@index([tenantId, conversationId, createdAt])
+  // Usado por el reporte cross-tenant de "preguntas sin responder" en
+  // Admin (AssistantSettingsService.getUnansweredQuestions) - ese query
+  // filtra por role+intent+createdAt sin scopear por tenant a propósito.
+  @@index([role, intent, createdAt])
   @@map("assistant_messages")
 }
 

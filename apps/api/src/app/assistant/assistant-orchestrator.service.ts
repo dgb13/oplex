@@ -42,16 +42,28 @@ export class AssistantOrchestratorService {
   ) {}
 
   /** Variante sin streaming, usada por el endpoint JSON de siempre
-   * (`POST /assistant/message`) - simplemente drena chatStream() y
-   * concatena el texto, sin exponerle el detalle de eventos al caller. */
-  async chat(user: AuthenticatedUser, history: HistoryMessage[], userMessage: string): Promise<string> {
+   * (`POST /assistant/message`) y por el webhook de WhatsApp - drena
+   * chatStream() concatenando el texto, pero a diferencia de la versión
+   * vieja (que descartaba todo lo demás) también junta qué tools se
+   * llegaron a invocar - el caller lo persiste en AssistantMessage.toolCalls
+   * para que el reporte de "preguntas sin responder" en Admin (intent=DATOS
+   * + toolCalls vacío) funcione igual sin importar por qué canal entró la
+   * pregunta. */
+  async chat(
+    user: AuthenticatedUser,
+    history: HistoryMessage[],
+    userMessage: string,
+  ): Promise<{ text: string; toolNames: string[] }> {
     let text = '';
+    const toolNames = new Set<string>();
     for await (const chunk of this.chatStream(user, history, userMessage)) {
       if (chunk.type === 'text') {
         text += chunk.text;
+      } else if (chunk.type === 'tool_start') {
+        toolNames.add(chunk.tool);
       }
     }
-    return text.trim();
+    return { text: text.trim(), toolNames: [...toolNames] };
   }
 
   /** Streaming token a token (docs/plan-asistente-ia-conversacional.md,

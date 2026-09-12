@@ -20,4 +20,9 @@ export class AdminAssistantSettingsController {
   updateSettings(@Body() dto: UpdateAssistantSettingsDto) {
     return this.assistantSettingsService.updateSettings(dto);
   }
+
+  @Get('unanswered-questions')
+  getUnansweredQuestions() {
+    return this.assistantSettingsService.getUnansweredQuestions();
+  }
 }

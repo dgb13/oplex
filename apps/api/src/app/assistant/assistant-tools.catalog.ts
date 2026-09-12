@@ -38,7 +38,7 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'stock_articulo',
     description:
-      'Busca artículos por nombre o SKU (coincidencia parcial) y devuelve, por cada variante encontrada, el stock total disponible y el stock mínimo configurado. Usar para preguntas como "tenemos parlantes", "cuánto stock queda de X" o "está bajo mínimo tal producto".',
+      'Busca artículos por nombre o SKU (coincidencia parcial) y devuelve, por cada variante encontrada, el precio de venta, el stock total disponible y el stock mínimo configurado. Usar para preguntas como "tenemos parlantes", "cuánto stock queda de X", "está bajo mínimo tal producto" o "cuánto sale/cuesta X".',
     input_schema: {
       type: 'object',
       properties: {

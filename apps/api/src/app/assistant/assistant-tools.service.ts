@@ -95,6 +95,7 @@ export class AssistantToolsService {
         sku: v.sku,
         color: v.color,
         talle: v.size,
+        precio: v.unitPrice,
         stockTotal: v.totalStock,
         stockMinimo: v.minimumStock,
       })),

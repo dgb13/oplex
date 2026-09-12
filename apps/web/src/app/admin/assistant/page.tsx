@@ -136,7 +136,54 @@ export default function AdminAssistantPage() {
               </button>
             </div>
           </div>
+
+          <UnansweredQuestionsCard />
         </>
+      )}
+    </div>
+  );
+}
+
+/** Insumo para priorizar qué agregar al catálogo de herramientas del
+ * asistente sin adivinar (ver AssistantSettingsService.getUnansweredQuestions):
+ * preguntas de "datos" (sobre el propio negocio) que el modelo terminó
+ * respondiendo en texto libre sin llamar a ninguna herramienta - casi
+ * siempre un "no tengo cómo consultar eso". Últimos 30 días, cross-tenant. */
+function UnansweredQuestionsCard() {
+  const { data: questions, isLoading } = useQuery({
+    queryKey: ['admin-assistant-unanswered'],
+    queryFn: adminAssistantApi.getUnansweredQuestions,
+  });
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-100">Preguntas sin responder</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Preguntas sobre datos del negocio que el asistente no pudo responder con ninguna herramienta actual, de
+          cualquier tenant, últimos 30 días. Sirve para decidir qué agregar al catálogo.
+        </p>
+      </div>
+
+      {isLoading || !questions ? (
+        <p className="text-sm text-slate-500">Cargando...</p>
+      ) : questions.length === 0 ? (
+        <p className="text-sm text-slate-500">Ninguna en los últimos 30 días.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-slate-800">
+          {questions.map((q) => (
+            <li key={q.id} className="flex flex-col gap-1 py-3 text-sm first:pt-0 last:pb-0">
+              <div className="flex items-center justify-between gap-4">
+                <span className="font-medium text-slate-200">{q.tenantName}</span>
+                <span className="whitespace-nowrap text-xs text-slate-500">
+                  {new Date(q.createdAt).toLocaleString('es-AR')}
+                </span>
+              </div>
+              <p className="text-slate-300">{q.question ?? <span className="italic text-slate-500">(sin pregunta registrada)</span>}</p>
+              <p className="text-xs text-slate-500">Respondió: &quot;{q.answer}&quot;</p>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
