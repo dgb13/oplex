@@ -185,6 +185,8 @@ export const invoicingApi = {
   listCurrencies: () => api.get<Currency[]>('/invoicing/currencies').then((r) => r.data),
   createCurrency: (dto: CreateCurrencyInput) =>
     api.post<Currency>('/invoicing/currencies', dto).then((r) => r.data),
+  setBaseCurrency: (currencyId: string) =>
+    api.post<Currency>(`/invoicing/currencies/${currencyId}/set-base`).then((r) => r.data),
   recordExchangeRate: (currencyId: string, rate: number) =>
     api.post('/invoicing/exchange-rates', { currencyId, rate }).then((r) => r.data),
   syncBnaRate: () => api.post('/invoicing/exchange-rates/sync-bna').then((r) => r.data),

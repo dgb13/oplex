@@ -1005,6 +1005,7 @@ model Currency {
   isBase   Boolean @default(false)
 
   exchangeRates       ExchangeRateHistory[]
+  financialAccounts   FinancialAccount[]
   invoices            Invoice[]
   creditNotes         CreditNote[]
   quoteRequests       QuoteRequest[]
@@ -2120,6 +2121,15 @@ model FinancialAccount {
   name           String
   provider       FinancialAccountProvider
   currentBalance Decimal                  @default(0) @db.Decimal(14, 2)
+  // null = moneda base del tenant (comportamiento histórico, sin cambios).
+  // Sólo se completa para cuentas explícitamente en otra moneda (p.ej. una
+  // Caja/Banco en USD) - ver CurrencySettings.tsx/NewFinancialAccountModal.
+  currencyId     String?
+  currency       Currency?                @relation(fields: [currencyId], references: [id])
+  // Último tipo de cambio (moneda de la cuenta por 1 base) al que se
+  // revaluó contablemente esta cuenta - ver
+  // AccountingService.postExchangeRateRevaluation. null = nunca revaluada.
+  lastRevaluationRate Decimal?            @db.Decimal(18, 6)
 
   receipts         Receipt[]
   transactions     FinancialTransaction[]

@@ -2,8 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { invoicingApi } from '@/lib/invoicing';
 import { reportsApi, type FinancialAccountProvider } from '@/lib/reports';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 
@@ -26,7 +27,18 @@ export default function NewFinancialAccountModal({ onClose }: Props) {
   const [name, setName] = useState('');
   const [provider, setProvider] = useState<FinancialAccountProvider>('BANK');
   const [currentBalance, setCurrentBalance] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
   const [error, setError] = useState('');
+
+  const currenciesQuery = useQuery({
+    queryKey: ['invoicing-currencies'],
+    queryFn: invoicingApi.listCurrencies,
+  });
+  // Sólo tiene sentido elegir moneda si el tenant configuró más de una -
+  // el caso común de hoy (sólo la base, o ninguna todavía) no necesita
+  // este selector en el medio.
+  const currencies = currenciesQuery.data ?? [];
+  const showCurrencyField = currencies.length > 1;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -34,6 +46,7 @@ export default function NewFinancialAccountModal({ onClose }: Props) {
         name,
         provider,
         currentBalance: currentBalance ? Number(currentBalance) : undefined,
+        currencyId: showCurrencyField && currencyId ? currencyId : undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['financial-accounts'] });
@@ -88,6 +101,19 @@ export default function NewFinancialAccountModal({ onClose }: Props) {
               ))}
             </select>
           </div>
+          {showCurrencyField && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground">Moneda</label>
+              <select className={selectClass} value={currencyId} onChange={(e) => setCurrencyId(e.target.value)}>
+                <option value="">Moneda base del tenant</option>
+                {currencies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Saldo inicial (opcional)</label>
             <Input

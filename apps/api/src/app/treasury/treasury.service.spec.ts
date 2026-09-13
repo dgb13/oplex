@@ -32,6 +32,7 @@ function makeServices(overrides: {
   } as unknown as InvoicingService;
   const accountingService = {
     postCheckRejectionJournalEntry: jest.fn().mockResolvedValue({}),
+    postExchangeRateRevaluation: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     ...overrides.accountingService,
   } as unknown as AccountingService;
   const service = new TreasuryService(checkService, reportsFinancialService, invoicingService, accountingService);
@@ -151,5 +152,83 @@ describe('TreasuryService.rejectCheck', () => {
     await expect(
       runInTenant(db, () => service.rejectCheck('chk-1', { reason: 'sin fondos' })),
     ).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('TreasuryService.revalueFinancialAccount', () => {
+  it('posts the revaluation using the given rate and stores it as the new lastRevaluationRate', async () => {
+    const { service, accountingService } = makeServices();
+    const financialAccountUpdate = jest.fn().mockResolvedValue({ id: 'fa-1', lastRevaluationRate: 1100 });
+    const db = {
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'fa-1',
+          currencyId: 'usd',
+          currentBalance: new Prisma.Decimal(100),
+          lastRevaluationRate: new Prisma.Decimal(1000),
+        }),
+        update: financialAccountUpdate,
+      },
+    };
+
+    await runInTenant(db, () => service.revalueFinancialAccount('fa-1', 1100));
+
+    expect(accountingService.postExchangeRateRevaluation).toHaveBeenCalledWith({
+      financialAccountId: 'fa-1',
+      currentBalance: new Prisma.Decimal(100),
+      previousRate: new Prisma.Decimal(1000),
+      newRate: 1100,
+    });
+    expect(financialAccountUpdate).toHaveBeenCalledWith({
+      where: { id: 'fa-1' },
+      data: { lastRevaluationRate: 1100 },
+    });
+  });
+
+  it('falls back to the latest ExchangeRateHistory rate when none is given', async () => {
+    const { service, accountingService } = makeServices();
+    const db = {
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'fa-1',
+          currencyId: 'usd',
+          currentBalance: new Prisma.Decimal(100),
+          lastRevaluationRate: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      exchangeRateHistory: {
+        findFirst: jest.fn().mockResolvedValue({ rate: new Prisma.Decimal(1050) }),
+      },
+    };
+
+    await runInTenant(db, () => service.revalueFinancialAccount('fa-1'));
+
+    expect(accountingService.postExchangeRateRevaluation).toHaveBeenCalledWith(
+      expect.objectContaining({ newRate: 1050 }),
+    );
+  });
+
+  it('throws when the account is in the tenant base currency (nothing to revalue)', async () => {
+    const { service } = makeServices();
+    const db = {
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'fa-1', currencyId: null }),
+      },
+    };
+
+    await expect(runInTenant(db, () => service.revalueFinancialAccount('fa-1'))).rejects.toThrow(NotFoundException);
+  });
+
+  it('throws when there is no exchange rate on file and none was given', async () => {
+    const { service } = makeServices();
+    const db = {
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'fa-1', currencyId: 'usd' }),
+      },
+      exchangeRateHistory: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+
+    await expect(runInTenant(db, () => service.revalueFinancialAccount('fa-1'))).rejects.toThrow(NotFoundException);
   });
 });

@@ -128,6 +128,21 @@ const INFLATION_GAIN_ACCOUNT = {
 const CASH_SHORTAGE_ACCOUNT = { code: '5.1.05', name: 'Faltante de Caja', type: 'EXPENSE' as const };
 const CASH_OVERAGE_ACCOUNT = { code: '4.2.04', name: 'Sobrante de Caja', type: 'INCOME' as const };
 
+// Revaluación de una FinancialAccount en moneda extranjera (ver
+// postExchangeRateRevaluation) - mismo molde que
+// CASH_SHORTAGE/OVERAGE_ACCOUNT: dos cuentas de resultado, una para cada
+// signo, nunca la misma cuenta con signo negativo.
+const EXCHANGE_LOSS_ACCOUNT = {
+  code: '5.1.06',
+  name: 'Pérdida por Diferencia de Cambio',
+  type: 'EXPENSE' as const,
+};
+const EXCHANGE_GAIN_ACCOUNT = {
+  code: '4.2.05',
+  name: 'Ganancia por Diferencia de Cambio',
+  type: 'INCOME' as const,
+};
+
 const INFLATION_CAPITAL_ADJUSTMENT_ACCOUNT = {
   code: '3.1.01',
   name: 'Ajuste de Capital por Inflación',
@@ -307,6 +322,21 @@ export interface PostInflationAdjustmentJournalEntryInput {
    * en el método). El signo decide qué cuenta de resultado se usa, el
    * asiento siempre postea la magnitud absoluta. */
   recpamAmount: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
+export interface PostExchangeRateRevaluationInput {
+  financialAccountId: string;
+  /** currentBalance de la FinancialAccount al momento de revaluar, en su
+   * propia moneda (no en la base) - ver
+   * ReportsFinancialService.revalueFinancialAccount, que ya lo trae. */
+  currentBalance: Prisma.Decimal | number | string;
+  /** Tipo de cambio anterior (FinancialAccount.lastRevaluationRate) contra
+   * el que se compara. undefined/null = primera revaluación: sólo fija la
+   * base, no hay asiento posible sin un valor previo del cual difiera. */
+  previousRate: Prisma.Decimal | number | string | null | undefined;
+  /** Tipo de cambio nuevo a aplicar (moneda de la cuenta por 1 base). */
+  newRate: Prisma.Decimal | number | string;
   date?: Date;
 }
 
@@ -1151,6 +1181,50 @@ export class AccountingService {
       `Ajuste por Inflación (RECPAM) - ${input.inflationAdjustmentId}`,
       lines,
       { date: input.date, inflationAdjustmentId: input.inflationAdjustmentId },
+    );
+  }
+
+  /**
+   * Revaluación de una FinancialAccount en moneda extranjera (ver
+   * ReportsFinancialService.revalueFinancialAccount) - la cuenta sigue
+   * llevando su propio currentBalance en su moneda, sin cambios; esto sólo
+   * ajusta cuánto vale ese saldo en pesos para el balance. Mismo molde que
+   * postCashSessionAdjustmentJournalEntry: dos líneas contra la CASH_ACCOUNT
+   * genérica, sin una cuenta contable por moneda. previousRate null/undefined
+   * = primera revaluación, sólo fija la base, no hay diferencia posible.
+   */
+  async postExchangeRateRevaluation(
+    input: PostExchangeRateRevaluationInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    if (input.previousRate === null || input.previousRate === undefined) {
+      return undefined;
+    }
+    const balance = new Prisma.Decimal(input.currentBalance);
+    const previousRate = new Prisma.Decimal(input.previousRate);
+    const newRate = new Prisma.Decimal(input.newRate);
+    const delta = balance.mul(newRate.sub(previousRate));
+    if (delta.eq(0)) {
+      return undefined;
+    }
+    const isGain = delta.gt(0);
+    const amount = delta.abs();
+    const [cash, result] = await Promise.all([
+      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.getOrCreateAccount(isGain ? EXCHANGE_GAIN_ACCOUNT : EXCHANGE_LOSS_ACCOUNT),
+    ]);
+    const lines: PostJournalEntryDto['lines'] = isGain
+      ? [
+          { accountId: cash.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: result.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ]
+      : [
+          { accountId: result.id, direction: 'DEBIT', amount: amount.toNumber() },
+          { accountId: cash.id, direction: 'CREDIT', amount: amount.toNumber() },
+        ];
+    return this.createBalancedEntry(
+      `${isGain ? 'Ganancia' : 'Pérdida'} por diferencia de cambio - cuenta ${input.financialAccountId}`,
+      lines,
+      { date: input.date },
     );
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, getUserId, Prisma } from '@plexo/database';
 import {
@@ -7,6 +7,7 @@ import {
   type ListPurchaseInvoicesQueryDto,
   type RecordSupplierPaymentDto,
 } from '@plexo/purchases';
+import { ReportsFinancialService } from '@plexo/reports-financial';
 import { CheckService } from '@plexo/treasury';
 
 /**
@@ -30,6 +31,7 @@ export class PurchaseInvoicesService {
   constructor(
     private readonly purchaseInvoiceService: PurchaseInvoiceService,
     private readonly accountingService: AccountingService,
+    private readonly reportsFinancialService: ReportsFinancialService,
     private readonly checkService: CheckService,
   ) {}
 
@@ -86,6 +88,35 @@ export class PurchaseInvoicesService {
       // as createInvoice's supplierInvoiceDate above.
       date: payment.paidAt,
     });
+
+    // Cierra el mismo gap que recordReceipt (Ventas): un pago en
+    // efectivo/transferencia contra una cuenta propia también tiene que
+    // debitar esa cuenta, no sólo el asiento contable de arriba. Endosar
+    // un cheque de cartera o emitir uno propio diferido son las únicas
+    // excepciones reales (ver el comentario debajo) - a lo sumo uno de los
+    // dos, nunca junto con financialAccountId de efectivo/transferencia.
+    if (dto.financialAccountId && !dto.endorseCheckId && !dto.ownCheck) {
+      const account = await getTenantDb().financialAccount.findUnique({
+        where: { id: dto.financialAccountId },
+      });
+      if (!account) {
+        throw new NotFoundException('Financial account not found');
+      }
+      const purchaseInvoice = await getTenantDb().purchaseInvoice.findUnique({
+        where: { id: invoiceId },
+        include: { currency: true },
+      });
+      if (account.currencyId && purchaseInvoice && account.currencyId !== purchaseInvoice.currencyId) {
+        throw new BadRequestException(
+          `Esta cuenta está en otra moneda que la factura de compra (factura en ${purchaseInvoice.currency.code})`,
+        );
+      }
+      await this.reportsFinancialService.recordFinancialTransaction({
+        financialAccountId: dto.financialAccountId,
+        amount: -payment.amount.toNumber(),
+        externalRef: `Pago factura de compra ${invoiceId}`,
+      });
+    }
 
     // Un pago puede cancelarse endosando un cheque de cartera o emitiendo
     // uno propio diferido, en vez de efectivo/transferencia - a lo sumo

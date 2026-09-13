@@ -1,10 +1,12 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { bankReconciliationApi, type BankStatementLine } from '@/lib/bank-reconciliation';
 import { reportsApi, type FinancialAccountProvider } from '@/lib/reports';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import CreateTransactionFromLineModal from './CreateTransactionFromLineModal';
 import ImportBankStatementModal from './ImportBankStatementModal';
@@ -29,6 +31,7 @@ export default function FinancialTab() {
   const [linkLine, setLinkLine] = useState<BankStatementLine | null>(null);
   const [createTxLine, setCreateTxLine] = useState<BankStatementLine | null>(null);
   const [selectedId, setSelectedId] = useState('');
+  const [revalueError, setRevalueError] = useState('');
 
   const accountsQuery = useQuery({
     queryKey: ['financial-accounts'],
@@ -65,6 +68,17 @@ export default function FinancialTab() {
       void queryClient.invalidateQueries({ queryKey: ['bank-statement-lines', selectedId] });
     },
   });
+  const revalueMutation = useMutation({
+    mutationFn: (financialAccountId: string) => reportsApi.revalueFinancialAccount(financialAccountId),
+    onSuccess: () => {
+      setRevalueError('');
+      void queryClient.invalidateQueries({ queryKey: ['financial-accounts'] });
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudo actualizar la cotización';
+      setRevalueError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
 
   const summary = reconciliationQuery.data;
   const unreconciled = unreconciledQuery.data ?? [];
@@ -87,6 +101,7 @@ export default function FinancialTab() {
               </Button>
             </div>
           </div>
+          {revalueError && <p className="mb-3 text-sm text-destructive">{revalueError}</p>}
           {accountsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : accounts.length === 0 ? (
@@ -99,6 +114,7 @@ export default function FinancialTab() {
                     <th className="p-3">Nombre</th>
                     <th className="p-3">Proveedor</th>
                     <th className="p-3 text-right">Saldo</th>
+                    <th className="p-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -110,9 +126,39 @@ export default function FinancialTab() {
                         selectedId === acc.id ? 'bg-muted/60' : ''
                       }`}
                     >
-                      <td className="p-3">{acc.name}</td>
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-2">
+                          {acc.name}
+                          {acc.currency && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {acc.currency.code}
+                            </Badge>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-3 text-muted-foreground">{PROVIDER_LABELS[acc.provider]}</td>
-                      <td className="p-3 text-right font-medium">${Number(acc.currentBalance).toFixed(2)}</td>
+                      <td className="p-3 text-right font-medium">
+                        {acc.currency ? acc.currency.code : '$'} {Number(acc.currentBalance).toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right">
+                        {acc.currency && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRevalueError('');
+                              revalueMutation.mutate(acc.id);
+                            }}
+                            disabled={revalueMutation.isPending}
+                          >
+                            {revalueMutation.isPending && revalueMutation.variables === acc.id
+                              ? 'Actualizando...'
+                              : 'Actualizar cotización'}
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

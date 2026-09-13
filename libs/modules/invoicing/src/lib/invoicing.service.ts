@@ -90,15 +90,37 @@ export class InvoicingService {
     private readonly invoicePdfService: InvoicePdfService,
   ) {}
 
-  createCurrency(dto: CreateCurrencyDto): Promise<Currency> {
-    return getTenantDb().currency.create({
+  async createCurrency(dto: CreateCurrencyDto): Promise<Currency> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    if (dto.isBase) {
+      await db.currency.updateMany({ where: { tenantId, isBase: true }, data: { isBase: false } });
+    }
+    return db.currency.create({
       data: {
-        tenantId: getTenantId(),
+        tenantId,
         code: dto.code,
         name: dto.name,
         isBase: dto.isBase ?? false,
       },
     });
+  }
+
+  /** Botón "Marcar como base" sobre una moneda ya existente en
+   * Preferencias → Monedas y Cotizaciones - hasta que esto existiera, una
+   * moneda sólo podía nacer base (y de hecho createCurrency ni siquiera
+   * mandaba isBase desde la UI todavía), así que ningún tenant real tenía
+   * una moneda base configurada. Mismo invariante "una sola base por
+   * tenant" que createCurrency. */
+  async setBaseCurrency(currencyId: string): Promise<Currency> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const currency = await db.currency.findUnique({ where: { id: currencyId } });
+    if (!currency) {
+      throw new NotFoundException('Currency not found');
+    }
+    await db.currency.updateMany({ where: { tenantId, isBase: true }, data: { isBase: false } });
+    return db.currency.update({ where: { id: currencyId }, data: { isBase: true } });
   }
 
   /** latestRate viene de una consulta extra por moneda (findFirst sobre su

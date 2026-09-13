@@ -3,6 +3,7 @@ import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, getUserId, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 import { InvoicingService, type CreateCreditNoteDto, type RecordReceiptDto } from '@plexo/invoicing';
+import { ReportsFinancialService } from '@plexo/reports-financial';
 import { resolveEmailFrom, TenantSettingsService } from '@plexo/tenant-settings';
 import { CheckService } from '@plexo/treasury';
 import type { CreateSaleDto } from './dto/create-sale.dto.js';
@@ -27,6 +28,7 @@ export class SalesService {
     private readonly invoicingService: InvoicingService,
     private readonly inventoryService: InventoryService,
     private readonly accountingService: AccountingService,
+    private readonly reportsFinancialService: ReportsFinancialService,
     private readonly tenantSettingsService: TenantSettingsService,
     private readonly checkService: CheckService,
   ) {}
@@ -216,6 +218,37 @@ export class SalesService {
       amount: receipt.amount,
       date: receipt.paidAt,
     });
+
+    // Cierra el gap que pos.service.spec.ts documenta para POS: fuera de
+    // Cheques/Conciliación Bancaria/POS, nada movía
+    // FinancialAccount.currentBalance todavía - este Receipt es "cash" en
+    // los términos contables de arriba, así que también tiene que
+    // acreditar la cuenta elegida. Un cheque de tercero es la única
+    // excepción real: no afecta el saldo hasta depositarlo (ver
+    // apps/api/src/app/treasury/) - eso es a propósito, ver el comentario
+    // en CheckService.
+    if (dto.financialAccountId && !dto.check) {
+      const account = await getTenantDb().financialAccount.findUnique({
+        where: { id: dto.financialAccountId },
+      });
+      if (!account) {
+        throw new NotFoundException('Financial account not found');
+      }
+      const invoice = await getTenantDb().invoice.findUnique({
+        where: { id: dto.invoiceId },
+        include: { currency: true },
+      });
+      if (account.currencyId && invoice && account.currencyId !== invoice.currencyId) {
+        throw new BadRequestException(
+          `Esta cuenta está en otra moneda que la factura (factura en ${invoice.currency.code})`,
+        );
+      }
+      await this.reportsFinancialService.recordFinancialTransaction({
+        financialAccountId: dto.financialAccountId,
+        amount: receipt.amount.toNumber(),
+        externalRef: `Cobro factura ${dto.invoiceId}`,
+      });
+    }
 
     // Un cheque de tercero siempre nace de un Recibo (ver
     // CheckService.registerThirdPartyCheck) - si el DTO trae el detalle,

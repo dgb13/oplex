@@ -103,4 +103,47 @@ export class TreasuryService {
 
     return check;
   }
+
+  /** Botón "Actualizar cotización" en FinancialTab.tsx sobre una cuenta en
+   * moneda no-base - la cuenta sigue con su currentBalance de siempre, sin
+   * tocar, esto sólo registra a qué tipo de cambio se la está valuando hoy
+   * y postea la diferencia contra la revaluación anterior (ver
+   * AccountingService.postExchangeRateRevaluation). rate opcional: si no
+   * viene, usa el último ExchangeRateHistory cargado para esa moneda. */
+  async revalueFinancialAccount(financialAccountId: string, rate?: number) {
+    const db = getTenantDb();
+    const account = await db.financialAccount.findUnique({ where: { id: financialAccountId } });
+    if (!account) {
+      throw new NotFoundException('Financial account not found');
+    }
+    if (!account.currencyId) {
+      throw new NotFoundException('Esta cuenta está en la moneda base del tenant, no se revalúa');
+    }
+
+    let newRate = rate;
+    if (newRate === undefined) {
+      const latest = await db.exchangeRateHistory.findFirst({
+        where: { currencyId: account.currencyId },
+        orderBy: { effectiveAt: 'desc' },
+      });
+      if (!latest) {
+        throw new NotFoundException('No hay ninguna cotización cargada para la moneda de esta cuenta');
+      }
+      newRate = latest.rate.toNumber();
+    }
+
+    const entry = await this.accountingService.postExchangeRateRevaluation({
+      financialAccountId,
+      currentBalance: account.currentBalance,
+      previousRate: account.lastRevaluationRate,
+      newRate,
+    });
+
+    const updated = await db.financialAccount.update({
+      where: { id: financialAccountId },
+      data: { lastRevaluationRate: newRate },
+    });
+
+    return { account: updated, journalEntry: entry };
+  }
 }

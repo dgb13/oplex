@@ -3,6 +3,7 @@ import {
   getTenantDb,
   getTenantId,
   Prisma,
+  type Currency,
   type FinancialAccount,
   type FinancialTransaction,
 } from '@plexo/database';
@@ -30,12 +31,16 @@ export class ReportsFinancialService {
         name: dto.name,
         provider: dto.provider,
         currentBalance: dto.currentBalance ?? 0,
+        currencyId: dto.currencyId,
       },
     });
   }
 
-  listFinancialAccounts(): Promise<FinancialAccount[]> {
-    return getTenantDb().financialAccount.findMany({ orderBy: { name: 'asc' } });
+  listFinancialAccounts(): Promise<(FinancialAccount & { currency: Currency | null })[]> {
+    return getTenantDb().financialAccount.findMany({
+      orderBy: { name: 'asc' },
+      include: { currency: true },
+    });
   }
 
   /** Records the movement and keeps FinancialAccount.currentBalance in

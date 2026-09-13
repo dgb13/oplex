@@ -26,6 +26,12 @@ export class InvoicingController {
   }
 
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @Post('currencies/:id/set-base')
+  setBaseCurrency(@Param('id', ParseUUIDPipe) id: string) {
+    return this.invoicingService.setBaseCurrency(id);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @Post('exchange-rates')
   recordExchangeRate(@Body() dto: RecordExchangeRateDto) {
     return this.invoicingService.recordExchangeRate(dto);

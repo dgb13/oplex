@@ -3,6 +3,7 @@ import type { AccountingService } from '@plexo/accounting';
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { InventoryService } from '@plexo/inventory';
 import type { InvoicingService } from '@plexo/invoicing';
+import type { ReportsFinancialService } from '@plexo/reports-financial';
 import type { TenantSettingsService } from '@plexo/tenant-settings';
 import type { CheckService } from '@plexo/treasury';
 import { SalesService } from './sales.service.js';
@@ -21,6 +22,10 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
 
 function makeCheckService(overrides: Partial<CheckService> = {}): CheckService {
   return { registerThirdPartyCheck: jest.fn(), ...overrides } as unknown as CheckService;
+}
+
+function makeReportsFinancialService(overrides: Partial<ReportsFinancialService> = {}): ReportsFinancialService {
+  return { recordFinancialTransaction: jest.fn(), ...overrides } as unknown as ReportsFinancialService;
 }
 
 /** Default settings (SHARED mode) resolve to `from: undefined` via
@@ -82,7 +87,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
     const dto = {
       customerId: 'customer-1',
       warehouseId: 'warehouse-1',
@@ -170,7 +175,7 @@ describe('SalesService.createSale', () => {
       }),
     } as unknown as TenantSettingsService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, tenantSettingsService, makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), tenantSettingsService, makeCheckService());
 
     await runInTenant(makeBranchDb(), () =>
       service.createSale({
@@ -193,7 +198,7 @@ describe('SalesService.createSale', () => {
     const invoicingService = { createInvoice: jest.fn() } as unknown as InvoicingService;
     const inventoryService = {} as unknown as InventoryService;
     const accountingService = {} as unknown as AccountingService;
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
     const db = makeBranchDb({
       id: 'branch-1',
       active: true,
@@ -220,7 +225,7 @@ describe('SalesService.createSale', () => {
     const invoicingService = { createInvoice: jest.fn() } as unknown as InvoicingService;
     const inventoryService = {} as unknown as InventoryService;
     const accountingService = {} as unknown as AccountingService;
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
     const db = makeBranchDb({
       id: 'branch-1',
       active: false,
@@ -265,7 +270,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(makeBranchDb(), () =>
@@ -303,7 +308,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockRejectedValue(failure),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(makeBranchDb(), () =>
@@ -344,7 +349,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(makeBranchDb(), () =>
       service.createSale({
@@ -413,7 +418,7 @@ describe('SalesService.voidSale', () => {
       },
     };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
     const dto = {
       invoiceId: 'invoice-1',
       reason: 'Devolución de mercadería',
@@ -484,7 +489,7 @@ describe('SalesService.voidSale', () => {
       },
     };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -516,7 +521,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -543,7 +548,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(db, () =>
@@ -568,7 +573,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -607,7 +612,7 @@ describe('SalesService.recordReceipt', () => {
       postReceiptJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-3', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
     const dto = { invoiceId: 'invoice-1', amount: 300, method: 'CASH' };
 
     const result = await service.recordReceipt(dto);
@@ -632,7 +637,7 @@ describe('SalesService.recordReceipt', () => {
       postReceiptJournalEntry: jest.fn().mockRejectedValue(failure),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CASH' }),
@@ -653,6 +658,7 @@ describe('SalesService.recordReceipt', () => {
       invoicingService,
       inventoryService,
       accountingService,
+      makeReportsFinancialService(),
       makeTenantSettingsService(),
       checkService,
     );
@@ -694,6 +700,7 @@ describe('SalesService.recordReceipt', () => {
       invoicingService,
       inventoryService,
       accountingService,
+      makeReportsFinancialService(),
       makeTenantSettingsService(),
       checkService,
     );
@@ -701,6 +708,109 @@ describe('SalesService.recordReceipt', () => {
     await service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CASH' });
 
     expect(checkService.registerThirdPartyCheck).not.toHaveBeenCalled();
+  });
+
+  it('credits the chosen financial account for a cash/transfer receipt (closes the balance gap)', async () => {
+    const receipt = makeReceipt();
+    const invoicingService = {
+      recordReceipt: jest.fn().mockResolvedValue(receipt),
+    } as unknown as InvoicingService;
+    const inventoryService = {} as unknown as InventoryService;
+    const accountingService = {
+      postReceiptJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-3', lines: [] }),
+    } as unknown as AccountingService;
+    const reportsFinancialService = makeReportsFinancialService();
+    const service = new SalesService(
+      invoicingService,
+      inventoryService,
+      accountingService,
+      reportsFinancialService,
+      makeTenantSettingsService(),
+      makeCheckService(),
+    );
+    const db = {
+      financialAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'fa-1', currencyId: null }) },
+      invoice: { findUnique: jest.fn().mockResolvedValue({ currencyId: 'ars', currency: { code: 'ARS' } }) },
+    };
+
+    await runInTenant(db, () =>
+      service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CASH', financialAccountId: 'fa-1' }),
+    );
+
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith({
+      financialAccountId: 'fa-1',
+      amount: 300,
+      externalRef: 'Cobro factura invoice-1',
+    });
+  });
+
+  it('does not credit any financial account for a third-party check (not cash until deposited)', async () => {
+    const receipt = makeReceipt();
+    const invoicingService = {
+      recordReceipt: jest.fn().mockResolvedValue(receipt),
+    } as unknown as InvoicingService;
+    const inventoryService = {} as unknown as InventoryService;
+    const accountingService = {
+      postReceiptJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-3', lines: [] }),
+    } as unknown as AccountingService;
+    const reportsFinancialService = makeReportsFinancialService();
+    const service = new SalesService(
+      invoicingService,
+      inventoryService,
+      accountingService,
+      reportsFinancialService,
+      makeTenantSettingsService(),
+      makeCheckService(),
+    );
+    const db = { invoice: { findUnique: jest.fn().mockResolvedValue({ customerId: 'customer-1' }) } };
+
+    await runInTenant(db, () =>
+      service.recordReceipt({
+        invoiceId: 'invoice-1',
+        amount: 300,
+        method: 'CHECK',
+        financialAccountId: 'fa-1',
+        check: {
+          number: '00012345',
+          bankName: 'Banco Galicia',
+          issueDate: '2026-08-20',
+          dueDate: '2026-09-20',
+        },
+      }),
+    );
+
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a receipt against a financial account whose currency does not match the invoice', async () => {
+    const receipt = makeReceipt();
+    const invoicingService = {
+      recordReceipt: jest.fn().mockResolvedValue(receipt),
+    } as unknown as InvoicingService;
+    const inventoryService = {} as unknown as InventoryService;
+    const accountingService = {
+      postReceiptJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-3', lines: [] }),
+    } as unknown as AccountingService;
+    const reportsFinancialService = makeReportsFinancialService();
+    const service = new SalesService(
+      invoicingService,
+      inventoryService,
+      accountingService,
+      reportsFinancialService,
+      makeTenantSettingsService(),
+      makeCheckService(),
+    );
+    const db = {
+      financialAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'fa-1', currencyId: 'usd' }) },
+      invoice: { findUnique: jest.fn().mockResolvedValue({ currencyId: 'ars', currency: { code: 'ARS' } }) },
+    };
+
+    await expect(
+      runInTenant(db, () =>
+        service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CASH', financialAccountId: 'fa-1' }),
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
   });
 
   it('throws when there is no authenticated user to attribute the check to', async () => {
@@ -716,6 +826,7 @@ describe('SalesService.recordReceipt', () => {
       invoicingService,
       inventoryService,
       accountingService,
+      makeReportsFinancialService(),
       makeTenantSettingsService(),
       makeCheckService(),
     );

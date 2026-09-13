@@ -984,6 +984,68 @@ describe('InvoicingService.createInvoice', () => {
   });
 });
 
+describe('InvoicingService.createCurrency', () => {
+  it('creates a non-base currency without touching any existing base', async () => {
+    const updateMany = jest.fn();
+    const create = jest.fn().mockResolvedValue({ id: 'usd', code: 'USD', name: 'Dólar', isBase: false });
+    const db = { currency: { updateMany, create } };
+    const service = new InvoicingService(makeEmailSender(), makeElectronicInvoicing(), makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+
+    await runInTenant(db, () => service.createCurrency({ code: 'USD', name: 'Dólar' }));
+
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({
+      data: { tenantId: 'tenant-1', code: 'USD', name: 'Dólar', isBase: false },
+    });
+  });
+
+  it('unmarks any other base currency for this tenant before creating a new base one', async () => {
+    const updateMany = jest.fn();
+    const create = jest.fn().mockResolvedValue({ id: 'usd', code: 'USD', name: 'Dólar', isBase: true });
+    const db = { currency: { updateMany, create } };
+    const service = new InvoicingService(makeEmailSender(), makeElectronicInvoicing(), makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+
+    await runInTenant(db, () => service.createCurrency({ code: 'USD', name: 'Dólar', isBase: true }));
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', isBase: true },
+      data: { isBase: false },
+    });
+    expect(create).toHaveBeenCalledWith({
+      data: { tenantId: 'tenant-1', code: 'USD', name: 'Dólar', isBase: true },
+    });
+  });
+});
+
+describe('InvoicingService.setBaseCurrency', () => {
+  it('unmarks the previous base currency and marks the given one instead', async () => {
+    const update = jest.fn().mockResolvedValue({ id: 'usd', code: 'USD', isBase: true });
+    const db = {
+      currency: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'usd', code: 'USD', isBase: false }),
+        updateMany: jest.fn(),
+        update,
+      },
+    };
+    const service = new InvoicingService(makeEmailSender(), makeElectronicInvoicing(), makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+
+    await runInTenant(db, () => service.setBaseCurrency('usd'));
+
+    expect(db.currency.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', isBase: true },
+      data: { isBase: false },
+    });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'usd' }, data: { isBase: true } });
+  });
+
+  it('throws when the currency does not exist', async () => {
+    const db = { currency: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const service = new InvoicingService(makeEmailSender(), makeElectronicInvoicing(), makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+
+    await expect(runInTenant(db, () => service.setBaseCurrency('missing'))).rejects.toThrow(NotFoundException);
+  });
+});
+
 describe('InvoicingService.listCurrencies', () => {
   it('reports latestRate 1 for the base currency without querying its history', async () => {
     const exchangeRateHistoryFindFirst = jest.fn();

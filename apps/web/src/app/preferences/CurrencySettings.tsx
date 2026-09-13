@@ -32,6 +32,7 @@ export default function CurrencySettings() {
   const [addingCurrency, setAddingCurrency] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
+  const [newIsBase, setNewIsBase] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [manualRateByCurrency, setManualRateByCurrency] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -39,15 +40,26 @@ export default function CurrencySettings() {
   const invalidateCurrencies = () => queryClient.invalidateQueries({ queryKey: ['invoicing-currencies'] });
 
   const createCurrencyMutation = useMutation({
-    mutationFn: () => invoicingApi.createCurrency({ code: newCode.trim().toUpperCase(), name: newName.trim() }),
+    mutationFn: () =>
+      invoicingApi.createCurrency({ code: newCode.trim().toUpperCase(), name: newName.trim(), isBase: newIsBase }),
     onSuccess: () => {
       setAddingCurrency(false);
       setNewCode('');
       setNewName('');
+      setNewIsBase(false);
       setError('');
       void invalidateCurrencies();
     },
     onError: (err) => setError(errorMessage(err, 'No se pudo crear la moneda')),
+  });
+
+  const setBaseCurrencyMutation = useMutation({
+    mutationFn: (currencyId: string) => invoicingApi.setBaseCurrency(currencyId),
+    onSuccess: () => {
+      setError('');
+      void invalidateCurrencies();
+    },
+    onError: (err) => setError(errorMessage(err, 'No se pudo marcar la moneda como base')),
   });
 
   const recordRateMutation = useMutation({
@@ -120,6 +132,15 @@ export default function CurrencySettings() {
                     placeholder="Dólar estadounidense"
                   />
                 </label>
+                <label className="flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={newIsBase}
+                    onChange={(e) => setNewIsBase(e.target.checked)}
+                    className="size-3.5"
+                  />
+                  Marcar como moneda base
+                </label>
                 <Button
                   type="button"
                   size="sm"
@@ -164,6 +185,8 @@ export default function CurrencySettings() {
                       savingRate={recordRateMutation.isPending}
                       onSyncBna={() => syncBnaMutation.mutate()}
                       syncingBna={syncBnaMutation.isPending}
+                      onSetBase={() => setBaseCurrencyMutation.mutate(currency.id)}
+                      settingBase={setBaseCurrencyMutation.isPending}
                       historyOpen={expandedHistoryId === currency.id}
                       onToggleHistory={() =>
                         setExpandedHistoryId((prev) => (prev === currency.id ? null : currency.id))
@@ -216,6 +239,8 @@ function CurrencyRow({
   savingRate,
   onSyncBna,
   syncingBna,
+  onSetBase,
+  settingBase,
   historyOpen,
   onToggleHistory,
 }: {
@@ -226,6 +251,8 @@ function CurrencyRow({
   savingRate: boolean;
   onSyncBna: () => void;
   syncingBna: boolean;
+  onSetBase: () => void;
+  settingBase: boolean;
   historyOpen: boolean;
   onToggleHistory: () => void;
 }) {
@@ -239,6 +266,9 @@ function CurrencyRow({
           <span className="text-muted-foreground">Moneda base</span>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="xs" onClick={onSetBase} disabled={settingBase}>
+              {settingBase ? 'Marcando...' : 'Marcar como base'}
+            </Button>
             {currency.code === 'USD' && (
               <Button type="button" variant="outline" size="xs" onClick={onSyncBna} disabled={syncingBna}>
                 {syncingBna ? 'Sincronizando...' : 'Sincronizar con Banco Nación'}

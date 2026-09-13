@@ -55,6 +55,10 @@ export interface FinancialAccount {
   name: string;
   provider: FinancialAccountProvider;
   currentBalance: string;
+  // null = moneda base del tenant - ver FinancialAccount.currencyId.
+  currencyId: string | null;
+  currency: { id: string; code: string; name: string } | null;
+  lastRevaluationRate: string | null;
 }
 
 export interface FinancialTransaction {
@@ -79,6 +83,7 @@ export interface CreateFinancialAccountInput {
   name: string;
   provider: FinancialAccountProvider;
   currentBalance?: number;
+  currencyId?: string;
 }
 
 export interface RecordFinancialTransactionInput {
@@ -126,5 +131,12 @@ export const reportsApi = {
   getReconciliationSummary: (financialAccountId: string) =>
     api
       .get<ReconciliationSummary>(`/reports/financial/accounts/${financialAccountId}/reconciliation`)
+      .then((r) => r.data),
+  revalueFinancialAccount: (financialAccountId: string, rate?: number) =>
+    api
+      .post<{ account: FinancialAccount; journalEntry: unknown }>(
+        `/reports/financial/accounts/${financialAccountId}/revalue`,
+        rate !== undefined ? { rate } : undefined,
+      )
       .then((r) => r.data),
 };

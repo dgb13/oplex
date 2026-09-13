@@ -793,6 +793,101 @@ describe('AccountingService.postCashSessionAdjustmentJournalEntry', () => {
   });
 });
 
+describe('AccountingService.postExchangeRateRevaluation', () => {
+  function dbWithAccounts(existingByCode: Record<string, { id: string }> = {}) {
+    const created: { code: string; name: string; type: string }[] = [];
+    return {
+      accountingAccount: {
+        findFirst: jest.fn(({ where }: { where: { code: string } }) =>
+          Promise.resolve(existingByCode[where.code] ?? null),
+        ),
+        create: jest.fn(({ data }: { data: { code: string; name: string; type: string } }) => {
+          created.push({ code: data.code, name: data.name, type: data.type });
+          return Promise.resolve({ id: `acc-${data.code}`, ...data });
+        }),
+      },
+      journalEntry: {
+        create: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
+      },
+      _created: created,
+    };
+  }
+
+  it('books debit Caja / credit Ganancia por Diferencia de Cambio when the rate went up', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postExchangeRateRevaluation({
+        financialAccountId: 'fa-1',
+        currentBalance: 100,
+        previousRate: 1000,
+        newRate: 1100,
+      }),
+    );
+
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.03', direction: 'DEBIT', amount: 10000 },
+      { accountId: 'acc-4.2.05', direction: 'CREDIT', amount: 10000 },
+    ]);
+  });
+
+  it('books debit Pérdida por Diferencia de Cambio / credit Caja when the rate went down', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postExchangeRateRevaluation({
+        financialAccountId: 'fa-1',
+        currentBalance: 100,
+        previousRate: 1100,
+        newRate: 1000,
+      }),
+    );
+
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-5.1.06', direction: 'DEBIT', amount: 10000 },
+      { accountId: 'acc-1.1.03', direction: 'CREDIT', amount: 10000 },
+    ]);
+  });
+
+  it('skips posting when the rate did not move', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postExchangeRateRevaluation({
+        financialAccountId: 'fa-1',
+        currentBalance: 100,
+        previousRate: 1000,
+        newRate: 1000,
+      }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('skips posting on the first revaluation (no previous rate to compare against)', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postExchangeRateRevaluation({
+        financialAccountId: 'fa-1',
+        currentBalance: 100,
+        previousRate: null,
+        newRate: 1000,
+      }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('AccountingService.postInflationAdjustmentJournalEntry', () => {
   it('books debit Pérdida / credit Ajuste de Capital for a positive (loss) RECPAM', async () => {
     const db = dbWithAccounts();
