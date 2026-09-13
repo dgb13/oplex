@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ARGENTINE_JURISDICTION_LABELS, withholdingRegimesApi, type ArgentineJurisdiction, type WithholdingRegime } from '@/lib/taxes';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -10,8 +12,8 @@ interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const JURISDICTION_OPTIONS = Object.keys(ARGENTINE_JURISDICTION_LABELS) as ArgentineJurisdiction[];
 
@@ -50,36 +52,30 @@ export default function ReviseWithholdingRegimeModal({ regime, onClose }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold">
             Revisar {regime.code} — {regime.name}
           </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Cierra la vigencia actual en la fecha de efecto y crea una nueva versión — los pagos ya
           registrados mantienen la retención que se calculó en su momento.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Nueva tasa (%)</label>
-            <input
-              className={inputClass}
-              type="number"
-              step="0.01"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-            />
+            <label className="text-sm text-muted-foreground">Nueva tasa (%)</label>
+            <Input type="number" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} />
           </div>
           {regime.taxType === 'GROSS_INCOME' && (
             <div className="flex flex-col gap-1">
-              <label className="text-sm text-slate-600 dark:text-slate-400">Jurisdicción</label>
+              <label className="text-sm text-muted-foreground">Jurisdicción</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={jurisdiction}
                 onChange={(e) => setJurisdiction(e.target.value as ArgentineJurisdiction)}
               >
@@ -93,9 +89,8 @@ export default function ReviseWithholdingRegimeModal({ regime, onClose }: Props)
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Nuevo mínimo no imponible</label>
-            <input
-              className={inputClass}
+            <label className="text-sm text-muted-foreground">Nuevo mínimo no imponible</label>
+            <Input
               type="number"
               step="0.01"
               value={minTaxableAmount}
@@ -103,32 +98,19 @@ export default function ReviseWithholdingRegimeModal({ regime, onClose }: Props)
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">
+            <label className="text-sm text-muted-foreground">
               Vigente desde (opcional, por defecto ahora)
             </label>
-            <input
-              className={inputClass}
-              type="date"
-              value={effectiveFrom}
-              onChange={(e) => setEffectiveFrom(e.target.value)}
-            />
+            <Input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Guardando...' : 'Guardar revisión'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

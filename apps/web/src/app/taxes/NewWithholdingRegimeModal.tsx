@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   ARGENTINE_JURISDICTION_LABELS,
   WITHHOLDING_TAX_TYPE_LABELS,
@@ -15,8 +17,8 @@ interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const TAX_TYPE_OPTIONS: WithholdingTaxType[] = ['INCOME_TAX', 'VAT', 'GROSS_INCOME'];
 const JURISDICTION_OPTIONS = Object.keys(ARGENTINE_JURISDICTION_LABELS) as ArgentineJurisdiction[];
@@ -69,37 +71,31 @@ export default function NewWithholdingRegimeModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nuevo régimen de retención</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nuevo régimen de retención</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Código</label>
-            <input
-              className={inputClass}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="GANANCIAS_RG830"
-            />
+            <label className="text-sm text-muted-foreground">Código</label>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="GANANCIAS_RG830" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Nombre</label>
-            <input
-              className={inputClass}
+            <label className="text-sm text-muted-foreground">Nombre</label>
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Retención Ganancias RG 830"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Impuesto</label>
+            <label className="text-sm text-muted-foreground">Impuesto</label>
             <select
-              className={inputClass}
+              className={selectClass}
               value={taxType}
               onChange={(e) => setTaxType(e.target.value as WithholdingTaxType)}
             >
@@ -112,9 +108,9 @@ export default function NewWithholdingRegimeModal({ onClose }: Props) {
           </div>
           {taxType === 'GROSS_INCOME' && (
             <div className="flex flex-col gap-1">
-              <label className="text-sm text-slate-600 dark:text-slate-400">Jurisdicción</label>
+              <label className="text-sm text-muted-foreground">Jurisdicción</label>
               <select
-                className={inputClass}
+                className={selectClass}
                 value={jurisdiction}
                 onChange={(e) => setJurisdiction(e.target.value as ArgentineJurisdiction)}
               >
@@ -128,9 +124,8 @@ export default function NewWithholdingRegimeModal({ onClose }: Props) {
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Tasa (%)</label>
-            <input
-              className={inputClass}
+            <label className="text-sm text-muted-foreground">Tasa (%)</label>
+            <Input
               type="number"
               step="0.01"
               value={rate}
@@ -139,11 +134,10 @@ export default function NewWithholdingRegimeModal({ onClose }: Props) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">
+            <label className="text-sm text-muted-foreground">
               Mínimo no imponible (opcional, 0 = siempre retiene)
             </label>
-            <input
-              className={inputClass}
+            <Input
               type="number"
               step="0.01"
               value={minTaxableAmount}
@@ -151,31 +145,23 @@ export default function NewWithholdingRegimeModal({ onClose }: Props) {
               placeholder="0"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={managedByAccountant}
               onChange={(e) => setManagedByAccountant(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800"
+              className="h-4 w-4 rounded border-input bg-transparent"
             />
             Delegado al contador (puede revisar la tasa sin ser OWNER/ADMIN)
           </label>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Creando...' : 'Crear régimen'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

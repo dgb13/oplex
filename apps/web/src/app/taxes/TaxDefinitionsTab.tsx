@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { taxesApi, type TaxCalculationType, type TaxDefinition } from '@/lib/taxes';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -38,46 +39,41 @@ export default function TaxDefinitionsTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setNewOpen(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-        >
+        <Button type="button" onClick={() => setNewOpen(true)}>
           + Nuevo impuesto
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
-        ) : error ? (
-          <div className="flex h-32 items-center justify-center text-red-600 dark:text-red-400">
-            Error al cargar los impuestos
-          </div>
-        ) : sorted.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin impuestos definidos</p>
-        ) : (
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando...</p>
+      ) : error ? (
+        <p className="text-sm text-destructive">Error al cargar los impuestos</p>
+      ) : sorted.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin impuestos definidos</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
-                <th className="pb-2 pr-4">Código</th>
-                <th className="pb-2 pr-4">Nombre</th>
-                <th className="pb-2 pr-4">Tipo</th>
-                <th className="pb-2 pr-4">Valor</th>
-                <th className="pb-2 pr-4">Vigencia</th>
-                <th className="pb-2 pr-4">Contador</th>
-                <th className="pb-2" />
+              <tr className="border-b bg-muted/50 text-left text-muted-foreground">
+                <th className="p-3">Código</th>
+                <th className="p-3">Nombre</th>
+                <th className="p-3">Tipo</th>
+                <th className="p-3">Valor</th>
+                <th className="p-3">Vigencia</th>
+                <th className="p-3">Contador</th>
+                <th className="p-3" />
               </tr>
             </thead>
             <tbody>
               {sorted.map((def) => {
                 const active = def.validTo === null;
                 return (
-                  <tr key={def.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{def.code}</td>
-                    <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{def.name}</td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">{CALC_TYPE_LABELS[def.calculationType]}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{formatValue(def)}</td>
-                    <td className="py-2 pr-4 text-xs text-slate-600 dark:text-slate-400">
+                  <tr key={def.id} className="border-b border-border/50">
+                    <td className="p-3 font-mono text-xs">{def.code}</td>
+                    <td className="p-3">{def.name}</td>
+                    <td className="p-3 text-muted-foreground">{CALC_TYPE_LABELS[def.calculationType]}</td>
+                    <td className="p-3">{formatValue(def)}</td>
+                    <td className="p-3 text-xs text-muted-foreground">
                       {new Date(def.validFrom).toLocaleDateString('es-AR')} —{' '}
                       {active ? (
                         <span className="text-emerald-600 dark:text-emerald-400">vigente</span>
@@ -85,14 +81,14 @@ export default function TaxDefinitionsTab() {
                         new Date(def.validTo as string).toLocaleDateString('es-AR')
                       )}
                     </td>
-                    <td className="py-2 pr-4 text-xs text-slate-600 dark:text-slate-400">
+                    <td className="p-3 text-xs text-muted-foreground">
                       {def.managedByAccountant ? 'Delegado' : '—'}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="p-3 text-right">
                       {active && (
                         <button
                           onClick={() => setRevising(def)}
-                          className="text-xs font-medium text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-700 dark:hover:text-indigo-300"
+                          className="text-xs font-medium text-primary hover:text-primary/80"
                         >
                           Revisar
                         </button>
@@ -103,8 +99,8 @@ export default function TaxDefinitionsTab() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       {newOpen && <NewTaxDefinitionModal onClose={() => setNewOpen(false)} />}
       {revising && <ReviseTaxDefinitionModal definition={revising} onClose={() => setRevising(null)} />}

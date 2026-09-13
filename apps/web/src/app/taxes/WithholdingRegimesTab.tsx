@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import {
   ARGENTINE_JURISDICTION_LABELS,
   WITHHOLDING_TAX_TYPE_LABELS,
@@ -49,53 +50,46 @@ export default function WithholdingRegimesTab() {
       )}
 
       <div className="flex justify-end">
-        <button
-          onClick={() => setNewOpen(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-        >
+        <Button type="button" onClick={() => setNewOpen(true)}>
           + Nuevo régimen
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
-        ) : error ? (
-          <div className="flex h-32 items-center justify-center text-red-600 dark:text-red-400">
-            Error al cargar los regímenes
-          </div>
-        ) : sorted.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin regímenes de retención definidos</p>
-        ) : (
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando...</p>
+      ) : error ? (
+        <p className="text-sm text-destructive">Error al cargar los regímenes</p>
+      ) : sorted.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin regímenes de retención definidos</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
-                <th className="pb-2 pr-4">Código</th>
-                <th className="pb-2 pr-4">Nombre</th>
-                <th className="pb-2 pr-4">Impuesto</th>
-                <th className="pb-2 pr-4">Jurisdicción</th>
-                <th className="pb-2 pr-4">Tasa</th>
-                <th className="pb-2 pr-4">Mínimo no imponible</th>
-                <th className="pb-2 pr-4">Vigencia</th>
-                <th className="pb-2" />
+              <tr className="border-b bg-muted/50 text-left text-muted-foreground">
+                <th className="p-3">Código</th>
+                <th className="p-3">Nombre</th>
+                <th className="p-3">Impuesto</th>
+                <th className="p-3">Jurisdicción</th>
+                <th className="p-3">Tasa</th>
+                <th className="p-3">Mínimo no imponible</th>
+                <th className="p-3">Vigencia</th>
+                <th className="p-3" />
               </tr>
             </thead>
             <tbody>
               {sorted.map((regime) => {
                 const active = regime.validTo === null;
                 return (
-                  <tr key={regime.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{regime.code}</td>
-                    <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{regime.name}</td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
-                      {WITHHOLDING_TAX_TYPE_LABELS[regime.taxType]}
-                    </td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                  <tr key={regime.id} className="border-b border-border/50">
+                    <td className="p-3 font-mono text-xs">{regime.code}</td>
+                    <td className="p-3">{regime.name}</td>
+                    <td className="p-3 text-muted-foreground">{WITHHOLDING_TAX_TYPE_LABELS[regime.taxType]}</td>
+                    <td className="p-3 text-muted-foreground">
                       {regime.jurisdiction ? ARGENTINE_JURISDICTION_LABELS[regime.jurisdiction] : '—'}
                     </td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{regime.rate}%</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">${regime.minTaxableAmount}</td>
-                    <td className="py-2 pr-4 text-xs text-slate-600 dark:text-slate-400">
+                    <td className="p-3">{regime.rate}%</td>
+                    <td className="p-3">${regime.minTaxableAmount}</td>
+                    <td className="p-3 text-xs text-muted-foreground">
                       {new Date(regime.validFrom).toLocaleDateString('es-AR')} —{' '}
                       {active ? (
                         <span className="text-emerald-600 dark:text-emerald-400">vigente</span>
@@ -103,11 +97,11 @@ export default function WithholdingRegimesTab() {
                         new Date(regime.validTo as string).toLocaleDateString('es-AR')
                       )}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="p-3 text-right">
                       {active && (
                         <button
                           onClick={() => setRevising(regime)}
-                          className="text-xs font-medium text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-700 dark:hover:text-indigo-300"
+                          className="text-xs font-medium text-primary hover:text-primary/80"
                         >
                           Revisar
                         </button>
@@ -118,8 +112,8 @@ export default function WithholdingRegimesTab() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       {newOpen && <NewWithholdingRegimeModal onClose={() => setNewOpen(false)} />}
       {revising && <ReviseWithholdingRegimeModal regime={revising} onClose={() => setRevising(null)} />}

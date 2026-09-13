@@ -1,11 +1,19 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { taxDeadlinesApi, TAX_DEADLINE_KIND_LABELS, type TaxDeadlineKind, type TaxDeadlineStatus } from '@/lib/memberships';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+function pillClass(active: boolean): string {
+  return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+    active ? 'bg-primary text-primary-foreground' : 'border text-muted-foreground hover:text-foreground'
+  }`;
+}
 
 const KIND_OPTIONS = Object.entries(TAX_DEADLINE_KIND_LABELS) as [TaxDeadlineKind, string][];
 
@@ -60,13 +68,10 @@ export default function TaxDeadlinesTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4"
-      >
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">Tipo</label>
-          <select className={inputClass} value={kind} onChange={(e) => setKind(e.target.value as TaxDeadlineKind)}>
+          <label className="text-xs text-muted-foreground">Tipo</label>
+          <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as TaxDeadlineKind)}>
             {KIND_OPTIONS.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -75,58 +80,45 @@ export default function TaxDeadlinesTab() {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">Vencimiento</label>
-          <input className={inputClass} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <label className="text-xs text-muted-foreground">Vencimiento</label>
+          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </div>
         <div className="flex flex-1 flex-col gap-1">
-          <label className="text-xs text-slate-500">Descripción</label>
-          <input
-            className={inputClass}
+          <label className="text-xs text-muted-foreground">Descripción</label>
+          <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="IVA mensual, Monotributo, etc."
           />
         </div>
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={createMutation.isPending}>
           {createMutation.isPending ? 'Agregando...' : '+ Agregar vencimiento'}
-        </button>
+        </Button>
       </form>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-2">
         {(['PENDING', 'DONE', 'ALL'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              statusFilter === s
-                ? 'bg-indigo-600 text-white'
-                : 'border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-            }`}
-          >
+          <button key={s} onClick={() => setStatusFilter(s)} className={pillClass(statusFilter === s)}>
             {s === 'PENDING' ? 'Pendientes' : s === 'DONE' ? 'Cumplidos' : 'Todos'}
           </button>
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
-        ) : !deadlines || deadlines.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin vencimientos cargados</p>
-        ) : (
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando...</p>
+      ) : !deadlines || deadlines.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin vencimientos cargados</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
-                <th className="pb-2 pr-4">Tipo</th>
-                <th className="pb-2 pr-4">Vencimiento</th>
-                <th className="pb-2 pr-4">Descripción</th>
-                <th className="pb-2 pr-4">Estado</th>
-                <th className="pb-2" />
+              <tr className="border-b bg-muted/50 text-left text-muted-foreground">
+                <th className="p-3">Tipo</th>
+                <th className="p-3">Vencimiento</th>
+                <th className="p-3">Descripción</th>
+                <th className="p-3">Estado</th>
+                <th className="p-3" />
               </tr>
             </thead>
             <tbody>
@@ -135,13 +127,13 @@ export default function TaxDeadlinesTab() {
                 const dueUtc = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
                 const overdue = d.status === 'PENDING' && dueUtc < today;
                 return (
-                  <tr key={d.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{TAX_DEADLINE_KIND_LABELS[d.kind]}</td>
-                    <td className={`py-2 pr-4 ${overdue ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                  <tr key={d.id} className="border-b border-border/50">
+                    <td className="p-3">{TAX_DEADLINE_KIND_LABELS[d.kind]}</td>
+                    <td className={`p-3 ${overdue ? 'font-medium text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
                       {due.toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                     </td>
-                    <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{d.description}</td>
-                    <td className="py-2 pr-4 text-xs">
+                    <td className="p-3">{d.description}</td>
+                    <td className="p-3 text-xs">
                       {d.status === 'DONE' ? (
                         <span className="text-emerald-600 dark:text-emerald-400">Cumplido</span>
                       ) : overdue ? (
@@ -150,11 +142,11 @@ export default function TaxDeadlinesTab() {
                         <span className="text-amber-600 dark:text-amber-400">Pendiente</span>
                       )}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="p-3 text-right">
                       {d.status === 'PENDING' && (
                         <button
                           onClick={() => markDoneMutation.mutate(d.id)}
-                          className="text-xs font-medium text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-700 dark:hover:text-indigo-300"
+                          className="text-xs font-medium text-primary hover:text-primary/80"
                         >
                           Marcar cumplido
                         </button>
@@ -165,8 +157,8 @@ export default function TaxDeadlinesTab() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
