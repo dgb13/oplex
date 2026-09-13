@@ -10,7 +10,6 @@ import TrialBanner from './TrialBanner';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { useDensity } from '@/providers/DensityProvider';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Briefcase,
@@ -18,10 +17,12 @@ import {
   Calculator,
   ChevronDown,
   LayoutDashboard,
+  Menu as MenuIcon,
   Package,
   ShoppingBag,
   ShoppingBasket,
   ShoppingCart,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -112,6 +113,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [online, setOnline] = useState<PresenceUser[]>([]);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Mismo queryKey que UserMenu's propio useQuery - react-query lo dedupe,
   // no dispara un segundo fetch.
@@ -150,87 +152,130 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
+  // Cierra el drawer mobile al navegar - sin esto, tocar un link en celular
+  // deja el overlay abierto tapando la pantalla de destino.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <div className="flex items-center gap-6">
-          <PlexoLogo size={22} />
-          <nav className="flex items-center gap-4">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <ImpersonationBanner />
+      <MembershipSessionBanner />
+      <TrialBanner />
+
+      <div className="flex min-h-0 flex-1">
+        {mobileNavOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-4 text-sidebar-foreground transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${
+            mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between px-1">
+            <PlexoLogo size={22} />
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg p-1 text-muted-foreground hover:bg-muted md:hidden"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+          </div>
+
+          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
             {NAV_ENTRIES.map((entry) =>
               entry.kind === 'link' ? (
                 <Link
                   key={entry.href}
                   href={entry.href}
-                  className={`flex items-center gap-1.5 text-sm transition ${
-                    pathname?.startsWith(entry.href) ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
+                    pathname?.startsWith(entry.href)
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  <entry.icon className="h-4 w-4" />
+                  <entry.icon className="h-4 w-4 shrink-0" />
                   {entry.label}
                 </Link>
               ) : (
-                <NavDropdown key={entry.label} group={entry} active={pathname ?? ''} />
+                <NavGroupSection key={entry.label} group={entry} active={pathname ?? ''} />
               ),
             )}
           </nav>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted md:hidden"
+              aria-label="Abrir menú"
+            >
+              <MenuIcon className="h-5 w-5" />
+            </button>
+            <div className="flex flex-1 items-center justify-end gap-5">
+              <OnlineColleagues users={online} />
+              <CartButton />
+              <UserMenu />
+            </div>
+          </header>
+          <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </div>
-        <div className="flex items-center gap-5">
-          <OnlineColleagues users={online} />
-          <CartButton />
-          <UserMenu />
-        </div>
-      </header>
-      <ImpersonationBanner />
-      <MembershipSessionBanner />
-      <TrialBanner />
-      <main className="p-6">{children}</main>
+      </div>
+
       <AssistantWidget />
     </div>
   );
 }
 
-function NavDropdown({ group, active }: { group: NavGroup; active: string }) {
-  const isActive = group.items.some((item) => active.startsWith(item.href));
-  // Ids explícitos en vez de dejar que Headless UI use useId(): el grupo
-  // "Mercado Pago" de Preferencias (MercadoPagoCard.tsx) envuelve un
-  // useSearchParams() en un <Suspense> que resuelve distinto en SSR vs
-  // cliente, lo que corre la numeración automática de useId() para todo lo
-  // que se renderiza después en la misma pasada y generaba un mismatch de
-  // hidratación acá (headlessui-menu-button-...) - nada roto en este
-  // componente en sí, pero un id fijo lo hace inmune a ese corrimiento.
-  const slug = group.label.toLowerCase().replace(/\s+/g, '-');
+function NavGroupSection({ group, active }: { group: NavGroup; active: string }) {
+  const isActiveGroup = group.items.some((item) => active.startsWith(item.href));
+  // Se inicializa abierto si el grupo contiene la pantalla actual - cada
+  // segmento de primer nivel tiene su propio layout.tsx que monta un
+  // AppShell nuevo (ver taxes/layout.tsx, reports/layout.tsx, etc.), así que
+  // este componente se remonta en cada navegación entre secciones y este
+  // valor inicial siempre refleja la ruta real, sin necesitar un useEffect.
+  const [open, setOpen] = useState(isActiveGroup);
 
   return (
-    <Menu as="div" className="relative">
-      <MenuButton
-        id={`nav-menu-${slug}-button`}
-        className={`flex items-center gap-1.5 text-sm transition ${
-          isActive ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition ${
+          isActiveGroup ? 'font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
         }`}
+        aria-expanded={open}
       >
-        <group.icon className="h-4 w-4" />
+        <group.icon className="h-4 w-4 shrink-0" />
         {group.label}
-        <ChevronDown className="h-3.5 w-3.5" />
-      </MenuButton>
-      <MenuItems
-        id={`nav-menu-${slug}-items`}
-        anchor="bottom start"
-        className="z-20 mt-2 w-48 rounded-xl border bg-popover py-2 text-popover-foreground shadow-xl focus:outline-none"
-      >
-        {group.items.map((item) => (
-          <MenuItem key={item.href}>
-            {({ focus }) => (
-              <Link
-                href={item.href}
-                className={`block px-4 py-2 text-sm transition ${active.startsWith(item.href) ? 'font-medium text-foreground' : 'text-muted-foreground'} ${focus ? 'bg-muted' : ''}`}
-              >
-                {item.label}
-              </Link>
-            )}
-          </MenuItem>
-        ))}
-      </MenuItems>
-    </Menu>
+        <ChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="ml-[1.15rem] flex flex-col gap-0.5 border-l py-0.5 pl-3">
+          {group.items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rounded-lg px-2.5 py-1.5 text-sm transition ${
+                active.startsWith(item.href)
+                  ? 'font-medium text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -273,7 +318,9 @@ function OnlineColleagues({ users }: { users: PresenceUser[] }) {
         className="flex items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
       >
         <span className="h-2 w-2 rounded-full bg-green-500" />
-        {users.length} compañero{users.length !== 1 ? 's' : ''} en línea
+        <span className="hidden sm:inline">
+          {users.length} compañero{users.length !== 1 ? 's' : ''} en línea
+        </span>
       </button>
 
       {open && (

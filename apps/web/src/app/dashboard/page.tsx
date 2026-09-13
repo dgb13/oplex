@@ -2,10 +2,19 @@
 
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { getSocket } from '@/lib/socket';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { MoreHorizontal } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect } from 'react';
 import OnboardingChecklist from './OnboardingChecklist';
 import {
@@ -68,6 +77,27 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
 };
 
+/** Atajo de navegación en la esquina de cada card - no un menú de acciones
+ * con varias opciones (todavía no hay más de una por card), pero se deja el
+ * mismo patrón de DropdownMenu para que sea trivial sumar una segunda
+ * acción el día que haga falta. */
+function CardMenu({ href, label }: { href: string; label: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon-xs" aria-label="Más opciones">
+            <MoreHorizontal />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem render={<Link href={href}>{label}</Link>} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { theme } = useTheme();
@@ -103,31 +133,26 @@ export default function DashboardPage() {
   }, [queryClient]);
 
   if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center text-slate-500">
-        Cargando tablero...
-      </div>
-    );
+    return <div className="flex h-64 items-center justify-center text-muted-foreground">Cargando tablero...</div>;
   }
 
   if (error || !data) {
-    return (
-      <div className="flex h-64 items-center justify-center text-red-600 dark:text-red-400">
-        Error al cargar el tablero
-      </div>
-    );
+    return <div className="flex h-64 items-center justify-center text-destructive">Error al cargar el tablero</div>;
   }
 
   const { todaySummary, stockByWarehouse, recentInvoices, lowStockAlerts, salesLast7Days } = data;
+  const stockTotal = stockByWarehouse.reduce((sum, wh) => sum + wh.totalItems, 0);
+  const pendingInvoices = todaySummary.invoiceCount - todaySummary.paidCount;
+  const avgTicket = todaySummary.invoiceCount > 0 ? todaySummary.total / todaySummary.invoiceCount : 0;
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Tablero</h1>
+      <h1 className="text-xl font-semibold">Tablero</h1>
 
       <OnboardingChecklist />
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard
           label="Facturado hoy"
           value={`$${todaySummary.total.toFixed(2)}`}
@@ -138,6 +163,13 @@ export default function DashboardPage() {
           value={`${todaySummary.paidCount}`}
           sub={`de ${todaySummary.invoiceCount} factura${todaySummary.invoiceCount !== 1 ? 's' : ''}`}
         />
+        <KpiCard label="Ticket promedio" value={`$${avgTicket.toFixed(2)}`} sub="facturado hoy" />
+        <KpiCard
+          label="Facturas pendientes"
+          value={`${pendingInvoices}`}
+          sub={pendingInvoices > 0 ? 'sin cobrar todavía' : 'todo cobrado'}
+        />
+        <KpiCard label="Stock total" value={`${stockTotal}`} sub={`${stockByWarehouse.length} depósito${stockByWarehouse.length !== 1 ? 's' : ''}`} />
         <KpiCard
           label="Alertas de stock"
           value={`${lowStockAlerts.length}`}
@@ -151,6 +183,9 @@ export default function DashboardPage() {
         <Card className="col-span-2">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Ventas últimos 7 días</CardTitle>
+            <CardAction>
+              <CardMenu href="/reports" label="Ver reportes de ventas" />
+            </CardAction>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -179,6 +214,9 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Alertas de stock</CardTitle>
+            <CardAction>
+              <CardMenu href="/inventory" label="Ver en Inventario" />
+            </CardAction>
           </CardHeader>
           <CardContent>
             {lowStockAlerts.length === 0 ? (
@@ -204,6 +242,9 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">Stock por depósito</CardTitle>
+          <CardAction>
+            <CardMenu href="/inventory" label="Ver Inventario" />
+          </CardAction>
         </CardHeader>
         <CardContent>
           {stockByWarehouse.length === 0 ? (
@@ -244,6 +285,9 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">Últimas facturas</CardTitle>
+          <CardAction>
+            <CardMenu href="/invoicing" label="Ver todas" />
+          </CardAction>
         </CardHeader>
         <CardContent>
           {recentInvoices.length === 0 ? (
