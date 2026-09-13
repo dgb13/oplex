@@ -1,5 +1,8 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { companiesApi, type Company, type CompanyRoleType, type Person } from '@/lib/companies';
 import { formatCuitInput } from '@/lib/cuit';
 import { resolveUploadUrl } from '@/lib/inventory';
@@ -44,9 +47,6 @@ const INDUSTRY_LABELS: Record<string, string> = {
   INMOBILIARIO: 'Inmobiliario',
   OTRO: 'Otro',
 };
-
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
 
 export default function CompanyDetailModal({ company, onClose, onEdit, readOnly }: Props) {
   const queryClient = useQueryClient();
@@ -109,22 +109,22 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-1 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {company.logoUrl && (
               <img
                 src={company.logoUrl}
                 alt=""
-                className="h-9 w-9 shrink-0 rounded-lg border border-slate-300 dark:border-slate-700 object-cover"
+                className="h-9 w-9 shrink-0 rounded-lg border object-cover"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
               />
             )}
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{company.name}</h2>
+            <h2 className="text-lg font-semibold">{company.name}</h2>
           </div>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
@@ -132,15 +132,13 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
           {currentRoles.map((role) => (
             <span
               key={role}
-              className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-300"
+              className="rounded bg-muted px-2 py-0.5 text-xs font-medium"
             >
               {ROLE_LABELS[role] ?? role}
             </span>
           ))}
           {!isActive && (
-            <span className="rounded bg-red-100 dark:bg-red-900 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">
-              Inactiva
-            </span>
+            <Badge className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300">Inactiva</Badge>
           )}
           {readOnly && !editingRoles && (
             <button
@@ -148,7 +146,7 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
                 setRolesDraft(currentRoles);
                 setEditingRoles(true);
               }}
-              className="text-xs text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-800 dark:hover:text-indigo-300"
+              className="text-xs text-primary transition hover:text-primary/80"
             >
               Editar roles
             </button>
@@ -156,9 +154,9 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
         </div>
 
         {editingRoles && (
-          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 p-3">
+          <div className="mb-4 flex flex-col gap-2 rounded-lg border bg-muted p-3">
             {ROLE_OPTIONS.map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <label key={opt.value} className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={rolesDraft.includes(opt.value)}
@@ -167,93 +165,84 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
                 {opt.label}
               </label>
             ))}
-            {rolesError && <p className="text-xs text-red-600 dark:text-red-400">{rolesError}</p>}
+            {rolesError && <p className="text-xs text-destructive">{rolesError}</p>}
             <div className="mt-1 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingRoles(false)}
-                className="rounded-lg px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-              >
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditingRoles(false)}>
                 Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={saveRoles}
-                disabled={rolesMutation.isPending}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="button" size="sm" onClick={saveRoles} disabled={rolesMutation.isPending}>
                 {rolesMutation.isPending ? 'Guardando...' : 'Guardar roles'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-xs text-slate-500">CUIT / Tax ID</p>
-            <p className="text-slate-700 dark:text-slate-300">
+            <p className="text-xs text-muted-foreground">CUIT / Tax ID</p>
+            <p className="">
               {company.taxId ? formatCuitInput(company.taxId) : '—'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Email</p>
-            <p className="text-slate-700 dark:text-slate-300">{company.email ?? '—'}</p>
+            <p className="text-xs text-muted-foreground">Email</p>
+            <p className="">{company.email ?? '—'}</p>
           </div>
           {company.taxCondition && (
             <div>
-              <p className="text-xs text-slate-500">Condición IVA (AFIP)</p>
-              <p className="text-slate-700 dark:text-slate-300">{company.taxCondition}</p>
+              <p className="text-xs text-muted-foreground">Condición IVA (AFIP)</p>
+              <p className="">{company.taxCondition}</p>
             </div>
           )}
           {company.fiscalAddress && (
             <div>
-              <p className="text-xs text-slate-500">Domicilio fiscal (AFIP)</p>
-              <p className="text-slate-700 dark:text-slate-300">{company.fiscalAddress}</p>
+              <p className="text-xs text-muted-foreground">Domicilio fiscal (AFIP)</p>
+              <p className="">{company.fiscalAddress}</p>
             </div>
           )}
           {company.industry && (
             <div>
-              <p className="text-xs text-slate-500">Rubro</p>
-              <p className="text-slate-700 dark:text-slate-300">
+              <p className="text-xs text-muted-foreground">Rubro</p>
+              <p className="">
                 {INDUSTRY_LABELS[company.industry] ?? company.industry}
               </p>
             </div>
           )}
           {company.grossIncomeNumber && (
             <div>
-              <p className="text-xs text-slate-500">Ingresos Brutos (IIBB)</p>
-              <p className="text-slate-700 dark:text-slate-300">{company.grossIncomeNumber}</p>
+              <p className="text-xs text-muted-foreground">Ingresos Brutos (IIBB)</p>
+              <p className="">{company.grossIncomeNumber}</p>
             </div>
           )}
           {company.roles.some((r) => r.role === 'CUSTOMER') && (
             <div>
-              <p className="text-xs text-slate-500">Límite de crédito</p>
-              <p className="text-slate-700 dark:text-slate-300">${Number(company.creditLimit).toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground">Límite de crédito</p>
+              <p className="">${Number(company.creditLimit).toFixed(2)}</p>
             </div>
           )}
           {company.roles.some((r) => r.role === 'BRANCH') && (
             <div>
-              <p className="text-xs text-slate-500">Punto de venta</p>
-              <p className="text-slate-700 dark:text-slate-300">{company.pointOfSaleNumber ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">Punto de venta</p>
+              <p className="">{company.pointOfSaleNumber ?? '—'}</p>
             </div>
           )}
           {company.roles.some((r) => r.role === 'CUSTOMER') &&
             (company.withholdsVat || company.withholdsIncomeTax || company.withholdsGrossIncome) && (
               <div className="col-span-2">
-                <p className="text-xs text-slate-500">Retenciones (agente AFIP/ARBA)</p>
+                <p className="text-xs text-muted-foreground">Retenciones (agente AFIP/ARBA)</p>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {company.withholdsVat && (
-                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       IVA
                     </span>
                   )}
                   {company.withholdsIncomeTax && (
-                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       Ganancias
                     </span>
                   )}
                   {company.withholdsGrossIncome && (
-                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       Ingresos Brutos
                     </span>
                   )}
@@ -264,19 +253,16 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
 
         {!readOnly && (
           <div className="mb-2 flex items-center gap-2">
-            <button
-              onClick={onEdit}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
-            >
+            <Button size="sm" variant="outline" onClick={onEdit}>
               Editar empresa
-            </button>
+            </Button>
 
             <button
               onClick={() => toggleActiveMutation.mutate()}
               disabled={toggleActiveMutation.isPending}
               className={
                 isActive
-                  ? 'rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50'
+                  ? 'rounded-lg border border-destructive/30 px-3 py-1.5 text-xs text-destructive transition hover:bg-destructive/10 disabled:opacity-50'
                   : 'rounded-lg border border-green-300 dark:border-green-800 px-3 py-1.5 text-xs text-green-600 dark:text-green-400 transition hover:bg-green-50 dark:hover:bg-green-950 disabled:opacity-50'
               }
             >
@@ -288,14 +274,14 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
             </button>
           </div>
         )}
-        {activeError && <p className="mb-4 text-xs text-red-600 dark:text-red-400">{activeError}</p>}
+        {activeError && <p className="mb-4 text-xs text-destructive">{activeError}</p>}
 
         {canHaveContacts && (
           <>
-            <h3 className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">Contactos</h3>
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">Contactos</h3>
             <div className="mb-4 flex flex-col gap-2">
               {(detail?.people ?? []).length === 0 ? (
-                <p className="text-sm text-slate-400 dark:text-slate-600">Sin contactos cargados</p>
+                <p className="text-sm text-muted-foreground">Sin contactos cargados</p>
               ) : (
                 detail?.people.map((person) => (
                   <ContactRow key={person.id} person={person} companyId={company.id} readOnly={readOnly} />
@@ -307,12 +293,12 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
         )}
 
         {company.roles.some((r) => r.role === 'SUPPLIER') && (
-          <div className={canHaveContacts ? 'mt-6 border-t border-slate-200 dark:border-slate-800 pt-4' : ''}>
-            <h3 className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+          <div className={canHaveContacts ? 'mt-6 border-t pt-4' : ''}>
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">
               Artículos que prefieren este proveedor
             </h3>
             {(detail?.preferredForArticles ?? []).length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Ningún artículo tiene a este proveedor como preferido todavía
               </p>
             ) : (
@@ -320,7 +306,7 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
                 {detail?.preferredForArticles.map((article) => (
                   <li
                     key={article.id}
-                    className="rounded-lg bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1.5 text-sm text-slate-800 dark:text-slate-200"
+                    className="rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
                   >
                     {article.name}
                   </li>
@@ -357,7 +343,7 @@ export function ContactRow({
   const avatarUrl = resolveUploadUrl(person.avatarUrl);
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-800/50 p-3 text-sm">
+    <div className="rounded-lg border bg-muted/50 p-3 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-3">
           <button
@@ -365,7 +351,7 @@ export function ContactRow({
             onClick={() => !readOnly && setEditingAvatar(true)}
             disabled={readOnly}
             title={readOnly ? undefined : 'Cambiar foto'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-300 dark:border-slate-700 bg-slate-300 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:cursor-default"
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted text-xs font-medium disabled:cursor-default"
           >
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -374,12 +360,12 @@ export function ContactRow({
             )}
           </button>
           <div>
-            <p className="text-slate-800 dark:text-slate-200">
+            <p className="">
               {person.firstName} {person.lastName}
-              {person.nickname && <span className="text-slate-500"> ({person.nickname})</span>}
+              {person.nickname && <span className="text-muted-foreground"> ({person.nickname})</span>}
             </p>
-            <p className="text-xs text-slate-500">{person.jobTitle}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">{person.jobTitle}</p>
+            <p className="text-xs text-muted-foreground">
               {[person.email, person.whatsapp].filter(Boolean).join(' · ')}
             </p>
           </div>
@@ -391,13 +377,13 @@ export function ContactRow({
               <button
                 onClick={() => deleteMutation.mutate()}
                 disabled={deleteMutation.isPending}
-                className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                className="text-xs font-medium text-destructive hover:text-destructive/80 disabled:opacity-50"
               >
                 Confirmar
               </button>
               <button
                 onClick={() => setConfirmingDelete(false)}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Cancelar
               </button>
@@ -406,7 +392,7 @@ export function ContactRow({
             <button
               onClick={() => setConfirmingDelete(true)}
               aria-label="Eliminar contacto"
-              className="shrink-0 text-slate-400 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-400"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
             >
               ✕
             </button>
@@ -463,48 +449,19 @@ export function NewPersonForm({ companyId }: { companyId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
-      <p className="text-xs text-slate-500">Agregar contacto</p>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-t pt-4">
+      <p className="text-xs text-muted-foreground">Agregar contacto</p>
       <div className="grid grid-cols-2 gap-2">
-        <input
-          className={inputClass}
-          placeholder="Nombre"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-        />
-        <input
-          className={inputClass}
-          placeholder="Apellido"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-        />
-        <input
-          className={inputClass}
-          placeholder="Cargo"
-          value={jobTitle}
-          onChange={(e) => setJobTitle(e.target.value)}
-        />
-        <input
-          className={inputClass}
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className={inputClass}
-          placeholder="WhatsApp"
-          value={whatsapp}
-          onChange={(e) => setWhatsapp(e.target.value)}
-        />
+        <Input placeholder="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <Input placeholder="Apellido" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        <Input placeholder="Cargo" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+        <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input placeholder="WhatsApp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
       </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="mt-1 self-start rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-      >
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" size="sm" className="mt-1 self-start" disabled={mutation.isPending}>
         {mutation.isPending ? 'Agregando...' : '+ Agregar contacto'}
-      </button>
+      </Button>
     </form>
   );
 }
