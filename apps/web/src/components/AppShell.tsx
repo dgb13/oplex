@@ -173,10 +173,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           />
         )}
 
-        {/* TODO(mobile-sidebar): patrón Tailwind estándar (mismo que otros
-         * drawers del repo), pero sin confirmar a mano en un celular real o
-         * devtools todavía - pendiente para el próximo PR que toque este
-         * archivo. */}
         <aside
           className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-4 text-sidebar-foreground transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${
             mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
