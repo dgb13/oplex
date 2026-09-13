@@ -1,5 +1,8 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { accountingApi } from '@/lib/accounting';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -14,9 +17,6 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 function formatMonth(iso: string): string {
   return new Date(iso).toLocaleDateString('es-AR', { timeZone: 'UTC', year: 'numeric', month: 'long' });
 }
-
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
 
 /** Vista previa (método del activo y pasivo monetario neto, RT6/NC39) +
  * emisión del asiento definitivo (Fase 2). Requiere que "Índices de
@@ -80,50 +80,49 @@ export default function InflationAdjustmentTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <p className="mb-3 text-xs text-slate-500">
+      <Card>
+        <CardContent>
+        <p className="mb-3 text-xs text-muted-foreground">
           Método del activo y pasivo monetario neto. El saldo de apertura se toma valuado al nivel de
           precios del mes de inicio, y cada movimiento posterior se reexpresa con el índice de su
           propio mes - hace falta tener cargado el índice de todos los meses del rango en
           "Índices de Inflación" (Admin), sin huecos.
         </p>
         <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
+          <label className="flex flex-col gap-1 text-sm text-muted-foreground">
             Desde
-            <input type="month" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Input type="month" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
+          <label className="flex flex-col gap-1 text-sm text-muted-foreground">
             Hasta
-            <input type="month" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
+            <Input type="month" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
-          <button
-            type="submit"
-            disabled={previewMutation.isPending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={previewMutation.isPending}>
             {previewMutation.isPending ? 'Calculando...' : 'Calcular vista previa'}
-          </button>
+          </Button>
         </form>
-        {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      </div>
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+        </CardContent>
+      </Card>
 
       {preview && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
+        <Card>
+          <CardContent>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            <h2 className="text-sm font-semibold">
               {formatMonth(preview.from)} → {formatMonth(preview.to)}
             </h2>
             <div className="flex items-center gap-4">
               {recpam !== null && (
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">RECPAM ({recpam > 0 ? 'Pérdida' : recpam < 0 ? 'Ganancia' : 'Neutro'})</p>
+                  <p className="text-xs text-muted-foreground">RECPAM ({recpam > 0 ? 'Pérdida' : recpam < 0 ? 'Ganancia' : 'Neutro'})</p>
                   <p
                     className={`text-lg font-semibold ${
                       recpam > 0
-                        ? 'text-red-600 dark:text-red-400'
+                        ? 'text-destructive'
                         : recpam < 0
                           ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-slate-900 dark:text-slate-100'
+                          : ' '
                     }`}
                   >
                     ${Math.abs(recpam).toFixed(2)}
@@ -133,47 +132,40 @@ export default function InflationAdjustmentTab() {
               {!postedResult && (
                 confirmingPost ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">¿Confirmás? Es un asiento real e inmutable.</span>
-                    <button
+                    <span className="text-xs text-muted-foreground">¿Confirmás? Es un asiento real e inmutable.</span>
+                    <Button
                       type="button"
+                      size="sm"
                       onClick={() => postMutation.mutate()}
                       disabled={postMutation.isPending}
-                      className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                      className="bg-red-700 text-white hover:bg-red-600"
                     >
                       {postMutation.isPending ? 'Emitiendo...' : 'Confirmar emisión'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingPost(false)}
-                      className="text-xs text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300"
-                    >
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmingPost(false)}>
                       Cancelar
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingPost(true)}
-                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                  >
+                  <Button type="button" onClick={() => setConfirmingPost(true)}>
                     Emitir asiento definitivo
-                  </button>
+                  </Button>
                 )
               )}
             </div>
           </div>
-          {postError && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{postError}</p>}
+          {postError && <p className="mb-3 text-sm text-destructive">{postError}</p>}
           {postedResult && <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">{postedResult}</p>}
 
           {preview.rows.length === 0 ? (
-            <p className="text-sm text-slate-400 dark:text-slate-600">
+            <p className="text-sm text-muted-foreground">
               No hay cuentas monetarias clasificadas - revisá "Tipo de partida" en Plan de Cuentas.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4">Código</th>
                     <th className="pb-2 pr-4">Cuenta</th>
                     <th className="pb-2 pr-4 text-right">Apertura</th>
@@ -185,22 +177,22 @@ export default function InflationAdjustmentTab() {
                 </thead>
                 <tbody>
                   {preview.rows.map((row) => (
-                    <tr key={row.accountId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{row.code}</td>
-                      <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{row.name}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                    <tr key={row.accountId} className="border-b border-border/50">
+                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{row.code}</td>
+                      <td className="py-2 pr-4">{row.name}</td>
+                      <td className="py-2 pr-4 text-right">
                         ${Number(row.openingBalance).toFixed(2)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                      <td className="py-2 pr-4 text-right">
                         ${Number(row.movementsNominal).toFixed(2)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                      <td className="py-2 pr-4 text-right">
                         ${Number(row.closingBalanceNominal).toFixed(2)}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                      <td className="py-2 pr-4 text-right">
                         ${Number(row.closingBalanceReexpressed).toFixed(2)}
                       </td>
-                      <td className="py-2 text-right font-medium text-slate-900 dark:text-slate-100">
+                      <td className="py-2 text-right font-medium">
                         ${Number(row.contribution).toFixed(2)}
                       </td>
                     </tr>
@@ -209,19 +201,21 @@ export default function InflationAdjustmentTab() {
               </table>
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Ajustes ya emitidos</h2>
+      <Card>
+        <CardContent>
+        <h2 className="mb-3 text-sm font-semibold">Ajustes ya emitidos</h2>
         {adjustmentsQuery.isLoading ? (
-          <p className="text-sm text-slate-500">Cargando...</p>
+          <p className="text-sm text-muted-foreground">Cargando...</p>
         ) : adjustments.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Todavía no se emitió ningún ajuste.</p>
+          <p className="text-sm text-muted-foreground">Todavía no se emitió ningún ajuste.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+              <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className="pb-2 pr-4">Período</th>
                 <th className="pb-2 pr-4 text-right">RECPAM</th>
                 <th className="pb-2">Emitido</th>
@@ -229,14 +223,14 @@ export default function InflationAdjustmentTab() {
             </thead>
             <tbody>
               {adjustments.map((adj) => (
-                <tr key={adj.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                  <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">
+                <tr key={adj.id} className="border-b border-border/50">
+                  <td className="py-2 pr-4">
                     {formatMonth(adj.periodFrom)} → {formatMonth(adj.periodTo)}
                   </td>
-                  <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                  <td className="py-2 pr-4 text-right">
                     ${Number(adj.recpamAmount).toFixed(2)}
                   </td>
-                  <td className="py-2 text-slate-600 dark:text-slate-400">
+                  <td className="py-2 text-muted-foreground">
                     {new Date(adj.createdAt).toLocaleDateString('es-AR')}
                   </td>
                 </tr>
@@ -244,7 +238,8 @@ export default function InflationAdjustmentTab() {
             </tbody>
           </table>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

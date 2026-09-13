@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { accountingApi, type AccountType } from '@/lib/accounting';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -9,8 +11,8 @@ interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
   { value: 'ASSET', label: 'Activo' },
@@ -51,36 +53,26 @@ export default function NewAccountModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Nueva cuenta</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Nueva cuenta</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Código</label>
-            <input
-              className={inputClass}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="1.1.03"
-            />
+            <label className="text-sm text-muted-foreground">Código</label>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="1.1.03" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Nombre</label>
-            <input
-              className={inputClass}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Caja"
-            />
+            <label className="text-sm text-muted-foreground">Nombre</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Caja" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Tipo</label>
-            <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as AccountType)}>
+            <label className="text-sm text-muted-foreground">Tipo</label>
+            <select className={selectClass} value={type} onChange={(e) => setType(e.target.value as AccountType)}>
               {TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -88,22 +80,14 @@ export default function NewAccountModal({ onClose }: Props) {
               ))}
             </select>
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Creando...' : 'Crear cuenta'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Card, CardContent } from '@/components/ui/card';
 import { accountingApi, type AccountType } from '@/lib/accounting';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -45,27 +46,28 @@ export default function TrialBalanceTab() {
               setFrom('');
               setTo('');
             }}
-            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="text-xs font-medium text-primary transition hover:text-primary/80"
           >
             Ver todo el historial
           </button>
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
+      <Card>
+        <CardContent>
         {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-32 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : error ? (
-          <div className="flex h-32 items-center justify-center text-red-600 dark:text-red-400">
+          <div className="flex h-32 items-center justify-center text-destructive">
             Error al cargar el balance
           </div>
         ) : rows?.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin movimientos todavía</p>
+          <p className="text-sm text-muted-foreground">Sin movimientos todavía</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-4">Código</th>
                   <th className="pb-2 pr-4">Cuenta</th>
                   <th className="pb-2 pr-4">Tipo</th>
@@ -76,24 +78,24 @@ export default function TrialBalanceTab() {
               </thead>
               <tbody>
                 {rows?.map((row) => (
-                  <tr key={row.accountId} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className="py-2 pr-4 font-mono text-xs text-slate-600 dark:text-slate-400">{row.code}</td>
-                    <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{row.name}</td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">{TYPE_LABELS[row.type]}</td>
-                    <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                  <tr key={row.accountId} className="border-b border-border/50">
+                    <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{row.code}</td>
+                    <td className="py-2 pr-4">{row.name}</td>
+                    <td className="py-2 pr-4 text-muted-foreground">{TYPE_LABELS[row.type]}</td>
+                    <td className="py-2 pr-4 text-right">
                       ${Number(row.debitTotal).toFixed(2)}
                     </td>
-                    <td className="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">
+                    <td className="py-2 pr-4 text-right">
                       ${Number(row.creditTotal).toFixed(2)}
                     </td>
-                    <td className="py-2 text-right font-semibold text-slate-900 dark:text-slate-100">
+                    <td className="py-2 text-right font-semibold">
                       ${Number(row.balance).toFixed(2)}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-slate-300 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                <tr className="border-t text-sm font-semibold">
                   <td className="pt-2" colSpan={3}>
                     Totales
                   </td>
@@ -105,7 +107,8 @@ export default function TrialBalanceTab() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

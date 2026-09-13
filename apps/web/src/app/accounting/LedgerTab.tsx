@@ -1,5 +1,6 @@
 'use client';
 
+import { Card, CardContent } from '@/components/ui/card';
 import { accountingApi } from '@/lib/accounting';
 import { useDensity } from '@/providers/DensityProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -32,7 +33,7 @@ export default function LedgerTab() {
       <select
         value={accountId}
         onChange={(e) => setAccountId(e.target.value)}
-        className="w-full max-w-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+        className="h-8 w-full max-w-sm rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <option value="">Elegí una cuenta...</option>
         {accounts.map((acc) => (
@@ -42,19 +43,20 @@ export default function LedgerTab() {
         ))}
       </select>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
+      <Card>
+        <CardContent>
         {!accountId ? (
-          <div className="flex h-32 items-center justify-center text-slate-400 dark:text-slate-600">
+          <div className="flex h-32 items-center justify-center text-muted-foreground">
             Elegí una cuenta para ver su mayor
           </div>
         ) : ledgerQuery.isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-32 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : ledger?.lines.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin movimientos para esta cuenta</p>
+          <p className="text-sm text-muted-foreground">Sin movimientos para esta cuenta</p>
         ) : (
           <table className={`w-full ${bodyText}`}>
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+              <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className={`${headY} pr-4`}>Fecha</th>
                 <th className={`${headY} pr-4`}>Descripción</th>
                 <th className={`${headY} pr-4 text-right`}>Debe</th>
@@ -67,19 +69,19 @@ export default function LedgerTab() {
                 const amount = Number(line.amount);
                 running += line.direction === 'DEBIT' ? amount : -amount;
                 return (
-                  <tr key={line.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                    <td className={`${cellY} pr-4 text-slate-600 dark:text-slate-400`}>
+                  <tr key={line.id} className="border-b border-border/50">
+                    <td className={`${cellY} pr-4 text-muted-foreground`}>
                       {/* timeZone: 'UTC' - see JournalTab.tsx, same date-only display fix. */}
                       {new Date(line.journalEntry.date).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                     </td>
-                    <td className={`${cellY} pr-4 text-slate-700 dark:text-slate-300`}>{line.journalEntry.description}</td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4`}>{line.journalEntry.description}</td>
+                    <td className={`${cellY} pr-4 text-right`}>
                       {line.direction === 'DEBIT' ? `$${amount.toFixed(2)}` : ''}
                     </td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4 text-right`}>
                       {line.direction === 'CREDIT' ? `$${amount.toFixed(2)}` : ''}
                     </td>
-                    <td className={`${cellY} text-right font-medium text-slate-900 dark:text-slate-100`}>
+                    <td className={`${cellY} text-right font-medium`}>
                       ${running.toFixed(2)}
                     </td>
                   </tr>
@@ -88,7 +90,8 @@ export default function LedgerTab() {
             </tbody>
           </table>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
