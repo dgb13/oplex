@@ -17,7 +17,7 @@ import {
   Calculator,
   ChevronDown,
   LayoutDashboard,
-  Menu as MenuIcon,
+  PanelLeft,
   Package,
   ShoppingBag,
   ShoppingBasket,
@@ -114,6 +114,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [online, setOnline] = useState<PresenceUser[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Sin persistir en localStorage a propósito: cada sección de primer nivel
+  // tiene su propio layout.tsx que monta un AppShell nuevo (mismo motivo que
+  // el estado de los grupos del nav, ver NavGroupSection más abajo), así que
+  // ya se resetea solo en cada navegación - persistirlo requeriría leer
+  // localStorage durante el render inicial, que es justo el patrón que causó
+  // el bug de hidratación que se arregló antes en esta misma sesión.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Un solo botón/ícono (PanelLeft) sirve para las dos cosas, como el
+  // SidebarTrigger de shadcn: en desktop colapsa/expande la columna fija, en
+  // mobile abre/cierra el drawer superpuesto - cuál de las dos depende del
+  // breakpoint real en el momento del click, no de un estado guardado.
+  function toggleSidebar() {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarCollapsed((v) => !v);
+    } else {
+      setMobileNavOpen((v) => !v);
+    }
+  }
 
   // Mismo queryKey que UserMenu's propio useQuery - react-query lo dedupe,
   // no dispara un segundo fetch.
@@ -176,7 +195,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <aside
           className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-4 text-sidebar-foreground transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${
             mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          } ${sidebarCollapsed ? 'md:hidden' : ''}`}
         >
           <div className="flex items-center justify-between px-1">
             <PlexoLogo size={22} />
@@ -214,11 +233,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
             <button
-              onClick={() => setMobileNavOpen(true)}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted md:hidden"
-              aria-label="Abrir menú"
+              onClick={toggleSidebar}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+              aria-label="Mostrar u ocultar barra lateral"
+              title="Mostrar u ocultar barra lateral"
             >
-              <MenuIcon className="h-5 w-5" />
+              <PanelLeft className="h-5 w-5" />
             </button>
             <div className="flex flex-1 items-center justify-end gap-5">
               <OnlineColleagues users={online} />
