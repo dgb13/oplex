@@ -1,6 +1,8 @@
 'use client';
 
 import CreateRegisterModal from '@/app/pos/CreateRegisterModal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { profileApi } from '@/lib/profile';
 import { posApi, type CashRegister } from '@/lib/pos';
@@ -30,8 +32,8 @@ export default function PosSettingsPage() {
   if (profile && !canManage) {
     return (
       <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cajas (POS)</h1>
-        <p className="text-sm text-slate-500">No tenés permiso para ver esta sección.</p>
+        <h1 className="text-xl font-semibold">Cajas (POS)</h1>
+        <p className="text-sm text-muted-foreground">No tenés permiso para ver esta sección.</p>
       </div>
     );
   }
@@ -40,44 +42,40 @@ export default function PosSettingsPage() {
     <div className="flex max-w-5xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cajas (POS)</h1>
-          <p className="text-sm text-slate-500">Administrá las cajas de Caja/POS: renombralas o activá/desactivalas.</p>
+          <h1 className="text-xl font-semibold">Cajas (POS)</h1>
+          <p className="text-sm text-muted-foreground">
+            Administrá las cajas de Caja/POS: renombralas o activá/desactivalas.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-        >
+        <Button type="button" className="shrink-0" onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" />
           Nueva caja
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
-        {isLoading ? (
-          <p className="p-6 text-sm text-slate-500">Cargando cajas...</p>
-        ) : !registers || registers.length === 0 ? (
-          <p className="p-6 text-sm text-slate-500">Todavía no hay ninguna caja creada.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-xs text-slate-500">
-                  <th className="p-3">Nombre</th>
-                  <th className="p-3">Sucursal</th>
-                  <th className="p-3">Depósito</th>
-                  <th className="p-3">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registers.map((register) => (
-                  <RegisterRow key={register.id} register={register} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando cajas...</p>
+      ) : !registers || registers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Todavía no hay ninguna caja creada.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+                <th className="p-3">Nombre</th>
+                <th className="p-3">Sucursal</th>
+                <th className="p-3">Depósito</th>
+                <th className="p-3">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registers.map((register) => (
+                <RegisterRow key={register.id} register={register} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {creating && <CreateRegisterModal onClose={() => setCreating(false)} />}
     </div>
@@ -124,11 +122,11 @@ function RegisterRow({ register }: { register: CashRegister }) {
   }
 
   return (
-    <tr className="border-b border-slate-200/70 dark:border-slate-800/70 last:border-0">
+    <tr className="border-b border-border/70 last:border-0">
       <td className="p-3">
         {editing ? (
           <div className="flex items-center gap-2">
-            <input
+            <Input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -139,13 +137,13 @@ function RegisterRow({ register }: { register: CashRegister }) {
                   setName(register.name);
                 }
               }}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500"
+              className="h-8"
             />
             <button
               type="button"
               onClick={submitRename}
               disabled={renameMutation.isPending}
-              className="text-green-600 transition hover:text-green-700 disabled:opacity-50"
+              className="text-emerald-600 dark:text-emerald-400 transition hover:text-emerald-700 dark:hover:text-emerald-300 disabled:opacity-50"
               aria-label="Confirmar"
             >
               <Check className="h-4 w-4" />
@@ -156,7 +154,7 @@ function RegisterRow({ register }: { register: CashRegister }) {
                 setEditing(false);
                 setName(register.name);
               }}
-              className="text-slate-400 transition hover:text-slate-600"
+              className="text-muted-foreground transition hover:text-foreground"
               aria-label="Cancelar"
             >
               <X className="h-4 w-4" />
@@ -164,11 +162,11 @@ function RegisterRow({ register }: { register: CashRegister }) {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-900 dark:text-slate-100">{register.name}</span>
+            <span className="font-medium">{register.name}</span>
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-200"
+              className="text-muted-foreground transition hover:text-foreground"
               aria-label="Renombrar"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -176,13 +174,13 @@ function RegisterRow({ register }: { register: CashRegister }) {
           </div>
         )}
         {feedback && (
-          <div className={`mt-1 text-xs ${feedback.isError ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+          <div className={`mt-1 text-xs ${feedback.isError ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {feedback.text}
           </div>
         )}
       </td>
-      <td className="p-3 text-slate-600 dark:text-slate-400">{register.branch.name}</td>
-      <td className="p-3 text-slate-600 dark:text-slate-400">{register.warehouse.name}</td>
+      <td className="p-3 text-muted-foreground">{register.branch.name}</td>
+      <td className="p-3 text-muted-foreground">{register.warehouse.name}</td>
       <td className="p-3">
         <div className="flex items-center gap-2">
           <ToggleSwitch
@@ -190,7 +188,7 @@ function RegisterRow({ register }: { register: CashRegister }) {
             onChange={(checked) => activeMutation.mutate(checked)}
             label={register.active ? 'Activa' : 'Inactiva'}
           />
-          <span className="text-xs text-slate-500">{register.active ? 'Activa' : 'Inactiva'}</span>
+          <span className="text-xs text-muted-foreground">{register.active ? 'Activa' : 'Inactiva'}</span>
         </div>
       </td>
     </tr>

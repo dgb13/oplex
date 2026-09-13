@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { activityLogApi } from '@/lib/activityLog';
 import type { TeamMember } from '@/lib/team';
 import { useQuery } from '@tanstack/react-query';
@@ -29,17 +30,17 @@ export default function UserActivityDrawer({ member, onClose }: { member: TeamMe
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-lg flex-col bg-white dark:bg-slate-900 shadow-2xl"
+        className="flex h-full w-full max-w-lg flex-col bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-5 py-4">
+        <div className="flex items-center justify-between border-b px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Actividad</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{member.name ?? member.email}</p>
+            <h2 className="text-lg font-semibold">Actividad</h2>
+            <p className="text-xs text-muted-foreground">{member.name ?? member.email}</p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
             aria-label="Cerrar"
           >
             <X className="h-5 w-5" />
@@ -48,30 +49,27 @@ export default function UserActivityDrawer({ member, onClose }: { member: TeamMe
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {isLoading || !data ? (
-            <p className="text-sm text-slate-500">Cargando...</p>
+            <p className="text-sm text-muted-foreground">Cargando...</p>
           ) : data.items.length === 0 ? (
-            <p className="text-sm text-slate-500">Todavía no hay actividad registrada para este usuario.</p>
+            <p className="text-sm text-muted-foreground">Todavía no hay actividad registrada para este usuario.</p>
           ) : (
             <ul className="flex flex-col gap-3">
               {data.items.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 text-xs"
-                >
-                  <div className="flex items-center justify-between text-slate-500">
+                <li key={entry.id} className="rounded-lg border p-3 text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground">
                     <span>{new Date(entry.occurredAt).toLocaleString('es-AR')}</span>
-                    <span className={entry.outcome === 'FAILURE' ? 'text-red-500' : 'text-slate-400'}>
+                    <span className={entry.outcome === 'FAILURE' ? 'text-destructive' : 'text-muted-foreground'}>
                       {entry.outcome === 'FAILURE' ? 'Falló' : 'OK'}
                     </span>
                   </div>
-                  <p className="mt-1 text-slate-800 dark:text-slate-200">
+                  <p className="mt-1">
                     {entry.entityTypeLabel ?? 'Actividad'}
                     {entry.entityLabel ? ` · ${entry.entityLabel}` : ''}
                   </p>
                   {entry.changes && (
-                    <p className="mt-1 break-all font-mono text-slate-500">{formatChanges(entry.changes)}</p>
+                    <p className="mt-1 break-all font-mono text-muted-foreground">{formatChanges(entry.changes)}</p>
                   )}
-                  {entry.errorMessage && <p className="mt-1 text-red-500">{entry.errorMessage}</p>}
+                  {entry.errorMessage && <p className="mt-1 text-destructive">{entry.errorMessage}</p>}
                 </li>
               ))}
             </ul>
@@ -79,24 +77,26 @@ export default function UserActivityDrawer({ member, onClose }: { member: TeamMe
         </div>
 
         {data && (
-          <div className="flex items-center gap-2 border-t border-slate-200 dark:border-slate-800 px-5 py-3">
-            <button
+          <div className="flex items-center gap-2 border-t px-5 py-3">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               Anterior
-            </button>
-            <span className="text-xs text-slate-500">Página {page}</span>
-            <button
+            </Button>
+            <span className="text-xs text-muted-foreground">Página {page}</span>
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => setPage((p) => p + 1)}
               disabled={data.items.length < pageSize}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               Siguiente
-            </button>
+            </Button>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { profileApi } from '@/lib/profile';
 import { ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/team';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
@@ -25,7 +26,7 @@ const ROLE_BADGE_CLASSES: Record<TeamRole, string> = {
   PURCHASES: 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300',
   INVENTORY: 'bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300',
   ACCOUNTANT: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300',
-  VIEWER: 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+  VIEWER: 'bg-muted text-muted-foreground',
 };
 
 const ASSIGNABLE_ROLES: TeamRole[] = ['ADMIN', 'SALES', 'PURCHASES', 'INVENTORY', 'ACCOUNTANT', 'VIEWER'];
@@ -41,8 +42,8 @@ export default function TeamPage() {
   if (profile && !canManage) {
     return (
       <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Equipo</h1>
-        <p className="text-sm text-slate-500">No tenés permiso para ver esta sección.</p>
+        <h1 className="text-xl font-semibold">Equipo</h1>
+        <p className="text-sm text-muted-foreground">No tenés permiso para ver esta sección.</p>
       </div>
     );
   }
@@ -51,49 +52,45 @@ export default function TeamPage() {
     <div className="flex max-w-5xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Equipo</h1>
-          <p className="text-sm text-slate-500">Quién tiene acceso a esta cuenta, con qué rol y qué tan activo está.</p>
+          <h1 className="text-xl font-semibold">Equipo</h1>
+          <p className="text-sm text-muted-foreground">
+            Quién tiene acceso a esta cuenta, con qué rol y qué tan activo está.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-        >
+        <Button type="button" className="shrink-0" onClick={() => setInviteOpen(true)}>
           + Invitar / Agregar colaborador
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
-        {isLoading ? (
-          <p className="p-6 text-sm text-slate-500">Cargando equipo...</p>
-        ) : !members || members.length === 0 ? (
-          <p className="p-6 text-sm text-slate-500">Todavía no hay nadie más en el equipo.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-xs text-slate-500">
-                  <th className="p-3">Miembro</th>
-                  <th className="p-3">Rol</th>
-                  <th className="p-3">Estado</th>
-                  <th className="p-3">Desde</th>
-                  <th className="p-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member) => (
-                  <MemberRow
-                    key={member.id}
-                    member={member}
-                    isSelf={member.id === profile?.id}
-                    onViewActivity={() => setActivityMember(member)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando equipo...</p>
+      ) : !members || members.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Todavía no hay nadie más en el equipo.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+                <th className="p-3">Miembro</th>
+                <th className="p-3">Rol</th>
+                <th className="p-3">Estado</th>
+                <th className="p-3">Desde</th>
+                <th className="p-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <MemberRow
+                  key={member.id}
+                  member={member}
+                  isSelf={member.id === profile?.id}
+                  onViewActivity={() => setActivityMember(member)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} />}
       {activityMember && <UserActivityDrawer member={activityMember} onClose={() => setActivityMember(null)} />}
@@ -142,15 +139,15 @@ function MemberRow({
   });
 
   return (
-    <tr className="border-b border-slate-200/70 dark:border-slate-800/70 last:border-0">
+    <tr className="border-b border-border/70 last:border-0">
       <td className="p-3">
-        <div className="font-medium text-slate-900 dark:text-slate-100">
+        <div className="font-medium">
           {member.name ?? member.email}
-          {isSelf && <span className="ml-2 text-xs font-normal text-slate-500">(vos)</span>}
+          {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(vos)</span>}
         </div>
-        <div className="text-xs text-slate-500">{member.email}</div>
+        <div className="text-xs text-muted-foreground">{member.email}</div>
         {feedback && (
-          <div className={`mt-1 text-xs ${feedback.isError ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+          <div className={`mt-1 text-xs ${feedback.isError ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {feedback.text}
           </div>
         )}
@@ -184,7 +181,9 @@ function MemberRow({
       </td>
       <td className="p-3">
         {member.isExternalAccountant ? (
-          <span className="text-xs text-slate-500">{member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}</span>
+          <span className="text-xs text-muted-foreground">
+            {member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}
+          </span>
         ) : (
           <div className="flex items-center gap-2" title={isSelf ? 'No podés suspender tu propia cuenta' : undefined}>
             <ToggleSwitch
@@ -192,25 +191,25 @@ function MemberRow({
               onChange={(checked) => statusMutation.mutate(checked ? 'ACTIVE' : 'SUSPENDED')}
               label={member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}
             />
-            <span className="text-xs text-slate-500">{member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}</span>
+            <span className="text-xs text-muted-foreground">{member.status === 'ACTIVE' ? 'Activo' : 'Suspendido'}</span>
           </div>
         )}
       </td>
-      <td className="p-3 text-xs text-slate-500">{new Date(member.createdAt).toLocaleDateString('es-AR')}</td>
+      <td className="p-3 text-xs text-muted-foreground">{new Date(member.createdAt).toLocaleDateString('es-AR')}</td>
       <td className="p-3 text-right">
         <Menu as="div" className="relative inline-block text-left">
-          <MenuButton className="rounded-lg px-2 py-1 text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-800">
+          <MenuButton className="rounded-lg px-2 py-1 text-muted-foreground transition hover:bg-muted">
             ⋯
           </MenuButton>
           <MenuItems
             anchor="bottom end"
-            className="z-10 mt-1 w-52 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-1 text-sm shadow-xl focus:outline-none"
+            className="z-10 mt-1 w-52 rounded-lg border bg-popover py-1 text-sm text-popover-foreground shadow-xl focus:outline-none"
           >
             <MenuItem>
               <button
                 type="button"
                 onClick={onViewActivity}
-                className="block w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 data-[focus]:bg-slate-100 dark:data-[focus]:bg-slate-800"
+                className="block w-full px-3 py-2 text-left data-[focus]:bg-muted"
               >
                 Ver actividad
               </button>
@@ -221,7 +220,7 @@ function MemberRow({
                   type="button"
                   onClick={() => resetPasswordMutation.mutate()}
                   disabled={resetPasswordMutation.isPending}
-                  className="block w-full px-3 py-2 text-left text-slate-700 dark:text-slate-300 data-[focus]:bg-slate-100 dark:data-[focus]:bg-slate-800 disabled:opacity-50"
+                  className="block w-full px-3 py-2 text-left data-[focus]:bg-muted disabled:opacity-50"
                 >
                   {resetPasswordMutation.isPending ? 'Enviando...' : 'Resetear contraseña'}
                 </button>
