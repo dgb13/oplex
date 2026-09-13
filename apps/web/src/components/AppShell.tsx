@@ -193,12 +193,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-4 text-sidebar-foreground transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-4 border-r bg-sidebar p-4 text-sidebar-foreground transition-all duration-200 md:static md:z-auto md:translate-x-0 ${
             mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
-          } ${sidebarCollapsed ? 'md:hidden' : ''}`}
+          } ${sidebarCollapsed ? 'md:w-16 md:px-2' : ''}`}
         >
           <div className="flex items-center justify-between px-1">
-            <PlexoLogo size={22} />
+            <PlexoLogo size={22} iconOnly={sidebarCollapsed} />
             <button
               onClick={() => setMobileNavOpen(false)}
               className="rounded-lg p-1 text-muted-foreground hover:bg-muted md:hidden"
@@ -214,17 +214,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={entry.href}
                   href={entry.href}
+                  title={sidebarCollapsed ? entry.label : undefined}
                   className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
+                    sidebarCollapsed ? 'md:justify-center md:px-2' : ''
+                  } ${
                     pathname?.startsWith(entry.href)
                       ? 'bg-primary/10 font-medium text-primary'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
                   <entry.icon className="h-4 w-4 shrink-0" />
-                  {entry.label}
+                  <span className={sidebarCollapsed ? 'md:hidden' : ''}>{entry.label}</span>
                 </Link>
               ) : (
-                <NavGroupSection key={entry.label} group={entry} active={pathname ?? ''} />
+                <NavGroupSection
+                  key={entry.label}
+                  group={entry}
+                  active={pathname ?? ''}
+                  collapsed={sidebarCollapsed}
+                  onExpandSidebar={() => setSidebarCollapsed(false)}
+                />
               ),
             )}
           </nav>
@@ -255,7 +264,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavGroupSection({ group, active }: { group: NavGroup; active: string }) {
+function NavGroupSection({
+  group,
+  active,
+  collapsed,
+  onExpandSidebar,
+}: {
+  group: NavGroup;
+  active: string;
+  collapsed: boolean;
+  onExpandSidebar: () => void;
+}) {
   const isActiveGroup = group.items.some((item) => active.startsWith(item.href));
   // Se inicializa abierto si el grupo contiene la pantalla actual - cada
   // segmento de primer nivel tiene su propio layout.tsx que monta un
@@ -263,6 +282,25 @@ function NavGroupSection({ group, active }: { group: NavGroup; active: string })
   // este componente se remonta en cada navegación entre secciones y este
   // valor inicial siempre refleja la ruta real, sin necesitar un useEffect.
   const [open, setOpen] = useState(isActiveGroup);
+
+  // Riel de íconos (sidebar colapsado en desktop): un grupo no tiene link
+  // propio al que navegar, así que acá el click sólo reabre el sidebar en
+  // vez de desplegar la lista - no hay espacio para mostrarla angosto, y un
+  // flyout flotante es más complejidad de la que esta pantalla necesita hoy.
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={onExpandSidebar}
+        title={group.label}
+        className={`hidden md:flex w-full items-center justify-center rounded-lg px-2 py-2 text-sm transition ${
+          isActiveGroup ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        }`}
+      >
+        <group.icon className="h-4 w-4 shrink-0" />
+      </button>
+    );
+  }
 
   return (
     <div>
