@@ -191,10 +191,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 function NavDropdown({ group, active }: { group: NavGroup; active: string }) {
   const isActive = group.items.some((item) => active.startsWith(item.href));
+  // Ids explícitos en vez de dejar que Headless UI use useId(): el grupo
+  // "Mercado Pago" de Preferencias (MercadoPagoCard.tsx) envuelve un
+  // useSearchParams() en un <Suspense> que resuelve distinto en SSR vs
+  // cliente, lo que corre la numeración automática de useId() para todo lo
+  // que se renderiza después en la misma pasada y generaba un mismatch de
+  // hidratación acá (headlessui-menu-button-...) - nada roto en este
+  // componente en sí, pero un id fijo lo hace inmune a ese corrimiento.
+  const slug = group.label.toLowerCase().replace(/\s+/g, '-');
 
   return (
     <Menu as="div" className="relative">
       <MenuButton
+        id={`nav-menu-${slug}-button`}
         className={`flex items-center gap-1.5 text-sm transition ${
           isActive ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
@@ -204,6 +213,7 @@ function NavDropdown({ group, active }: { group: NavGroup; active: string }) {
         <ChevronDown className="h-3.5 w-3.5" />
       </MenuButton>
       <MenuItems
+        id={`nav-menu-${slug}-items`}
         anchor="bottom start"
         className="z-20 mt-2 w-48 rounded-xl border bg-popover py-2 text-popover-foreground shadow-xl focus:outline-none"
       >
