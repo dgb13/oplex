@@ -3,6 +3,9 @@
 import ArticlePicker from '@/components/ArticlePicker';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import ToggleSwitch from '@/components/ToggleSwitch';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import VatLineSummary from '@/components/VatLineSummary';
 import VatRateSelect, { type VatKind } from '@/components/VatRateSelect';
 import { companiesApi } from '@/lib/companies';
@@ -18,8 +21,8 @@ interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function QuoteFormModal({ quote, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -132,18 +135,18 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-semibold">
             {isEdit ? `Editar cotización ${quote?.number}` : 'Nueva cotización'}
           </h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         {!ready ? (
-          <div className="py-10 text-center text-slate-500">Cargando...</div>
+          <div className="py-10 text-center text-muted-foreground">Cargando...</div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
@@ -153,13 +156,17 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                   <button
                     type="button"
                     onClick={() => setCreatingCustomer(true)}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    className="text-xs text-primary hover:text-primary/80"
                   >
                     + nuevo cliente
                   </button>
                 }
               >
-                <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                <select
+                  className={`${selectClass} w-full`}
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                >
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -168,7 +175,11 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                 </select>
               </Field>
               <Field label="Moneda">
-                <select className={inputClass} value={currencyId} onChange={(e) => setCurrencyId(e.target.value)}>
+                <select
+                  className={`${selectClass} w-full`}
+                  value={currencyId}
+                  onChange={(e) => setCurrencyId(e.target.value)}
+                >
                   {currencies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.code}
@@ -177,24 +188,19 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                 </select>
               </Field>
               <Field label="Válida hasta">
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={validUntil}
-                  onChange={(e) => setValidUntil(e.target.value)}
-                />
+                <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
               </Field>
             </div>
 
             <Field label="Notas">
-              <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </Field>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm text-slate-600 dark:text-slate-400">Líneas</label>
+                <label className="text-sm text-muted-foreground">Líneas</label>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <ToggleSwitch
                       checked={pricesIncludeTax}
                       onChange={setPricesIncludeTax}
@@ -202,16 +208,12 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                     />
                     <span>Precios con IVA incluido</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
-                  >
+                  <button type="button" onClick={addLine} className="text-xs text-primary hover:text-primary/80">
                     + agregar línea
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 {pricesIncludeTax
                   ? 'El precio unitario de cada línea es el precio final (con IVA) - se desglosa a neto solo.'
                   : 'El precio unitario de cada línea es neto (sin IVA) - se le suma el IVA de su alícuota.'}
@@ -230,20 +232,20 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                       })
                     }
                   />
-                  <input
+                  <Input
                     type="number"
                     min={1}
                     step="any"
-                    className={`${inputClass} w-20`}
+                    className="w-20"
                     value={line.quantity}
                     onChange={(e) => updateLine(index, { quantity: Number(e.target.value) })}
                     title="Cantidad"
                   />
-                  <input
+                  <Input
                     type="number"
                     min={0}
                     step="any"
-                    className={`${inputClass} w-28`}
+                    className="w-28"
                     placeholder="Precio"
                     value={line.unitPrice}
                     onChange={(e) => updateLine(index, { unitPrice: Number(e.target.value) })}
@@ -257,7 +259,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => removeLine(index)}
-                      className="text-slate-500 hover:text-red-600 dark:hover:text-red-400"
+                      className="text-muted-foreground hover:text-destructive"
                     >
                       ✕
                     </button>
@@ -267,23 +269,15 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
               <VatLineSummary lines={lines} pricesIncludeTax={pricesIncludeTax} />
             </div>
 
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="mt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-              >
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={mutation.isPending}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear cotización'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -304,7 +298,7 @@ function Field({ label, action, children }: { label: string; action?: React.Reac
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+        <label className="text-sm text-muted-foreground">{label}</label>
         {action}
       </div>
       {children}
