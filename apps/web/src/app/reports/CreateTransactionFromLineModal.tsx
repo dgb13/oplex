@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { bankReconciliationApi, type BankStatementLine } from '@/lib/bank-reconciliation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -10,8 +12,8 @@ interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function CreateTransactionFromLineModal({ line, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -40,14 +42,14 @@ export default function CreateTransactionFromLineModal({ line, onClose }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Crear movimiento</h2>
-          <button onClick={onClose} className="text-slate-500 transition hover:text-slate-700 dark:hover:text-slate-300">
+          <h2 className="text-lg font-semibold">Crear movimiento</h2>
+          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-muted-foreground">
           Este movimiento apareció en el extracto pero no tiene ningún comprobante cargado en Oplex — se va a
           registrar y postear su asiento contable automáticamente.
         </p>
@@ -61,20 +63,16 @@ export default function CreateTransactionFromLineModal({ line, onClose }: Props)
           className="flex flex-col gap-4"
         >
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Fecha</label>
-            <input
-              className={inputClass}
-              value={new Date(line.lineDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
-              disabled
-            />
+            <label className="text-sm text-muted-foreground">Fecha</label>
+            <Input value={new Date(line.lineDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })} disabled />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Importe</label>
-            <input className={inputClass} value={`$${Number(line.amount).toFixed(2)}`} disabled />
+            <label className="text-sm text-muted-foreground">Importe</label>
+            <Input value={`$${Number(line.amount).toFixed(2)}`} disabled />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Tipo de movimiento</label>
-            <select className={inputClass} value={isExpense ? 'EXPENSE' : 'INCOME'} disabled>
+            <label className="text-sm text-muted-foreground">Tipo de movimiento</label>
+            <select className={selectClass} value={isExpense ? 'EXPENSE' : 'INCOME'} disabled>
               {isExpense ? (
                 <option value="EXPENSE">Gasto bancario</option>
               ) : (
@@ -83,25 +81,17 @@ export default function CreateTransactionFromLineModal({ line, onClose }: Props)
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 dark:text-slate-400">Descripción</label>
-            <input className={inputClass} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <label className="text-sm text-muted-foreground">Descripción</label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
-            >
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Guardando...' : 'Crear movimiento'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
