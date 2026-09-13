@@ -1,6 +1,7 @@
 'use client';
 
 import PurchaseInvoiceDetailPanel from '@/app/purchases/PurchaseInvoiceDetailPanel';
+import { Button } from '@/components/ui/button';
 import { payablesApi, type SupplierStatementEntry } from '@/lib/payables';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -39,25 +40,25 @@ export default function SupplierStatementView({ supplierId }: Props) {
   return (
     <div className="flex flex-col gap-4">
       {query.isLoading || !statement ? (
-        <div className="flex h-24 items-center justify-center text-slate-500">Cargando...</div>
+        <div className="flex h-24 items-center justify-center text-muted-foreground">Cargando...</div>
       ) : (
         <>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{statement.supplierName}</h3>
+          <h3 className="text-base font-semibold">{statement.supplierName}</h3>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div>
-              <p className="text-xs text-slate-500">Saldo total vencido</p>
-              <p className="text-lg font-semibold text-red-600 dark:text-red-400">${money(statement.totalOverdue)}</p>
+              <p className="text-xs text-muted-foreground">Saldo total vencido</p>
+              <p className="text-lg font-semibold text-destructive">${money(statement.totalOverdue)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Saldo total a vencer</p>
+              <p className="text-xs text-muted-foreground">Saldo total a vencer</p>
               <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
                 ${money(statement.totalNotYetDue)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Total adeudado</p>
-              <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              <p className="text-xs text-muted-foreground">Total adeudado</p>
+              <p className="text-lg font-semibold">
                 ${money(statement.totalOutstanding)}
               </p>
             </div>
@@ -72,20 +73,21 @@ export default function SupplierStatementView({ supplierId }: Props) {
               onPreset={(r) => setRange(r)}
             />
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />
                 Mostrar solo comprobantes con saldo pendiente
               </label>
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => payablesApi.openSupplierStatementPdf(supplierId, { from, to, pendingOnly })}
                 disabled={entries.length === 0}
-                className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
               >
                 Exportar PDF
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() =>
                   payablesApi.downloadSupplierStatementExcel(supplierId, statement.supplierName, {
                     from,
@@ -94,20 +96,19 @@ export default function SupplierStatementView({ supplierId }: Props) {
                   })
                 }
                 disabled={entries.length === 0}
-                className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
               >
                 Exportar Excel (.xlsx)
-              </button>
+              </Button>
             </div>
           </div>
 
           {entries.length === 0 ? (
-            <p className="text-sm text-slate-400 dark:text-slate-600">Sin movimientos en el período</p>
+            <p className="text-sm text-muted-foreground">Sin movimientos en el período</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4 whitespace-nowrap">Fecha</th>
                     <th className="pb-2 pr-4">Tipo y Nro. de Comprobante</th>
                     <th className="pb-2 pr-4 whitespace-nowrap">Vencimiento</th>
@@ -120,35 +121,35 @@ export default function SupplierStatementView({ supplierId }: Props) {
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
-                    <tr key={entry.id} className="border-b border-slate-200/50 dark:border-slate-800/50">
-                      <td className="py-2 pr-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                    <tr key={entry.id} className="border-b border-border/50">
+                      <td className="py-2 pr-4 whitespace-nowrap text-muted-foreground">
                         {formatDate(entry.date)}
                       </td>
                       <td className="py-2 pr-4">
-                        <span className="text-xs text-slate-500">{TYPE_LABELS[entry.type]}</span>
+                        <span className="text-xs text-muted-foreground">{TYPE_LABELS[entry.type]}</span>
                         <br />
                         {entry.documentNumber}
                       </td>
-                      <td className="py-2 pr-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                      <td className="py-2 pr-4 whitespace-nowrap text-muted-foreground">
                         {entry.dueDate ? formatDate(entry.dueDate) : '—'}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-800 dark:text-slate-200">
+                      <td className="py-2 pr-4 text-right">
                         {Number(entry.debe) > 0 ? `$${money(entry.debe)}` : ''}
                       </td>
-                      <td className="py-2 pr-4 text-right text-slate-800 dark:text-slate-200">
+                      <td className="py-2 pr-4 text-right">
                         {Number(entry.haber) > 0 ? `$${money(entry.haber)}` : ''}
                       </td>
-                      <td className="py-2 pr-4 text-right font-medium text-slate-900 dark:text-slate-100">
+                      <td className="py-2 pr-4 text-right font-medium">
                         ${money(entry.balance)}
                       </td>
-                      <td className="py-2 pr-4 whitespace-nowrap text-xs text-slate-600 dark:text-slate-400">
+                      <td className="py-2 pr-4 whitespace-nowrap text-xs text-muted-foreground">
                         {entry.status ?? '—'}
                       </td>
                       <td className="py-2">
                         {entry.type === 'INVOICE' && (
                           <button
                             onClick={() => setDetailInvoiceId(entry.id)}
-                            className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                            className="text-xs text-muted-foreground hover:text-foreground"
                           >
                             Ver detalle
                           </button>

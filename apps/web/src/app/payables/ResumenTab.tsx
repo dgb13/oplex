@@ -1,5 +1,6 @@
 'use client';
 
+import { Card, CardContent } from '@/components/ui/card';
 import { payablesApi } from '@/lib/payables';
 import { useDensity } from '@/providers/DensityProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -20,17 +21,18 @@ export default function ResumenTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Antigüedad de saldos</h2>
+      <Card>
+        <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Antigüedad de saldos</h2>
         {agingQuery.isLoading ? (
-          <div className="flex h-32 items-center justify-center text-slate-500">Cargando...</div>
+          <div className="flex h-32 items-center justify-center text-muted-foreground">Cargando...</div>
         ) : aging.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">Sin saldos pendientes</p>
+          <p className="text-sm text-muted-foreground">Sin saldos pendientes</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
+                <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className={`${headY} pr-4`}>Proveedor</th>
                   <th className={`${headY} pr-4 text-right`}>Al día</th>
                   <th className={`${headY} pr-4 text-right`}>1-30</th>
@@ -45,13 +47,13 @@ export default function ResumenTab() {
                   <tr
                     key={row.supplierId}
                     onClick={() => setStatementFor(row.supplierId)}
-                    className="cursor-pointer border-b border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-200/40 dark:hover:bg-slate-800/40"
+                    className="cursor-pointer border-b border-border/50 hover:bg-muted/40 dark:hover:bg-muted/40"
                   >
-                    <td className={`${cellY} pr-4 text-slate-800 dark:text-slate-200`}>{row.supplierName}</td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4`}>{row.supplierName}</td>
+                    <td className={`${cellY} pr-4 text-right`}>
                       ${Number(row.current).toFixed(2)}
                     </td>
-                    <td className={`${cellY} pr-4 text-right text-slate-700 dark:text-slate-300`}>
+                    <td className={`${cellY} pr-4 text-right`}>
                       ${Number(row.days1to30).toFixed(2)}
                     </td>
                     <td className={`${cellY} pr-4 text-right text-amber-600 dark:text-amber-400`}>
@@ -60,10 +62,10 @@ export default function ResumenTab() {
                     <td className={`${cellY} pr-4 text-right text-orange-400`}>
                       ${Number(row.days61to90).toFixed(2)}
                     </td>
-                    <td className={`${cellY} pr-4 text-right text-red-600 dark:text-red-400`}>
+                    <td className={`${cellY} pr-4 text-right text-destructive`}>
                       ${Number(row.days90Plus).toFixed(2)}
                     </td>
-                    <td className={`${cellY} pr-4 text-right font-semibold text-slate-900 dark:text-slate-100`}>
+                    <td className={`${cellY} pr-4 text-right font-semibold`}>
                       ${Number(row.totalOutstanding).toFixed(2)}
                     </td>
                   </tr>
@@ -72,7 +74,8 @@ export default function ResumenTab() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {statementFor && <SupplierStatementModal supplierId={statementFor} onClose={() => setStatementFor(null)} />}
     </div>
