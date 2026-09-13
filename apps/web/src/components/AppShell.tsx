@@ -112,6 +112,7 @@ function currentUserId(): string | null {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
   const [online, setOnline] = useState<PresenceUser[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Sin persistir en localStorage a propósito: cada sección de primer nivel
@@ -249,8 +250,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <PanelLeft className="h-5 w-5" />
             </button>
-            <div className="flex flex-1 items-center justify-end gap-5">
+            <div className="flex flex-1 items-center justify-end gap-3">
               <OnlineColleagues users={online} />
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+                aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              >
+                {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+              </button>
               <CartButton />
               <UserMenu />
             </div>
@@ -403,7 +412,6 @@ function OnlineColleagues({ users }: { users: PresenceUser[] }) {
 
 function UserMenu() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const { density, setDensity } = useDensity();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -523,15 +531,6 @@ function UserMenu() {
               Preferencias
             </Link>
           )}
-
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            className="flex w-full items-center gap-3 px-4 py-2 hover:bg-muted"
-          >
-            {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
-          </button>
 
           <button
             onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
