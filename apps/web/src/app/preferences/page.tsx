@@ -2,6 +2,9 @@
 
 import { activityLogApi, type TenantActivityEntry } from '@/lib/activityLog';
 import CompanyListView from '@/components/CompanyListView';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { formatCuitInput } from '@/lib/cuit';
 import { INVOICE_PDF_FORMATS, invoicingPreferencesApi, type InvoicePdfFormat } from '@/lib/invoicing';
 import { inventoryApi, type AutoReplenishmentResult } from '@/lib/inventory';
@@ -23,14 +26,12 @@ import { useState } from 'react';
 import CurrencySettings from './CurrencySettings';
 import MercadoPagoCard from './MercadoPagoCard';
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function pillClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-    active
-      ? 'bg-indigo-600 text-white'
-      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+    active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
   }`;
 }
 
@@ -92,9 +93,9 @@ export default function PreferencesPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Preferencias</h1>
+      <h1 className="text-xl font-semibold">Preferencias</h1>
       {isLoading || !settings ? (
-        <div className="text-slate-500">Cargando...</div>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
         <>
           <EmailSettingsCard settings={settings} />
@@ -135,67 +136,69 @@ function ActivityLogCard() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Actividad del tenant
-      </h2>
-      {isLoading || !data ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
-      ) : data.items.length === 0 ? (
-        <p className="text-sm text-slate-500">Todavía no hay actividad registrada.</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-slate-500">
-                  <th className="pb-2 pr-4">Fecha/hora</th>
-                  <th className="pb-2 pr-4">Usuario</th>
-                  <th className="pb-2 pr-4">Entidad</th>
-                  <th className="pb-2 pr-4">Cambios</th>
-                  <th className="pb-2">IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((entry) => (
-                  <tr key={entry.id} className="border-t border-slate-200 dark:border-slate-800">
-                    <td className="py-2 pr-4 whitespace-nowrap">
-                      {new Date(entry.occurredAt).toLocaleString('es-AR')}
-                    </td>
-                    <td className="py-2 pr-4">{entry.userName ?? entry.userEmail ?? '—'}</td>
-                    <td className="py-2 pr-4">
-                      {entry.entityTypeLabel ?? '—'}
-                      {entry.entityLabel ? ` ${entry.entityLabel}` : ''}
-                    </td>
-                    <td className="py-2 pr-4 font-mono break-all">{formatChanges(entry.changes)}</td>
-                    <td className="py-2">{entry.ip ?? '—'}</td>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Actividad del tenant</h2>
+        {isLoading || !data ? (
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        ) : data.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay actividad registrada.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="pb-2 pr-4">Fecha/hora</th>
+                    <th className="pb-2 pr-4">Usuario</th>
+                    <th className="pb-2 pr-4">Entidad</th>
+                    <th className="pb-2 pr-4">Cambios</th>
+                    <th className="pb-2">IP</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <span className="text-xs text-slate-500">Página {page}</span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={data.items.length < pageSize}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+                </thead>
+                <tbody>
+                  {data.items.map((entry) => (
+                    <tr key={entry.id} className="border-t">
+                      <td className="py-2 pr-4 whitespace-nowrap">
+                        {new Date(entry.occurredAt).toLocaleString('es-AR')}
+                      </td>
+                      <td className="py-2 pr-4">{entry.userName ?? entry.userEmail ?? '—'}</td>
+                      <td className="py-2 pr-4">
+                        {entry.entityTypeLabel ?? '—'}
+                        {entry.entityLabel ? ` ${entry.entityLabel}` : ''}
+                      </td>
+                      <td className="py-2 pr-4 font-mono break-all">{formatChanges(entry.changes)}</td>
+                      <td className="py-2">{entry.ip ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                Anterior
+              </Button>
+              <span className="text-xs text-muted-foreground">Página {page}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={data.items.length < pageSize}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -318,234 +321,235 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
   const expiresInDays = settings.afipCertExpiresAt ? daysUntil(settings.afipCertExpiresAt) : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Certificado AFIP (facturación electrónica)
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Certificado digital (.crt) y clave privada (.key) propios de esta empresa, autorizados para
-        WSFE en el Administrador de Relaciones de Clave Fiscal de AFIP. El Punto de Venta se define
-        por sucursal (ver &quot;Mis sucursales&quot; más arriba).
-      </p>
-
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-        <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-          CUIT de la empresa
-          <input
-            type="text"
-            value={taxId}
-            onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
-            placeholder="30-71659554-9"
-            className={`${inputClass} w-40`}
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            setTaxIdMessage('');
-            taxIdMutation.mutate();
-          }}
-          disabled={!taxId.trim() || taxIdMutation.isPending}
-          className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-        >
-          {taxIdMutation.isPending ? 'Guardando...' : 'Guardar CUIT'}
-        </button>
-        {taxIdError && <p className="text-xs text-red-600 dark:text-red-400">{taxIdError}</p>}
-        {taxIdMessage && <p className="text-xs text-green-600 dark:text-green-400">{taxIdMessage}</p>}
-        {!settings.tenantTaxId && (
-          <p className="w-full text-xs text-amber-600 dark:text-amber-400">
-            El certificado AFIP se registra a nombre de este CUIT - sin él, el certificado no queda
-            realmente configurado aunque lo hayas subido.
-          </p>
-        )}
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-        <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-          Condición IVA propia
-          <select
-            value={ownTaxCondition}
-            onChange={(e) => setOwnTaxCondition(e.target.value as TenantTaxCondition)}
-            className={`${inputClass} w-56`}
-          >
-            <option value="" disabled>
-              Sin configurar
-            </option>
-            <option value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</option>
-            <option value="MONOTRIBUTO">Monotributo</option>
-            <option value="EXENTO">Exento</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            setOwnTaxConditionMessage('');
-            if (ownTaxCondition) ownTaxConditionMutation.mutate(ownTaxCondition);
-          }}
-          disabled={!ownTaxCondition || ownTaxConditionMutation.isPending}
-          className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-        >
-          {ownTaxConditionMutation.isPending ? 'Guardando...' : 'Guardar condición IVA'}
-        </button>
-        {ownTaxConditionMessage && (
-          <p className="text-xs text-green-600 dark:text-green-400">{ownTaxConditionMessage}</p>
-        )}
-        <p className="w-full text-xs text-slate-500">
-          Determina qué letra de comprobante corresponde emitir (A/B/C) - Nueva factura la sugiere o
-          la fuerza automáticamente en base a esto y a la condición IVA del cliente.
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">
+          Certificado AFIP (facturación electrónica)
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Certificado digital (.crt) y clave privada (.key) propios de esta empresa, autorizados para
+          WSFE en el Administrador de Relaciones de Clave Fiscal de AFIP. El Punto de Venta se define
+          por sucursal (ver &quot;Mis sucursales&quot; más arriba).
         </p>
-      </div>
 
-      <details className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 p-4 text-xs text-slate-600 dark:text-slate-400">
-        <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
-          ¿Cómo consigo el certificado AFIP? (guía paso a paso)
-        </summary>
-        <div className="mt-3 flex flex-col gap-4">
-          <div>
-            <p className="mb-1 font-medium text-slate-700 dark:text-slate-300">
-              1. Generá la clave privada y el pedido de certificado (CSR)
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            CUIT de la empresa
+            <Input
+              type="text"
+              value={taxId}
+              onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
+              placeholder="30-71659554-9"
+              className="w-40"
+            />
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTaxIdMessage('');
+              taxIdMutation.mutate();
+            }}
+            disabled={!taxId.trim() || taxIdMutation.isPending}
+          >
+            {taxIdMutation.isPending ? 'Guardando...' : 'Guardar CUIT'}
+          </Button>
+          {taxIdError && <p className="text-xs text-destructive">{taxIdError}</p>}
+          {taxIdMessage && <p className="text-xs text-green-600 dark:text-green-400">{taxIdMessage}</p>}
+          {!settings.tenantTaxId && (
+            <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+              El certificado AFIP se registra a nombre de este CUIT - sin él, el certificado no queda
+              realmente configurado aunque lo hayas subido.
             </p>
-            <p className="mb-2">
-              Con OpenSSL, en cualquier terminal (reemplazá el CUIT y el nombre):
-            </p>
-            <pre className="overflow-x-auto rounded-md bg-slate-200 dark:bg-slate-800 p-2 font-mono text-[11px]">
+          )}
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Condición IVA propia
+            <select
+              value={ownTaxCondition}
+              onChange={(e) => setOwnTaxCondition(e.target.value as TenantTaxCondition)}
+              className={`${selectClass} w-56`}
+            >
+              <option value="" disabled>
+                Sin configurar
+              </option>
+              <option value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</option>
+              <option value="MONOTRIBUTO">Monotributo</option>
+              <option value="EXENTO">Exento</option>
+            </select>
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setOwnTaxConditionMessage('');
+              if (ownTaxCondition) ownTaxConditionMutation.mutate(ownTaxCondition);
+            }}
+            disabled={!ownTaxCondition || ownTaxConditionMutation.isPending}
+          >
+            {ownTaxConditionMutation.isPending ? 'Guardando...' : 'Guardar condición IVA'}
+          </Button>
+          {ownTaxConditionMessage && (
+            <p className="text-xs text-green-600 dark:text-green-400">{ownTaxConditionMessage}</p>
+          )}
+          <p className="w-full text-xs text-muted-foreground">
+            Determina qué letra de comprobante corresponde emitir (A/B/C) - Nueva factura la sugiere o
+            la fuerza automáticamente en base a esto y a la condición IVA del cliente.
+          </p>
+        </div>
+
+        <details className="mb-4 rounded-lg border p-4 text-xs text-muted-foreground">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
+            ¿Cómo consigo el certificado AFIP? (guía paso a paso)
+          </summary>
+          <div className="mt-3 flex flex-col gap-4">
+            <div>
+              <p className="mb-1 font-medium text-foreground">
+                1. Generá la clave privada y el pedido de certificado (CSR)
+              </p>
+              <p className="mb-2">
+                Con OpenSSL, en cualquier terminal (reemplazá el CUIT y el nombre):
+              </p>
+              <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-[11px]">
 {`openssl req -new -newkey rsa:2048 -nodes \\
   -keyout empresa.key -out empresa.csr \\
   -subj "/C=AR/O=Nombre Empresa/CN=empresa/serialNumber=CUIT 20XXXXXXXXX"`}
-            </pre>
-            <p className="mt-1">
-              Esto genera dos archivos: <span className="font-mono">empresa.key</span> (clave
-              privada - nunca se sube a AFIP, sólo acá) y{' '}
-              <span className="font-mono">empresa.csr</span> (pedido de certificado, ese sí va a
-              AFIP).
+              </pre>
+              <p className="mt-1">
+                Esto genera dos archivos: <span className="font-mono">empresa.key</span> (clave
+                privada - nunca se sube a AFIP, sólo acá) y{' '}
+                <span className="font-mono">empresa.csr</span> (pedido de certificado, ese sí va a
+                AFIP).
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-foreground">
+                2. Para probar primero (Homologación - recomendado)
+              </p>
+              <ol className="ml-4 list-decimal">
+                <li>Entrá a AFIP con Clave Fiscal → &quot;Administrador de Relaciones de Clave Fiscal&quot;.</li>
+                <li>
+                  Buscá el servicio &quot;WSASS&quot; (Administración de Certificados Digitales),
+                  sección de testing/homologación.
+                </li>
+                <li>
+                  Subí el <span className="font-mono">.csr</span> del paso 1 y descargá el{' '}
+                  <span className="font-mono">.crt</span> (se emite al toque, sin trámite adicional).
+                </li>
+                <li>Asociá ese certificado al web service &quot;wsfe&quot; para tu CUIT.</li>
+                <li>
+                  Subí acá abajo el <span className="font-mono">.crt</span> descargado y el{' '}
+                  <span className="font-mono">.key</span> del paso 1, ambiente
+                  &quot;Homologación&quot;.
+                </li>
+              </ol>
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-foreground">
+                3. Para facturar de verdad (Producción)
+              </p>
+              <ol className="ml-4 list-decimal">
+                <li>
+                  En &quot;Administrador de Relaciones de Clave Fiscal&quot; → &quot;Nueva
+                  Relación&quot; → servicio &quot;wsfe&quot; (Facturación Electrónica), representado
+                  tu propio CUIT.
+                </li>
+                <li>
+                  En esa relación, adjuntá el certificado de producción (mismo{' '}
+                  <span className="font-mono">.csr</span>, o generá uno nuevo con el comando de
+                  arriba).
+                </li>
+                <li>
+                  Subí acá el <span className="font-mono">.crt</span> de producción y su{' '}
+                  <span className="font-mono">.key</span>, ambiente &quot;Producción&quot;.
+                </li>
+              </ol>
+            </div>
+            <p className="italic text-muted-foreground">
+              Homologación y Producción son certificados y trámites separados - no sirve el mismo
+              certificado para los dos ambientes.
             </p>
           </div>
-          <div>
-            <p className="mb-1 font-medium text-slate-700 dark:text-slate-300">
-              2. Para probar primero (Homologación - recomendado)
-            </p>
-            <ol className="ml-4 list-decimal">
-              <li>Entrá a AFIP con Clave Fiscal → &quot;Administrador de Relaciones de Clave Fiscal&quot;.</li>
-              <li>
-                Buscá el servicio &quot;WSASS&quot; (Administración de Certificados Digitales),
-                sección de testing/homologación.
-              </li>
-              <li>
-                Subí el <span className="font-mono">.csr</span> del paso 1 y descargá el{' '}
-                <span className="font-mono">.crt</span> (se emite al toque, sin trámite adicional).
-              </li>
-              <li>Asociá ese certificado al web service &quot;wsfe&quot; para tu CUIT.</li>
-              <li>
-                Subí acá abajo el <span className="font-mono">.crt</span> descargado y el{' '}
-                <span className="font-mono">.key</span> del paso 1, ambiente
-                &quot;Homologación&quot;.
-              </li>
-            </ol>
-          </div>
-          <div>
-            <p className="mb-1 font-medium text-slate-700 dark:text-slate-300">
-              3. Para facturar de verdad (Producción)
-            </p>
-            <ol className="ml-4 list-decimal">
-              <li>
-                En &quot;Administrador de Relaciones de Clave Fiscal&quot; → &quot;Nueva
-                Relación&quot; → servicio &quot;wsfe&quot; (Facturación Electrónica), representado
-                tu propio CUIT.
-              </li>
-              <li>
-                En esa relación, adjuntá el certificado de producción (mismo{' '}
-                <span className="font-mono">.csr</span>, o generá uno nuevo con el comando de
-                arriba).
-              </li>
-              <li>
-                Subí acá el <span className="font-mono">.crt</span> de producción y su{' '}
-                <span className="font-mono">.key</span>, ambiente &quot;Producción&quot;.
-              </li>
-            </ol>
-          </div>
-          <p className="italic text-slate-500">
-            Homologación y Producción son certificados y trámites separados - no sirve el mismo
-            certificado para los dos ambientes.
-          </p>
-        </div>
-      </details>
+        </details>
 
-      {settings.afipConfigured ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-          <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-            Certificado cargado
-          </span>
-          <span className="text-xs text-slate-600 dark:text-slate-400">
-            Ambiente: {settings.afipEnv === 'PRODUCCION' ? 'Producción' : 'Homologación'}
-          </span>
-          {settings.afipCertExpiresAt && (
-            <span className="text-xs text-slate-600 dark:text-slate-400">
-              Vence el {new Date(settings.afipCertExpiresAt).toLocaleDateString('es-AR')}
-              {expiresInDays !== null && expiresInDays <= 30 && (
-                <span className="ml-1 font-medium text-amber-600 dark:text-amber-400">
-                  ({expiresInDays <= 0 ? 'vencido' : `en ${expiresInDays} días`})
-                </span>
-              )}
+        {settings.afipConfigured ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border p-4">
+            <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+              Certificado cargado
             </span>
-          )}
-          <button
-            type="button"
-            onClick={() => removeMutation.mutate()}
-            disabled={removeMutation.isPending}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            {removeMutation.isPending ? 'Quitando...' : 'Quitar certificado'}
-          </button>
-        </div>
-      ) : (
-        <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-          Todavía no hay un certificado cargado - la emisión de comprobantes con CAE real no va a
-          funcionar hasta que subas uno.
-        </p>
-      )}
+            <span className="text-xs text-muted-foreground">
+              Ambiente: {settings.afipEnv === 'PRODUCCION' ? 'Producción' : 'Homologación'}
+            </span>
+            {settings.afipCertExpiresAt && (
+              <span className="text-xs text-muted-foreground">
+                Vence el {new Date(settings.afipCertExpiresAt).toLocaleDateString('es-AR')}
+                {expiresInDays !== null && expiresInDays <= 30 && (
+                  <span className="ml-1 font-medium text-amber-600 dark:text-amber-400">
+                    ({expiresInDays <= 0 ? 'vencido' : `en ${expiresInDays} días`})
+                  </span>
+                )}
+              </span>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => removeMutation.mutate()}
+              disabled={removeMutation.isPending}
+            >
+              {removeMutation.isPending ? 'Quitando...' : 'Quitar certificado'}
+            </Button>
+          </div>
+        ) : (
+          <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
+            Todavía no hay un certificado cargado - la emisión de comprobantes con CAE real no va a
+            funcionar hasta que subas uno.
+          </p>
+        )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEnv('HOMOLOGACION')}
-            className={pillClass(env === 'HOMOLOGACION')}
-          >
-            Homologación (sandbox)
-          </button>
-          <button
-            type="button"
-            onClick={() => setEnv('PRODUCCION')}
-            className={pillClass(env === 'PRODUCCION')}
-          >
-            Producción
-          </button>
-        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setEnv('HOMOLOGACION')}
+              className={pillClass(env === 'HOMOLOGACION')}
+            >
+              Homologación (sandbox)
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnv('PRODUCCION')}
+              className={pillClass(env === 'PRODUCCION')}
+            >
+              Producción
+            </button>
+          </div>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-            Certificado (.crt / .pem)
-            <input type="file" accept=".crt,.pem,.cer" onChange={handleCertFile} className="text-xs" />
-            {certFileName && <span className="text-slate-500">{certFileName}</span>}
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-            Clave privada (.key)
-            <input type="file" accept=".key,.pem" onChange={handleKeyFile} className="text-xs" />
-            {keyFileName && <span className="text-slate-500">{keyFileName}</span>}
-          </label>
-        </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Certificado (.crt / .pem)
+              <input type="file" accept=".crt,.pem,.cer" onChange={handleCertFile} className="text-xs" />
+              {certFileName && <span className="text-muted-foreground">{certFileName}</span>}
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Clave privada (.key)
+              <input type="file" accept=".key,.pem" onChange={handleKeyFile} className="text-xs" />
+              {keyFileName && <span className="text-muted-foreground">{keyFileName}</span>}
+            </label>
+          </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
-        <button
-          type="submit"
-          disabled={!certPem || !keyPem || uploadMutation.isPending}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {uploadMutation.isPending ? 'Guardando...' : 'Guardar certificado'}
-        </button>
-      </form>
-    </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
+          <Button type="submit" className="self-start" disabled={!certPem || !keyPem || uploadMutation.isPending}>
+            {uploadMutation.isPending ? 'Guardando...' : 'Guardar certificado'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -581,46 +585,42 @@ function WithholdingAgentCard({ settings }: { settings: TenantSettings }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Retenciones a proveedores
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Marcá sólo los impuestos para los que AFIP/ARBA (u otro organismo provincial) ya te otorgó el
-        carácter de agente de retención. Habilita el catálogo de regímenes en Impuestos → Retenciones
-        y la opción de retener al registrar un pago en Compras.
-      </p>
-      <div className="flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input
-            type="checkbox"
-            checked={incomeTax}
-            onChange={() => toggle('withholdingAgentIncomeTax', incomeTax, setIncomeTax)}
-          />
-          Somos agentes de retención de Ganancias
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input type="checkbox" checked={vat} onChange={() => toggle('withholdingAgentVat', vat, setVat)} />
-          Somos agentes de retención de IVA
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input
-            type="checkbox"
-            checked={grossIncome}
-            onChange={() => toggle('withholdingAgentGrossIncome', grossIncome, setGrossIncome)}
-          />
-          Somos agentes de retención de Ingresos Brutos (IIBB)
-        </label>
-      </div>
-      {message && <p className="mt-3 text-xs text-green-600 dark:text-green-400">{message}</p>}
-    </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Retenciones a proveedores</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Marcá sólo los impuestos para los que AFIP/ARBA (u otro organismo provincial) ya te otorgó el
+          carácter de agente de retención. Habilita el catálogo de regímenes en Impuestos → Retenciones
+          y la opción de retener al registrar un pago en Compras.
+        </p>
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={incomeTax}
+              onChange={() => toggle('withholdingAgentIncomeTax', incomeTax, setIncomeTax)}
+            />
+            Somos agentes de retención de Ganancias
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={vat} onChange={() => toggle('withholdingAgentVat', vat, setVat)} />
+            Somos agentes de retención de IVA
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={grossIncome}
+              onChange={() => toggle('withholdingAgentGrossIncome', grossIncome, setGrossIncome)}
+            />
+            Somos agentes de retención de Ingresos Brutos (IIBB)
+          </label>
+        </div>
+        {message && <p className="mt-3 text-xs text-green-600 dark:text-green-400">{message}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
-/** Sugerencia genérica de % de remarca para cuando un Article no tiene su
- * propio override (Inventario → editar artículo) - nunca recalcula un
- * precio ya cargado solo, sólo pre-completa el campo la próxima vez que
- * alguien cree o edite un artículo sin su propio %. */
 /** Datos fiscales del emisor que van en el PDF de Facturación (ver
  * @plexo/invoicing/pdf) - CUIT/razón social ya se cargan en otro lado
  * (tenantInfoApi/Tenant.name), acá sólo lo que faltaba. El formato de
@@ -660,74 +660,64 @@ function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Datos fiscales para la Factura
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Domicilio, Ingresos Brutos e inicio de actividades del emisor - se imprimen en el PDF de
-        Facturación (CUIT y razón social ya se cargan arriba, en Certificado AFIP).
-      </p>
-      <div className="grid grid-cols-2 gap-4">
-        <label className="col-span-2 flex flex-col gap-1">
-          <span className="text-xs text-slate-500">Domicilio fiscal</span>
-          <input
-            value={fiscalAddress}
-            onChange={(e) => setFiscalAddress(e.target.value)}
-            placeholder="Av. Siempre Viva 123, CABA"
-            className={inputClass}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-500">Ingresos Brutos</span>
-          <input
-            value={grossIncomeNumber}
-            onChange={(e) => setGrossIncomeNumber(e.target.value)}
-            className={inputClass}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-500">Inicio de actividades</span>
-          <input
-            type="date"
-            value={activityStartDate}
-            onChange={(e) => setActivityStartDate(e.target.value)}
-            className={inputClass}
-          />
-        </label>
-      </div>
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setMessage('');
-            saveFiscalDataMutation.mutate();
-          }}
-          disabled={saveFiscalDataMutation.isPending}
-          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {saveFiscalDataMutation.isPending ? 'Guardando...' : 'Guardar'}
-        </button>
-        {message && <p className="text-xs text-green-600 dark:text-green-400">{message}</p>}
-      </div>
-
-      {preferences && (
-        <div className="mt-6 flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-4">
-          <span className="text-xs text-slate-500">Formato de PDF por defecto</span>
-          <select
-            value={preferences.invoicePdfFormat}
-            onChange={(e) => formatMutation.mutate(e.target.value as InvoicePdfFormat)}
-            className={inputClass}
-          >
-            {INVOICE_PDF_FORMATS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Datos fiscales para la Factura</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Domicilio, Ingresos Brutos e inicio de actividades del emisor - se imprimen en el PDF de
+          Facturación (CUIT y razón social ya se cargan arriba, en Certificado AFIP).
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="col-span-2 flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Domicilio fiscal</span>
+            <Input
+              value={fiscalAddress}
+              onChange={(e) => setFiscalAddress(e.target.value)}
+              placeholder="Av. Siempre Viva 123, CABA"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Ingresos Brutos</span>
+            <Input value={grossIncomeNumber} onChange={(e) => setGrossIncomeNumber(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Inicio de actividades</span>
+            <Input type="date" value={activityStartDate} onChange={(e) => setActivityStartDate(e.target.value)} />
+          </label>
         </div>
-      )}
-    </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setMessage('');
+              saveFiscalDataMutation.mutate();
+            }}
+            disabled={saveFiscalDataMutation.isPending}
+          >
+            {saveFiscalDataMutation.isPending ? 'Guardando...' : 'Guardar'}
+          </Button>
+          {message && <p className="text-xs text-green-600 dark:text-green-400">{message}</p>}
+        </div>
+
+        {preferences && (
+          <div className="mt-6 flex items-center gap-3 border-t pt-4">
+            <span className="text-xs text-muted-foreground">Formato de PDF por defecto</span>
+            <select
+              value={preferences.invoicePdfFormat}
+              onChange={(e) => formatMutation.mutate(e.target.value as InvoicePdfFormat)}
+              className={selectClass}
+            >
+              {INVOICE_PDF_FORMATS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -750,37 +740,32 @@ function InventoryPricingCard({ settings }: { settings: TenantSettings }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Precios de Inventario
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        % de remarca sugerido por defecto para artículos que no tengan uno propio configurado (Inventario
-        → editar artículo). Sólo pre-completa el precio de venta al cargar/editar - nunca lo cambia solo
-        después.
-      </p>
-      <div className="flex items-center gap-3">
-        <input
-          type="number"
-          min={0}
-          step="any"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="p. ej. 40"
-          className={`${inputClass} w-32`}
-        />
-        <span className="text-sm text-slate-500">%</span>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={mutation.isPending}
-          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Guardando...' : 'Guardar'}
-        </button>
-      </div>
-      {message && <p className="mt-3 text-xs text-green-600 dark:text-green-400">{message}</p>}
-    </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Precios de Inventario</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          % de remarca sugerido por defecto para artículos que no tengan uno propio configurado (Inventario
+          → editar artículo). Sólo pre-completa el precio de venta al cargar/editar - nunca lo cambia solo
+          después.
+        </p>
+        <div className="flex items-center gap-3">
+          <Input
+            type="number"
+            min={0}
+            step="any"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="p. ej. 40"
+            className="w-32"
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+          <Button type="button" size="sm" onClick={handleSave} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </div>
+        {message && <p className="mt-3 text-xs text-green-600 dark:text-green-400">{message}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -812,30 +797,31 @@ function ReplenishmentCard() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Reposición automática de stock
-      </h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Corre sola todos los días a la madrugada y genera un Pedido de Cotización por proveedor para
-        las variantes marcadas &quot;Automático&quot; en Inventario → Alertas de stock. Usá este botón
-        para ejecutarla ahora mismo en vez de esperar a la próxima corrida.
-      </p>
-      <button
-        type="button"
-        onClick={() => {
-          setMessage('');
-          setError('');
-          mutation.mutate();
-        }}
-        disabled={mutation.isPending}
-        className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-      >
-        {mutation.isPending ? 'Ejecutando...' : 'Ejecutar reposición ahora'}
-      </button>
-      {error && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
-      {message && <p className="mt-3 text-xs text-slate-500 dark:text-slate-500">{message}</p>}
-    </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Reposición automática de stock</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Corre sola todos los días a la madrugada y genera un Pedido de Cotización por proveedor para
+          las variantes marcadas &quot;Automático&quot; en Inventario → Alertas de stock. Usá este botón
+          para ejecutarla ahora mismo en vez de esperar a la próxima corrida.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setMessage('');
+            setError('');
+            mutation.mutate();
+          }}
+          disabled={mutation.isPending}
+        >
+          {mutation.isPending ? 'Ejecutando...' : 'Ejecutar reposición ahora'}
+        </Button>
+        {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+        {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -916,178 +902,174 @@ function EmailSettingsCard({ settings }: { settings: TenantSettings }) {
     emailSenderMode === 'CUSTOM_DOMAIN' && settings.domainStatus !== 'verified';
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">
-        Remitente de emails a clientes
-      </h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEmailSenderMode('CUSTOM_DOMAIN')}
-            className={pillClass(emailSenderMode === 'CUSTOM_DOMAIN')}
-          >
-            Dominio propio (recomendado)
-          </button>
-          <button
-            type="button"
-            onClick={() => setEmailSenderMode('SHARED')}
-            className={pillClass(emailSenderMode === 'SHARED')}
-          >
-            Compartido Oplex
-          </button>
-        </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Remitente de emails a clientes</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setEmailSenderMode('CUSTOM_DOMAIN')}
+              className={pillClass(emailSenderMode === 'CUSTOM_DOMAIN')}
+            >
+              Dominio propio (recomendado)
+            </button>
+            <button
+              type="button"
+              onClick={() => setEmailSenderMode('SHARED')}
+              className={pillClass(emailSenderMode === 'SHARED')}
+            >
+              Compartido Oplex
+            </button>
+          </div>
 
-        {emailSenderMode === 'CUSTOM_DOMAIN' && (
-          <div className="flex flex-col gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-                Dominio
-                <input
-                  type="text"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="tuempresa.com"
-                  className={`${inputClass} w-48`}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-                Usuario
-                <input
-                  type="text"
-                  value={emailFromLocalPart}
-                  onChange={(e) => setEmailFromLocalPart(e.target.value)}
-                  placeholder="facturas"
-                  className={`${inputClass} w-32`}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-slate-600 dark:text-slate-400">
-                Nombre para mostrar
-                <input
-                  type="text"
-                  value={emailFromName}
-                  onChange={(e) => setEmailFromName(e.target.value)}
-                  placeholder="Facturación Tu Empresa"
-                  className={`${inputClass} w-56`}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => registerMutation.mutate()}
-                disabled={!domain.trim() || registerMutation.isPending}
-                className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-              >
-                {registerMutation.isPending ? 'Generando...' : 'Generar registros DNS'}
-              </button>
-              {settings.emailCustomDomain && (
-                <button
+          {emailSenderMode === 'CUSTOM_DOMAIN' && (
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Dominio
+                  <Input
+                    type="text"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    placeholder="tuempresa.com"
+                    className="w-48"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Usuario
+                  <Input
+                    type="text"
+                    value={emailFromLocalPart}
+                    onChange={(e) => setEmailFromLocalPart(e.target.value)}
+                    placeholder="facturas"
+                    className="w-32"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Nombre para mostrar
+                  <Input
+                    type="text"
+                    value={emailFromName}
+                    onChange={(e) => setEmailFromName(e.target.value)}
+                    placeholder="Facturación Tu Empresa"
+                    className="w-56"
+                  />
+                </label>
+                <Button
                   type="button"
-                  onClick={() => verifyMutation.mutate()}
-                  disabled={verifyMutation.isPending}
-                  className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => registerMutation.mutate()}
+                  disabled={!domain.trim() || registerMutation.isPending}
                 >
-                  {verifyMutation.isPending ? 'Verificando...' : 'Verificar ahora'}
-                </button>
+                  {registerMutation.isPending ? 'Generando...' : 'Generar registros DNS'}
+                </Button>
+                {settings.emailCustomDomain && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => verifyMutation.mutate()}
+                    disabled={verifyMutation.isPending}
+                  >
+                    {verifyMutation.isPending ? 'Verificando...' : 'Verificar ahora'}
+                  </Button>
+                )}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Remitente final: <span className="font-mono">{previewFrom}</span>
+              </p>
+
+              {settings.emailCustomDomain && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">Estado del dominio:</span>
+                  <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClass(settings.domainStatus)}`}>
+                    {statusLabel(settings.domainStatus)}
+                  </span>
+                </div>
+              )}
+
+              {isPendingVerification && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Mientras el dominio no esté verificado, los emails a clientes se siguen enviando
+                  desde el remitente compartido de Oplex.
+                </p>
+              )}
+
+              {domainError && <p className="text-xs text-destructive">{domainError}</p>}
+
+              {records && records.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground">
+                        <th className="pb-2 pr-4">Tipo</th>
+                        <th className="pb-2 pr-4">Nombre</th>
+                        <th className="pb-2 pr-4">Valor</th>
+                        <th className="pb-2">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.map((record, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="py-2 pr-4 font-mono">{record.type}</td>
+                          <td className="py-2 pr-4 font-mono">{record.name}</td>
+                          <td className="py-2 pr-4 font-mono break-all">{record.value}</td>
+                          <td className="py-2">
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClass(record.status)}`}>
+                              {statusLabel(record.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
+          )}
 
-            <p className="text-xs text-slate-500">
-              Remitente final: <span className="font-mono">{previewFrom}</span>
-            </p>
-
-            {settings.emailCustomDomain && (
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-600 dark:text-slate-400">Estado del dominio:</span>
-                <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClass(settings.domainStatus)}`}>
-                  {statusLabel(settings.domainStatus)}
-                </span>
-              </div>
-            )}
-
-            {isPendingVerification && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Mientras el dominio no esté verificado, los emails a clientes se siguen enviando
-                desde el remitente compartido de Oplex.
-              </p>
-            )}
-
-            {domainError && <p className="text-xs text-red-600 dark:text-red-400">{domainError}</p>}
-
-            {records && records.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="text-slate-500">
-                      <th className="pb-2 pr-4">Tipo</th>
-                      <th className="pb-2 pr-4">Nombre</th>
-                      <th className="pb-2 pr-4">Valor</th>
-                      <th className="pb-2">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {records.map((record, i) => (
-                      <tr key={i} className="border-t border-slate-200 dark:border-slate-800">
-                        <td className="py-2 pr-4 font-mono">{record.type}</td>
-                        <td className="py-2 pr-4 font-mono">{record.name}</td>
-                        <td className="py-2 pr-4 font-mono break-all">{record.value}</td>
-                        <td className="py-2">
-                          <span className={`rounded-full px-2 py-0.5 font-medium ${statusPillClass(record.status)}`}>
-                            {statusLabel(record.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">Tono del recordatorio de facturas vencidas</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(TONE_PREVIEWS) as ReminderTone[]).map((tone) => (
+                <button
+                  key={tone}
+                  type="button"
+                  onClick={() => setReminderTone(tone)}
+                  className={pillClass(reminderTone === tone)}
+                >
+                  {TONE_PREVIEWS[tone].label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs italic text-muted-foreground">{TONE_PREVIEWS[reminderTone].preview}</p>
           </div>
-        )}
 
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Tono del recordatorio de facturas vencidas
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(TONE_PREVIEWS) as ReminderTone[]).map((tone) => (
-              <button
-                key={tone}
-                type="button"
-                onClick={() => setReminderTone(tone)}
-                className={pillClass(reminderTone === tone)}
-              >
-                {TONE_PREVIEWS[tone].label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs italic text-slate-500">{TONE_PREVIEWS[reminderTone].preview}</p>
-        </div>
+          <label className="flex flex-col gap-1 text-sm text-muted-foreground">
+            Email para copia (CC) del recordatorio de cobranza
+            <Input
+              type="email"
+              value={reminderCcEmail}
+              onChange={(e) => setReminderCcEmail(e.target.value)}
+              placeholder="cobranzas@tuempresa.com"
+              className="w-72"
+            />
+            <span className="text-xs text-muted-foreground">
+              Opcional. Cada recordatorio que se le manda al cliente también le llega en copia a este
+              buzón, sin necesitar un dominio propio.
+            </span>
+          </label>
 
-        <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
-          Email para copia (CC) del recordatorio de cobranza
-          <input
-            type="email"
-            value={reminderCcEmail}
-            onChange={(e) => setReminderCcEmail(e.target.value)}
-            placeholder="cobranzas@tuempresa.com"
-            className={`${inputClass} w-72`}
-          />
-          <span className="text-xs text-slate-500">
-            Opcional. Cada recordatorio que se le manda al cliente también le llega en copia a este
-            buzón, sin necesitar un dominio propio.
-          </span>
-        </label>
-
-        {saveError && <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>}
-        {saveMessage && <p className="text-sm text-green-600 dark:text-green-400">{saveMessage}</p>}
-        <button
-          type="submit"
-          disabled={saveMutation.isPending}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {saveMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
-        </button>
-      </form>
-    </div>
+          {saveError && <p className="text-sm text-destructive">{saveError}</p>}
+          {saveMessage && <p className="text-sm text-green-600 dark:text-green-400">{saveMessage}</p>}
+          <Button type="submit" className="self-start" disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
