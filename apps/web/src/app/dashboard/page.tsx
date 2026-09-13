@@ -13,11 +13,22 @@ import {
 import { getSocket } from '@/lib/socket';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  DollarSign,
+  MoreHorizontal,
+  Package,
+  Receipt,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import OnboardingChecklist from './OnboardingChecklist';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -102,7 +113,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { theme } = useTheme();
 
-  const { data, isLoading, error } = useQuery<Snapshot>({
+  const { data, error } = useQuery<Snapshot>({
     queryKey: ['dashboard-snapshot'],
     queryFn: () => api.get('/dashboard/snapshot').then((r) => r.data as Snapshot),
   });
@@ -132,18 +143,89 @@ export default function DashboardPage() {
     };
   }, [queryClient]);
 
-  if (isLoading) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Cargando tablero...</div>;
-  }
+  // Dispara el stagger/count-up una sola vez, cuando el snapshot llega por
+  // primera vez - a propósito no depende de `data` directo (que es una
+  // referencia nueva en cada refetch en segundo plano por los sockets de
+  // arriba), así una factura creada en otra pestaña no vuelve a hacer
+  // aparecer las cards de cero cada vez, sólo la primera carga real.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!data || revealed) return undefined;
+    const id = setTimeout(() => setRevealed(true), 30);
+    return () => clearTimeout(id);
+  }, [data, revealed]);
 
-  if (error || !data) {
-    return <div className="flex h-64 items-center justify-center text-destructive">Error al cargar el tablero</div>;
-  }
+  const stockTotal = data ? data.stockByWarehouse.reduce((sum, wh) => sum + wh.totalItems, 0) : 0;
+  const pendingInvoices = data ? data.todaySummary.invoiceCount - data.todaySummary.paidCount : 0;
+  const avgTicket =
+    data && data.todaySummary.invoiceCount > 0 ? data.todaySummary.total / data.todaySummary.invoiceCount : 0;
 
-  const { todaySummary, stockByWarehouse, recentInvoices, lowStockAlerts, salesLast7Days } = data;
-  const stockTotal = stockByWarehouse.reduce((sum, wh) => sum + wh.totalItems, 0);
-  const pendingInvoices = todaySummary.invoiceCount - todaySummary.paidCount;
-  const avgTicket = todaySummary.invoiceCount > 0 ? todaySummary.total / todaySummary.invoiceCount : 0;
+  // Sólo "Facturado hoy" y "Ticket promedio" tienen una serie real de 7 días
+  // detrás (salesLast7Days, que el snapshot ya trae) - las otras cuatro KPIs
+  // no tienen historial en el backend todavía, así que no llevan sparkline
+  // en vez de inventar una tendencia falsa.
+  const kpis: KpiDef[] = data
+    ? [
+        {
+          id: 'facturado',
+          icon: DollarSign,
+          label: 'Facturado hoy',
+          value: data.todaySummary.total,
+          prefix: '$',
+          decimals: 2,
+          sub: `${data.todaySummary.invoiceCount} factura${data.todaySummary.invoiceCount !== 1 ? 's' : ''}`,
+          accent: 'emerald',
+          spark: data.salesLast7Days.map((d) => ({ v: d.total })),
+        },
+        {
+          id: 'cobrado',
+          icon: Wallet,
+          label: 'Cobrado hoy',
+          value: data.todaySummary.paidCount,
+          decimals: 0,
+          sub: `de ${data.todaySummary.invoiceCount} factura${data.todaySummary.invoiceCount !== 1 ? 's' : ''}`,
+          accent: 'sky',
+        },
+        {
+          id: 'ticket',
+          icon: Receipt,
+          label: 'Ticket promedio',
+          value: avgTicket,
+          prefix: '$',
+          decimals: 2,
+          sub: 'facturado hoy',
+          accent: 'violet',
+          spark: data.salesLast7Days.map((d) => ({ v: d.count > 0 ? d.total / d.count : 0 })),
+        },
+        {
+          id: 'pendientes',
+          icon: Clock,
+          label: 'Facturas pendientes',
+          value: pendingInvoices,
+          decimals: 0,
+          sub: pendingInvoices > 0 ? 'sin cobrar todavía' : 'todo cobrado',
+          accent: 'amber',
+        },
+        {
+          id: 'stock',
+          icon: Package,
+          label: 'Stock total',
+          value: stockTotal,
+          decimals: 0,
+          sub: `${data.stockByWarehouse.length} depósito${data.stockByWarehouse.length !== 1 ? 's' : ''}`,
+          accent: 'primary',
+        },
+        {
+          id: 'alertas',
+          icon: AlertTriangle,
+          label: 'Alertas de stock',
+          value: data.lowStockAlerts.length,
+          decimals: 0,
+          sub: 'productos bajo mínimo',
+          alert: data.lowStockAlerts.length > 0,
+        },
+      ]
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -151,33 +233,46 @@ export default function DashboardPage() {
 
       <OnboardingChecklist />
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard
-          label="Facturado hoy"
-          value={`$${todaySummary.total.toFixed(2)}`}
-          sub={`${todaySummary.invoiceCount} factura${todaySummary.invoiceCount !== 1 ? 's' : ''}`}
-        />
-        <KpiCard
-          label="Cobrado hoy"
-          value={`${todaySummary.paidCount}`}
-          sub={`de ${todaySummary.invoiceCount} factura${todaySummary.invoiceCount !== 1 ? 's' : ''}`}
-        />
-        <KpiCard label="Ticket promedio" value={`$${avgTicket.toFixed(2)}`} sub="facturado hoy" />
-        <KpiCard
-          label="Facturas pendientes"
-          value={`${pendingInvoices}`}
-          sub={pendingInvoices > 0 ? 'sin cobrar todavía' : 'todo cobrado'}
-        />
-        <KpiCard label="Stock total" value={`${stockTotal}`} sub={`${stockByWarehouse.length} depósito${stockByWarehouse.length !== 1 ? 's' : ''}`} />
-        <KpiCard
-          label="Alertas de stock"
-          value={`${lowStockAlerts.length}`}
-          sub="productos bajo mínimo"
-          alert={lowStockAlerts.length > 0}
-        />
-      </div>
+      {error ? (
+        <p className="text-sm text-destructive">Error al cargar el tablero</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {data
+              ? kpis.map((def, i) => <KpiCard key={def.id} def={def} index={i} revealed={revealed} />)
+              : Array.from({ length: 6 }, (_, i) => <KpiCardSkeleton key={i} />)}
+          </div>
 
+          {data && (
+            <DashboardBelowKpis
+              salesLast7Days={data.salesLast7Days}
+              lowStockAlerts={data.lowStockAlerts}
+              stockByWarehouse={data.stockByWarehouse}
+              recentInvoices={data.recentInvoices}
+              theme={theme}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DashboardBelowKpis({
+  salesLast7Days,
+  lowStockAlerts,
+  stockByWarehouse,
+  recentInvoices,
+  theme,
+}: {
+  salesLast7Days: Snapshot['salesLast7Days'];
+  lowStockAlerts: Snapshot['lowStockAlerts'];
+  stockByWarehouse: Snapshot['stockByWarehouse'];
+  recentInvoices: Snapshot['recentInvoices'];
+  theme: string;
+}) {
+  return (
+    <>
       {/* Sales chart + low stock */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="col-span-2">
@@ -330,27 +425,123 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  alert,
-}: {
+type KpiAccent = 'emerald' | 'sky' | 'violet' | 'amber' | 'primary';
+
+interface KpiDef {
+  id: string;
+  icon: LucideIcon;
   label: string;
-  value: string;
+  value: number;
+  prefix?: string;
+  decimals?: number;
   sub: string;
+  accent?: KpiAccent;
   alert?: boolean;
-}) {
+  spark?: { v: number }[];
+}
+
+const ACCENT: Record<KpiAccent, { icon: string; tint: string; stroke: string }> = {
+  emerald: { icon: 'text-emerald-600 dark:text-emerald-400', tint: 'bg-emerald-600/10', stroke: '#10b981' },
+  sky: { icon: 'text-sky-600 dark:text-sky-400', tint: 'bg-sky-600/10', stroke: '#0ea5e9' },
+  violet: { icon: 'text-violet-600 dark:text-violet-400', tint: 'bg-violet-600/10', stroke: '#8b5cf6' },
+  amber: { icon: 'text-amber-600 dark:text-amber-400', tint: 'bg-amber-600/10', stroke: '#f59e0b' },
+  primary: { icon: 'text-primary', tint: 'bg-primary/10', stroke: '#6366f1' },
+};
+
+/** Cuenta de 0 al valor final con un ease-out propio (sin react-countup -
+ * son ~15 líneas, no justifica una dependencia nueva). Reinicia sólo si
+ * `active` pasa a false; si el valor objetivo cambia con `active` ya en
+ * true (llegó un snapshot nuevo), vuelve a animar desde 0 hasta el valor
+ * nuevo - "algo cambió" es información, no un glitch. */
+function useCountUp(target: number, active: boolean, duration = 1100): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setValue(0);
+      return undefined;
+    }
+    let frame: number;
+    const start = performance.now();
+    function tick(now: number) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(target * eased);
+      if (t < 1) frame = requestAnimationFrame(tick);
+    }
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [active, target, duration]);
+  return value;
+}
+
+function KpiCard({ def, index, revealed }: { def: KpiDef; index: number; revealed: boolean }) {
+  const shown = useCountUp(def.value, revealed);
+  const accent = ACCENT[def.accent ?? 'primary'];
+  const gradId = `kpi-grad-${def.id}`;
+
   return (
-    <Card className={alert ? 'bg-destructive/5 ring-destructive/30' : undefined}>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-2xl font-bold ${alert ? 'text-destructive' : ''}`}>{value}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
+    <Card
+      className={`transition-all duration-500 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
+        revealed ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+      } ${def.alert ? 'bg-destructive/5 ring-destructive/30' : ''}`}
+      style={{ transitionDelay: `${index * 90}ms` }}
+    >
+      <CardContent className="flex flex-col gap-1">
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+            def.alert ? 'bg-destructive/10 text-destructive' : `${accent.tint} ${accent.icon}`
+          }`}
+        >
+          <def.icon className="h-4 w-4" />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{def.label}</p>
+        <p className={`text-2xl font-bold tabular-nums ${def.alert ? 'text-destructive' : ''}`}>
+          {def.prefix}
+          {shown.toFixed(def.decimals ?? 0)}
+        </p>
+        <p className="text-xs text-muted-foreground">{def.sub}</p>
+        {def.spark && (
+          <div className="-mx-1 mt-1 h-9">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={def.spark} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={accent.stroke} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={accent.stroke} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={accent.stroke}
+                  strokeWidth={2}
+                  fill={`url(#${gradId})`}
+                  dot={false}
+                  isAnimationActive={revealed}
+                  animationDuration={1100}
+                  animationBegin={index * 90 + 150}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function KpiCardSkeleton() {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2">
+        <div className="skeleton-shimmer h-8 w-8 rounded-lg bg-muted" />
+        <div className="skeleton-shimmer mt-1 h-3 w-16 rounded bg-muted" />
+        <div className="skeleton-shimmer h-6 w-20 rounded bg-muted" />
+        <div className="skeleton-shimmer h-3 w-14 rounded bg-muted" />
       </CardContent>
     </Card>
   );
