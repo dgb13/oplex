@@ -1,5 +1,6 @@
 'use client';
 
+import { Input } from '@/components/ui/input';
 import { companiesApi } from '@/lib/companies';
 import { reportsApi } from '@/lib/reports';
 import {
@@ -17,8 +18,8 @@ import DateRangeFilter from '../reports/DateRangeFilter';
 import DepositCheckModal from './DepositCheckModal';
 import RejectCheckModal from './RejectCheckModal';
 
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const STATUS_OPTIONS: CheckStatus[] = [
   'PORTFOLIO',
@@ -78,12 +79,12 @@ export default function TreasuryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cartera de Cheques</h1>
+      <h1 className="text-xl font-semibold">Cartera de Cheques</h1>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Estado
-          <select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value as CheckStatus | '')}>
+          <select className={selectClass} value={status} onChange={(e) => setStatus(e.target.value as CheckStatus | '')}>
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -92,22 +93,17 @@ export default function TreasuryPage() {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Tipo
-          <select className={inputClass} value={kind} onChange={(e) => setKind(e.target.value as CheckKind | '')}>
+          <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as CheckKind | '')}>
             <option value="">Todos</option>
             <option value="THIRD_PARTY">{CHECK_KIND_LABELS.THIRD_PARTY}</option>
             <option value="OWN">{CHECK_KIND_LABELS.OWN}</option>
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Banco
-          <input
-            className={inputClass}
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-            placeholder="Filtrar por banco"
-          />
+          <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Filtrar por banco" />
         </label>
         <DateRangeFilter
           from={dueFrom}
@@ -121,25 +117,25 @@ export default function TreasuryPage() {
         />
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-4">
-        {checksQuery.isLoading ? (
-          <div className="flex h-24 items-center justify-center text-slate-500">Cargando...</div>
-        ) : checks.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-600">No hay cheques que coincidan con el filtro</p>
-        ) : (
+      {checksQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Cargando...</p>
+      ) : checks.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No hay cheques que coincidan con el filtro</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs text-slate-500">
-                <th className="pb-2 pr-4">Vencimiento</th>
-                <th className="pb-2 pr-4">Tipo</th>
-                <th className="pb-2 pr-4">Número / Banco</th>
-                <th className="pb-2 pr-4">Cliente / Proveedor</th>
-                <th className="pb-2 pr-4">Cuenta</th>
-                <th className="pb-2 pr-4 text-right">Monto</th>
-                <th className="pb-2 pr-4">Estado</th>
-                <th className="pb-2" />
+              <tr className="border-b bg-muted/50 text-left text-muted-foreground">
+                <th className="p-3">Vencimiento</th>
+                <th className="p-3">Tipo</th>
+                <th className="p-3">Número / Banco</th>
+                <th className="p-3">Cliente / Proveedor</th>
+                <th className="p-3">Cuenta</th>
+                <th className="p-3 text-right">Monto</th>
+                <th className="p-3">Estado</th>
+                <th className="p-3" />
               </tr>
             </thead>
             <tbody>
@@ -161,38 +157,36 @@ export default function TreasuryPage() {
                   (check.status === 'PORTFOLIO' || check.status === 'DEPOSITED' || check.status === 'ENDORSED');
 
                 return (
-                  <tr key={check.id} className="border-b border-slate-200/50 dark:border-slate-800/50 align-top">
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                  <tr key={check.id} className="border-b border-border/50 align-top">
+                    <td className="p-3 text-muted-foreground">
                       {new Date(check.dueDate).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                     </td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">{CHECK_KIND_LABELS[check.kind]}</td>
-                    <td className="py-2 pr-4">
-                      <p className="text-slate-800 dark:text-slate-200">{check.number}</p>
-                      <p className="text-xs text-slate-500">{check.bankName}</p>
+                    <td className="p-3 text-muted-foreground">{CHECK_KIND_LABELS[check.kind]}</td>
+                    <td className="p-3">
+                      <p>{check.number}</p>
+                      <p className="text-xs text-muted-foreground">{check.bankName}</p>
                     </td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                    <td className="p-3 text-muted-foreground">
                       {companyId ? (companyNameById.get(companyId) ?? '—') : '—'}
                     </td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                    <td className="p-3 text-muted-foreground">
                       {check.financialAccountId ? (accountNameById.get(check.financialAccountId) ?? '—') : '—'}
                     </td>
-                    <td className="py-2 pr-4 text-right font-medium text-slate-900 dark:text-slate-100">
-                      ${Number(check.amount).toFixed(2)}
-                    </td>
-                    <td className="py-2 pr-4">
+                    <td className="p-3 text-right font-medium">${Number(check.amount).toFixed(2)}</td>
+                    <td className="p-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.colorClass}`}>
                         {badge.label}
                       </span>
                       {check.status === 'REJECTED' && check.rejectionReason && (
-                        <p className="mt-1 text-xs text-slate-500">{check.rejectionReason}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{check.rejectionReason}</p>
                       )}
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="p-3 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
                         {canDeposit && (
                           <button
                             onClick={() => setDepositing(check)}
-                            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 transition hover:text-indigo-700 dark:hover:text-indigo-300"
+                            className="text-xs font-medium text-primary hover:text-primary/80"
                           >
                             Depositar
                           </button>
@@ -203,13 +197,13 @@ export default function TreasuryPage() {
                               <button
                                 onClick={() => clearMutation.mutate(check.id)}
                                 disabled={clearMutation.isPending}
-                                className="text-xs font-medium text-green-600 dark:text-green-400 disabled:opacity-50"
+                                className="text-xs font-medium text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
                               >
                                 Confirmar
                               </button>
                               <button
                                 onClick={() => setClearingId(null)}
-                                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                className="text-xs text-muted-foreground hover:text-foreground"
                               >
                                 Volver
                               </button>
@@ -217,7 +211,7 @@ export default function TreasuryPage() {
                           ) : (
                             <button
                               onClick={() => setClearingId(check.id)}
-                              className="text-xs font-medium text-green-600 dark:text-green-400 transition hover:text-green-700 dark:hover:text-green-300"
+                              className="text-xs font-medium text-emerald-600 dark:text-emerald-400 transition hover:text-emerald-700 dark:hover:text-emerald-300"
                             >
                               Acreditar
                             </button>
@@ -237,8 +231,8 @@ export default function TreasuryPage() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       {depositing && (
         <DepositCheckModal check={depositing} accounts={accounts} onClose={() => setDepositing(null)} />
