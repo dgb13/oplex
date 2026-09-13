@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AccountingModule } from '@plexo/accounting';
 import { InventoryModule } from '@plexo/inventory';
 import { InvoicingModule } from '@plexo/invoicing';
+import { QuotesModule } from '@plexo/quotes';
 import { ReportsFinancialModule } from '@plexo/reports-financial';
 import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { TreasuryModule } from '@plexo/treasury';
@@ -14,6 +15,7 @@ import { SalesService } from './sales.service.js';
     InvoicingModule,
     AccountingModule,
     ReportsFinancialModule,
+    QuotesModule,
     TenantSettingsModule,
     TreasuryModule,
   ],

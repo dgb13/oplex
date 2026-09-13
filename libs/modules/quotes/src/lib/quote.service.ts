@@ -14,6 +14,9 @@ const DETAIL_INCLUDE = {
   customer: { select: { id: true, name: true, taxId: true, email: true, fiscalAddress: true } },
   currency: true,
   createdBy: { select: { id: true, name: true, email: true } },
+  // A lo sumo una (Invoice.quoteId es @@unique por tenant) - el frontend la
+  // usa para mostrar "Ya facturada" en vez del botón "Convertir a factura".
+  invoices: { select: { id: true, number: true } },
 } satisfies Prisma.QuoteInclude;
 
 const LIST_INCLUDE = {

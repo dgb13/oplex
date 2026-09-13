@@ -3,9 +3,11 @@ import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, getUserId, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 import { InvoicingService, type CreateCreditNoteDto, type RecordReceiptDto } from '@plexo/invoicing';
+import { QuoteService } from '@plexo/quotes';
 import { ReportsFinancialService } from '@plexo/reports-financial';
 import { resolveEmailFrom, TenantSettingsService } from '@plexo/tenant-settings';
 import { CheckService } from '@plexo/treasury';
+import type { CreateInvoiceFromQuoteDto } from './dto/create-invoice-from-quote.dto.js';
 import type { CreateSaleDto } from './dto/create-sale.dto.js';
 
 /**
@@ -29,6 +31,7 @@ export class SalesService {
     private readonly inventoryService: InventoryService,
     private readonly accountingService: AccountingService,
     private readonly reportsFinancialService: ReportsFinancialService,
+    private readonly quoteService: QuoteService,
     private readonly tenantSettingsService: TenantSettingsService,
     private readonly checkService: CheckService,
   ) {}
@@ -281,5 +284,68 @@ export class SalesService {
     }
 
     return receipt;
+  }
+
+  /**
+   * "Convertir a factura" desde el panel de detalle de una Cotización
+   * (Ventas → Cotizaciones) - hoy no existía ningún vínculo entre ambos
+   * documentos, así que pasar de una cotización en USD a la factura en
+   * pesos era 100% manual (ver PROGRESS.md/memoria de esta sesión). Delega
+   * en createSale tal cual (mismo stock/asiento contable que una venta
+   * directa) en vez de duplicar esa orquestación - sólo arma el
+   * CreateSaleDto a partir de la Cotización, convirtiendo cada línea a la
+   * moneda base del tenant si la cotización no está ya en esa moneda.
+   */
+  async createInvoiceFromQuote(quoteId: string, dto: CreateInvoiceFromQuoteDto) {
+    const quote = await this.quoteService.get(quoteId);
+    if (quote.status !== 'ACCEPTED') {
+      throw new BadRequestException('Sólo se puede facturar una cotización aceptada');
+    }
+
+    const db = getTenantDb();
+    const existing = await db.invoice.findFirst({ where: { quoteId } });
+    if (existing) {
+      throw new BadRequestException(`Esta cotización ya fue facturada (${existing.number})`);
+    }
+
+    const baseCurrency = await db.currency.findFirst({ where: { isBase: true } });
+    if (!baseCurrency) {
+      throw new BadRequestException('Este tenant todavía no tiene una moneda base configurada');
+    }
+
+    let factor = new Prisma.Decimal(1);
+    if (!quote.currency.isBase) {
+      const latestRate = await db.exchangeRateHistory.findFirst({
+        where: { currencyId: quote.currencyId },
+        orderBy: { effectiveAt: 'desc' },
+      });
+      if (!latestRate) {
+        throw new BadRequestException(
+          `Cargá una cotización para ${quote.currency.code} en Preferencias antes de convertir esta cotización`,
+        );
+      }
+      factor = latestRate.rate;
+    }
+
+    const invoice = await this.createSale({
+      customerId: quote.customerId,
+      warehouseId: dto.warehouseId,
+      documentLetter: dto.documentLetter,
+      branchId: dto.branchId,
+      currencyId: baseCurrency.id,
+      exchangeRate: factor.toNumber(),
+      globalDiscountPercent: dto.globalDiscountPercent,
+      dueDate: dto.dueDate,
+      pricesIncludeTax: dto.pricesIncludeTax,
+      lines: quote.lines.map((line) => ({
+        articleVariantId: line.articleVariantId,
+        quantity: line.quantity.toNumber(),
+        unitPrice: line.unitPrice.mul(factor).toNumber(),
+      })),
+    });
+
+    await db.invoice.update({ where: { id: invoice.id }, data: { quoteId } });
+
+    return invoice;
   }
 }

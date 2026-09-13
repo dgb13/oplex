@@ -14,6 +14,7 @@ import { buildVariantLabel } from '@/lib/inventory';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
+import ConvertQuoteToInvoiceModal from './ConvertQuoteToInvoiceModal';
 import QuoteFollowUpModal from './QuoteFollowUpModal';
 
 const selectClass =
@@ -31,6 +32,7 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
   const [pdfStyle, setPdfStyle] = useState<PdfStyle>('MODERNO');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true));
@@ -258,6 +260,21 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
                     </Button>
                   </>
                 )}
+                {data.status === 'ACCEPTED' &&
+                  (data.invoices.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Ya facturada — <span className="font-medium text-foreground">{data.invoices[0].number}</span>
+                    </p>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setConverting(true)}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      Convertir a factura
+                    </Button>
+                  ))}
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </section>
@@ -266,6 +283,13 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
       </div>
 
       {sending && data && <QuoteFollowUpModal quote={data} onClose={() => setSending(false)} />}
+      {converting && data && (
+        <ConvertQuoteToInvoiceModal
+          quote={data}
+          onClose={() => setConverting(false)}
+          onConverted={() => setConverting(false)}
+        />
+      )}
     </div>
   );
 }

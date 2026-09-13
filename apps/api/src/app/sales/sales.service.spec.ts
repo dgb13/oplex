@@ -3,6 +3,7 @@ import type { AccountingService } from '@plexo/accounting';
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { InventoryService } from '@plexo/inventory';
 import type { InvoicingService } from '@plexo/invoicing';
+import type { QuoteService } from '@plexo/quotes';
 import type { ReportsFinancialService } from '@plexo/reports-financial';
 import type { TenantSettingsService } from '@plexo/tenant-settings';
 import type { CheckService } from '@plexo/treasury';
@@ -16,12 +17,21 @@ import { SalesService } from './sales.service.js';
 // mano), nunca la implementación real.
 jest.mock('@plexo/invoicing', () => ({}));
 
+// Mismo motivo que el mock de arriba - @plexo/quotes (agregado a
+// SalesService para createInvoiceFromQuote) también arrastra
+// @react-pdf/renderer vía su propio PdfGeneratorService.
+jest.mock('@plexo/quotes', () => ({}));
+
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
 }
 
 function makeCheckService(overrides: Partial<CheckService> = {}): CheckService {
   return { registerThirdPartyCheck: jest.fn(), ...overrides } as unknown as CheckService;
+}
+
+function makeQuoteService(overrides: Partial<QuoteService> = {}): QuoteService {
+  return { get: jest.fn(), ...overrides } as unknown as QuoteService;
 }
 
 function makeReportsFinancialService(overrides: Partial<ReportsFinancialService> = {}): ReportsFinancialService {
@@ -87,7 +97,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
     const dto = {
       customerId: 'customer-1',
       warehouseId: 'warehouse-1',
@@ -175,7 +185,7 @@ describe('SalesService.createSale', () => {
       }),
     } as unknown as TenantSettingsService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), tenantSettingsService, makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), tenantSettingsService, makeCheckService());
 
     await runInTenant(makeBranchDb(), () =>
       service.createSale({
@@ -198,7 +208,7 @@ describe('SalesService.createSale', () => {
     const invoicingService = { createInvoice: jest.fn() } as unknown as InvoicingService;
     const inventoryService = {} as unknown as InventoryService;
     const accountingService = {} as unknown as AccountingService;
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
     const db = makeBranchDb({
       id: 'branch-1',
       active: true,
@@ -225,7 +235,7 @@ describe('SalesService.createSale', () => {
     const invoicingService = { createInvoice: jest.fn() } as unknown as InvoicingService;
     const inventoryService = {} as unknown as InventoryService;
     const accountingService = {} as unknown as AccountingService;
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
     const db = makeBranchDb({
       id: 'branch-1',
       active: false,
@@ -270,7 +280,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(makeBranchDb(), () =>
@@ -308,7 +318,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockRejectedValue(failure),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(makeBranchDb(), () =>
@@ -349,7 +359,7 @@ describe('SalesService.createSale', () => {
       postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(makeBranchDb(), () =>
       service.createSale({
@@ -418,7 +428,7 @@ describe('SalesService.voidSale', () => {
       },
     };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
     const dto = {
       invoiceId: 'invoice-1',
       reason: 'Devolución de mercadería',
@@ -489,7 +499,7 @@ describe('SalesService.voidSale', () => {
       },
     };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -521,7 +531,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -548,7 +558,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       runInTenant(db, () =>
@@ -573,7 +583,7 @@ describe('SalesService.voidSale', () => {
     } as unknown as AccountingService;
     const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await runInTenant(db, () =>
       service.voidSale({
@@ -612,7 +622,7 @@ describe('SalesService.recordReceipt', () => {
       postReceiptJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-3', lines: [] }),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
     const dto = { invoiceId: 'invoice-1', amount: 300, method: 'CASH' };
 
     const result = await service.recordReceipt(dto);
@@ -637,7 +647,7 @@ describe('SalesService.recordReceipt', () => {
       postReceiptJournalEntry: jest.fn().mockRejectedValue(failure),
     } as unknown as AccountingService;
 
-    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeTenantSettingsService(), makeCheckService());
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
     await expect(
       service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CASH' }),
@@ -659,6 +669,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       makeReportsFinancialService(),
+      makeQuoteService(),
       makeTenantSettingsService(),
       checkService,
     );
@@ -701,6 +712,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       makeReportsFinancialService(),
+      makeQuoteService(),
       makeTenantSettingsService(),
       checkService,
     );
@@ -725,6 +737,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       reportsFinancialService,
+      makeQuoteService(),
       makeTenantSettingsService(),
       makeCheckService(),
     );
@@ -759,6 +772,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       reportsFinancialService,
+      makeQuoteService(),
       makeTenantSettingsService(),
       makeCheckService(),
     );
@@ -797,6 +811,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       reportsFinancialService,
+      makeQuoteService(),
       makeTenantSettingsService(),
       makeCheckService(),
     );
@@ -827,6 +842,7 @@ describe('SalesService.recordReceipt', () => {
       inventoryService,
       accountingService,
       makeReportsFinancialService(),
+      makeQuoteService(),
       makeTenantSettingsService(),
       makeCheckService(),
     );
@@ -842,6 +858,134 @@ describe('SalesService.recordReceipt', () => {
       tenantContextStorage.run({ tenantId: 'tenant-1', tx: db as never }, () =>
         service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'CHECK', check: checkDetail }),
       ),
+    ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('SalesService.createInvoiceFromQuote', () => {
+  function makeQuote(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'quote-1',
+      customerId: 'customer-1',
+      status: 'ACCEPTED',
+      currencyId: 'usd',
+      currency: { id: 'usd', code: 'USD', isBase: false },
+      lines: [{ articleVariantId: 'variant-1', quantity: new Prisma.Decimal(2), unitPrice: new Prisma.Decimal(100) }],
+      ...overrides,
+    };
+  }
+
+  function makeInvoice() {
+    return {
+      id: 'invoice-1',
+      subtotal: new Prisma.Decimal(220000),
+      taxTotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(220000),
+      exchangeRate: new Prisma.Decimal(1100),
+      issueDate: new Date('2026-01-01'),
+      lines: [],
+      taxLines: [],
+    };
+  }
+
+  function makeServices(quote: unknown) {
+    const invoicingService = {
+      createInvoice: jest.fn().mockResolvedValue(makeInvoice()),
+    } as unknown as InvoicingService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
+    } as unknown as AccountingService;
+    const quoteService = makeQuoteService({ get: jest.fn().mockResolvedValue(quote) });
+    const service = new SalesService(
+      invoicingService,
+      inventoryService,
+      accountingService,
+      makeReportsFinancialService(),
+      quoteService,
+      makeTenantSettingsService(),
+      makeCheckService(),
+    );
+    return { service, invoicingService, quoteService };
+  }
+
+  const convertDto = { warehouseId: 'warehouse-1', documentLetter: 'B' as const, branchId: 'branch-1' };
+
+  it('converts each line multiplying by the latest exchange rate when the quote currency is not the base', async () => {
+    const quote = makeQuote();
+    const { service, invoicingService } = makeServices(quote);
+    const db = {
+      ...makeBranchDb(),
+      invoice: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      currency: { findFirst: jest.fn().mockResolvedValue({ id: 'ars', code: 'ARS', isBase: true }) },
+      exchangeRateHistory: { findFirst: jest.fn().mockResolvedValue({ rate: new Prisma.Decimal(1100) }) },
+    };
+
+    const invoice = await runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto));
+
+    const createInvoiceArgs = (invoicingService.createInvoice as jest.Mock).mock.calls[0][0];
+    expect(createInvoiceArgs.currencyId).toBe('ars');
+    expect(createInvoiceArgs.exchangeRate).toBe(1100);
+    expect(createInvoiceArgs.lines).toEqual([{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 110000 }]);
+    expect(db.invoice.update).toHaveBeenCalledWith({ where: { id: invoice.id }, data: { quoteId: 'quote-1' } });
+  });
+
+  it('passes line amounts through unchanged (factor 1) when the quote is already in the base currency', async () => {
+    const quote = makeQuote({ currencyId: 'ars', currency: { id: 'ars', code: 'ARS', isBase: true } });
+    const { service, invoicingService } = makeServices(quote);
+    const exchangeRateHistoryFindFirst = jest.fn();
+    const db = {
+      ...makeBranchDb(),
+      invoice: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
+      currency: { findFirst: jest.fn().mockResolvedValue({ id: 'ars', code: 'ARS', isBase: true }) },
+      exchangeRateHistory: { findFirst: exchangeRateHistoryFindFirst },
+    };
+
+    await runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto));
+
+    expect(exchangeRateHistoryFindFirst).not.toHaveBeenCalled();
+    const createInvoiceArgs = (invoicingService.createInvoice as jest.Mock).mock.calls[0][0];
+    expect(createInvoiceArgs.exchangeRate).toBe(1);
+    expect(createInvoiceArgs.lines).toEqual([{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 100 }]);
+  });
+
+  it('rejects when the quote currency has no exchange rate loaded yet', async () => {
+    const quote = makeQuote();
+    const { service } = makeServices(quote);
+    const db = {
+      ...makeBranchDb(),
+      invoice: { findFirst: jest.fn().mockResolvedValue(null) },
+      currency: { findFirst: jest.fn().mockResolvedValue({ id: 'ars', code: 'ARS', isBase: true }) },
+      exchangeRateHistory: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+
+    await expect(
+      runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto)),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a quote that is not ACCEPTED', async () => {
+    const quote = makeQuote({ status: 'SENT' });
+    const { service } = makeServices(quote);
+
+    await expect(
+      runInTenant(makeBranchDb(), () => service.createInvoiceFromQuote('quote-1', convertDto)),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a quote that was already converted to an invoice', async () => {
+    const quote = makeQuote();
+    const { service } = makeServices(quote);
+    const db = {
+      ...makeBranchDb(),
+      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'invoice-existing', number: 'B-0001' }) },
+    };
+
+    await expect(
+      runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto)),
     ).rejects.toThrow(BadRequestException);
   });
 });

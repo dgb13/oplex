@@ -11,6 +11,8 @@ import type { SalesService } from '../sales/sales.service.js';
 // implementación real, y su árbol de imports arrastra @react-pdf/renderer
 // (ESM-only) vía @plexo/invoicing.
 jest.mock('@plexo/invoicing', () => ({}));
+// Same reasoning, now also for @plexo/quotes (SalesService.createInvoiceFromQuote).
+jest.mock('@plexo/quotes', () => ({}));
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);

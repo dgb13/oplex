@@ -1526,6 +1526,12 @@ model Invoice {
   status                InvoiceStatus  @default(DRAFT)
   issueDate             DateTime       @default(now())
   dueDate               DateTime?
+  // Seteado sólo cuando esta factura nace de "Convertir a factura" sobre una
+  // Cotización (ver SalesService.createInvoiceFromQuote) - null para el
+  // resto (la mayoría, facturación directa). @@unique de abajo asegura que
+  // una Cotización nunca termine con más de una Factura vinculada.
+  quoteId               String?
+  quote                 Quote?         @relation(fields: [quoteId], references: [id])
   currencyId            String
   currency              Currency       @relation(fields: [currencyId], references: [id])
   // USD -> currency, locked at issuance - never recompute retroactively.
@@ -1561,6 +1567,7 @@ model Invoice {
 
   @@unique([tenantId, documentLetter, pointOfSale, number])
   @@unique([tenantId, id])
+  @@unique([tenantId, quoteId])
   @@index([tenantId, customerId])
   @@map("invoices")
 }
@@ -1731,7 +1738,10 @@ model Quote {
   createdBy       User     @relation(fields: [createdByUserId], references: [id])
   createdAt       DateTime @default(now())
 
-  lines QuoteLine[]
+  lines    QuoteLine[]
+  // A lo sumo una (ver Invoice.quoteId @@unique) - "Convertir a factura"
+  // desde el panel de detalle, ver SalesService.createInvoiceFromQuote.
+  invoices Invoice[]
 
   @@unique([tenantId, number])
   @@index([tenantId])

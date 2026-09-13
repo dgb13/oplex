@@ -12,6 +12,8 @@ import { MercadoPagoWebhookService, type MercadoPagoWebhookInput } from './merca
 // can't parse through the dist symlink) - only SalesService's TYPES are
 // needed here, never a real InvoicingService instance.
 jest.mock('@plexo/invoicing', () => ({}));
+// Same reasoning, now also for @plexo/quotes (SalesService.createInvoiceFromQuote).
+jest.mock('@plexo/quotes', () => ({}));
 
 const SECRET = 'test-webhook-secret';
 

@@ -6,6 +6,8 @@ import { MercadoPagoWebhookController } from './mercadopago-webhook.controller.j
 // pulls in @react-pdf/renderer (ESM the Jest/swc pipeline can't parse
 // through the dist symlink).
 jest.mock('@plexo/invoicing', () => ({}));
+// Same reasoning, now also for @plexo/quotes (SalesService.createInvoiceFromQuote).
+jest.mock('@plexo/quotes', () => ({}));
 
 function makeService(): jest.Mocked<MercadoPagoWebhookService> {
   return { handleNotification: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<MercadoPagoWebhookService>;

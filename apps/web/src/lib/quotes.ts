@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { DocumentLetter } from '@/lib/documentLetter';
 
 export type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
 export type QuoteSendChannel = 'EMAIL' | 'WHATSAPP';
@@ -81,6 +82,18 @@ export interface QuoteDetail {
   currency: { id: string; code: string; name: string };
   lines: QuoteLineDetail[];
   createdBy: { id: string; name: string | null; email: string };
+  // A lo sumo una (una Cotización se factura una sola vez) - ver
+  // "Convertir a factura" en QuoteDetailPanel.tsx.
+  invoices: { id: string; number: string }[];
+}
+
+export interface ConvertQuoteToInvoiceInput {
+  warehouseId: string;
+  documentLetter: DocumentLetter;
+  branchId: string;
+  dueDate?: string;
+  pricesIncludeTax?: boolean;
+  globalDiscountPercent?: number;
 }
 
 export interface CreateQuoteInput {
@@ -161,4 +174,9 @@ export const quotesApi = {
   markSentWhatsapp: (id: string) =>
     api.post<QuoteDetail>(`/quotes/${id}/mark-sent-whatsapp`).then((r) => r.data),
   openPdf: (id: string, style?: PdfStyle) => openPdf(id, style),
+  // Duplicado a propósito, no un import de @/lib/invoicing - mismo criterio
+  // que PdfStyle arriba: ningún archivo lib de un dominio importa los
+  // internals de otro.
+  convertToInvoice: (id: string, dto: ConvertQuoteToInvoiceInput) =>
+    api.post<{ id: string; number: string }>(`/sales/invoices/from-quote/${id}`, dto).then((r) => r.data),
 };
