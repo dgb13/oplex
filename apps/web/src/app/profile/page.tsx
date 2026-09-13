@@ -1,5 +1,9 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { activityLogApi } from '@/lib/activityLog';
 import { initials, profileApi, type UserProfile } from '@/lib/profile';
 import { disconnectSocket } from '@/lib/socket';
@@ -28,9 +32,9 @@ export default function ProfilePage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Mi perfil</h1>
+      <h1 className="text-xl font-semibold">Mi perfil</h1>
       {isLoading || !profile ? (
-        <div className="text-slate-500">Cargando...</div>
+        <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
         <>
           <AccountCard
@@ -66,23 +70,27 @@ function ActivityCard() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Últimas acciones</h2>
-      {isLoading || !entries ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
-      ) : entries.length === 0 ? (
-        <p className="text-sm text-slate-500">Todavía no hay actividad registrada.</p>
-      ) : (
-        <ul className="flex flex-col gap-2 text-sm">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center justify-between gap-4">
-              <span className="text-slate-700 dark:text-slate-300">{entry.action}</span>
-              <span className="whitespace-nowrap text-xs text-slate-500">{formatRelative(entry.occurredAt)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Últimas acciones</h2>
+        {isLoading || !entries ? (
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        ) : entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay actividad registrada.</p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {entries.map((entry) => (
+              <li key={entry.id} className="flex items-center justify-between gap-4">
+                <span>{entry.action}</span>
+                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  {formatRelative(entry.occurredAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -107,76 +115,58 @@ function AccountCard({ profile, onSaved }: { profile: UserProfile; onSaved: () =
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Datos de la cuenta</h2>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Datos de la cuenta</h2>
 
-      <div className="mb-6 flex items-center gap-4">
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt=""
-            className="h-16 w-16 rounded-full border border-slate-300 dark:border-slate-700 object-cover"
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600 text-lg font-semibold text-white">
-            {initials(profile.name, profile.email)}
-          </div>
-        )}
-        <div>
-          <p className="text-slate-800 dark:text-slate-200">{profile.name || profile.email}</p>
-          <p className="text-xs text-slate-500">{profile.email}</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label="Nombre">
-          <input
-            className={inputClass}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Tu nombre"
-          />
-        </Field>
-        <Field label="URL de avatar">
-          <input
-            className={inputClass}
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="https://..."
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input
-            type="checkbox"
-            checked={showOnlinePresence}
-            onChange={(e) => setShowOnlinePresence(e.target.checked)}
-          />
-          Mostrar mi estado en línea a mis compañeros
-        </label>
-
-        <div className="grid grid-cols-2 gap-4 border-t border-slate-200 dark:border-slate-800 pt-4 text-xs sm:grid-cols-3">
+        <div className="mb-6 flex items-center gap-4">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="h-16 w-16 rounded-full border object-cover" />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
+              {initials(profile.name, profile.email)}
+            </div>
+          )}
           <div>
-            <p className="text-slate-400 dark:text-slate-600">Rol</p>
-            <p className="text-slate-700 dark:text-slate-300">{ROLE_LABELS[profile.role] ?? profile.role}</p>
-          </div>
-          <div>
-            <p className="text-slate-400 dark:text-slate-600">Miembro desde</p>
-            <p className="text-slate-700 dark:text-slate-300">
-              {new Date(profile.createdAt).toLocaleDateString('es-AR')}
-            </p>
+            <p>{profile.name || profile.email}</p>
+            <p className="text-xs text-muted-foreground">{profile.email}</p>
           </div>
         </div>
 
-        {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
-        </button>
-      </form>
-    </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field label="Nombre">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" />
+          </Field>
+          <Field label="URL de avatar">
+            <Input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." />
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showOnlinePresence}
+              onChange={(e) => setShowOnlinePresence(e.target.checked)}
+            />
+            Mostrar mi estado en línea a mis compañeros
+          </label>
+
+          <div className="grid grid-cols-2 gap-4 border-t pt-4 text-xs sm:grid-cols-3">
+            <div>
+              <p className="text-muted-foreground">Rol</p>
+              <p>{ROLE_LABELS[profile.role] ?? profile.role}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Miembro desde</p>
+              <p>{new Date(profile.createdAt).toLocaleDateString('es-AR')}</p>
+            </div>
+          </div>
+
+          {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
+          <Button type="submit" className="self-start" disabled={mutation.isPending}>
+            {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -225,49 +215,44 @@ function PasswordCard() {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-4 text-sm font-medium text-slate-600 dark:text-slate-400">Cambiar contraseña</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label="Contraseña actual">
-          <input
-            type="password"
-            className={inputClass}
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-          />
-        </Field>
-        <Field label="Contraseña nueva">
-          <input
-            type="password"
-            className={inputClass}
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-          />
-        </Field>
-        <Field label="Confirmar contraseña nueva">
-          <input
-            type="password"
-            className={inputClass}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
-          />
-        </Field>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {success && <p className="text-sm text-green-600 dark:text-green-400">{success}</p>}
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Actualizando...' : 'Cambiar contraseña'}
-        </button>
-      </form>
-    </div>
+    <Card>
+      <CardContent>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Cambiar contraseña</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field label="Contraseña actual">
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Contraseña nueva">
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+          </Field>
+          <Field label="Confirmar contraseña nueva">
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+          </Field>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {success && <p className="text-sm text-emerald-600 dark:text-emerald-400">{success}</p>}
+          <Button type="submit" className="self-start" disabled={mutation.isPending}>
+            {mutation.isPending ? 'Actualizando...' : 'Cambiar contraseña'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -323,94 +308,93 @@ function WhatsAppLinkCard() {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 p-6">
-      <h2 className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-400">WhatsApp</h2>
-      <p className="mb-4 text-xs text-slate-500">
-        Vinculá tu número para consultarle al asistente de IA por WhatsApp.
-      </p>
+    <Card>
+      <CardContent>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">WhatsApp</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Vinculá tu número para consultarle al asistente de IA por WhatsApp.
+        </p>
 
-      {isLoading || !status ? (
-        <p className="text-sm text-slate-500">Cargando...</p>
-      ) : status.linked ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-            Vinculado
-          </span>
-          <span className="text-sm text-slate-700 dark:text-slate-300">{status.phoneE164}</span>
-          <button
-            type="button"
-            onClick={() => unlinkMutation.mutate()}
-            disabled={unlinkMutation.isPending}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            {unlinkMutation.isPending ? 'Desvinculando...' : 'Desvincular'}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-            <Field label="Número de WhatsApp">
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+54 9 11 1234-5678"
-                className={`${inputClass} w-52`}
-                required
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Formato internacional completo, con código de país. Si es un celular argentino, incluí el "9" después
-                del 54 (ej: +54 9 11 1234-5678) - sin eso el asistente no va a poder responderte por WhatsApp.
-              </p>
-            </Field>
-            <button
-              type="submit"
-              disabled={!phone.trim() || requestMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {requestMutation.isPending ? 'Generando...' : generated || status.pending ? 'Generar otro código' : 'Generar código'}
-            </button>
-          </form>
+        {isLoading || !status ? (
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        ) : status.linked ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+              Vinculado
+            </Badge>
+            <span className="text-sm">{status.phoneE164}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => unlinkMutation.mutate()} disabled={unlinkMutation.isPending}>
+              {unlinkMutation.isPending ? 'Desvinculando...' : 'Desvincular'}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+              <Field label="Número de WhatsApp">
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+54 9 11 1234-5678"
+                  className="w-52"
+                  required
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Formato internacional completo, con código de país. Si es un celular argentino, incluí el "9"
+                  después del 54 (ej: +54 9 11 1234-5678) - sin eso el asistente no va a poder responderte por
+                  WhatsApp.
+                </p>
+              </Field>
+              <Button type="submit" disabled={!phone.trim() || requestMutation.isPending}>
+                {requestMutation.isPending
+                  ? 'Generando...'
+                  : generated || status.pending
+                    ? 'Generar otro código'
+                    : 'Generar código'}
+              </Button>
+            </form>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
-          {generated ? (
-            <div className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950 p-4 text-sm">
-              <p className="text-slate-700 dark:text-slate-300">
-                Desde <span className="font-mono">{generated.phoneE164}</span>, mandale este código por WhatsApp{' '}
-                {generated.businessPhoneDisplay ? (
-                  <>
-                    al número de Oplex <span className="font-semibold font-mono">{generated.businessPhoneDisplay}</span>
-                  </>
-                ) : (
-                  <span className="font-semibold">al número de Oplex</span>
-                )}
-                :
-              </p>
-              <p className="mt-2 font-mono text-2xl font-bold tracking-widest text-indigo-700 dark:text-indigo-400">{generated.code}</p>
-              <p className="mt-2 text-xs text-slate-500">Vence a las {new Date(generated.expiresAt).toLocaleTimeString('es-AR')}.</p>
-            </div>
-          ) : (
-            status.pending && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Ya generaste un código para {status.pending.phoneE164}, vence a las{' '}
-                {new Date(status.pending.expiresAt).toLocaleTimeString('es-AR')}. Generá uno nuevo si no llegás a mandarlo a tiempo.
-              </p>
-            )
-          )}
-        </div>
-      )}
-    </div>
+            {generated ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+                <p>
+                  Desde <span className="font-mono">{generated.phoneE164}</span>, mandale este código por WhatsApp{' '}
+                  {generated.businessPhoneDisplay ? (
+                    <>
+                      al número de Oplex{' '}
+                      <span className="font-semibold font-mono">{generated.businessPhoneDisplay}</span>
+                    </>
+                  ) : (
+                    <span className="font-semibold">al número de Oplex</span>
+                  )}
+                  :
+                </p>
+                <p className="mt-2 font-mono text-2xl font-bold tracking-widest text-primary">{generated.code}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Vence a las {new Date(generated.expiresAt).toLocaleTimeString('es-AR')}.
+                </p>
+              </div>
+            ) : (
+              status.pending && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Ya generaste un código para {status.pending.phoneE164}, vence a las{' '}
+                  {new Date(status.pending.expiresAt).toLocaleTimeString('es-AR')}. Generá uno nuevo si no llegás a
+                  mandarlo a tiempo.
+                </p>
+              )
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
-
-const inputClass =
-  'rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );
