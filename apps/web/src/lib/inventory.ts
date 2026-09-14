@@ -240,6 +240,8 @@ export const inventoryApi = {
   listArticles: (filters?: ListArticlesFilters) =>
     api.get<Article[]>('/inventory/articles', { params: filters }).then((r) => r.data),
   listWarehouses: () => api.get<Warehouse[]>('/inventory/warehouses').then((r) => r.data),
+  createWarehouse: (dto: { name: string; location?: string }) =>
+    api.post<Warehouse>('/inventory/warehouses', dto).then((r) => r.data),
   listReorderSuggestions: () =>
     api.get<ReorderSuggestion[]>('/inventory/reorder-suggestions').then((r) => r.data),
   setMinimumStock: (dto: SetMinimumStockInput) => api.post('/inventory/minimum-stock', dto).then((r) => r.data),

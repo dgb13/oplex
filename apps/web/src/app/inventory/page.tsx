@@ -17,6 +17,7 @@ import ArticleSupplierModal from './ArticleSupplierModal';
 import ImportArticlesModal from './ImportArticlesModal';
 import StockAlertsPanel from './StockAlertsPanel';
 import StockMovementModal from './StockMovementModal';
+import WarehouseFormModal from './WarehouseFormModal';
 
 interface VariantRow {
   articleId: string;
@@ -137,6 +138,7 @@ export default function InventoryPage() {
     markupPercent: number | null;
   } | null>(null);
   const [creatingArticle, setCreatingArticle] = useState(false);
+  const [creatingWarehouse, setCreatingWarehouse] = useState(false);
   // Sólo el id, no una copia de los campos - ArticleDetailsModal sube
   // archivos/edita la descripción del mismo artículo mientras está abierto,
   // así que sus datos se recalculan de `rows` (ver detailsRow) en cada
@@ -225,6 +227,9 @@ export default function InventoryPage() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setImportModalOpen(true)}>
             Importar desde Excel
+          </Button>
+          <Button variant="outline" onClick={() => setCreatingWarehouse(true)}>
+            + Nuevo depósito
           </Button>
           <Button variant="outline" onClick={() => setCreatingArticle(true)}>
             + Nuevo artículo
@@ -485,6 +490,8 @@ export default function InventoryPage() {
       )}
 
       {creatingArticle && <ArticleFormModal onClose={() => setCreatingArticle(false)} />}
+
+      {creatingWarehouse && <WarehouseFormModal onClose={() => setCreatingWarehouse(false)} />}
 
       {detailsRow && (
         <ArticleDetailsModal

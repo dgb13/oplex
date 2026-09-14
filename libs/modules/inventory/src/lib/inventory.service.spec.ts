@@ -14,6 +14,22 @@ function makeEventEmitter(): EventEmitter2 {
   return { emit: jest.fn() } as unknown as EventEmitter2;
 }
 
+describe('InventoryService.createWarehouse', () => {
+  it('scopes the new warehouse to the current tenant', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'wh-1', name: 'Depósito central', location: null });
+    const service = new InventoryService(makeEventEmitter());
+
+    const result = await runInTenant({ warehouse: { create } }, () =>
+      service.createWarehouse({ name: 'Depósito central' }),
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      data: { tenantId: 'tenant-1', name: 'Depósito central', location: undefined },
+    });
+    expect(result).toEqual({ id: 'wh-1', name: 'Depósito central', location: null });
+  });
+});
+
 describe('InventoryService.recordMovement', () => {
   it('decrements the ledger and records the movement for a SALE_OUT with enough stock', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
