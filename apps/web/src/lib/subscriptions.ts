@@ -14,6 +14,10 @@ export interface Plan {
   debitDiscountPercent: string;
   isActive: boolean;
   aiInvoiceScanMonthlyQuota: number | null;
+  aiAssistantMonthlyQueryQuota: number | null;
+  // Módulo de Producción - on/off puro, sin cupo mensual. Ver
+  // SubscriptionService.assertCanUseProduction() en el backend.
+  productionModuleEnabled: boolean;
 }
 
 export interface TenantSubscription {

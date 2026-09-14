@@ -27,6 +27,7 @@ const EMPTY_FORM: CreatePlanInput = {
   debitDiscountPercent: 0,
   isActive: true,
   slaMarkdown: '',
+  productionModuleEnabled: false,
 };
 
 export default function AdminPlansPage() {
@@ -97,6 +98,7 @@ export default function AdminPlansPage() {
                   <th className="p-3 text-right">Cupo Asistente/mes</th>
                   <th className="p-3 text-right">Desc. débito</th>
                   <th className="p-3">Activo</th>
+                  <th className="p-3">Producción</th>
                   <th className="p-3">SLA</th>
                   <th className="p-3">Acciones</th>
                 </tr>
@@ -107,7 +109,7 @@ export default function AdminPlansPage() {
                   .map((plan) =>
                     editingId === plan.id ? (
                       <tr key={plan.id} className="border-b border-slate-800/50">
-                        <td colSpan={12} className="p-3">
+                        <td colSpan={13} className="p-3">
                           <PlanForm
                             initial={plan}
                             saving={updateMutation.isPending}
@@ -149,6 +151,17 @@ export default function AdminPlansPage() {
                             }`}
                           >
                             {plan.isActive ? 'Sí' : 'No'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`rounded px-2 py-0.5 text-xs font-medium ${
+                              plan.productionModuleEnabled
+                                ? 'bg-green-900/50 text-green-300'
+                                : 'bg-slate-800 text-slate-500'
+                            }`}
+                          >
+                            {plan.productionModuleEnabled ? 'Sí' : 'No'}
                           </span>
                         </td>
                         <td className="p-3">
@@ -213,6 +226,7 @@ function PlanForm({
     maxMonthlyInvoices: initial.maxMonthlyInvoices,
     debitDiscountPercent: Number(initial.debitDiscountPercent ?? 0),
     isActive: initial.isActive ?? true,
+    productionModuleEnabled: initial.productionModuleEnabled ?? false,
     slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
     // Texto, no número: "" representa null (función no incluida en este
     // plan) - un <input type="number"> no distingue "vacío" de "0" con la
@@ -293,6 +307,16 @@ function PlanForm({
             <option value="0">No</option>
           </select>
         </Field>
+        <Field label="Módulo de Producción">
+          <select
+            value={form.productionModuleEnabled ? '1' : '0'}
+            onChange={(e) => setForm({ ...form, productionModuleEnabled: e.target.value === '1' })}
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+          >
+            <option value="1">Incluido</option>
+            <option value="0">No incluido</option>
+          </select>
+        </Field>
       </div>
 
       <div className="mt-4">
@@ -353,6 +377,7 @@ function PlanForm({
                     maxMonthlyInvoices: form.maxMonthlyInvoices,
                     debitDiscountPercent: form.debitDiscountPercent,
                     isActive: form.isActive,
+                    productionModuleEnabled: form.productionModuleEnabled,
                     slaMarkdown: form.slaMarkdown,
                     aiInvoiceScanMonthlyQuota,
                     aiAssistantMonthlyQueryQuota,

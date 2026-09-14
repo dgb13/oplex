@@ -276,6 +276,38 @@ describe('SubscriptionService quota checks', () => {
 
     expect(result).toEqual({ planName: 'Gold', quota: 300, used: 77 });
   });
+
+  it('assertCanUseProduction rejects when the plan does not include the module (on/off, no quota to count)', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Basic', productionModuleEnabled: false }) }));
+    const db = { tenantSubscription: { findUniqueOrThrow } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseProduction())).rejects.toThrow(
+      /no incluye el módulo de Producción/,
+    );
+  });
+
+  it('assertCanUseProduction allows when the plan includes the module', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ name: 'Bronze', productionModuleEnabled: true }) }));
+    const db = { tenantSubscription: { findUniqueOrThrow } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseProduction())).resolves.toBeUndefined();
+  });
+
+  it('assertCanUseProduction still gates on an expired subscription, even on a plan that includes the module', async () => {
+    const findUniqueOrThrow = jest.fn().mockResolvedValue(
+      makeActiveSubscription({ status: 'EXPIRED', plan: makePlan({ productionModuleEnabled: true }) }),
+    );
+    const db = { tenantSubscription: { findUniqueOrThrow } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseProduction())).rejects.toThrow(ForbiddenException);
+  });
 });
 
 describe('SubscriptionService plan catalog (global, no tenant context)', () => {
@@ -328,6 +360,37 @@ describe('SubscriptionService plan catalog (global, no tenant context)', () => {
     expect(data.priceMonthly).toBeInstanceOf(Prisma.Decimal);
     expect(data.priceMonthly.toNumber()).toBe(500);
     expect(data.debitDiscountPercent.toNumber()).toBe(10);
+  });
+
+  it('createPlan defaults productionModuleEnabled to false when omitted', async () => {
+    const create = jest.fn().mockResolvedValue(makePlan());
+    const prisma = {
+      plan: { findUnique: jest.fn().mockResolvedValue(null), create },
+    } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await service.createPlan({
+      key: 'NEW',
+      name: 'Nuevo',
+      priceMonthly: 500,
+      maxUsers: 2,
+      maxClients: 2,
+      maxMonthlyInvoices: 2,
+    });
+
+    expect(create.mock.calls[0][0].data.productionModuleEnabled).toBe(false);
+  });
+
+  it('updatePlan persists productionModuleEnabled when the SuperAdmin toggles it', async () => {
+    const update = jest.fn().mockResolvedValue(makePlan());
+    const prisma = {
+      plan: { findUnique: jest.fn().mockResolvedValue(makePlan()), update },
+    } as unknown as PrismaService;
+    const service = new SubscriptionService(prisma);
+
+    await service.updatePlan('plan-1', { productionModuleEnabled: true });
+
+    expect(update.mock.calls[0][0].data.productionModuleEnabled).toBe(true);
   });
 
   it('updatePlan throws NotFoundException for an unknown id', async () => {

@@ -172,6 +172,21 @@ export class SubscriptionService {
     }
   }
 
+  /** Módulo de Producción (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md,
+   * Fase 1) - a diferencia de assertCanUseAiInvoiceScan/assertCanUseAssistant
+   * de arriba, on/off puro sin cupo mensual que contar (decisión con el
+   * usuario, 2026-09-14): no hay "usado este mes", sólo "el plan lo
+   * incluye o no". El chequeo de sólo-lectura de "cantidad producible"
+   * (Fase 4.6) queda abierto en cualquier plan a propósito - este assert es
+   * sólo para endpoints de escritura (crear/confirmar/cancelar orden,
+   * crear/editar BOM), nunca se llama desde el de sólo lectura. */
+  async assertCanUseProduction(): Promise<void> {
+    const { plan } = await this.assertSubscriptionActive();
+    if (!plan.productionModuleEnabled) {
+      throw new ForbiddenException(`Tu plan actual (${plan.name}) no incluye el módulo de Producción`);
+    }
+  }
+
   /** Usado por AiInvoiceScanService.getAvailability() (apps/api) para
    * mostrarle al usuario cuánto cupo mensual lleva usado, no sólo si
    * todavía puede o no - a diferencia de assertCanUseAiInvoiceScan() de
@@ -273,6 +288,7 @@ export class SubscriptionService {
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
+        productionModuleEnabled: dto.productionModuleEnabled ?? false,
       },
     });
   }
@@ -301,6 +317,7 @@ export class SubscriptionService {
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
+        productionModuleEnabled: dto.productionModuleEnabled,
       },
     });
   }

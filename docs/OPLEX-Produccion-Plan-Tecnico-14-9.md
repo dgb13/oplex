@@ -73,7 +73,7 @@ variantes). Mejora el sistema aunque nunca se construya producción.
 
 ---
 
-## Fase 1 — Gating por plan (BRONZE+, configurable por SuperAdmin)
+## Fase 1 — Gating por plan (BRONZE+, configurable por SuperAdmin) ✅ IMPLEMENTADA (2026-09-14)
 
 No estaba en el diseño original — lo pediste ahora. Investigué cómo OPLEX ya gatea
 funciones por plan (`Plan.aiInvoiceScanMonthlyQuota` / `Plan.aiAssistantMonthlyQueryQuota`,
@@ -125,6 +125,23 @@ confirmar una orden real exige BRONZE+.
 
 **Riesgo**: bajo. Es infraestructura nueva pero acotada (1 campo de Plan, 1 assert, 1
 condicional en el sidebar) y no depende de ninguna entidad de producción todavía.
+
+**Implementado y verificado en vivo (2026-09-14)**: migración `20260930050000_plans_production_module`
+(`ALTER TABLE plans ADD COLUMN "productionModuleEnabled" BOOLEAN NOT NULL DEFAULT false`
++ backfill `sortOrder >= 2`), `Plan.productionModuleEnabled` en el schema,
+`SubscriptionService.assertCanUseProduction()` (mismo shape que
+`assertCanUseAssistant`, 6 tests nuevos), `CreatePlanDto`/`UpdatePlanDto` +
+`createPlan`/`updatePlan` actualizados, y el toggle "Módulo de Producción" en
+`/admin/plans` (mismo patrón que "Activo"). **No** se agregó el nav "Producción" al
+sidebar todavía (`AppShell.tsx`) - no hay ninguna pantalla real a la que apuntar hasta
+la Fase 6, se deja para entonces en vez de dejar un link roto.
+
+Verificado contra Postgres real, no sólo tests: backfill confirmado por query directa
+(BASIC=false, BRONZE..DIAMOND=true), y el toggle probado de punta a punta desde
+`/admin/plans` (apagado y reencendido en BRONZE, persistido correctamente). `nx
+run-many -t test,build,lint --projects=subscriptions,api,web` 100% verde (34 tests de
+`subscriptions`, 302 de `api`, build de `web` completo con las 48 rutas incluyendo
+`/admin/plans`).
 
 ---
 

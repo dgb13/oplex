@@ -331,6 +331,12 @@ model Plan {
   // Cuenta AssistantMessage con role USER del tenant en el mes, ver
   // SubscriptionService.assertCanUseAssistant().
   aiAssistantMonthlyQueryQuota Int?
+  // Módulo de Producción (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md,
+  // Fase 1) - a diferencia de los cupos de arriba, on/off puro sin límite
+  // de uso (decisión con el usuario, 2026-09-14): un plan lo incluye o no,
+  // sin tope mensual. Backfill: true desde BRONZE (sortOrder >= 2) en
+  // adelante, false en BASIC - ver SubscriptionService.assertCanUseProduction().
+  productionModuleEnabled Boolean @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

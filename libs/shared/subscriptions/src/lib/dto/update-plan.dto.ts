@@ -61,4 +61,10 @@ export class UpdatePlanDto {
   @IsInt()
   @Min(0)
   aiAssistantMonthlyQueryQuota?: number | null;
+
+  // Módulo de Producción - on/off puro, sin cupo. Ver
+  // SubscriptionService.assertCanUseProduction().
+  @IsOptional()
+  @IsBoolean()
+  productionModuleEnabled?: boolean;
 }

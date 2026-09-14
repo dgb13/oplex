@@ -170,6 +170,8 @@ export interface AdminPlan {
   slaUpdatedAt: string | null;
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
+  // Módulo de Producción - on/off puro, sin cupo mensual.
+  productionModuleEnabled: boolean;
 }
 
 export interface CreatePlanInput {
@@ -187,6 +189,8 @@ export interface CreatePlanInput {
   aiInvoiceScanMonthlyQuota?: number | null;
   // null = sacar al plan del Asistente de IA conversacional (no incluido).
   aiAssistantMonthlyQueryQuota?: number | null;
+  // Módulo de Producción - on/off puro, sin cupo mensual.
+  productionModuleEnabled?: boolean;
 }
 
 export type UpdatePlanInput = Partial<Omit<CreatePlanInput, 'key'>>;
