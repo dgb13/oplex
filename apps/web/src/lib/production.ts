@@ -29,13 +29,19 @@ export interface BomByproduct {
   costSharePercent: string | null;
 }
 
-export interface Bom {
+export interface BomSummary {
   id: string;
   outputArticleVariantId: string;
   name: string;
   version: number;
   isActive: boolean;
   createdAt: string;
+}
+
+// BomService.listVersions (a diferencia de create/getActiveBomOrThrow) NO
+// trae lines/byproducts - es sólo el historial de versiones, ver el
+// service. Tipado aparte para no prometer campos que no llegan.
+export interface Bom extends BomSummary {
   lines: BomLine[];
   byproducts: BomByproduct[];
 }
@@ -140,7 +146,7 @@ export interface StockPiece {
 export const productionApi = {
   getBom: (articleVariantId: string) => api.get<Bom>(`/production/bom/${articleVariantId}`).then((r) => r.data),
   listBomVersions: (articleVariantId: string) =>
-    api.get<Bom[]>(`/production/bom/${articleVariantId}/versions`).then((r) => r.data),
+    api.get<BomSummary[]>(`/production/bom/${articleVariantId}/versions`).then((r) => r.data),
   createBom: (dto: CreateBomInput) => api.post<Bom>('/production/bom', dto).then((r) => r.data),
   computeProducible: (articleVariantId: string, warehouseId: string) =>
     api

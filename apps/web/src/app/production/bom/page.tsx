@@ -1,14 +1,28 @@
 'use client';
 
-import ArticlePicker from '@/components/ArticlePicker';
+import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
+import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
 import { productionApi, type CreateBomLineInput } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ChefHat,
+  Hash,
+  Layers,
+  Package,
+  Percent,
+  Plus,
+  Ruler,
+  Save,
+  Scissors,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ProductionPlanGateBanner, useProductionGate } from '../ProductionPlanGate';
 
@@ -25,10 +39,43 @@ function emptyLine(): LineDraft {
   return { inputArticleVariantId: '', quantity: '', length: '', width: '', cutsCount: '', expectedWastePercent: '' };
 }
 
+function ThumbOrIcon({ imageUrl, icon: Icon }: { imageUrl?: string | null; icon: typeof Package }) {
+  const src = imageUrl ? resolveUploadUrl(imageUrl) : null;
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Icon className="h-5 w-5" />}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  icon: typeof Hash;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-0.5 ${className ?? ''}`}>
+      <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <Icon className="h-3 w-3" /> {label}
+      </label>
+      <Input type="number" value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
 export default function BomPage() {
   const gate = useProductionGate();
   const queryClient = useQueryClient();
   const [outputArticleVariantId, setOutputArticleVariantId] = useState('');
+  const [outputOption, setOutputOption] = useState<ArticlePickerOption | null>(null);
   const [name, setName] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [error, setError] = useState('');
@@ -113,115 +160,149 @@ export default function BomPage() {
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   }
 
+  // Limpia el error apenas el usuario corrige lo que lo disparó, en vez de
+  // dejarlo pegado en pantalla hasta el próximo submit (confundía durante
+  // las pruebas manuales).
+  useEffect(() => {
+    if (!error) return;
+    if (name.trim() && lines.some((l) => l.inputArticleVariantId && l.quantity)) {
+      setError('');
+    }
+  }, [name, lines, error]);
+
   if (gate.isLoading) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Recetas de producción</h1>
+      <div className="flex items-center gap-2">
+        <ChefHat className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-semibold">Recetas de producción</h1>
+      </div>
 
       {!gate.enabled ? (
         <ProductionPlanGateBanner planName={gate.planName} />
       ) : (
         <>
-          <Card className="max-w-md">
-            <CardContent>
-              <label className="text-sm text-muted-foreground">Producto</label>
-              <ArticlePicker
-                value={outputArticleVariantId}
-                onChange={(id) => setOutputArticleVariantId(id)}
-                placeholder="Buscar producto..."
-                className="mt-1"
-              />
+          <Card className="max-w-lg">
+            <CardContent className="flex items-center gap-3">
+              <ThumbOrIcon imageUrl={outputOption?.imageUrl} icon={Package} />
+              <div className="flex-1">
+                <label className="text-sm text-muted-foreground">Producto a fabricar</label>
+                <ArticlePicker
+                  value={outputArticleVariantId}
+                  onChange={(id, option) => {
+                    setOutputArticleVariantId(id);
+                    setOutputOption(option);
+                  }}
+                  placeholder="Buscar producto..."
+                  className="mt-1"
+                />
+              </div>
             </CardContent>
           </Card>
 
           {outputArticleVariantId && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {bomQuery.data ? `Receta activa - versión ${bomQuery.data.version}` : 'Nueva receta'}
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  {bomQuery.data ? (
+                    <>
+                      <Layers className="h-4 w-4" /> Receta activa
+                      <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300">
+                        v{bomQuery.data.version}
+                      </Badge>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Nueva receta
+                    </>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm text-muted-foreground">Nombre de la receta</label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="p. ej. Tablero eléctrico armado" />
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="p. ej. Tablero eléctrico armado"
+                    />
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      Insumos (largo/ancho/cortes sólo hacen falta para artículos por metro o por pieza)
+                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Package className="h-3.5 w-3.5" /> Insumos
+                      <span className="text-xs">(largo/ancho/cortes sólo hacen falta para artículos por metro o por pieza)</span>
                     </p>
                     {lines.map((line, i) => {
                       const article = lookup[line.inputArticleVariantId];
+                      const isPiece = line.length !== '' || line.width !== '' || line.cutsCount !== '';
                       return (
-                        <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border p-2">
-                          <ArticlePicker
-                            value={line.inputArticleVariantId}
-                            onChange={(id) => updateLine(i, { inputArticleVariantId: id })}
-                            placeholder="Insumo..."
-                            className="min-w-[220px] flex-1"
+                        <div
+                          key={i}
+                          className="flex flex-wrap items-start gap-3 rounded-xl border bg-muted/20 p-3 transition hover:bg-muted/40"
+                        >
+                          <ThumbOrIcon imageUrl={undefined} icon={isPiece ? Ruler : Package} />
+                          <div className="min-w-[220px] flex-1">
+                            <ArticlePicker
+                              value={line.inputArticleVariantId}
+                              onChange={(id) => updateLine(i, { inputArticleVariantId: id })}
+                              placeholder="Insumo..."
+                            />
+                            {article && line.inputArticleVariantId && (
+                              <p className="mt-1 text-[11px] text-muted-foreground">SKU {article.sku}</p>
+                            )}
+                          </div>
+
+                          <NumberField
+                            label="Cantidad"
+                            icon={Hash}
+                            value={line.quantity}
+                            onChange={(v) => updateLine(i, { quantity: v })}
+                            className="w-20"
                           />
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[10px] text-muted-foreground">Cantidad</label>
-                            <Input
-                              type="number"
-                              className="w-20"
-                              value={line.quantity}
-                              onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[10px] text-muted-foreground">Largo (mm)</label>
-                            <Input
-                              type="number"
-                              className="w-20"
-                              value={line.length}
-                              onChange={(e) => updateLine(i, { length: e.target.value })}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[10px] text-muted-foreground">Ancho (mm)</label>
-                            <Input
-                              type="number"
-                              className="w-20"
-                              value={line.width}
-                              onChange={(e) => updateLine(i, { width: e.target.value })}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[10px] text-muted-foreground">Cortes</label>
-                            <Input
-                              type="number"
-                              className="w-16"
-                              value={line.cutsCount}
-                              onChange={(e) => updateLine(i, { cutsCount: e.target.value })}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <label className="text-[10px] text-muted-foreground">Merma %</label>
-                            <Input
-                              type="number"
-                              className="w-16"
-                              value={line.expectedWastePercent}
-                              onChange={(e) => updateLine(i, { expectedWastePercent: e.target.value })}
-                            />
-                          </div>
+                          <NumberField
+                            label="Largo (mm)"
+                            icon={Ruler}
+                            value={line.length}
+                            onChange={(v) => updateLine(i, { length: v })}
+                            className="w-20"
+                          />
+                          <NumberField
+                            label="Ancho (mm)"
+                            icon={Ruler}
+                            value={line.width}
+                            onChange={(v) => updateLine(i, { width: v })}
+                            className="w-20"
+                          />
+                          <NumberField
+                            label="Cortes"
+                            icon={Scissors}
+                            value={line.cutsCount}
+                            onChange={(v) => updateLine(i, { cutsCount: v })}
+                            className="w-16"
+                          />
+                          <NumberField
+                            label="Merma %"
+                            icon={Percent}
+                            value={line.expectedWastePercent}
+                            onChange={(v) => updateLine(i, { expectedWastePercent: v })}
+                            className="w-16"
+                          />
+
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon-sm"
                             aria-label="Quitar insumo"
+                            className="text-muted-foreground hover:text-destructive"
                             onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                          {article && line.inputArticleVariantId && (
-                            <p className="w-full text-[11px] text-muted-foreground">SKU {article.sku}</p>
-                          )}
                         </div>
                       );
                     })}
@@ -229,16 +310,22 @@ export default function BomPage() {
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="border-dashed"
                       onClick={() => setLines((prev) => [...prev, emptyLine()])}
                     >
                       <Plus className="h-3.5 w-3.5" /> Agregar insumo
                     </Button>
                   </div>
 
-                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  {error && (
+                    <p className="flex items-center gap-1.5 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4" /> {error}
+                    </p>
+                  )}
 
                   <div className="flex justify-end">
                     <Button type="submit" disabled={mutation.isPending}>
+                      <Save className="h-4 w-4" />
                       {mutation.isPending
                         ? 'Guardando...'
                         : bomQuery.data
