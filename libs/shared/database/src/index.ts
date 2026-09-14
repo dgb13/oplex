@@ -93,6 +93,7 @@ export type {
   BillOfMaterials,
   BomLine,
   BomByproduct,
+  BomAttachment,
   ProductionOrder,
   ProductionConsumption,
   ProductionOutput,

@@ -16,6 +16,7 @@
     }
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.0",
     "@nestjs/common": "^11.1.28",
     "@plexo/auth": "^0.0.1",
     "@plexo/database": "^0.0.1",
@@ -23,6 +24,7 @@
     "@plexo/subscriptions": "^0.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "fastify": "^5.10.0",
     "tslib": "^2.3.0"
   }
 }

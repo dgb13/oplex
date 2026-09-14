@@ -6,15 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
-import { productionApi, type CreateBomLineInput } from '@/lib/production';
+import { productionApi, type BomAttachment, type CreateBomLineInput } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import {
   AlertCircle,
   ChefHat,
+  FileArchive,
+  FileText,
   Hash,
   Layers,
   Package,
+  Paperclip,
   Percent,
   Plus,
   Ruler,
@@ -22,8 +25,9 @@ import {
   Scissors,
   Sparkles,
   Trash2,
+  Upload,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProductionPlanGateBanner, useProductionGate } from '../ProductionPlanGate';
 
 interface LineDraft {
@@ -68,6 +72,132 @@ function NumberField({
       </label>
       <Input type="number" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Documentación (PDF/ZIP) de esta versión puntual de receta - sólo tiene
+ * sentido una vez que la receta existe de verdad (bomId real), por eso
+ * `bom/page.tsx` sólo la muestra cuando `bomQuery.data` está cargado, no
+ * mientras se está armando una receta nueva todavía sin guardar. */
+function BomAttachmentsCard({ bomId, version }: { bomId: string; version: number }) {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState('');
+
+  const attachmentsQuery = useQuery({
+    queryKey: ['production-bom-attachments', bomId],
+    queryFn: () => productionApi.listBomAttachments(bomId),
+  });
+
+  function invalidate() {
+    void queryClient.invalidateQueries({ queryKey: ['production-bom-attachments', bomId] });
+  }
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => productionApi.uploadBomAttachment(bomId, file),
+    onSuccess: () => {
+      setError('');
+      invalidate();
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudo subir el archivo';
+      setError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (attachmentId: string) => productionApi.deleteBomAttachment(attachmentId),
+    onSuccess: invalidate,
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    uploadMutation.mutate(file);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Paperclip className="h-4 w-4" /> Documentación
+          <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300">v{version}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          Planos, hojas de corte, etc. en PDF o ZIP (hasta 20MB) - quedan asociados a esta versión, no se copian si
+          guardás una nueva.
+        </p>
+
+        {(attachmentsQuery.data?.length ?? 0) > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {attachmentsQuery.data?.map((att: BomAttachment) => (
+              <li
+                key={att.id}
+                className="flex items-center gap-2.5 rounded-lg border bg-muted/20 px-3 py-2 text-sm"
+              >
+                {att.fileType === 'PDF' ? (
+                  <FileText className="h-4 w-4 shrink-0 text-red-500" />
+                ) : (
+                  <FileArchive className="h-4 w-4 shrink-0 text-amber-600" />
+                )}
+                <a
+                  href={resolveUploadUrl(att.fileUrl) ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate font-medium text-primary hover:underline"
+                >
+                  {att.fileName}
+                </a>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(att.fileSizeBytes)}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Eliminar adjunto"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => deleteMutation.mutate(att.id)}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4" /> {error}
+          </p>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.zip"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-fit border-dashed"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadMutation.isPending}
+        >
+          <Upload className="h-3.5 w-3.5" /> {uploadMutation.isPending ? 'Subiendo...' : 'Subir archivo'}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -337,6 +467,8 @@ export default function BomPage() {
               </CardContent>
             </Card>
           )}
+
+          {bomQuery.data && <BomAttachmentsCard bomId={bomQuery.data.id} version={bomQuery.data.version} />}
         </>
       )}
     </div>

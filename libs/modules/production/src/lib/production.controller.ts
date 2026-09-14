@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
+import '@fastify/multipart';
 import { Roles } from '@plexo/auth';
 import { SubscriptionService } from '@plexo/subscriptions';
+import { BomAttachmentService } from './bom-attachment.service.js';
 import { BomService } from './bom.service.js';
 import { ConfirmProductionOrderDto } from './dto/confirm-production-order.dto.js';
 import { CreateBomDto } from './dto/create-bom.dto.js';
@@ -22,6 +25,7 @@ import { StockPieceService } from './stock-piece.service.js';
 export class ProductionController {
   constructor(
     private readonly bomService: BomService,
+    private readonly bomAttachmentService: BomAttachmentService,
     private readonly orderService: ProductionOrderService,
     private readonly planningService: ProductionPlanningService,
     private readonly stockPieceService: StockPieceService,
@@ -45,6 +49,39 @@ export class ProductionController {
   async listBomVersions(@Param('articleVariantId', ParseUUIDPipe) articleVariantId: string) {
     await this.subscriptionService.assertCanUseProduction();
     return this.bomService.listVersions(articleVariantId);
+  }
+
+  // Documentación (PDF/ZIP) de una versión puntual de receta - ver
+  // BomAttachmentService. bomId es la fila puntual de BillOfMaterials
+  // (no el articleVariantId), a diferencia del resto de las rutas de BOM
+  // de arriba.
+  @Get('bom/attachments/:bomId')
+  async listBomAttachments(@Param('bomId', ParseUUIDPipe) bomId: string) {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.bomAttachmentService.list(bomId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Post('bom/attachments/:bomId')
+  async uploadBomAttachment(@Param('bomId', ParseUUIDPipe) bomId: string, @Req() req: FastifyRequest) {
+    await this.subscriptionService.assertCanUseProduction();
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No se recibió ningún archivo');
+    }
+    const buffer = await data.toBuffer();
+    return this.bomAttachmentService.upload(bomId, data.mimetype, data.filename, buffer);
+  }
+
+  // Mismo path que GET/POST arriba, sin colisión: el método HTTP alcanza
+  // para distinguirlos, esto no necesita ningún segmento extra - el
+  // parámetro es el id del adjunto, no el del bomId (que sólo GET/POST
+  // usan).
+  @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Delete('bom/attachments/:attachmentId')
+  async removeBomAttachment(@Param('attachmentId', ParseUUIDPipe) attachmentId: string) {
+    await this.subscriptionService.assertCanUseProduction();
+    await this.bomAttachmentService.remove(attachmentId);
   }
 
   // Abierto en cualquier plan (incluido BASIC) a propósito - ver decisión 4

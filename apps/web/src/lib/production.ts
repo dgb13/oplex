@@ -143,6 +143,22 @@ export interface StockPiece {
   createdAt: string;
 }
 
+export type BomAttachmentType = 'PDF' | 'ZIP';
+
+// Documentación (plano, hoja de corte) de una versión PUNTUAL de receta
+// (bomId, no el articleVariantId) - decisión ya confirmada con el
+// usuario: guardar como versión nueva no arrastra los adjuntos viejos.
+export interface BomAttachment {
+  id: string;
+  bomId: string;
+  fileType: BomAttachmentType;
+  fileName: string;
+  fileUrl: string;
+  fileSizeBytes: number;
+  uploadedByUserId: string;
+  createdAt: string;
+}
+
 export const productionApi = {
   getBom: (articleVariantId: string) => api.get<Bom>(`/production/bom/${articleVariantId}`).then((r) => r.data),
   listBomVersions: (articleVariantId: string) =>
@@ -168,4 +184,15 @@ export const productionApi = {
     api
       .get<StockPiece[]>('/production/pieces', { params: { articleVariantId, warehouseId } })
       .then((r) => r.data),
+  listBomAttachments: (bomId: string) =>
+    api.get<BomAttachment[]>(`/production/bom/attachments/${bomId}`).then((r) => r.data),
+  uploadBomAttachment: (bomId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post<BomAttachment>(`/production/bom/attachments/${bomId}`, formData)
+      .then((r) => r.data);
+  },
+  deleteBomAttachment: (attachmentId: string) =>
+    api.delete(`/production/bom/attachments/${attachmentId}`).then((r) => r.data),
 };

@@ -693,6 +693,7 @@ model User {
   createdInflationAdjustments InflationAdjustment[]
   cartItems                  InventoryCartItem[]
   createdQuotes              Quote[]
+  uploadedBomAttachments     BomAttachment[]
   emailVerificationCode      EmailVerificationCode?
   passwordResetTokens        PasswordResetToken[]
   oauthAccounts              OAuthAccount[]
@@ -1425,9 +1426,46 @@ model BillOfMaterials {
   lines                  BomLine[]
   byproducts             BomByproduct[]
   productionOrders       ProductionOrder[]
+  // Documentación (planos, hojas de corte) de ESTA versión puntual, no del
+  // producto en general - decisión explícita del usuario: editar la
+  // receta y guardar como versión nueva no arrastra los adjuntos viejos,
+  // hay que resubirlos. Ver BomAttachment.
+  attachments            BomAttachment[]
 
   @@index([tenantId, outputArticleVariantId, isActive])
   @@map("bill_of_materials")
+}
+
+enum BomAttachmentType {
+  PDF
+  ZIP
+}
+
+// Documentación adjunta a una versión puntual de receta (plano, hoja de
+// corte, etc.) - tabla independiente en vez de un campo tipo
+// Article.brochureUrl porque acá puede haber varios archivos por receta,
+// no uno solo. Mismo patrón de subida que ArticleAttachmentsService
+// (disco local bajo uploads/, nombre random-uuid, servido sin
+// autenticación vía @fastify/static) pero sin el límite de "un slot por
+// tipo" de ese service - ver BomAttachmentService.
+model BomAttachment {
+  id               String            @id @default(uuid())
+  tenantId         String
+  bomId            String
+  bom              BillOfMaterials   @relation(fields: [bomId], references: [id])
+  fileType         BomAttachmentType
+  // Nombre original del archivo (lo que el usuario subió) - separado de
+  // fileUrl, que usa un nombre random-uuid en disco para no pisar
+  // archivos ni depender de que el nombre original sea un path seguro.
+  fileName         String
+  fileUrl          String
+  fileSizeBytes    Int
+  uploadedByUserId String
+  uploadedBy       User              @relation(fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime          @default(now())
+
+  @@index([tenantId, bomId])
+  @@map("bom_attachments")
 }
 
 model BomLine {
