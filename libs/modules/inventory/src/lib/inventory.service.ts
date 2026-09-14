@@ -426,6 +426,21 @@ export class InventoryService {
     let priorLedger: { quantity: Prisma.Decimal; avgUnitCost: Prisma.Decimal | null } | null =
       null;
     if (dto.type !== 'ADJUSTMENT') {
+      // Lock the ledger row before reading it: two concurrent costed
+      // movements against the same (warehouse, variant) otherwise both read
+      // the same stale avgUnitCost, compute their own new average in
+      // parallel, and the second write clobbers the first's contribution
+      // (quantity still ends up right, via the atomic increment below, but
+      // the averaged cost silently drops one of the two movements). Same
+      // "lock first, in requested order" recipe already used by
+      // InvoicingService.createCreditNote and GoodsReceiptService.create for
+      // the analogous race. No-op if the row doesn't exist yet - nothing to
+      // lock on a brand-new (warehouse, variant) pair, see the upsert below.
+      await db.$queryRaw`
+        SELECT id FROM stock_ledger
+        WHERE "warehouseId" = ${dto.warehouseId} AND "articleVariantId" = ${dto.articleVariantId}
+        FOR UPDATE
+      `;
       priorLedger = await db.stockLedger.findUnique({
         where: {
           warehouseId_articleVariantId: {

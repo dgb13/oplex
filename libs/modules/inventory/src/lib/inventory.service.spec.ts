@@ -40,7 +40,7 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     const result = await runInTenant(
-      { stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -75,7 +75,7 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     await runInTenant(
-      { stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -104,7 +104,7 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     await runInTenant(
-      { stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -130,13 +130,15 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     await expect(
-      runInTenant({ stockLedger: { updateMany, findUnique }, stockMovement: { create } }, () =>
-        service.recordMovement({
-          warehouseId: 'wh-1',
-          articleVariantId: 'variant-1',
-          type: 'SALE_OUT',
-          quantity: 999,
-        }),
+      runInTenant(
+        { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+        () =>
+          service.recordMovement({
+            warehouseId: 'wh-1',
+            articleVariantId: 'variant-1',
+            type: 'SALE_OUT',
+            quantity: 999,
+          }),
       ),
     ).rejects.toThrow(BadRequestException);
 
@@ -168,6 +170,7 @@ describe('InventoryService.recordMovement', () => {
 
     await runInTenant(
       {
+        $queryRaw: jest.fn().mockResolvedValue([]),
         stockLedger: { upsert, findUnique },
         stockMovement: { create },
         articleVariant: { findUniqueOrThrow },
@@ -205,6 +208,7 @@ describe('InventoryService.recordMovement', () => {
 
     await runInTenant(
       {
+        $queryRaw: jest.fn().mockResolvedValue([]),
         stockLedger: { upsert, findUnique },
         stockMovement: { create },
         articleVariant: { findUniqueOrThrow },
@@ -224,6 +228,69 @@ describe('InventoryService.recordMovement', () => {
     expect((call.update.avgUnitCost as InstanceType<typeof Prisma.Decimal>).toNumber()).toBe(150);
   });
 
+  it('locks the ledger row before reading it for a costed movement, so two concurrent PURCHASE_INs cannot both read the same stale average', async () => {
+    const upsert = jest.fn().mockResolvedValue({});
+    const create = jest.fn().mockResolvedValue({ id: 'movement-3b' });
+    const queryRaw = jest.fn().mockResolvedValue([]);
+    const findUnique = jest.fn().mockImplementation(() => {
+      // The lock must be taken BEFORE the read it protects, not after.
+      expect(queryRaw).toHaveBeenCalledTimes(1);
+      return Promise.resolve({ quantity: new Prisma.Decimal(10), avgUnitCost: new Prisma.Decimal(100) });
+    });
+    const findUniqueOrThrow = jest.fn().mockResolvedValue({ unitPrice: new Prisma.Decimal(150) });
+    const priceHistoryCreate = jest.fn().mockResolvedValue({});
+    const service = new InventoryService(makeEventEmitter());
+
+    await runInTenant(
+      {
+        $queryRaw: queryRaw,
+        stockLedger: { upsert, findUnique },
+        stockMovement: { create },
+        articleVariant: { findUniqueOrThrow },
+        priceHistory: { create: priceHistoryCreate },
+      },
+      () =>
+        service.recordMovement({
+          warehouseId: 'wh-1',
+          articleVariantId: 'variant-1',
+          type: 'PURCHASE_IN',
+          quantity: 10,
+          unitCost: 200,
+        }),
+    );
+
+    // Two findUnique calls total: the priorLedger read this test cares about
+    // (locked, asserted above), plus an unrelated later read that only
+    // fetches the post-write quantity for the stock.updated socket event.
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(findUnique).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not lock/read the ledger for an ADJUSTMENT (quantity-only, never averages cost)', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const findUnique = jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(4) });
+    const queryRaw = jest.fn().mockResolvedValue([]);
+    const create = jest.fn().mockResolvedValue({ id: 'movement-adj' });
+    const service = new InventoryService(makeEventEmitter());
+
+    await runInTenant(
+      { $queryRaw: queryRaw, stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      () =>
+        service.recordMovement({
+          warehouseId: 'wh-1',
+          articleVariantId: 'variant-1',
+          type: 'ADJUSTMENT',
+          quantity: -4,
+        }),
+    );
+
+    // The lock/priorLedger read is skipped entirely for ADJUSTMENT - the one
+    // findUnique call that does happen is the unrelated post-write read for
+    // the stock.updated socket event (see the test above).
+    expect(queryRaw).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalledTimes(1);
+  });
+
   it('writes a PriceHistory row snapshotting the selling price and the purchase cost', async () => {
     const upsert = jest.fn().mockResolvedValue({});
     const create = jest.fn().mockResolvedValue({ id: 'movement-5' });
@@ -234,6 +301,7 @@ describe('InventoryService.recordMovement', () => {
 
     await runInTenant(
       {
+        $queryRaw: jest.fn().mockResolvedValue([]),
         stockLedger: { upsert, findUnique },
         stockMovement: { create },
         articleVariant: { findUniqueOrThrow },
@@ -302,6 +370,7 @@ describe('InventoryService.recordMovement', () => {
 
     await runInTenant(
       {
+        $queryRaw: jest.fn().mockResolvedValue([]),
         stockLedger: { upsert, findUnique },
         stockMovement: { create },
         articleVariant: { findUniqueOrThrow },
@@ -416,13 +485,15 @@ describe('InventoryService.recordMovement', () => {
       .mockResolvedValue({ quantity: new Prisma.Decimal(10), avgUnitCost: new Prisma.Decimal(100) });
     const service = new InventoryService(makeEventEmitter());
 
-    await runInTenant({ stockLedger: { upsert, findUnique }, stockMovement: { create } }, () =>
-      service.recordMovement({
-        warehouseId: 'wh-1',
-        articleVariantId: 'variant-1',
-        type: 'RETURN',
-        quantity: 3,
-      }),
+    await runInTenant(
+      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { upsert, findUnique }, stockMovement: { create } },
+      () =>
+        service.recordMovement({
+          warehouseId: 'wh-1',
+          articleVariantId: 'variant-1',
+          type: 'RETURN',
+          quantity: 3,
+        }),
     );
 
     const call = upsert.mock.calls[0][0];
