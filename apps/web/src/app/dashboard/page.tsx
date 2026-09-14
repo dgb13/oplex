@@ -11,12 +11,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { getSocket } from '@/lib/socket';
+import { productionApi } from '@/lib/production';
+import { subscriptionsApi } from '@/lib/subscriptions';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Clock,
   DollarSign,
+  Factory,
   MoreHorizontal,
   Package,
   Receipt,
@@ -106,6 +109,44 @@ function CardMenu({ href, label }: { href: string; label: string }) {
         <DropdownMenuItem render={<Link href={href}>{label}</Link>} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Mismo queryKey que AppShell/TrialBanner (['subscription-me']) y que
+ * production/page.tsx (['production-orders']) - React Query dedupea
+ * ambos fetches, así que este widget no agrega ningún pedido nuevo al
+ * navegar entre Tablero y Producción. No renderiza nada para un tenant en
+ * un plan sin el módulo (BASIC). */
+function ProductionWidget() {
+  const { data: subscription } = useQuery({ queryKey: ['subscription-me'], queryFn: subscriptionsApi.getCurrent });
+  const enabled = subscription?.plan.productionModuleEnabled ?? false;
+  const ordersQuery = useQuery({ queryKey: ['production-orders'], queryFn: productionApi.listOrders, enabled });
+
+  if (!enabled) {
+    return null;
+  }
+
+  const waiting = ordersQuery.data?.filter((o) => o.status === 'PLANNED' && o.isShortOnMaterials).length ?? 0;
+
+  return (
+    <Link
+      href="/production"
+      className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm transition hover:bg-muted/40"
+    >
+      <div
+        className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+          waiting > 0 ? 'bg-amber-600/10 text-amber-600 dark:text-amber-400' : 'bg-primary/10 text-primary'
+        }`}
+      >
+        <Factory className="h-4 w-4" />
+      </div>
+      <div>
+        <p className="font-medium">
+          {waiting > 0 ? `${waiting} orden${waiting === 1 ? '' : 'es'} esperando insumos` : 'Producción al día'}
+        </p>
+        <p className="text-xs text-muted-foreground">Ver módulo de Producción</p>
+      </div>
+    </Link>
   );
 }
 
@@ -232,6 +273,7 @@ export default function DashboardPage() {
       <h1 className="text-xl font-semibold">Tablero</h1>
 
       <OnboardingChecklist />
+      <ProductionWidget />
 
       {error ? (
         <p className="text-sm text-destructive">Error al cargar el tablero</p>

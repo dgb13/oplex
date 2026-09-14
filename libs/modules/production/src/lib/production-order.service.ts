@@ -246,8 +246,16 @@ export class ProductionOrderService {
     });
   }
 
-  async getById(orderId: string): Promise<ProductionOrder> {
-    const order = await getTenantDb().productionOrder.findUnique({ where: { id: orderId } });
+  // Con relations - a diferencia del resto de los métodos de este service
+  // (que sólo necesitan los campos propios de ProductionOrder), el detalle
+  // de una orden (pantalla "Nueva orden / detalle", Fase 6) necesita ver
+  // qué se reservó/consumió/produjo realmente, no sólo el estado. Lectura
+  // pura, no requiere ningún Service de otro módulo.
+  async getById(orderId: string) {
+    const order = await getTenantDb().productionOrder.findUnique({
+      where: { id: orderId },
+      include: { reservations: true, consumptions: true, outputs: true },
+    });
     if (!order) {
       throw new NotFoundException('Production order not found');
     }

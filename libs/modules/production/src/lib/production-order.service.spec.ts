@@ -154,3 +154,25 @@ describe('ProductionOrderService.cancel', () => {
     await expect(runAsTenant(db, () => service.cancel('order-1'))).rejects.toThrow("can't be cancelled");
   });
 });
+
+describe('ProductionOrderService.getById', () => {
+  it('includes reservations/consumptions/outputs', async () => {
+    const findUnique = jest.fn().mockResolvedValue(makeOrder());
+    const db = makeDb({ productionOrder: { findUnique } });
+    const service = makeService({ db });
+
+    await runAsTenant(db, () => service.getById('order-1'));
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+      include: { reservations: true, consumptions: true, outputs: true },
+    });
+  });
+
+  it('throws NotFoundException when the order does not exist', async () => {
+    const db = makeDb({ productionOrder: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.getById('missing'))).rejects.toThrow('not found');
+  });
+});

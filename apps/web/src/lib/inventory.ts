@@ -57,6 +57,28 @@ export function buildVariantLabel(variant: {
   return [variant.color, variant.size, variant.brand].filter(Boolean).join(' / ') || null;
 }
 
+export interface ArticleVariantLookupEntry {
+  articleName: string;
+  variantLabel: string | null;
+  sku: string;
+}
+
+/** articleVariantId -> nombre/SKU legible, para pantallas que sólo tienen
+ * el UUID a mano (BOM/órdenes/piezas de Producción, que devuelven el
+ * modelo crudo de Prisma sin joinear nombres) - se arma en el cliente a
+ * partir de ['inventory-articles'] (ya cacheado por ArticlePicker/el
+ * catálogo, React Query lo dedupea) en vez de agregar un include al
+ * backend sólo para mostrar texto. */
+export function buildArticleVariantLookup(articles: Article[]): Record<string, ArticleVariantLookupEntry> {
+  const map: Record<string, ArticleVariantLookupEntry> = {};
+  for (const article of articles) {
+    for (const variant of article.variants) {
+      map[variant.id] = { articleName: article.name, variantLabel: buildVariantLabel(variant), sku: variant.sku };
+    }
+  }
+  return map;
+}
+
 export interface Article {
   id: string;
   name: string;

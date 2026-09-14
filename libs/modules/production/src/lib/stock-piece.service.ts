@@ -88,6 +88,20 @@ export class StockPieceService {
     return result._sum.currentLength ?? new Prisma.Decimal(0);
   }
 
+  /** Todas las piezas de un artículo 1D (AVAILABLE/DEPLETED/SCRAP, no sólo
+   * las disponibles como findBestFitPiece/findLargestPiece/
+   * getAvailableLength de arriba) - el historial completo de cortes es el
+   * punto de la pantalla "Piezas / recortes" (Fase 6, UI). */
+  listByArticleVariant(input: {
+    articleVariantId: string;
+    warehouseId?: string;
+  }): Promise<StockPiece[]> {
+    return getTenantDb().stockPiece.findMany({
+      where: { articleVariantId: input.articleVariantId, warehouseId: input.warehouseId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   /**
    * Corta `lengthToCut` de una pieza: la retira (DEPLETED) y, si sobra
    * remanente, crea la pieza hija (AVAILABLE si remainder >=

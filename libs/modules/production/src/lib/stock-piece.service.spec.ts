@@ -116,3 +116,21 @@ describe('StockPieceService.cutPiece', () => {
     ).rejects.toThrow('not available');
   });
 });
+
+describe('StockPieceService.listByArticleVariant', () => {
+  it('lists every piece of the article regardless of status, newest first', async () => {
+    const findMany = jest.fn().mockResolvedValue([makePiece({ status: 'DEPLETED' }), makePiece()]);
+    const db = makeDb({ stockPiece: { findMany } });
+    const service = new StockPieceService();
+
+    const result = await runAsTenant(db, () =>
+      service.listByArticleVariant({ articleVariantId: 'variant-cable', warehouseId: 'warehouse-1' }),
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { articleVariantId: 'variant-cable', warehouseId: 'warehouse-1' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(result).toHaveLength(2);
+  });
+});

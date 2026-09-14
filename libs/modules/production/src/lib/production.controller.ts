@@ -7,6 +7,7 @@ import { CreateBomDto } from './dto/create-bom.dto.js';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
 import { ProductionOrderService } from './production-order.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
+import { StockPieceService } from './stock-piece.service.js';
 
 /**
  * Endpoints propios del módulo (BOM, órdenes, producible) - ver
@@ -23,6 +24,7 @@ export class ProductionController {
     private readonly bomService: BomService,
     private readonly orderService: ProductionOrderService,
     private readonly planningService: ProductionPlanningService,
+    private readonly stockPieceService: StockPieceService,
     private readonly subscriptionService: SubscriptionService,
   ) {}
 
@@ -86,5 +88,18 @@ export class ProductionController {
   async cancelOrder(@Param('id', ParseUUIDPipe) id: string) {
     await this.subscriptionService.assertCanUseProduction();
     return this.orderService.cancel(id);
+  }
+
+  // Historial completo de piezas 1D de un artículo - pantalla "Piezas /
+  // recortes" (Fase 6, UI). warehouseId es opcional (ver
+  // StockPieceService.listByArticleVariant) para poder ver la trazabilidad
+  // completa entre depósitos, no sólo la de uno.
+  @Get('pieces')
+  async listPieces(
+    @Query('articleVariantId', ParseUUIDPipe) articleVariantId: string,
+    @Query('warehouseId') warehouseId?: string,
+  ) {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.stockPieceService.listByArticleVariant({ articleVariantId, warehouseId });
   }
 }

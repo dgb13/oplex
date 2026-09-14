@@ -8,6 +8,7 @@ import ImpersonationBanner from './ImpersonationBanner';
 import MembershipSessionBanner from './MembershipSessionBanner';
 import TrialBanner from './TrialBanner';
 import { disconnectSocket, getSocket } from '@/lib/socket';
+import { subscriptionsApi } from '@/lib/subscriptions';
 import { useDensity } from '@/providers/DensityProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -16,6 +17,7 @@ import {
   Building2,
   Calculator,
   ChevronDown,
+  Factory,
   LayoutDashboard,
   PanelLeft,
   Package,
@@ -88,6 +90,22 @@ const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase },
 ];
 
+// Insertado condicionalmente en el render (ver AppShell más abajo) según
+// subscription.plan.productionModuleEnabled - no vive en NAV_ENTRIES, un
+// tenant en un plan sin el módulo (BASIC) no debe verlo nunca en el
+// sidebar, sólo gateado server-side (Roles/SubscriptionService) no basta
+// para la UX de "no existe" que se busca acá.
+const PRODUCTION_NAV_GROUP: NavGroup = {
+  kind: 'group',
+  label: 'Producción',
+  icon: Factory,
+  items: [
+    { href: '/production', label: 'Tablero' },
+    { href: '/production/bom', label: 'Recetas' },
+    { href: '/production/pieces', label: 'Piezas y recortes' },
+  ],
+};
+
 interface PresenceUser {
   userId: string;
   name: string | null;
@@ -138,6 +156,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Mismo queryKey que UserMenu's propio useQuery - react-query lo dedupe,
   // no dispara un segundo fetch.
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
+
+  // Mismo queryKey que TrialBanner - react-query lo dedupe, un tenant con
+  // el banner de prueba visible no dispara un segundo fetch acá.
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription-me'],
+    queryFn: subscriptionsApi.getCurrent,
+  });
+  const comprasIndex = NAV_ENTRIES.findIndex((e) => e.kind === 'group' && e.label === 'Compras');
+  const navEntries = subscription?.plan.productionModuleEnabled
+    ? [
+        ...NAV_ENTRIES.slice(0, comprasIndex + 1),
+        PRODUCTION_NAV_GROUP,
+        ...NAV_ENTRIES.slice(comprasIndex + 1),
+      ]
+    : NAV_ENTRIES;
 
   useEffect(() => {
     if (profile?.mustChangePassword && pathname !== '/profile') {
@@ -210,7 +243,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
-            {NAV_ENTRIES.map((entry) =>
+            {navEntries.map((entry) =>
               entry.kind === 'link' ? (
                 <Link
                   key={entry.href}
