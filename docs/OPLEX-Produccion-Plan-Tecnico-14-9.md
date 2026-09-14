@@ -252,7 +252,7 @@ invoicing,quotes,purchases,subscriptions,database` y `nx run database:test-rls`
 
 ---
 
-## Fase 3 — Conversión de unidad de compra (habilita CONTINUO)
+## Fase 3 — Conversión de unidad de compra (habilita CONTINUO) ✅ IMPLEMENTADA (2026-09-14)
 
 Confirmo lo que pedía el punto 4 del prompt: **CONTINUO se resuelve 100% con el
 `StockLedger` actual** — es un solo número decimal (gramos/ml), la aritmética `Decimal`
@@ -286,6 +286,32 @@ pasa a ocurrir sólo en el momento de recibir, un único punto, sin tocar el sch
 **Riesgo**: 🟢 bajo — cambio acotado a un service, `factor=1` preserva el comportamiento
 actual para todo lo que no sea CONTINUO.
 
+**Implementado y verificado en vivo (2026-09-14)**: desviación menor del código de
+ejemplo de arriba — se adelantaron a esta fase sólo los 3 campos de `Article` que
+CONTINUO necesita (`measurementType`, `purchaseSize`, `baseUnit`, migración
+`20260930070000_articles_measurement_type`), no los 5 de la Fase 4 completa
+(`isManufactured` y los propios de 1D/2D quedan para cuando se construya `StockPiece`/
+BOM) - mismo criterio ya usado en la Fase 2 con `StockReservation`: adelantar sólo lo
+que la fase actual necesita para ser real y testeable, no todo el schema de una sola
+vez. `GoodsReceiptService.RECEIPT_DETAIL_INCLUDE` (libs/modules/purchases) se extendió
+para traer `articleVariant.article.{measurementType,purchaseSize}` en el mismo query
+(sin N+1), y `GoodsReceiptsService.createReceipt` hace la conversión tal cual estaba
+planeado.
+
+4 tests nuevos (conversión real con `purchaseSize` configurado, factor=1 para CONTINUO
+sin `purchaseSize` todavía, más los 2 tests existentes ajustados al nuevo shape del
+mock). Verificado además de punta a punta contra Postgres real, no sólo con mocks:
+marqué "Harina triple 0 por 35kg" (un artículo de la demo, con 45 de stock ya cargado)
+como CONTINUO con `purchaseSize=35000`, creé una Orden de Compra real por 2 "bolsas" a
+$50.000 c/u desde la UI, la marqué enviada y la recibí desde "Recibir mercadería" - el
+stock resultante quedó en **70045** (45 + 2×35.000) exacto, y el `StockMovement` quedó
+con `quantity=70000`/`unitCost=1.4286` ($50.000/35.000) exacto. El `avgUnitCost` mixto
+resultante (fracción vieja en "unidades" + fracción nueva en gramos) es un artefacto
+esperable de reconvertir en vivo un artículo que ya tenía stock cargado como DISCRETO -
+no un defecto de esta fase, un caso de borde real a tener en cuenta si algún tenant
+real cambia el `measurementType` de un artículo con historial. `nx run-many
+-t test,build,lint` sobre los 8 proyectos afectados 100% verde.
+
 ---
 
 ## Fase 4 — Entidades de producción
@@ -294,32 +320,36 @@ Acá entra el grueso del schema nuevo del diseño (§2). Contesto los puntos 2, 
 11 del prompt.
 
 ### 4.1. `Article` — agregar el discriminador sin romper nada (punto 2)
-```prisma
-enum MeasurementType { DISCRETE  CONTINUOUS  LINEAL_1D  SURFACE_2D }
 
+✅ **`measurementType`/`purchaseSize`/`baseUnit` ya están implementados** (adelantados a
+la Fase 3, ver esa sección - `MeasurementType` ya existe con sus 4 valores). Lo único
+que falta agregar acá es el resto:
+```prisma
 model Article {
   ...
-  measurementType  MeasurementType @default(DISCRETE)   // NUEVO
-  isManufactured   Boolean         @default(false)       // NUEVO
-  purchaseSize     Decimal?                              // NUEVO, CONTINUO
-  baseUnit         String?                                // NUEVO, CONTINUO
-  commercialLength Decimal?                               // NUEVO, 1D
-  minUsableLength  Decimal?                               // NUEVO, 1D
-  sheetWidth       Decimal?                                // NUEVO, 2D
-  sheetLength      Decimal?                                // NUEVO, 2D
+  // Ya existen (Fase 3):
+  // measurementType  MeasurementType @default(DISCRETE)
+  // purchaseSize     Decimal?
+  // baseUnit         String?
+  isManufactured   Boolean  @default(false)   // NUEVO
+  commercialLength Decimal?                   // NUEVO, 1D
+  minUsableLength  Decimal?                   // NUEVO, 1D
+  sheetWidth       Decimal?                   // NUEVO, 2D
+  sheetLength      Decimal?                   // NUEVO, 2D
 }
 ```
-`@default(DISCRETE)` hace que la migración sea un `ALTER TABLE ... ADD COLUMN` puro —
-**cero artículos existentes cambian de comportamiento**. `recordMovement` no lee
-`measurementType` hoy ni lo va a leer para DISCRETE (sigue exactamente igual). Sólo el
-código nuevo (StockPiece, BOM, función de producible) lo consulta.
+`@default(DISCRETE)` ya hizo que su migración fuera un `ALTER TABLE ... ADD COLUMN`
+puro — **cero artículos existentes cambiaron de comportamiento** (confirmado: `recordMovement`
+no lee `measurementType`, sólo `GoodsReceiptsService` lo hace y sólo para `CONTINUOUS`).
+Los 5 campos que faltan acá son igual de inocuos (nullable/con default), mismo criterio.
 
-**Migración de datos — decisión confirmada**: todos los artículos existentes quedan en
-`DISCRETE` sin excepción, sin importar su `unitOfMeasure` actual (`KG`/`LTR`/`M2`/`MM`
-incluidos) — **no** se auto-mapea nada. El usuario elige a mano, por artículo, cuáles
-pasan a CONTINUO/1D/2D después (desde el mismo `ArticleFormModal` donde hoy elige
-`unitOfMeasure`). Cero riesgo de que un artículo cambie de comportamiento sin que su
-dueño lo haya pedido.
+**Migración de datos — decisión confirmada, ya aplicada**: todos los artículos
+existentes quedaron en `DISCRETE` sin excepción, sin importar su `unitOfMeasure` actual
+(`KG`/`LTR`/`M2`/`MM` incluidos) — **no** se auto-mapeó nada. El usuario elige a mano,
+por artículo, cuáles pasan a CONTINUO/1D/2D (desde el mismo `ArticleFormModal` donde
+hoy elige `unitOfMeasure` — el propio selector de `measurementType` en esa pantalla
+todavía no existe, es trabajo de la Fase 6/UI; hoy sólo se puede setear vía API/SQL
+directo, como se hizo para probar la Fase 3 en vivo).
 
 ### 4.2. `StockPiece` — convivencia con `StockLedger` (punto 3)
 **Recomendación**: `StockLedger` sigue existiendo y siendo la fuente de "total" para
@@ -626,13 +656,16 @@ está firme — el trabajo real de esta fase es de UI/UX, no de arquitectura.
 3. ✅ `20260930060000_stock_reservations` — tabla `StockReservation` +
    `ReservationStatus`, sola, antes de que `ProductionOrder` exista (ver Fase 2 más
    arriba para el porqué de esta desviación del orden original). Aplicada.
-4. `articles_add_measurement_type` — `measurementType` (default DISCRETE),
-   `isManufactured`, `purchaseSize`, `baseUnit`, `commercialLength`, `minUsableLength`,
-   `sheetWidth`, `sheetLength`. Todos nullable u opcionales, sin backfill de datos
-   (todo queda DISCRETE/`isManufactured=false`, decisión ya confirmada).
-5. `stock_pieces` — tabla nueva.
-6. `production_bom` — `bill_of_materials`, `bom_lines`, `bom_byproducts`.
-7. `production_orders` — `production_orders`, `production_consumptions`,
+4. ✅ `20260930070000_articles_measurement_type` — `measurementType` (default
+   DISCRETE), `purchaseSize`, `baseUnit`. Aplicada (Fase 3) - sólo los 3 campos que
+   CONTINUO necesita, no los 5 de la Fase 4 completa (ver esa fase para el porqué de
+   este split).
+5. `articles_add_manufacturing_fields` — `isManufactured`, `commercialLength`,
+   `minUsableLength`, `sheetWidth`, `sheetLength` (1D/2D/BOM). Todos nullable u
+   opcionales, sin backfill de datos.
+6. `stock_pieces` — tabla nueva.
+7. `production_bom` — `bill_of_materials`, `bom_lines`, `bom_byproducts`.
+8. `production_orders` — `production_orders`, `production_consumptions`,
    `production_outputs`, más el `ALTER TABLE stock_reservations` que agrega la FK real
    a `productionOrderId` (hoy suelta, ver Fase 2).
 

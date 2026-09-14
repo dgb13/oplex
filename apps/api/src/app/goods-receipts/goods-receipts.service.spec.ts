@@ -12,6 +12,14 @@ import { GoodsReceiptsService } from './goods-receipts.service.js';
 // requiring the real module/its ESM chain at all.
 jest.mock('@plexo/purchases', () => ({ GoodsReceiptService: jest.fn() }));
 
+// DISCRETE (measurementType default) por defecto en los dos helpers de
+// abajo - factor=1, comportamiento idéntico al que había antes de la Fase
+// 3 (conversión de unidad de compra) salvo que se pase measurementType/
+// purchaseSize explícitos.
+function discreteArticle() {
+  return { measurementType: 'DISCRETE' as const, purchaseSize: null };
+}
+
 function makeReceipt(overrides: Record<string, unknown> = {}) {
   return {
     id: 'receipt-1',
@@ -22,12 +30,22 @@ function makeReceipt(overrides: Record<string, unknown> = {}) {
       {
         id: 'receipt-line-1',
         quantity: new Prisma.Decimal(120),
-        purchaseOrderLine: { id: 'line-1', articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
+        purchaseOrderLine: {
+          id: 'line-1',
+          articleVariantId: 'variant-1',
+          unitCost: new Prisma.Decimal(150),
+          articleVariant: { article: discreteArticle() },
+        },
       },
       {
         id: 'receipt-line-2',
         quantity: new Prisma.Decimal(5),
-        purchaseOrderLine: { id: 'line-2', articleVariantId: 'variant-2', unitCost: new Prisma.Decimal(30) },
+        purchaseOrderLine: {
+          id: 'line-2',
+          articleVariantId: 'variant-2',
+          unitCost: new Prisma.Decimal(30),
+          articleVariant: { article: discreteArticle() },
+        },
       },
     ],
     ...overrides,
@@ -101,5 +119,82 @@ describe('GoodsReceiptsService.createReceipt', () => {
       }),
     ).rejects.toThrow(failure);
     expect(accountingService.postGoodsReceiptAccrual).not.toHaveBeenCalled();
+  });
+
+  it('converts purchase units to stock units for a CONTINUOUS article with purchaseSize configured (2 bolsas de 35kg -> 70.000gr)', async () => {
+    const receipt = makeReceipt({
+      lines: [
+        {
+          id: 'receipt-line-1',
+          quantity: new Prisma.Decimal(2), // 2 bolsas pedidas/recibidas
+          purchaseOrderLine: {
+            id: 'line-1',
+            articleVariantId: 'variant-1',
+            unitCost: new Prisma.Decimal(50000), // $/bolsa
+            articleVariant: {
+              article: { measurementType: 'CONTINUOUS', purchaseSize: new Prisma.Decimal(35000) },
+            },
+          },
+        },
+      ],
+    });
+    const goodsReceiptService = { create: jest.fn().mockResolvedValue(receipt) } as unknown as GoodsReceiptService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+
+    await service.createReceipt({
+      purchaseOrderId: 'po-1',
+      warehouseId: 'warehouse-1',
+      lines: [{ purchaseOrderLineId: 'line-1', quantity: 2 }],
+    });
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Stock se mueve en la unidad base (gramos), no en "bolsas".
+        quantity: 70000,
+        // $/bolsa -> $/gramo.
+        unitCost: 50000 / 35000,
+      }),
+    );
+    // El accrual (lo que se le debe al proveedor) sigue en unidad de
+    // compra - la conversión es sólo de la unidad de stock que entra.
+    const accrualArg = (accountingService.postGoodsReceiptAccrual as jest.Mock).mock.calls[0][0];
+    expect((accrualArg.amount as Prisma.Decimal).toNumber()).toBe(100000); // 2 * 50000
+  });
+
+  it('does not convert a CONTINUOUS article that has no purchaseSize configured yet (factor 1, same as today)', async () => {
+    const receipt = makeReceipt({
+      lines: [
+        {
+          id: 'receipt-line-1',
+          quantity: new Prisma.Decimal(10),
+          purchaseOrderLine: {
+            id: 'line-1',
+            articleVariantId: 'variant-1',
+            unitCost: new Prisma.Decimal(5),
+            articleVariant: { article: { measurementType: 'CONTINUOUS', purchaseSize: null } },
+          },
+        },
+      ],
+    });
+    const goodsReceiptService = { create: jest.fn().mockResolvedValue(receipt) } as unknown as GoodsReceiptService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+
+    await service.createReceipt({
+      purchaseOrderId: 'po-1',
+      warehouseId: 'warehouse-1',
+      lines: [{ purchaseOrderLineId: 'line-1', quantity: 10 }],
+    });
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ quantity: 10, unitCost: 5 }),
+    );
   });
 });

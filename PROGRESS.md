@@ -1054,3 +1054,19 @@ Implementada la Fase 2 del plan técnico: `InventoryService.recordMovement` ahor
 **Verificado también**: los datos de demo del tenant ahora incluyen artículos pensados para el módulo de Producción (Azúcar Ledesma x 10kg, Cable Canal Ranurado 70x30, Harina triple 0 por 35kg) - coinciden con los ejemplos del propio diseño (`docs/OPLEX-Produccion-Diseño-14-9.md`), probablemente cargados a mano por el usuario en una sesión anterior para tener con qué probar las fases siguientes.
 
 **Pendiente explícito para la próxima sesión**: commitear y pushear la Fase 2. Seguir con la Fase 3 (conversión de unidad de compra, habilita CONTINUO) cuando el usuario lo indique - riesgo bajo, cambio acotado a `GoodsReceiptsService`.
+
+## Sesión 2026-09-14 (cont. 3, PC_DEPARTAMENTO) — Fase 3 del módulo de Producción: conversión de unidad de compra (habilita CONTINUO)
+
+Implementada la Fase 3 del plan técnico: `GoodsReceiptsService.createReceipt` (apps/api) ahora convierte "unidad de compra" a "unidad de stock" al recibir mercadería de un artículo `CONTINUOUS` con `purchaseSize` configurado (ej. bolsa de 35kg → 35.000gr) - `PurchaseOrderLine.quantity`/`unitCost` siguen significando "lo que se le pide al proveedor" sin cambios, la conversión ocurre sólo en este único punto, con `factor=1` (comportamiento actual intacto) para cualquier artículo que no sea CONTINUO o que todavía no tenga `purchaseSize` cargado.
+
+**Mismo criterio de "adelantar sólo lo mínimo" ya usado en la Fase 2**: se agregaron a `Article` únicamente los 3 campos que CONTINUO necesita (`measurementType`, `purchaseSize`, `baseUnit`, migración `20260930070000_articles_measurement_type`) - no los 5 campos completos de la Fase 4 (`isManufactured` + los propios de 1D/2D quedan para cuando se construya `StockPiece`/BOM). Documentado el split en el plan técnico, con la lista de migraciones actualizada.
+
+`GoodsReceiptService.RECEIPT_DETAIL_INCLUDE` (libs/modules/purchases) se extendió para traer `articleVariant.article.{measurementType,purchaseSize}` en el mismo query (sin N+1 query por línea).
+
+**Tests**: 4 nuevos (conversión real, factor=1 sin `purchaseSize`, + 2 tests existentes ajustados al nuevo shape del mock).
+
+**Verificado en vivo contra Postgres real, de punta a punta desde la UI real, no sólo con mocks**: marqué "Harina triple 0 por 35kg" (artículo de la demo, con 45 de stock ya cargado) como `CONTINUOUS` con `purchaseSize=35000` directo en la base (todavía no hay UI para esto, es trabajo de la Fase 6), creé una Orden de Compra real por 2 "bolsas" a $50.000 c/u desde `/purchases`, la marqué enviada (directo en la base, para no disparar un envío de email real sin proveedor configurado) y la recibí desde "Recibir mercadería" - el stock resultante quedó en **70045** (45 + 2×35.000) exacto, con el `StockMovement` en `quantity=70000`/`unitCost=1.4286` ($50.000/35.000) exacto. Encontré (y documenté como caso de borde esperable, no bug) que el `avgUnitCost` queda mezclado entre la fracción vieja en "unidades" y la nueva en gramos - artefacto de reconvertir en vivo un artículo que ya tenía stock cargado como DISCRETO, no algo que pase en uso real (un artículo nace con su `measurementType` definitivo, o necesita una reconciliación de stock si cambia después).
+
+`nx run-many -t test,build,lint` sobre los 8 proyectos afectados (api, inventory, invoicing, quotes, purchases, subscriptions, database, web) 100% verde.
+
+**Pendiente explícito para la próxima sesión**: commitear y pushear la Fase 3. Seguir con la Fase 4 (entidades de producción - BOM, StockPiece, ProductionOrder) cuando el usuario lo indique - es la fase de mayor volumen de schema nuevo, aunque aditiva (riesgo medio, no modifica tablas existentes salvo columnas opcionales de Article).

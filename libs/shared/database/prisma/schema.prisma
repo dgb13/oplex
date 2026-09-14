@@ -50,6 +50,16 @@ enum UnitOfMeasure {
   UNIT
 }
 
+// Ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1 - discriminador
+// de comportamiento de stock/consumo por artículo, capa nueva encima de
+// UnitOfMeasure (que se mantiene tal cual, sin tocar su significado).
+enum MeasurementType {
+  DISCRETE
+  CONTINUOUS
+  LINEAL_1D
+  SURFACE_2D
+}
+
 enum MovementType {
   PURCHASE_IN
   SALE_OUT
@@ -1068,6 +1078,28 @@ model Article {
   name                String
   description         String?
   unitOfMeasure       UnitOfMeasure  @default(UNIT)
+  // Discriminador de cómo se mide/consume el stock de este artículo (ver
+  // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1) - se mantiene
+  // aparte de `unitOfMeasure` de arriba (compatibilidad, sin tocar su
+  // significado actual). @default(DISCRETE) hace que ningún artículo
+  // existente cambie de comportamiento con esta migración - el usuario
+  // elige a mano, por artículo, cuáles pasan a CONTINUO/1D/2D después.
+  // Sólo `purchaseSize`/`baseUnit` llegan en esta fase (lo que CONTINUO
+  // necesita, ver Fase 3) - `isManufactured` y los campos propios de 1D/2D
+  // (commercialLength, minUsableLength, sheetWidth, sheetLength) llegan
+  // recién en la Fase 4, junto con StockPiece/BOM/ProductionOrder.
+  measurementType     MeasurementType @default(DISCRETE)
+  // CONTINUO: tamaño de la presentación de compra en la unidad base de
+  // consumo (ej. 35000 = bolsa de 35kg, si baseUnit="gr") - ver
+  // GoodsReceiptsService.createReceipt, que multiplica/divide por esto al
+  // convertir "bolsas pedidas" a "gramos que entran a stock". Null en
+  // cualquier otro measurementType (o en CONTINUO sin configurar todavía,
+  // en cuyo caso GoodsReceiptsService no convierte nada - factor 1).
+  purchaseSize        Decimal?        @db.Decimal(14, 3)
+  // CONTINUO: unidad base de consumo (gr, ml) - puramente informativo,
+  // ningún cálculo la lee todavía (el factor de conversión sale de
+  // purchaseSize a secas). Sirve para mostrarla en la UI de la Fase 6.
+  baseUnit            String?
   categoryId          String?
   category            Category?      @relation(fields: [categoryId], references: [id])
   taxDefinitionId     String?

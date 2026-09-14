@@ -34,15 +34,31 @@ export class GoodsReceiptsService {
     const receipt = await this.goodsReceiptService.create(dto);
     let accrualAmount = new Prisma.Decimal(0);
     for (const line of receipt.lines) {
+      // Conversión de unidad de compra -> unidad de stock (ver
+      // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 3): PurchaseOrderLine.
+      // quantity/unitCost siguen significando "lo que se le pide al
+      // proveedor" (ej. 3 bolsas a $X la bolsa) - la conversión a la unidad
+      // real de stock (ej. gramos) pasa a ocurrir sólo acá, al recibir.
+      // factor=1 para CONTINUO sin purchaseSize configurado todavía, y para
+      // cualquier otro measurementType - comportamiento actual intacto.
+      const article = line.purchaseOrderLine.articleVariant.article;
+      const factor =
+        article.measurementType === 'CONTINUOUS' && article.purchaseSize
+          ? article.purchaseSize
+          : new Prisma.Decimal(1);
+
       await this.inventoryService.recordMovement({
         warehouseId: receipt.warehouseId,
         articleVariantId: line.purchaseOrderLine.articleVariantId,
         type: 'PURCHASE_IN',
-        quantity: line.quantity.toNumber(),
-        unitCost: line.purchaseOrderLine.unitCost.toNumber(),
+        quantity: line.quantity.mul(factor).toNumber(),
+        unitCost: line.purchaseOrderLine.unitCost.div(factor).toNumber(),
         purchaseOrderId: receipt.purchaseOrderId,
         goodsReceiptLineId: line.id,
       });
+      // El accrual (GRNI) sigue siendo "cantidad pedida × costo por unidad
+      // de compra" tal cual - la conversión de arriba es puramente de
+      // unidad de stock, no cambia cuánto se le debe al proveedor.
       accrualAmount = accrualAmount.add(line.quantity.mul(line.purchaseOrderLine.unitCost));
     }
     await this.accountingService.postGoodsReceiptAccrual({

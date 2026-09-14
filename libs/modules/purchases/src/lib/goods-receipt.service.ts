@@ -4,7 +4,23 @@ import type { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto.js';
 import { getReturnedQuantitiesByGoodsReceiptLine } from './supplier-return.service.js';
 
 const RECEIPT_DETAIL_INCLUDE = {
-  lines: { include: { purchaseOrderLine: { select: { id: true, articleVariantId: true, unitCost: true } } } },
+  lines: {
+    include: {
+      purchaseOrderLine: {
+        select: {
+          id: true,
+          articleVariantId: true,
+          unitCost: true,
+          // measurementType/purchaseSize del artículo, no de la variante -
+          // GoodsReceiptsService (apps/api) los usa para convertir "bolsas
+          // pedidas" a la unidad de stock real antes de mover inventario
+          // (ver Fase 3 del plan de Producción). Sin esto tendría que
+          // volver a consultar cada Article por separado (N+1).
+          articleVariant: { select: { article: { select: { measurementType: true, purchaseSize: true } } } },
+        },
+      },
+    },
+  },
   receivedBy: { select: { id: true, name: true, email: true } },
 } satisfies Prisma.GoodsReceiptInclude;
 
