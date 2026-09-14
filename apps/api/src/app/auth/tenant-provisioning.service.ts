@@ -50,6 +50,16 @@ export class TenantProvisioningService {
     await withTenantContext(this.prisma, input.tenantId, async () => {
       const db = getTenantDb();
       await db.tenant.create({ data: { id: input.tenantId, name: input.name, taxId: input.taxId } });
+      // Toda alta necesita una moneda base desde el día uno - Cotizaciones/
+      // Facturación/etc. la exigen (currencyId no-nullable) y, antes de esto,
+      // ningún tenant nuevo terminaba con una configurada porque nada la
+      // creaba automáticamente (ver el backfill en la migración
+      // currency_base_backfill para los tenants viejos). ARS a secas porque
+      // el producto entero asume Argentina (AFIP, CUIT, IIBB) - no hay
+      // noción de tenant multi-país todavía.
+      await db.currency.create({
+        data: { tenantId: input.tenantId, code: 'ARS', name: 'Peso argentino', isBase: true },
+      });
       const user = await db.user.create({
         data: {
           tenantId: input.tenantId,

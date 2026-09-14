@@ -5,6 +5,7 @@ import { TenantProvisioningService } from './tenant-provisioning.service.js';
 function makePrisma() {
   const fakeTx = {
     tenant: { create: jest.fn().mockResolvedValue({}) },
+    currency: { create: jest.fn().mockResolvedValue({}) },
     user: { create: jest.fn().mockResolvedValue({ id: 'user-1' }) },
     $executeRaw: jest.fn().mockResolvedValue(undefined),
   };
@@ -15,11 +16,15 @@ function makePrisma() {
 }
 
 describe('TenantProvisioningService.provision', () => {
-  it('creates the tenant, then the owner user, then starts the trial - in that order', async () => {
+  it('creates the tenant, its base currency, the owner user, then starts the trial - in that order', async () => {
     const { prisma, fakeTx } = makePrisma();
     const callOrder: string[] = [];
     fakeTx.tenant.create.mockImplementation(() => {
       callOrder.push('tenant');
+      return Promise.resolve({});
+    });
+    fakeTx.currency.create.mockImplementation(() => {
+      callOrder.push('currency');
       return Promise.resolve({});
     });
     fakeTx.user.create.mockImplementation(() => {
@@ -44,8 +49,28 @@ describe('TenantProvisioningService.provision', () => {
       planKey: 'GOLD',
     });
 
-    expect(callOrder).toEqual(['tenant', 'user', 'trial']);
+    expect(callOrder).toEqual(['tenant', 'currency', 'user', 'trial']);
     expect(subscriptionService.startTrial).toHaveBeenCalledWith('GOLD');
+  });
+
+  it('creates a base ARS currency for the new tenant', async () => {
+    const { prisma, fakeTx } = makePrisma();
+    const subscriptionService = { startTrial: jest.fn().mockResolvedValue({}) } as unknown as SubscriptionService;
+    const service = new TenantProvisioningService(prisma, subscriptionService);
+
+    await service.provision({
+      tenantId: 'tenant-1',
+      name: 'Acme',
+      ownerEmail: 'o@acme.com',
+      passwordHash: 'hashed',
+      mustChangePassword: true,
+      autoVerifyEmail: false,
+      planKey: 'GOLD',
+    });
+
+    expect(fakeTx.currency.create).toHaveBeenCalledWith({
+      data: { tenantId: 'tenant-1', code: 'ARS', name: 'Peso argentino', isBase: true },
+    });
   });
 
   it('sets emailVerifiedAt to null when autoVerifyEmail is false (signup público)', async () => {
