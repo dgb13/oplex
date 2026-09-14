@@ -1,6 +1,7 @@
 import type { AccountingService } from '@plexo/accounting';
 import { Prisma } from '@plexo/database';
 import type { InventoryService } from '@plexo/inventory';
+import type { StockPieceService } from '@plexo/production';
 import type { GoodsReceiptService } from '@plexo/purchases';
 import { GoodsReceiptsService } from './goods-receipts.service.js';
 
@@ -17,7 +18,11 @@ jest.mock('@plexo/purchases', () => ({ GoodsReceiptService: jest.fn() }));
 // 3 (conversión de unidad de compra) salvo que se pase measurementType/
 // purchaseSize explícitos.
 function discreteArticle() {
-  return { measurementType: 'DISCRETE' as const, purchaseSize: null };
+  return { measurementType: 'DISCRETE' as const, purchaseSize: null, commercialLength: null, minUsableLength: null };
+}
+
+function makeStockPieceService(): jest.Mocked<Pick<StockPieceService, 'createFullStockPiece'>> {
+  return { createFullStockPiece: jest.fn().mockResolvedValue({}) };
 }
 
 function makeReceipt(overrides: Record<string, unknown> = {}) {
@@ -60,7 +65,8 @@ describe('GoodsReceiptsService.createReceipt', () => {
     const accountingService = {
       postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+    const stockPieceService = makeStockPieceService();
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, stockPieceService as unknown as StockPieceService, accountingService);
     const dto = {
       purchaseOrderId: 'po-1',
       warehouseId: 'warehouse-1',
@@ -99,6 +105,7 @@ describe('GoodsReceiptsService.createReceipt', () => {
     // that arrived last week must land in last week's P&L.
     expect(accrualArg.date).toEqual(new Date('2026-07-15'));
     expect(result).toBe(receipt);
+    expect(stockPieceService.createFullStockPiece).not.toHaveBeenCalled();
   });
 
   it('propagates a recordMovement failure without swallowing it (the enclosing tx rolls back the receipt too)', async () => {
@@ -109,7 +116,8 @@ describe('GoodsReceiptsService.createReceipt', () => {
     const accountingService = {
       postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+    const stockPieceService = makeStockPieceService();
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, stockPieceService as unknown as StockPieceService, accountingService);
 
     await expect(
       service.createReceipt({
@@ -143,7 +151,8 @@ describe('GoodsReceiptsService.createReceipt', () => {
     const accountingService = {
       postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+    const stockPieceService = makeStockPieceService();
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, stockPieceService as unknown as StockPieceService, accountingService);
 
     await service.createReceipt({
       purchaseOrderId: 'po-1',
@@ -185,7 +194,8 @@ describe('GoodsReceiptsService.createReceipt', () => {
     const accountingService = {
       postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, accountingService);
+    const stockPieceService = makeStockPieceService();
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, stockPieceService as unknown as StockPieceService, accountingService);
 
     await service.createReceipt({
       purchaseOrderId: 'po-1',
@@ -196,5 +206,56 @@ describe('GoodsReceiptsService.createReceipt', () => {
     expect(inventoryService.recordMovement).toHaveBeenCalledWith(
       expect.objectContaining({ quantity: 10, unitCost: 5 }),
     );
+  });
+
+  it('creates one StockPiece per commercial-length unit received for a LINEAL_1D article (3 barras de 2000mm -> 3 piezas, 6000mm de espejo en StockLedger)', async () => {
+    const receipt = makeReceipt({
+      lines: [
+        {
+          id: 'receipt-line-1',
+          quantity: new Prisma.Decimal(3), // 3 barras pedidas/recibidas
+          purchaseOrderLine: {
+            id: 'line-1',
+            articleVariantId: 'variant-cable',
+            unitCost: new Prisma.Decimal(10000), // $/barra
+            articleVariant: {
+              article: {
+                measurementType: 'LINEAL_1D',
+                purchaseSize: null,
+                commercialLength: new Prisma.Decimal(2000),
+                minUsableLength: new Prisma.Decimal(100),
+              },
+            },
+          },
+        },
+      ],
+    });
+    const goodsReceiptService = { create: jest.fn().mockResolvedValue(receipt) } as unknown as GoodsReceiptService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      postGoodsReceiptAccrual: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const stockPieceService = makeStockPieceService();
+    const service = new GoodsReceiptsService(goodsReceiptService, inventoryService, stockPieceService as unknown as StockPieceService, accountingService);
+
+    await service.createReceipt({
+      purchaseOrderId: 'po-1',
+      warehouseId: 'warehouse-1',
+      lines: [{ purchaseOrderLineId: 'line-1', quantity: 3 }],
+    });
+
+    // Espejo de StockLedger: 3 barras * 2000mm = 6000mm, a $/mm = 10000/2000 = 5.
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ articleVariantId: 'variant-cable', quantity: 6000, unitCost: 5 }),
+    );
+    expect(stockPieceService.createFullStockPiece).toHaveBeenCalledTimes(3);
+    expect(stockPieceService.createFullStockPiece).toHaveBeenCalledWith({
+      articleVariantId: 'variant-cable',
+      warehouseId: 'warehouse-1',
+      length: new Prisma.Decimal(2000),
+      unitCost: expect.objectContaining({ toString: expect.any(Function) }),
+    });
+    const unitCostArg = (stockPieceService.createFullStockPiece as jest.Mock).mock.calls[0][0].unitCost as Prisma.Decimal;
+    expect(unitCostArg.toString()).toBe('5');
   });
 });

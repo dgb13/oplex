@@ -21,6 +21,7 @@ import type { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
 import type { RecordStockMovementDto } from './dto/record-stock-movement.dto.js';
 import type { SetMinimumStockDto } from './dto/set-minimum-stock.dto.js';
 import { computeStockDelta } from './stock-movement.domain.js';
+import { getReservedQuantity } from './stock-availability.domain.js';
 
 export interface ReorderSuggestion {
   warehouseId: string;
@@ -464,29 +465,24 @@ export class InventoryService {
       }
 
       // "Disponible = físico - reservado" (ver
-      // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2): cualquier salida
-      // de stock que no sea un ADJUSTMENT manual (un ajuste es una
+      // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2/4): cualquier
+      // salida de stock que no sea un ADJUSTMENT manual (un ajuste es una
       // corrección de la realidad física, no debe verse bloqueado por una
       // reserva de producción) respeta lo que otra orden ya tiene
       // comprometido, no sólo el total físico. Sumado bajo el mismo lock que
       // ya tomamos arriba sobre esta fila de StockLedger - por eso es seguro
       // contra otro recordMovement concurrente, pero SÓLO si quien crea o
-      // libera una reserva (ProductionOrderService, Fase 4) toma ese mismo
-      // lock antes de tocar stock_reservations (ver el contrato de
-      // concurrencia documentado en el modelo StockReservation). Hoy esa
-      // tabla está siempre vacía - nada la escribe todavía - así que esta
-      // cuenta da 0 y el chequeo es un no-op real, sin cambiar el
-      // comportamiento actual.
+      // libera una reserva (ProductionOrderService, @plexo/production) toma
+      // ese mismo lock antes de tocar stock_reservations (ver el contrato de
+      // concurrencia documentado en el modelo StockReservation).
+      // getReservedQuantity es el mismo helper que usa
+      // ProductionPlanningService.computeProducible - nunca pueden divergir
+      // en qué cuenta como "reservado".
       if (dto.type !== 'ADJUSTMENT') {
-        const reservedAgg = await db.stockReservation.aggregate({
-          where: {
-            warehouseId: dto.warehouseId,
-            inputArticleVariantId: dto.articleVariantId,
-            status: 'ACTIVE',
-          },
-          _sum: { quantityReserved: true },
+        const reserved = await getReservedQuantity(db, {
+          warehouseId: dto.warehouseId,
+          articleVariantId: dto.articleVariantId,
         });
-        const reserved = reservedAgg._sum.quantityReserved ?? new Prisma.Decimal(0);
         const available = (priorLedger?.quantity ?? new Prisma.Decimal(0)).sub(reserved);
         if (available.lt(-delta)) {
           throw new BadRequestException(

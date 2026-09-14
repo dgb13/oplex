@@ -33,6 +33,17 @@ export default [
             { sourceTag: 'scope:tenant-settings', onlyDependOnLibsWithTags: ['scope:tenant-settings', 'scope:shared'] },
             { sourceTag: 'scope:activity-log', onlyDependOnLibsWithTags: ['scope:activity-log', 'scope:shared'] },
             { sourceTag: 'scope:purchases', onlyDependOnLibsWithTags: ['scope:purchases', 'scope:shared'] },
+            // Producción reusa el helper puro de "disponible"
+            // (getReservedQuantity) del módulo de inventario - ver
+            // libs/modules/inventory/src/lib/stock-availability.domain.ts.
+            // Única excepción del repo a "un lib module sólo depende de sí
+            // mismo + shared": importa una función pura de otro módulo, no
+            // su Service (eso sigue prohibido, ver la regla de
+            // composición-en-apps/api de siempre).
+            {
+              sourceTag: 'scope:production',
+              onlyDependOnLibsWithTags: ['scope:production', 'scope:shared', 'scope:inventory'],
+            },
             { sourceTag: 'scope:payables', onlyDependOnLibsWithTags: ['scope:payables', 'scope:shared'] },
             { sourceTag: 'scope:treasury', onlyDependOnLibsWithTags: ['scope:treasury', 'scope:shared'] },
             { sourceTag: 'scope:mercadopago', onlyDependOnLibsWithTags: ['scope:mercadopago', 'scope:shared'] },
@@ -54,6 +65,7 @@ export default [
                 'scope:tenant-settings',
                 'scope:activity-log',
                 'scope:purchases',
+                'scope:production',
                 'scope:payables',
                 'scope:treasury',
                 'scope:mercadopago',

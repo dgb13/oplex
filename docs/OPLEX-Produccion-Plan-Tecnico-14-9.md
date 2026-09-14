@@ -314,7 +314,7 @@ real cambia el `measurementType` de un artículo con historial. `nx run-many
 
 ---
 
-## Fase 4 — Entidades de producción
+## Fase 4 — Entidades de producción ✅ IMPLEMENTADA (2026-09-14)
 
 Acá entra el grueso del schema nuevo del diseño (§2). Contesto los puntos 2, 3, 5, 8, 9,
 11 del prompt.
@@ -559,6 +559,65 @@ confirmar una orden.
 nuevas, no modifica el comportamiento de tablas existentes salvo los campos opcionales
 de `Article`).
 
+**Implementado y verificado en vivo (2026-09-14)**: migración
+`20260930080000_production_entities` (7 tablas + 3 enums nuevos, generada con `prisma
+migrate diff` contra la DB real y aplicada), nueva librería Nx `libs/modules/production`
+(`@plexo/production` - `BomService`, `StockPieceService`, `ProductionPlanningService`,
+`ProductionOrderService`, `ProductionController`, `ProductionModule`) y una excepción de
+`eslint.config.mjs` documentada en el propio archivo: `scope:production` puede importar
+`scope:inventory` (única vez en todo el repo que un lib module depende del scope de
+otro) porque reusa `getReservedQuantity` (función pura, extraída a
+`stock-availability.domain.ts`), nunca el `Service` de Inventario.
+
+- **`completeOrder`** (el consumo/producción real) se adelantó a esta fase completa
+  (el plan original lo separaba en la Fase 5, pero esa fase es sólo el asiento
+  contable - el consumo en sí no depende de contabilidad) y vive en
+  `apps/api/src/app/production` (`ProductionService`/`ProductionExecutionController`,
+  ruta separada de `@plexo/production`'s propio controller, mismo criterio que
+  `goods-receipts` vs. las rutas propias de `@plexo/purchases`) porque necesita llamar
+  a `InventoryService.recordMovement`, algo que `ProductionOrderService` (lib) no puede
+  hacer. Reparte el costo entre subproductos (`BomByproduct.costSharePercent`) y el
+  producto principal se queda con el remanente, para que la suma cierre exacto contra
+  el costo total consumido sin arrastre de redondeo.
+- **1D en `completeOrder`**: si una sola `StockPiece` no alcanza para cubrir toda la
+  reserva, se agota la más grande disponible y se sigue cortando de otra(s) - probado
+  en vivo cortando 1500mm de una barra de 2000mm (deja un recorte de 500mm AVAILABLE,
+  por encima de `minUsableLength=100`).
+- **`GoodsReceiptsService` extendido para 1D** (pendiente que quedó explícito de la
+  fase anterior): `commercialLength` cumple para 1D el mismo rol que `purchaseSize`
+  para CONTINUO - "cuánto trae cada unidad pedida" - y además de espejar
+  `StockLedger.quantity` crea una `StockPiece` `FULL_STOCK` por cada unidad comercial
+  recibida (barra/rollo), a `unitCost` = costo por mm.
+- Gap real de diseño que no estaba resuelto en ninguno de los dos documentos:
+  `ProductionOrder` no tiene `warehouseId` propio (ni lo tenía el diseño original) -
+  se resolvió pidiéndolo como parámetro explícito en `confirm()`
+  (`ConfirmProductionOrderDto.warehouseId`), ya que todas las reservas de una orden
+  comparten depósito.
+- 34 tests nuevos (`BomService`, `StockPieceService`, `ProductionPlanningService`,
+  `ProductionOrderService` en `@plexo/production`; `ProductionService` y la extensión
+  1D de `GoodsReceiptsService` en `apps/api`) más los existentes de `inventory`/
+  `purchases`/`api` sin romper ninguno. Verificado de punta a punta contra Postgres
+  real y la API real corriendo (no sólo mocks): marqué "CABLE CANAL RANURADO 70X30" (un
+  artículo real de la demo) como `LINEAL_1D` (`commercialLength=2000`,
+  `minUsableLength=100`), compré 3 barras vía una Orden de Compra + remito real (creó 3
+  `StockPiece` de 2000mm), armé una receta real (`POST /production/bom`, 300mm por
+  unidad), confirmé `GET /production/producible` (dio **20** unidades, `6000/300`),
+  creé y confirmé una orden de 5 unidades (reservó exactamente 1500mm, `producible`
+  bajó a **15** reflejando la reserva), la completé (`POST
+  /production/orders/:id/complete` - cortó una sola barra de 2000mm dejando un recorte
+  de 500mm, `ProductionConsumption.cost=7500`, `ProductionOutput` de 5 unidades a
+  $1500/u, orden `DONE`), y probé también el camino corto: una orden de 20 unidades
+  confirmó con `isShortOnMaterials=true` (reservó las 4500mm que quedaban),
+  `complete()` la rechazó con el mensaje esperado, y `cancel()` liberó la reserva
+  (`RELEASED`) correctamente. `nx affected -t lint,test,build --uncommitted` sobre los
+  33 proyectos afectados, 100% verde.
+- **Artefacto de datos ya documentado en la Fase 3, repetido acá**: cambiar el
+  `measurementType` de un artículo que ya tenía stock cargado bajo la convención vieja
+  (unidades, no mm) deja el `avgUnitCost`/`quantity` de `StockLedger` con una mezcla sin
+  sentido (no afecta el costeo real de producción, que para 1D usa siempre
+  `StockPiece.unitCost`, nunca el promedio de `StockLedger`) - un caso de borde a
+  resolver con una advertencia en la futura UI de la Fase 6, no un defecto de esta fase.
+
 ---
 
 ## Fase 5 — Asientos contables de producción (punto 10)
@@ -660,14 +719,14 @@ está firme — el trabajo real de esta fase es de UI/UX, no de arquitectura.
    DISCRETE), `purchaseSize`, `baseUnit`. Aplicada (Fase 3) - sólo los 3 campos que
    CONTINUO necesita, no los 5 de la Fase 4 completa (ver esa fase para el porqué de
    este split).
-5. `articles_add_manufacturing_fields` — `isManufactured`, `commercialLength`,
-   `minUsableLength`, `sheetWidth`, `sheetLength` (1D/2D/BOM). Todos nullable u
-   opcionales, sin backfill de datos.
-6. `stock_pieces` — tabla nueva.
-7. `production_bom` — `bill_of_materials`, `bom_lines`, `bom_byproducts`.
-8. `production_orders` — `production_orders`, `production_consumptions`,
-   `production_outputs`, más el `ALTER TABLE stock_reservations` que agrega la FK real
-   a `productionOrderId` (hoy suelta, ver Fase 2).
+5-8. ✅ `20260930080000_production_entities` — las 4 migraciones planeadas (campos de
+   fabricación en `Article`, `stock_pieces`, BOM, órdenes de producción) se aplicaron
+   como **una sola** migración en vez de cuatro separadas (generada de punta con
+   `prisma migrate diff` contra la DB real, todo el schema nuevo de la Fase 4 es
+   aditivo y sin backfill, no había motivo real para partirla). Incluye el `ALTER
+   TABLE stock_reservations` que agrega la FK real a `productionOrderId` (hoy suelta,
+   ver Fase 2). Aplicada y re-verificada con un segundo `prisma migrate diff` que
+   confirmó cero drift atribuible a este cambio.
 
 (No hay migración de `reservedQuantity` desnormalizada — se confirmó la Opción B para
 el cálculo de "disponible", ver Fase 2.)

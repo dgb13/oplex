@@ -1,6 +1,7 @@
 export * from './lib/inventory.module.js';
 export * from './lib/inventory.service.js';
 export * from './lib/stock-movement.domain.js';
+export * from './lib/stock-availability.domain.js';
 export * from './lib/dto/create-warehouse.dto.js';
 export * from './lib/dto/create-category.dto.js';
 export * from './lib/dto/create-article.dto.js';

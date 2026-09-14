@@ -11,12 +11,21 @@ const RECEIPT_DETAIL_INCLUDE = {
           id: true,
           articleVariantId: true,
           unitCost: true,
-          // measurementType/purchaseSize del artículo, no de la variante -
-          // GoodsReceiptsService (apps/api) los usa para convertir "bolsas
-          // pedidas" a la unidad de stock real antes de mover inventario
-          // (ver Fase 3 del plan de Producción). Sin esto tendría que
-          // volver a consultar cada Article por separado (N+1).
-          articleVariant: { select: { article: { select: { measurementType: true, purchaseSize: true } } } },
+          // measurementType/purchaseSize/commercialLength del artículo, no
+          // de la variante - GoodsReceiptsService (apps/api) los usa para
+          // convertir "bolsas"/"barras pedidas" a la unidad de stock real
+          // antes de mover inventario (ver Fase 3/4.2 del plan de
+          // Producción - commercialLength es el equivalente de
+          // purchaseSize para 1D: cuántos mm trae CADA barra/rollo
+          // pedido). Sin esto tendría que volver a consultar cada Article
+          // por separado (N+1).
+          articleVariant: {
+            select: {
+              article: {
+                select: { measurementType: true, purchaseSize: true, commercialLength: true, minUsableLength: true },
+              },
+            },
+          },
         },
       },
     },

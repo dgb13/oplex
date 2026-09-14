@@ -101,6 +101,9 @@
     },
     {
       "path": "./libs/modules/ai-invoice-scan"
+    },
+    {
+      "path": "./libs/modules/production"
     }
   ],
   "compilerOptions": {}

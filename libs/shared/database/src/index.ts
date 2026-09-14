@@ -88,5 +88,13 @@ export type {
   TenantMembershipAssignment,
   PlatformSettings,
   TaxDeadline,
+  StockReservation,
+  StockPiece,
+  BillOfMaterials,
+  BomLine,
+  BomByproduct,
+  ProductionOrder,
+  ProductionConsumption,
+  ProductionOutput,
 } from './generated/client.js';
 export * from './generated/enums.js';

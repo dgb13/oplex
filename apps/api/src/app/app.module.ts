@@ -13,6 +13,7 @@ import { InventoryCartModule } from '@plexo/inventory-cart';
 import { InvoicingModule } from '@plexo/invoicing';
 import { MercadoPagoModule } from '@plexo/mercadopago';
 import { PayablesModule } from '@plexo/payables';
+import { ProductionModule } from '@plexo/production';
 import { PurchasesModule } from '@plexo/purchases';
 import { QuotesModule } from '@plexo/quotes';
 import { ReceivablesModule } from '@plexo/receivables';
@@ -36,6 +37,7 @@ import { InventoryCartCheckoutModule } from './inventory-cart-checkout/inventory
 import { PurchaseCreditNotesModule } from './purchase-credit-notes/purchase-credit-notes.module.js';
 import { PurchaseInvoicesModule } from './purchase-invoices/purchase-invoices.module.js';
 import { PosModule } from './pos/pos.module.js';
+import { ProductionExecutionModule } from './production/production-execution.module.js';
 import { SalesModule } from './sales/sales.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
 import { SupplierReturnsModule } from './supplier-returns/supplier-returns.module.js';
@@ -70,6 +72,8 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     TenantSettingsModule,
     ActivityLogModule,
     PurchasesModule,
+    ProductionModule,
+    ProductionExecutionModule,
     QuotesModule,
     InventoryCartCheckoutModule,
     GoodsReceiptsModule,

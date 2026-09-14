@@ -1100,6 +1100,26 @@ model Article {
   // ningún cálculo la lee todavía (el factor de conversión sale de
   // purchaseSize a secas). Sirve para mostrarla en la UI de la Fase 6.
   baseUnit            String?
+  // true = este artículo se fabrica (tiene una BillOfMaterials activa que
+  // lo referencia como outputArticleVariantId) - false = se compra/revende
+  // tal cual. Puramente informativo por ahora (BomService no lo valida
+  // todavía al crear una receta) - existir la BOM es lo que realmente
+  // habilita producir, este flag es sólo para que el catálogo/la UI (Fase
+  // 6) puedan filtrar "productos fabricados" sin tener que hacer un join.
+  isManufactured      Boolean         @default(false)
+  // LINEAL_1D: largo de la "medida comercial"/presentación con la que
+  // nace una StockPiece FULL_STOCK nueva (mm) - ver
+  // StockPieceService.createFullStockPiece.
+  commercialLength    Decimal?        @db.Decimal(14, 3)
+  // LINEAL_1D: umbral de merma (mm) - un recorte por debajo de esto se
+  // marca SCRAP en vez de quedar disponible como OFFCUT reutilizable. Ver
+  // StockPieceService.cutPiece.
+  minUsableLength     Decimal?        @db.Decimal(14, 3)
+  // SURFACE_2D: dimensiones de la plancha estándar (mm) - Nivel A del
+  // diseño (§5): sólo informan el área total de una plancha nueva, no hay
+  // nesting/recortes 2D rastreables en v1.
+  sheetWidth          Decimal?        @db.Decimal(14, 3)
+  sheetLength         Decimal?        @db.Decimal(14, 3)
   categoryId          String?
   category            Category?      @relation(fields: [categoryId], references: [id])
   taxDefinitionId     String?
@@ -1193,6 +1213,13 @@ model ArticleVariant {
   purchaseOrderLines PurchaseOrderLine[]
   cartItems          InventoryCartItem[]
   stockReservations  StockReservation[]
+  stockPieces               StockPiece[]
+  producedByBoms            BillOfMaterials[]        @relation("BomOutput")
+  bomLinesAsInput           BomLine[]                @relation("BomLineInput")
+  bomByproductsAsOutput     BomByproduct[]           @relation("BomByproductOutput")
+  productionOrdersAsOutput  ProductionOrder[]        @relation("ProductionOrderOutput")
+  productionConsumptions    ProductionConsumption[]  @relation("ProductionConsumptionInput")
+  productionOutputs         ProductionOutput[]       @relation("ProductionOutputArticle")
 
   @@unique([tenantId, sku])
   @@index([tenantId, articleId])
@@ -1268,6 +1295,7 @@ model Warehouse {
   goodsReceipts     GoodsReceipt[]
   cashRegisters     CashRegister[]
   stockReservations StockReservation[]
+  stockPieces       StockPiece[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -1297,15 +1325,20 @@ model StockReservation {
   id                    String             @id @default(uuid())
   tenantId              String
   productionOrderId     String
+  // Relación real desde la Fase 4 (ProductionOrder ya existe) - en la Fase
+  // 2 esto era una referencia suelta sin FK, mismo criterio que
+  // StockMovement.sourceType/sourceId, porque ProductionOrder todavía no
+  // existía. ON DELETE RESTRICT (nunca se borra una orden con reservas).
+  productionOrder       ProductionOrder    @relation(fields: [productionOrderId], references: [id])
   inputArticleVariantId String
   articleVariant        ArticleVariant     @relation(fields: [inputArticleVariantId], references: [id])
   warehouseId           String
   warehouse             Warehouse          @relation(fields: [warehouseId], references: [id])
   quantityReserved      Decimal            @db.Decimal(14, 3)
-  // 1D (Fase 4): si esta reserva es de una pieza física específica en vez
-  // de una cantidad genérica del agregado. Sin @relation todavía -
-  // StockPiece tampoco existe hasta la Fase 4.
+  // 1D: si esta reserva es de una pieza física específica en vez de una
+  // cantidad genérica del agregado (ver StockPieceService).
   stockPieceId          String?
+  stockPiece            StockPiece?        @relation(fields: [stockPieceId], references: [id])
   status                ReservationStatus  @default(ACTIVE)
   createdAt             DateTime           @default(now())
 
@@ -1317,6 +1350,215 @@ enum ReservationStatus {
   ACTIVE
   CONSUMED
   RELEASED
+}
+
+// --- Producción (@plexo/production) ---
+// Ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4. StockReservation
+// ya existe desde la Fase 2 (arriba); acá van el resto de las entidades:
+// piezas físicas (1D), recetas (BOM) y órdenes de producción.
+
+// Pieza física individual con remanente rastreable - la clave del Nivel 2
+// en 1D (cable canal, perfiles, caños): el stock deja de ser un número
+// plano y pasa a ser una lista de piezas ("2000 -> 1100 -> 600" del
+// diseño). StockLedger.quantity para un artículo 1D se mantiene
+// sincronizado (espejo del total de piezas AVAILABLE) en la misma
+// transacción que crea/modifica una pieza - ningún lector actual de stock
+// (listArticles, Tablero, ArticlePicker, listReorderSuggestions) cambia;
+// sólo StockPieceService y ProductionPlanningService consultan esta tabla
+// directamente. Ver Fase 4.2/4.3 del plan para el porqué de este diseño.
+model StockPiece {
+  id               String              @id @default(uuid())
+  tenantId         String
+  articleVariantId String
+  articleVariant   ArticleVariant      @relation(fields: [articleVariantId], references: [id])
+  warehouseId      String
+  warehouse        Warehouse           @relation(fields: [warehouseId], references: [id])
+  originalLength   Decimal             @db.Decimal(14, 3)
+  currentLength    Decimal             @db.Decimal(14, 3)
+  status           PieceStatus         @default(AVAILABLE)
+  sourceType       PieceSource
+  parentPieceId    String?
+  parentPiece      StockPiece?         @relation("PieceLineage", fields: [parentPieceId], references: [id])
+  offcuts          StockPiece[]        @relation("PieceLineage")
+  // Costo heredado del PPP del lote de origen al nacer la pieza,
+  // proporcional a su longitud - nunca recalculado después (mismo
+  // criterio "congelado al momento" que StockMovement.unitCost). Un
+  // recorte (OFFCUT) hereda el mismo unitCost que su pieza madre.
+  unitCost         Decimal             @db.Decimal(14, 4)
+  createdAt        DateTime            @default(now())
+  reservations      StockReservation[]
+  consumptions      ProductionConsumption[] @relation("ConsumedPiece")
+  offcutOf          ProductionConsumption[] @relation("OffcutPiece")
+
+  // Búsqueda de "mejor pieza para este corte": AVAILABLE, ordenadas por
+  // currentLength ascendente, filtradas por artículo+depósito.
+  @@index([tenantId, articleVariantId, warehouseId, status, currentLength])
+  @@map("stock_pieces")
+}
+
+enum PieceStatus {
+  AVAILABLE
+  DEPLETED
+  SCRAP
+}
+
+enum PieceSource {
+  FULL_STOCK
+  OFFCUT
+}
+
+// La receta que se anexa a un artículo producible (Article.isManufactured).
+// Versionado append-only: editar una receta activa nunca la pisa - crea una
+// fila nueva (version = anterior+1, isActive=true) y desactiva la vieja,
+// mismo criterio que PriceHistory/ExchangeRateHistory. Sólo una versión
+// activa por producto a la vez (ver @@index de abajo, filtrado por
+// aplicación - Postgres no tiene @@unique parcial nativo en Prisma).
+model BillOfMaterials {
+  id                     String          @id @default(uuid())
+  tenantId               String
+  outputArticleVariantId String
+  outputArticleVariant   ArticleVariant  @relation("BomOutput", fields: [outputArticleVariantId], references: [id])
+  name                   String
+  version                Int             @default(1)
+  isActive               Boolean         @default(true)
+  createdAt              DateTime        @default(now())
+  lines                  BomLine[]
+  byproducts             BomByproduct[]
+  productionOrders       ProductionOrder[]
+
+  @@index([tenantId, outputArticleVariantId, isActive])
+  @@map("bill_of_materials")
+}
+
+model BomLine {
+  id                    String          @id @default(uuid())
+  tenantId              String
+  bomId                 String
+  bom                   BillOfMaterials @relation(fields: [bomId], references: [id])
+  inputArticleVariantId String
+  inputArticleVariant   ArticleVariant  @relation("BomLineInput", fields: [inputArticleVariantId], references: [id])
+  // Se interpreta según el measurementType del insumo: DISCRETO=unidades,
+  // CONTINUO=gr/ml, 1D=largo del corte (mm) x cutsCount, 2D=área (width x
+  // length). Ver ProductionPlanningService.computeProducible.
+  quantity              Decimal         @db.Decimal(14, 3)
+  width                 Decimal?        @db.Decimal(14, 3)
+  length                Decimal?        @db.Decimal(14, 3)
+  cutsCount             Int?
+  // Desperdicio *planificado* (%) - infla la cantidad a reservar/consumir:
+  // cantidadReservada = quantity × cantidadOrdenada × (1+expectedWastePercent/100).
+  // Distinto de ProductionConsumption.wasteAmount (la merma *real*).
+  expectedWastePercent  Decimal         @default(0) @db.Decimal(5, 2)
+
+  @@index([tenantId, bomId])
+  @@map("bom_lines")
+}
+
+// Subproductos/co-productos *planificados y declarados en la receta* (se
+// sabe de antemano que salen) - distinto del recorte reutilizable 1D
+// (StockPiece OFFCUT), que depende del corte puntual y se maneja por su
+// propia vía.
+model BomByproduct {
+  id                     String         @id @default(uuid())
+  tenantId               String
+  bomId                  String
+  bom                    BillOfMaterials @relation(fields: [bomId], references: [id])
+  outputArticleVariantId String
+  outputArticleVariant   ArticleVariant @relation("BomByproductOutput", fields: [outputArticleVariantId], references: [id])
+  quantity               Decimal        @db.Decimal(14, 3)
+  // % del costo total de producción que absorbe este subproducto - la
+  // suma de todos los BomByproduct de una receta más el remanente
+  // implícito del producto principal debe dar 100% (validado al guardar
+  // la receta, ver BomService.create).
+  costSharePercent       Decimal?       @db.Decimal(5, 2)
+
+  @@index([tenantId, bomId])
+  @@map("bom_byproducts")
+}
+
+// La orden de producción en sí. bomId es opcional (una orden ad-hoc sin
+// receta formal es válida) - bomVersion se graba al crear la orden y nunca
+// se recalcula después, aunque la receta cambie más tarde (mismo criterio
+// "congelado" que StockMovement.unitCost).
+model ProductionOrder {
+  id                     String                  @id @default(uuid())
+  tenantId               String
+  outputArticleVariantId String
+  outputArticleVariant   ArticleVariant          @relation("ProductionOrderOutput", fields: [outputArticleVariantId], references: [id])
+  bomId                  String?
+  bom                    BillOfMaterials?        @relation(fields: [bomId], references: [id])
+  bomVersion             Int?
+  quantity               Decimal                 @db.Decimal(14, 3)
+  status                 ProductionStatus        @default(DRAFT)
+  // Avanzó (reservó lo que sí había) con faltante de insumos - ver
+  // ProductionOrderService.confirm. La orden queda en cola visible como
+  // "esperando insumos", nunca consume hasta que se complete el faltante
+  // y el usuario confirme avanzar (sugerencia + confirmación manual, nunca
+  // automático - regla explícita del diseño §7).
+  isShortOnMaterials     Boolean                 @default(false)
+  createdAt              DateTime                @default(now())
+  startedAt              DateTime?
+  finishedAt             DateTime?
+  cancelledAt             DateTime?
+  reservations           StockReservation[]
+  consumptions           ProductionConsumption[]
+  outputs                ProductionOutput[]
+
+  @@index([tenantId, status])
+  @@map("production_orders")
+}
+
+enum ProductionStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// Registro de consumo real (al completar la orden) - uno por insumo
+// consumido. cost es el costo de lo consumido (PPP proporcional, o el
+// unitCost de la StockPiece específica si stockPieceId está seteado).
+model ProductionConsumption {
+  id                    String           @id @default(uuid())
+  tenantId              String
+  productionOrderId     String
+  productionOrder       ProductionOrder  @relation(fields: [productionOrderId], references: [id])
+  inputArticleVariantId String
+  inputArticleVariant   ArticleVariant   @relation("ProductionConsumptionInput", fields: [inputArticleVariantId], references: [id])
+  // 1D: de qué pieza física se cortó (la sugerida u override del operario).
+  stockPieceId          String?
+  stockPiece            StockPiece?      @relation("ConsumedPiece", fields: [stockPieceId], references: [id])
+  quantityConsumed      Decimal          @db.Decimal(14, 3)
+  // 1D: recorte generado (nueva StockPiece OFFCUT), si el corte dejó un
+  // remanente ≥ minUsableLength.
+  offcutPieceId         String?
+  offcutPiece           StockPiece?      @relation("OffcutPiece", fields: [offcutPieceId], references: [id])
+  // Merma *real* generada (recorte < minUsableLength en 1D, o desperdicio
+  // 2D) - distinto de BomLine.expectedWastePercent (la merma *planificada*).
+  wasteAmount           Decimal          @default(0) @db.Decimal(14, 3)
+  cost                  Decimal          @db.Decimal(14, 4)
+
+  @@index([tenantId, productionOrderId])
+  @@map("production_consumptions")
+}
+
+// Cada producto que la orden generó - el principal (isPrimary=true) y los
+// subproductos declarados en BomByproduct (isPrimary=false). cost sale del
+// reparto de BomByproduct.costSharePercent sobre el costo total de
+// insumos consumidos (ver ProductionOrderService.complete).
+model ProductionOutput {
+  id                String          @id @default(uuid())
+  tenantId          String
+  productionOrderId String
+  productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  articleVariantId  String
+  articleVariant    ArticleVariant  @relation("ProductionOutputArticle", fields: [articleVariantId], references: [id])
+  isPrimary         Boolean
+  quantityProduced  Decimal         @db.Decimal(14, 3)
+  cost              Decimal         @db.Decimal(14, 4)
+
+  @@index([tenantId, productionOrderId])
+  @@map("production_outputs")
 }
 
 // --- Caja / POS (@plexo/pos) ---
