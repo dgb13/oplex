@@ -145,7 +145,7 @@ run-many -t test,build,lint --projects=subscriptions,api,web` 100% verde (34 tes
 
 ---
 
-## Fase 2 — Reservas / "disponible" en `recordMovement`
+## Fase 2 — Reservas / "disponible" en `recordMovement` ✅ IMPLEMENTADA (2026-09-14)
 
 Esta es la pregunta más importante técnicamente (punto 6 del prompt) y la que más
 decisiones de diseño abre. La resuelvo, pero marco explícitamente los puntos donde hay
@@ -212,6 +212,43 @@ model StockReservation {
 **Riesgo**: 🔴 alto pero acotado — es el corazón del punto de escritura único, así que
 un bug acá afecta todo el sistema. Por eso va después de la Fase 0 (con el lock ya
 puesto) y antes de construir ninguna entidad de producción encima.
+
+**Implementado y verificado en vivo (2026-09-14)**: migración `20260930060000_stock_reservations`
+crea `StockReservation` (con `ReservationStatus`, RLS + `tenant_isolation` policy,
+igual criterio que cualquier otra tabla tenant-scoped) **por sí sola**, antes de que
+`ProductionOrder` exista (Fase 4) - desviación deliberada de la lista de migraciones
+original (que no tenía ninguna migración propia para la Fase 2): `recordMovement` ya
+necesita poder sumar reservas `ACTIVE`, así que la tabla nace ahora, vacía/inerte,
+lista para cuando la Fase 4 empiece a escribir en ella. `productionOrderId` es una
+referencia suelta (sin `@relation`/FK), mismo criterio que
+`StockMovement.sourceType/sourceId` - la Fase 4 agrega la FK real en la misma
+migración que cree `production_orders`.
+
+`InventoryService.recordMovement` ahora calcula "disponible" (bajo el mismo lock de la
+Fase 0) para toda salida de stock que no sea `ADJUSTMENT`, y rechaza con
+`BadRequestException('Insufficient available stock in this warehouse (some is reserved
+for production)')` si la cantidad pedida excede lo disponible - antes incluso de llegar
+al `updateMany` atómico existente (que queda como red de seguridad adicional, ahora
+redundante en la práctica pero inofensiva). `ADJUSTMENT` queda explícitamente afuera de
+este chequeo (es una corrección de la realidad física, no debe bloquearse por una
+reserva de producción).
+
+**Contrato de concurrencia documentado** (en el modelo `StockReservation` y en el
+código): cualquier alta/baja de una reserva (`ProductionOrderService`, Fase 4) tiene
+que tomar el mismo `SELECT ... FOR UPDATE` sobre `StockLedger` antes de tocar
+`stock_reservations` - si no, el cálculo de disponible puede leer un valor viejo bajo
+concurrencia real. Hoy es un no-op seguro porque nada escribe en esa tabla todavía.
+
+7 tests nuevos (2 de rechazo/aceptación con reservas reales via mock, 1 confirmando que
+`ADJUSTMENT` nunca consulta reservas, más el ajuste de los tests existentes que ahora
+necesitan mockear `stockReservation.aggregate`). Verificado además contra Postgres
+real, no sólo con mocks: inserté una reserva manual de 15 unidades sobre un artículo
+con 17 físicas (disponible=2) y confirmé desde la UI real que (1) una venta de 5
+unidades se rechaza con el mensaje exacto de arriba sin tocar el stock, y (2) una venta
+de exactamente 2 unidades (el límite) se acepta y decrementa el físico a 15 - después
+borré la reserva de prueba. `nx run-many -t test,build,lint --projects=api,inventory,
+invoicing,quotes,purchases,subscriptions,database` y `nx run database:test-rls`
+(26/26) 100% verde.
 
 ---
 
@@ -583,17 +620,21 @@ está firme — el trabajo real de esta fase es de UI/UX, no de arquitectura.
 
 ## Lista de migraciones (en orden)
 
-1. `plans_add_production_module_enabled` — columna + backfill (BASIC=false, resto=true).
-2. *(Fase 0 no requiere migración — sólo código.)*
-3. `articles_add_measurement_type` — `measurementType` (default DISCRETE),
+1. ✅ `20260930050000_plans_production_module` — columna + backfill (BASIC=false,
+   resto=true). Aplicada (Fase 1).
+2. *(Fase 0 no requiere migración — sólo código.)* ✅ Implementada.
+3. ✅ `20260930060000_stock_reservations` — tabla `StockReservation` +
+   `ReservationStatus`, sola, antes de que `ProductionOrder` exista (ver Fase 2 más
+   arriba para el porqué de esta desviación del orden original). Aplicada.
+4. `articles_add_measurement_type` — `measurementType` (default DISCRETE),
    `isManufactured`, `purchaseSize`, `baseUnit`, `commercialLength`, `minUsableLength`,
    `sheetWidth`, `sheetLength`. Todos nullable u opcionales, sin backfill de datos
-   (todo queda DISCRETE/`isManufactured=false` salvo que se confirme lo contrario — ver
-   decisión pendiente).
-4. `stock_pieces` — tabla nueva.
-5. `production_bom` — `bill_of_materials`, `bom_lines`, `bom_byproducts`.
-6. `production_orders` — `production_orders`, `stock_reservations`,
-   `production_consumptions`, `production_outputs`.
+   (todo queda DISCRETE/`isManufactured=false`, decisión ya confirmada).
+5. `stock_pieces` — tabla nueva.
+6. `production_bom` — `bill_of_materials`, `bom_lines`, `bom_byproducts`.
+7. `production_orders` — `production_orders`, `production_consumptions`,
+   `production_outputs`, más el `ALTER TABLE stock_reservations` que agrega la FK real
+   a `productionOrderId` (hoy suelta, ver Fase 2).
 
 (No hay migración de `reservedQuantity` desnormalizada — se confirmó la Opción B para
 el cálculo de "disponible", ver Fase 2.)

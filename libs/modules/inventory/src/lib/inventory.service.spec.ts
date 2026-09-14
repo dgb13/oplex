@@ -14,6 +14,14 @@ function makeEventEmitter(): EventEmitter2 {
   return { emit: jest.fn() } as unknown as EventEmitter2;
 }
 
+// Every outbound movement (delta < 0, type !== ADJUSTMENT) now sums ACTIVE
+// StockReservations to compute "disponible" (see recordMovement, Fase 2 of
+// the Producción plan) - no reservation ever created in these tests, so this
+// mock always returns 0, preserving today's behavior exactly.
+function noReservations() {
+  return { aggregate: jest.fn().mockResolvedValue({ _sum: { quantityReserved: null } }) };
+}
+
 describe('InventoryService.createWarehouse', () => {
   it('scopes the new warehouse to the current tenant', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'wh-1', name: 'Depósito central', location: null });
@@ -40,7 +48,12 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     const result = await runInTenant(
-      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        stockLedger: { updateMany, findUnique },
+        stockMovement: { create },
+        stockReservation: noReservations(),
+      },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -75,7 +88,12 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     await runInTenant(
-      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        stockLedger: { updateMany, findUnique },
+        stockMovement: { create },
+        stockReservation: noReservations(),
+      },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -104,7 +122,12 @@ describe('InventoryService.recordMovement', () => {
     const service = new InventoryService(makeEventEmitter());
 
     await runInTenant(
-      { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+      {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        stockLedger: { updateMany, findUnique },
+        stockMovement: { create },
+        stockReservation: noReservations(),
+      },
       () =>
         service.recordMovement({
           warehouseId: 'wh-1',
@@ -131,7 +154,12 @@ describe('InventoryService.recordMovement', () => {
 
     await expect(
       runInTenant(
-        { $queryRaw: jest.fn().mockResolvedValue([]), stockLedger: { updateMany, findUnique }, stockMovement: { create } },
+        {
+          $queryRaw: jest.fn().mockResolvedValue([]),
+          stockLedger: { updateMany, findUnique },
+          stockMovement: { create },
+          stockReservation: noReservations(),
+        },
         () =>
           service.recordMovement({
             warehouseId: 'wh-1',
@@ -143,6 +171,102 @@ describe('InventoryService.recordMovement', () => {
     ).rejects.toThrow(BadRequestException);
 
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a SALE_OUT that would dip into reserved stock, even though there is enough físico', async () => {
+    // 15 físico, 12 reservados for a production order -> only 3 disponible.
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn();
+    const findUnique = jest
+      .fn()
+      .mockResolvedValue({ quantity: new Prisma.Decimal(15), avgUnitCost: new Prisma.Decimal(50) });
+    const aggregate = jest.fn().mockResolvedValue({ _sum: { quantityReserved: new Prisma.Decimal(12) } });
+    const service = new InventoryService(makeEventEmitter());
+
+    await expect(
+      runInTenant(
+        {
+          $queryRaw: jest.fn().mockResolvedValue([]),
+          stockLedger: { updateMany, findUnique },
+          stockMovement: { create },
+          stockReservation: { aggregate },
+        },
+        () =>
+          service.recordMovement({
+            warehouseId: 'wh-1',
+            articleVariantId: 'variant-1',
+            type: 'SALE_OUT',
+            quantity: 5,
+          }),
+      ),
+    ).rejects.toThrow(/reserved for production/);
+
+    // Rejected before ever touching the ledger or writing a movement - the
+    // whole point of checking disponible BEFORE the atomic decrement.
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('allows a SALE_OUT that fits within disponible (físico minus what is reserved elsewhere)', async () => {
+    // 15 físico, 12 reservados -> 3 disponible, selling exactly 3 fits.
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({ id: 'movement-9' });
+    const findUnique = jest
+      .fn()
+      .mockResolvedValue({ quantity: new Prisma.Decimal(15), avgUnitCost: new Prisma.Decimal(50) });
+    const aggregate = jest.fn().mockResolvedValue({ _sum: { quantityReserved: new Prisma.Decimal(12) } });
+    const service = new InventoryService(makeEventEmitter());
+
+    await runInTenant(
+      {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        stockLedger: { updateMany, findUnique },
+        stockMovement: { create },
+        stockReservation: { aggregate },
+      },
+      () =>
+        service.recordMovement({
+          warehouseId: 'wh-1',
+          articleVariantId: 'variant-1',
+          type: 'SALE_OUT',
+          quantity: 3,
+        }),
+    );
+
+    expect(aggregate).toHaveBeenCalledWith({
+      where: { warehouseId: 'wh-1', inputArticleVariantId: 'variant-1', status: 'ACTIVE' },
+      _sum: { quantityReserved: true },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { warehouseId: 'wh-1', articleVariantId: 'variant-1', quantity: { gte: 3 } },
+      data: { quantity: { increment: -3 } },
+    });
+  });
+
+  it('does not consult reservations for an ADJUSTMENT (physical-count correction, not gated by what is reserved on paper)', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const findUnique = jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(11) });
+    const create = jest.fn().mockResolvedValue({ id: 'movement-adj-2' });
+    const aggregate = jest.fn();
+    const service = new InventoryService(makeEventEmitter());
+
+    await runInTenant(
+      {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        stockLedger: { updateMany, findUnique },
+        stockMovement: { create },
+        stockReservation: { aggregate },
+      },
+      () =>
+        service.recordMovement({
+          warehouseId: 'wh-1',
+          articleVariantId: 'variant-1',
+          type: 'ADJUSTMENT',
+          quantity: -4,
+        }),
+    );
+
+    expect(aggregate).not.toHaveBeenCalled();
   });
 
   it('rejects a PURCHASE_IN with no unitCost', async () => {

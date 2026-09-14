@@ -1160,6 +1160,7 @@ model ArticleVariant {
   quoteRequestLines  QuoteRequestLine[]
   purchaseOrderLines PurchaseOrderLine[]
   cartItems          InventoryCartItem[]
+  stockReservations  StockReservation[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, articleId])
@@ -1229,15 +1230,61 @@ model Warehouse {
   name     String
   location String?
 
-  stockLedger   StockLedger[]
-  minimumStocks MinimumStock[]
-  movements     StockMovement[]
-  goodsReceipts GoodsReceipt[]
-  cashRegisters CashRegister[]
+  stockLedger       StockLedger[]
+  minimumStocks     MinimumStock[]
+  movements         StockMovement[]
+  goodsReceipts     GoodsReceipt[]
+  cashRegisters     CashRegister[]
+  stockReservations StockReservation[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("warehouses")
+}
+
+// Reserva de insumos comprometidos a una orden de producción - ver
+// docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2 (modelo de stock en 3
+// capas: físico total / reservado / disponible = físico - reservado).
+// Creada en esta fase por sí sola, antes de que ProductionOrder exista
+// (llega en la Fase 4), porque InventoryService.recordMovement ya necesita
+// poder sumar reservas ACTIVE para calcular "disponible" en cada salida de
+// stock - construir el mecanismo primero, inerte hasta que algo escriba acá.
+//
+// productionOrderId es una referencia suelta (sin @relation/FK) a
+// propósito, mismo criterio que StockMovement.sourceType/sourceId para
+// apuntar a una tabla que hoy no existe todavía - la Fase 4 agrega la
+// relación real (y la FK) en la misma migración que crea ProductionOrder.
+//
+// Contrato de concurrencia (importante para quien construya
+// ProductionOrderService en la Fase 4): cualquier alta/baja de una fila acá
+// tiene que tomar el mismo `SELECT ... FOR UPDATE` sobre StockLedger que ya
+// usa recordMovement (ver ese método) ANTES de tocar esta tabla - si no, el
+// cálculo de "disponible" puede leer un valor viejo bajo concurrencia real,
+// aunque cada operación individual sea atómica por separado.
+model StockReservation {
+  id                    String             @id @default(uuid())
+  tenantId              String
+  productionOrderId     String
+  inputArticleVariantId String
+  articleVariant        ArticleVariant     @relation(fields: [inputArticleVariantId], references: [id])
+  warehouseId           String
+  warehouse             Warehouse          @relation(fields: [warehouseId], references: [id])
+  quantityReserved      Decimal            @db.Decimal(14, 3)
+  // 1D (Fase 4): si esta reserva es de una pieza física específica en vez
+  // de una cantidad genérica del agregado. Sin @relation todavía -
+  // StockPiece tampoco existe hasta la Fase 4.
+  stockPieceId          String?
+  status                ReservationStatus  @default(ACTIVE)
+  createdAt             DateTime           @default(now())
+
+  @@index([tenantId, inputArticleVariantId, warehouseId, status])
+  @@map("stock_reservations")
+}
+
+enum ReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
 }
 
 // --- Caja / POS (@plexo/pos) ---
