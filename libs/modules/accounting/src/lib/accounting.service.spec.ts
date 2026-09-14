@@ -477,6 +477,83 @@ describe('AccountingService.reverseSupplierReturnAccrual', () => {
   });
 });
 
+describe('AccountingService.postProductionJournalEntry', () => {
+  it('books a wash entry (debit/credit Mercaderías) when inputs and outputs cost the same', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postProductionJournalEntry({
+        productionOrderId: 'order-1',
+        inputsCost: 7500,
+        outputsCost: 7500,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(['1.1.04']);
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.productionOrderId).toBe('order-1');
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.04', direction: 'DEBIT', amount: 7500 },
+      { accountId: 'acc-1.1.04', direction: 'CREDIT', amount: 7500 },
+    ]);
+  });
+
+  it('absorbs a shortfall (outputs < inputs) as a loss, keeping the entry balanced', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postProductionJournalEntry({
+        productionOrderId: 'order-2',
+        inputsCost: 1000,
+        outputsCost: 900,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(expect.arrayContaining(['1.1.04', '5.1.07']));
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.04', direction: 'DEBIT', amount: 900 },
+      { accountId: 'acc-1.1.04', direction: 'CREDIT', amount: 1000 },
+      { accountId: 'acc-5.1.07', direction: 'DEBIT', amount: 100 },
+    ]);
+  });
+
+  it('absorbs a surplus (outputs > inputs) as a gain, keeping the entry balanced', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    await runInTenant(db, () =>
+      service.postProductionJournalEntry({
+        productionOrderId: 'order-3',
+        inputsCost: 900,
+        outputsCost: 1000,
+      }),
+    );
+
+    expect(db._created.map((a) => a.code)).toEqual(expect.arrayContaining(['1.1.04', '4.2.06']));
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-1.1.04', direction: 'DEBIT', amount: 1000 },
+      { accountId: 'acc-1.1.04', direction: 'CREDIT', amount: 900 },
+      { accountId: 'acc-4.2.06', direction: 'CREDIT', amount: 100 },
+    ]);
+  });
+
+  it('skips posting entirely when both inputs and outputs cost nothing', async () => {
+    const db = dbWithAccounts();
+    const service = new AccountingService();
+
+    const result = await runInTenant(db, () =>
+      service.postProductionJournalEntry({ productionOrderId: 'order-4', inputsCost: 0, outputsCost: 0 }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('AccountingService.postPurchaseInvoiceJournalEntry', () => {
   it('clears GRNI, books IVA Crédito/Percepciones, credits Proveedores for the total', async () => {
     const db = dbWithAccounts();

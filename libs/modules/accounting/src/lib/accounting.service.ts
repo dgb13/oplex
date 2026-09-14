@@ -143,6 +143,29 @@ const EXCHANGE_GAIN_ACCOUNT = {
   type: 'INCOME' as const,
 };
 
+// Traspaso interno de Mercaderías al completar una ProductionOrder (ver
+// postProductionJournalEntry, Fase 5 del módulo de Producción) - Debe
+// outputsCost / Haber inputsCost, misma cuenta única de Inventario (sin
+// Materias Primas/Productos Terminados separadas, decisión ya confirmada
+// con el usuario). Si inputsCost != outputsCost (merma/redondeo), mismo
+// molde que CASH_SHORTAGE/OVERAGE_ACCOUNT y EXCHANGE_LOSS/GAIN_ACCOUNT: dos
+// cuentas de resultado, una por signo. En la práctica
+// ProductionService.completeOrder (apps/api) hace que el output principal
+// absorba el remanente exacto del costo de insumos, así que esta rama es
+// puramente defensiva hoy - documentado en el plan técnico como "detalle
+// menor" pendiente de resolver con el usuario si algún día deja de cerrar
+// exacto.
+const PRODUCTION_VARIANCE_LOSS_ACCOUNT = {
+  code: '5.1.07',
+  name: 'Pérdida por Diferencia de Producción',
+  type: 'EXPENSE' as const,
+};
+const PRODUCTION_VARIANCE_GAIN_ACCOUNT = {
+  code: '4.2.06',
+  name: 'Ganancia por Diferencia de Producción',
+  type: 'INCOME' as const,
+};
+
 const INFLATION_CAPITAL_ADJUSTMENT_ACCOUNT = {
   code: '3.1.01',
   name: 'Ajuste de Capital por Inflación',
@@ -337,6 +360,15 @@ export interface PostExchangeRateRevaluationInput {
   previousRate: Prisma.Decimal | number | string | null | undefined;
   /** Tipo de cambio nuevo a aplicar (moneda de la cuenta por 1 base). */
   newRate: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
+export interface PostProductionJournalEntryInput {
+  productionOrderId: string;
+  /** Suma de ProductionConsumption.cost de la orden (todo lo consumido). */
+  inputsCost: Prisma.Decimal | number | string;
+  /** Suma de ProductionOutput.cost de la orden (principal + subproductos). */
+  outputsCost: Prisma.Decimal | number | string;
   date?: Date;
 }
 
@@ -674,6 +706,7 @@ export class AccountingService {
       bankStatementLineId?: string;
       inflationAdjustmentId?: string;
       cashSessionId?: string;
+      productionOrderId?: string;
     },
   ): Promise<JournalEntryWithLines> {
     const tenantId = getTenantId();
@@ -713,6 +746,7 @@ export class AccountingService {
         bankStatementLineId: opts.bankStatementLineId,
         inflationAdjustmentId: opts.inflationAdjustmentId,
         cashSessionId: opts.cashSessionId,
+        productionOrderId: opts.productionOrderId,
         createdById,
         lines: {
           createMany: {
@@ -1225,6 +1259,50 @@ export class AccountingService {
       `${isGain ? 'Ganancia' : 'Pérdida'} por diferencia de cambio - cuenta ${input.financialAccountId}`,
       lines,
       { date: input.date },
+    );
+  }
+
+  /**
+   * Posted when a ProductionOrder is completed (ver apps/api's
+   * ProductionService.completeOrder, llamado justo después de
+   * finishOrder) - traspaso interno de "Mercaderías": Debe Mercaderías por
+   * lo producido (outputsCost) / Haber Mercaderías por lo consumido
+   * (inputsCost). No cambia el total del activo de inventario cuando
+   * ambos coinciden (caso normal hoy), sólo documenta el movimiento contra
+   * la orden. Ver PRODUCTION_VARIANCE_LOSS/GAIN_ACCOUNT arriba para el caso
+   * defensivo en que no coincidan.
+   */
+  async postProductionJournalEntry(
+    input: PostProductionJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const inputsCost = new Prisma.Decimal(input.inputsCost);
+    const outputsCost = new Prisma.Decimal(input.outputsCost);
+    if (inputsCost.lte(0) && outputsCost.lte(0)) {
+      return undefined;
+    }
+    const inventory = await this.getOrCreateAccount(INVENTORY_ASSET_ACCOUNT);
+    const lines: PostJournalEntryDto['lines'] = [];
+    if (outputsCost.gt(0)) {
+      lines.push({ accountId: inventory.id, direction: 'DEBIT', amount: outputsCost.toNumber() });
+    }
+    if (inputsCost.gt(0)) {
+      lines.push({ accountId: inventory.id, direction: 'CREDIT', amount: inputsCost.toNumber() });
+    }
+    const delta = outputsCost.sub(inputsCost);
+    if (!delta.eq(0)) {
+      const variance = await this.getOrCreateAccount(
+        delta.gt(0) ? PRODUCTION_VARIANCE_GAIN_ACCOUNT : PRODUCTION_VARIANCE_LOSS_ACCOUNT,
+      );
+      lines.push({
+        accountId: variance.id,
+        direction: delta.gt(0) ? 'CREDIT' : 'DEBIT',
+        amount: delta.abs().toNumber(),
+      });
+    }
+    return this.createBalancedEntry(
+      `Producción completada - orden ${input.productionOrderId}`,
+      lines,
+      { date: input.date, productionOrderId: input.productionOrderId },
     );
   }
 

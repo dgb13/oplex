@@ -1,7 +1,12 @@
+import type { AccountingService } from '@plexo/accounting';
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { InventoryService } from '@plexo/inventory';
 import type { BomService, ProductionOrderService, StockPieceService } from '@plexo/production';
 import { ProductionService } from './production.service.js';
+
+function makeAccountingService() {
+  return { postProductionJournalEntry: jest.fn().mockResolvedValue(undefined) };
+}
 
 function runAsTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
@@ -54,12 +59,14 @@ describe('ProductionService.completeOrder', () => {
     const inventoryService = {
       recordMovement: jest.fn().mockResolvedValue({ unitCost: new Prisma.Decimal(2) }),
     };
+    const accountingService = makeAccountingService();
 
     const service = new ProductionService(
       orderService as unknown as ProductionOrderService,
       stockPieceService as unknown as StockPieceService,
       bomService as unknown as BomService,
       inventoryService as unknown as InventoryService,
+      accountingService as unknown as AccountingService,
     );
 
     const result = await runAsTenant(db, () => service.completeOrder('order-1'));
@@ -81,6 +88,12 @@ describe('ProductionService.completeOrder', () => {
     expect(outputCall.isPrimary).toBe(true);
     expect(outputCall.cost.toString()).toBe('2000');
     expect(result.status).toBe('DONE');
+
+    // Ambos deben cerrar iguales (2000 == 2000), sin subproductos.
+    const journalCall = (accountingService.postProductionJournalEntry as jest.Mock).mock.calls[0][0];
+    expect(journalCall.productionOrderId).toBe('order-1');
+    expect(journalCall.inputsCost.toString()).toBe('2000');
+    expect(journalCall.outputsCost.toString()).toBe('2000');
   });
 
   it('cuts across two stock pieces for a 1D input when a single piece does not cover the whole reservation', async () => {
@@ -118,12 +131,14 @@ describe('ProductionService.completeOrder', () => {
         .mockResolvedValueOnce({ consumedFrom: { ...pieceB, status: 'DEPLETED' }, offcut: null }),
     };
     const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: null }) };
+    const accountingService = makeAccountingService();
 
     const service = new ProductionService(
       orderService as unknown as ProductionOrderService,
       stockPieceService as unknown as StockPieceService,
       bomService as unknown as BomService,
       inventoryService as unknown as InventoryService,
+      accountingService as unknown as AccountingService,
     );
 
     await runAsTenant(db, () => service.completeOrder('order-1'));
@@ -167,12 +182,14 @@ describe('ProductionService.completeOrder', () => {
     const stockPieceService = {};
     // costo total consumido = unitCost(10) * 1000 = 10000
     const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: new Prisma.Decimal(10) }) };
+    const accountingService = makeAccountingService();
 
     const service = new ProductionService(
       orderService as unknown as ProductionOrderService,
       stockPieceService as unknown as StockPieceService,
       bomService as unknown as BomService,
       inventoryService as unknown as InventoryService,
+      accountingService as unknown as AccountingService,
     );
 
     await runAsTenant(db, () => service.completeOrder('order-1'));
@@ -185,6 +202,12 @@ describe('ProductionService.completeOrder', () => {
     expect(byproductOutput.cost.toString()).toBe('2000');
     expect(primaryOutput.cost.toString()).toBe('8000');
     expect(byproductOutput.quantityProduced.toString()).toBe('2');
+
+    // Subproducto (2000) + principal (8000) tienen que cerrar exacto
+    // contra lo consumido (10000), sin diferencia de producción.
+    const journalCall = (accountingService.postProductionJournalEntry as jest.Mock).mock.calls[0][0];
+    expect(journalCall.inputsCost.toString()).toBe('10000');
+    expect(journalCall.outputsCost.toString()).toBe('10000');
   });
 
   it('rejects completing an order with no active reservation', async () => {
@@ -199,6 +222,7 @@ describe('ProductionService.completeOrder', () => {
       {} as StockPieceService,
       {} as BomService,
       {} as InventoryService,
+      {} as AccountingService,
     );
 
     await expect(runAsTenant(db, () => service.completeOrder('order-1'))).rejects.toThrow(

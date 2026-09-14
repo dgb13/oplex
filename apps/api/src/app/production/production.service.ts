@@ -1,26 +1,25 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, Prisma, type ProductionOrder, type StockReservation } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 import { BomService, ProductionOrderService, StockPieceService } from '@plexo/production';
 
 /**
  * Composición del "completar orden" (ver
- * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5): decide CUÁNTO se
- * consume de cada insumo reservado (cortando `StockPiece` para 1D, o
- * directo para el resto) y llama a `InventoryService.recordMovement` -
- * `ProductionOrderService`/`StockPieceService` (ambos de `@plexo/production`)
- * no pueden llamar a `InventoryService` (`@plexo/inventory`) ellos mismos,
- * regla del repo de que un lib module nunca inyecta el Service de otro
- * módulo - por eso esta orquestación vive acá, mismo rol que
- * GoodsReceiptsService componiendo Purchases+Inventory+Accounting.
- *
- * Todavía SIN asiento contable (eso es Fase 5, `postProductionJournalEntry`)
- * - esta orden queda DONE con su costeo (`ProductionConsumption`/
- * `ProductionOutput`) pero sin traspaso de "Mercaderías" todavía.
+ * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5 y Fase 5): decide
+ * CUÁNTO se consume de cada insumo reservado (cortando `StockPiece` para
+ * 1D, o directo para el resto), llama a `InventoryService.recordMovement`
+ * y posta el asiento de traspaso de "Mercaderías"
+ * (`AccountingService.postProductionJournalEntry`) - `ProductionOrderService`/
+ * `StockPieceService` (ambos de `@plexo/production`) no pueden llamar a
+ * `InventoryService`/`AccountingService` ellos mismos, regla del repo de
+ * que un lib module nunca inyecta el Service de otro módulo - por eso esta
+ * orquestación vive acá, mismo rol que GoodsReceiptsService componiendo
+ * Purchases+Inventory+Accounting.
  *
  * Atomicidad gratis, mismo motivo que goods-receipts.service.ts: todo pasa
  * por getTenantDb(), la transacción del request - si algo tira, se
- * deshace todo, reservas incluidas.
+ * deshace todo, reservas y asiento incluidos.
  */
 @Injectable()
 export class ProductionService {
@@ -29,6 +28,7 @@ export class ProductionService {
     private readonly stockPieceService: StockPieceService,
     private readonly bomService: BomService,
     private readonly inventoryService: InventoryService,
+    private readonly accountingService: AccountingService,
   ) {}
 
   async completeOrder(orderId: string): Promise<ProductionOrder> {
@@ -55,10 +55,12 @@ export class ProductionService {
     const warehouseId = reservations[0].warehouseId;
 
     let remainingCost = totalConsumptionCost;
+    let totalOutputsCost = new Prisma.Decimal(0);
     for (const byproduct of bom.byproducts) {
       const quantityProduced = byproduct.quantity.mul(order.quantity);
       const cost = totalConsumptionCost.mul(byproduct.costSharePercent ?? 0).div(100);
       remainingCost = remainingCost.sub(cost);
+      totalOutputsCost = totalOutputsCost.add(cost);
       await this.recordOutputMovement(order, {
         articleVariantId: byproduct.outputArticleVariantId,
         isPrimary: false,
@@ -78,8 +80,16 @@ export class ProductionService {
       cost: remainingCost,
       warehouseId,
     });
+    totalOutputsCost = totalOutputsCost.add(remainingCost);
 
-    return this.orderService.finishOrder(order.id);
+    const finishedOrder = await this.orderService.finishOrder(order.id);
+    await this.accountingService.postProductionJournalEntry({
+      productionOrderId: finishedOrder.id,
+      inputsCost: totalConsumptionCost,
+      outputsCost: totalOutputsCost,
+      date: finishedOrder.finishedAt ?? undefined,
+    });
+    return finishedOrder;
   }
 
   private async consumeReservation(

@@ -1502,7 +1502,12 @@ model ProductionOrder {
   reservations           StockReservation[]
   consumptions           ProductionConsumption[]
   outputs                ProductionOutput[]
+  // El asiento de traspaso de "Mercaderías" posteado al completar esta
+  // orden - ver JournalEntry.productionOrderId/AccountingService.
+  // postProductionJournalEntry (Fase 5).
+  journalEntry           JournalEntry?
 
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@map("production_orders")
 }
@@ -2212,6 +2217,12 @@ model JournalEntry {
   // distinta de cero; un cierre exacto no genera ninguno.
   cashSessionId        String?              @unique
   cashSession          CashSession?         @relation(fields: [tenantId, cashSessionId], references: [tenantId, id])
+  // Traspaso interno de "Mercaderías" al completar una orden de producción
+  // (Fase 5) - ver AccountingService.postProductionJournalEntry. Una orden
+  // sólo tiene asiento propio acá al completarse (DONE); DRAFT/PLANNED/
+  // CANCELLED no generan ninguno.
+  productionOrderId    String?              @unique
+  productionOrder      ProductionOrder?     @relation(fields: [tenantId, productionOrderId], references: [tenantId, id])
   description          String
   date                 DateTime            @default(now())
   createdById          String
@@ -2235,6 +2246,7 @@ model JournalEntry {
   @@unique([tenantId, bankStatementLineId])
   @@unique([tenantId, inflationAdjustmentId])
   @@unique([tenantId, cashSessionId])
+  @@unique([tenantId, productionOrderId])
   @@index([tenantId])
   @@map("journal_entries")
 }
