@@ -2,6 +2,7 @@
 
 import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
@@ -215,17 +216,11 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   </button>
                 }
               >
-                <select
-                  className={inputClass}
+                <Select
                   value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCustomerId}
+                  options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                />
               </Field>
               <Field
                 label="Sucursal / PV"
@@ -239,44 +234,29 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   </button>
                 }
               >
-                <select
-                  className={inputClass}
+                <Select
                   value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.pointOfSaleNumber ?? 'sin PV'})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setBranchId}
+                  options={branches.map((b) => ({
+                    value: b.id,
+                    label: `${b.name} (${b.pointOfSaleNumber ?? 'sin PV'})`,
+                  }))}
+                />
               </Field>
               <Field label="Depósito">
-                <select
-                  className={inputClass}
+                <Select
                   value={warehouseId}
-                  onChange={(e) => setWarehouseId(e.target.value)}
-                >
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setWarehouseId}
+                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                />
               </Field>
               <Field label="Tipo de comprobante">
-                <select
-                  className={`${inputClass} disabled:opacity-70`}
+                <Select
                   value={documentLetter}
+                  onChange={(v) => setDocumentLetter(v as typeof documentLetter)}
                   disabled={letterSuggestion.locked}
-                  onChange={(e) => setDocumentLetter(e.target.value as typeof documentLetter)}
-                >
-                  {DOCUMENT_LETTERS.map((letter) => (
-                    <option key={letter} value={letter}>
-                      Factura {letter}
-                    </option>
-                  ))}
-                </select>
+                  options={DOCUMENT_LETTERS.map((letter) => ({ value: letter, label: `Factura ${letter}` }))}
+                />
                 <p
                   className={`mt-1 text-xs ${letterSuggestion.locked ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
                 >
@@ -284,17 +264,11 @@ export default function NewInvoiceModal({ onClose }: Props) {
                 </p>
               </Field>
               <Field label="Moneda">
-                <select
-                  className={inputClass}
+                <Select
                   value={currencyId}
-                  onChange={(e) => setCurrencyId(e.target.value)}
-                >
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCurrencyId}
+                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
+                />
                 {selectedCurrency && !selectedCurrency.isBase && (
                   <input
                     type="number"

@@ -5,6 +5,7 @@ import { getSocket } from '@/lib/socket';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Info, LayoutGrid, List } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -245,18 +246,15 @@ export default function InventoryPage() {
           placeholder="Buscar por artículo o SKU..."
           className="w-full sm:max-w-sm"
         />
-        <select
+        <Select
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          className="sm:w-56"
+          options={[
+            { value: '', label: 'Todas las categorías' },
+            ...categories.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

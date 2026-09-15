@@ -1,6 +1,7 @@
 'use client';
 
 import type { DocumentLetter } from '@/lib/documentLetter';
+import Select from '@/components/ui/Select';
 import {
   purchaseInvoicesApi,
   purchaseOrdersApi,
@@ -205,21 +206,15 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Field label="Orden de Compra">
-            <select
-              className={inputClass}
+            <Select
+              placeholder="Elegir orden..."
               value={purchaseOrderId}
-              onChange={(e) => {
-                setPurchaseOrderId(e.target.value);
+              onChange={(value) => {
+                setPurchaseOrderId(value);
                 setSelectedReceiptIds([]);
               }}
-            >
-              <option value="">Elegir orden...</option>
-              {orders.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.number} — {o.supplier.name}
-                </option>
-              ))}
-            </select>
+              options={orders.map((o) => ({ value: o.id, label: `${o.number} — ${o.supplier.name}` }))}
+            />
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
@@ -272,18 +267,14 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
             </p>
             <div className="grid grid-cols-3 gap-4">
               <Field label="Tipo">
-                <select
-                  className={inputClass}
+                <Select
                   value={documentLetter}
-                  onChange={(e) => setDocumentLetter(e.target.value as DocumentLetter | '')}
-                >
-                  <option value="">Sin especificar</option>
-                  {DOCUMENT_LETTERS.map((letter) => (
-                    <option key={letter} value={letter}>
-                      Factura {letter}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setDocumentLetter(value as DocumentLetter | '')}
+                  options={[
+                    { value: '', label: 'Sin especificar' },
+                    ...DOCUMENT_LETTERS.map((letter) => ({ value: letter, label: `Factura ${letter}` })),
+                  ]}
+                />
               </Field>
               <Field label="Punto de venta">
                 <input
@@ -347,17 +338,15 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
               return (
                 <div key={i} className="flex flex-col gap-1 rounded-lg border p-2">
                   <div className="flex items-center gap-2">
-                    <select
-                      className={`${inputClass} w-40`}
+                    <Select
+                      className="w-40"
                       value={line.type}
-                      onChange={(e) => updateTaxLineType(i, e.target.value as PurchaseInvoiceTaxLineType)}
-                    >
-                      {(Object.keys(TAX_LINE_TYPE_LABELS) as PurchaseInvoiceTaxLineType[]).map((t) => (
-                        <option key={t} value={t}>
-                          {TAX_LINE_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => updateTaxLineType(i, value as PurchaseInvoiceTaxLineType)}
+                      options={(Object.keys(TAX_LINE_TYPE_LABELS) as PurchaseInvoiceTaxLineType[]).map((t) => ({
+                        value: t,
+                        label: TAX_LINE_TYPE_LABELS[t],
+                      }))}
+                    />
                     {line.type === 'PERCEPCION' && (
                       <>
                         <input
@@ -367,21 +356,20 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
                           value={line.concept}
                           onChange={(e) => updateTaxLine(i, { concept: e.target.value })}
                         />
-                        <select
-                          className={`${inputClass} w-32`}
-                          title="Sub-clasificación para el Libro de IVA Digital"
+                        <Select
+                          className="w-32"
                           value={line.taxType ?? ''}
-                          onChange={(e) =>
-                            updateTaxLine(i, { taxType: (e.target.value || undefined) as WithholdingTaxType | undefined })
+                          onChange={(value) =>
+                            updateTaxLine(i, { taxType: (value || undefined) as WithholdingTaxType | undefined })
                           }
-                        >
-                          <option value="">Otra nacional</option>
-                          {(Object.keys(WITHHOLDING_TAX_TYPE_LABELS) as WithholdingTaxType[]).map((t) => (
-                            <option key={t} value={t}>
-                              {WITHHOLDING_TAX_TYPE_LABELS[t]}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            { value: '', label: 'Otra nacional' },
+                            ...(Object.keys(WITHHOLDING_TAX_TYPE_LABELS) as WithholdingTaxType[]).map((t) => ({
+                              value: t,
+                              label: WITHHOLDING_TAX_TYPE_LABELS[t],
+                            })),
+                          ]}
+                        />
                       </>
                     )}
                     <button
@@ -404,21 +392,18 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
                         value={line.netAmount ?? 0}
                         onChange={(e) => updateIvaCreditoLine(i, { netAmount: Number(e.target.value) })}
                       />
-                      <select
-                        className={`${inputClass} w-24`}
+                      <Select
+                        className="w-24"
                         value={isStandardRate ? String(line.taxRate) : OTHER_RATE}
-                        onChange={(e) => {
-                          if (e.target.value === OTHER_RATE) return;
-                          updateIvaCreditoLine(i, { taxRate: Number(e.target.value) });
+                        onChange={(value) => {
+                          if (value === OTHER_RATE) return;
+                          updateIvaCreditoLine(i, { taxRate: Number(value) });
                         }}
-                      >
-                        {STANDARD_VAT_RATES.map((r) => (
-                          <option key={r} value={r}>
-                            {formatRate(r)}%
-                          </option>
-                        ))}
-                        <option value={OTHER_RATE}>Otra</option>
-                      </select>
+                        options={[
+                          ...STANDARD_VAT_RATES.map((r) => ({ value: String(r), label: `${formatRate(r)}%` })),
+                          { value: OTHER_RATE, label: 'Otra' },
+                        ]}
+                      />
                       {!isStandardRate && (
                         <input
                           type="number"
