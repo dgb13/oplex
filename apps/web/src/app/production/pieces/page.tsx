@@ -3,6 +3,7 @@
 import ArticlePicker from '@/components/ArticlePicker';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import Select from '@/components/ui/Select';
 import { inventoryApi } from '@/lib/inventory';
 import { productionApi, type PieceStatus } from '@/lib/production';
 import { useQuery } from '@tanstack/react-query';
@@ -57,18 +58,14 @@ export default function StockPiecesPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm text-muted-foreground">Depósito</label>
-                <select
+                <Select
                   value={warehouseId}
-                  onChange={(e) => setWarehouseId(e.target.value)}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value="">Todos los depósitos</option>
-                  {(warehousesQuery.data ?? []).map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setWarehouseId}
+                  options={[
+                    { value: '', label: 'Todos los depósitos' },
+                    ...(warehousesQuery.data ?? []).map((w) => ({ value: w.id, label: w.name })),
+                  ]}
+                />
               </div>
             </CardContent>
           </Card>

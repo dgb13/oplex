@@ -4,6 +4,7 @@ import ArticlePicker from '@/components/ArticlePicker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
 import { productionApi } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -112,18 +113,12 @@ export default function NewProductionOrderPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-sm text-muted-foreground">Depósito</label>
-                  <select
+                  <Select
                     value={warehouseId}
-                    onChange={(e) => setWarehouseId(e.target.value)}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <option value="">Elegir depósito...</option>
-                    {(warehousesQuery.data ?? []).map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setWarehouseId}
+                    placeholder="Elegir depósito..."
+                    options={(warehousesQuery.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1">

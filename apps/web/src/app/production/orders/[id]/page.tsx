@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
 import { productionApi } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -133,18 +134,12 @@ export default function ProductionOrderDetailPage() {
                 <div className="flex flex-wrap items-end gap-3 border-t pt-4">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm text-muted-foreground">Depósito para reservar</label>
-                    <select
+                    <Select
                       value={confirmWarehouseId}
-                      onChange={(e) => setConfirmWarehouseId(e.target.value)}
-                      className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <option value="">Elegir depósito...</option>
-                      {(warehousesQuery.data ?? []).map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setConfirmWarehouseId}
+                      placeholder="Elegir depósito..."
+                      options={(warehousesQuery.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+                    />
                   </div>
                   <Button
                     onClick={() => confirmMutation.mutate()}
