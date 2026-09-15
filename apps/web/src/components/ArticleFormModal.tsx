@@ -6,6 +6,7 @@ import { inventoryApi, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface CreatedArticleVariantRef {
@@ -45,6 +46,28 @@ interface MatrixRow {
 
 const inputClass =
   'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+// `inputClass` trae `h-8` (pensado para un input de una línea) y sin
+// padding vertical - en un <textarea rows={3}> eso pisa la altura de
+// `rows` y deja el texto pegado contra el borde superior (reportado por
+// el usuario). Mismo aspecto (borde, focus ring) pero alto libre + `py-2`.
+const textareaClass =
+  'rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
+// Un <select> nativo sin `appearance-none` conserva la flechita del SO -
+// se ve "sin estilo" al lado de los inputs/checkboxes ya tokenizados de
+// este mismo modal (reportado por el usuario). Wrapper local en vez de
+// promoverlo a components/ui/ todavía - son 6 usos, todos acá.
+function StyledSelect({ className = '', children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select {...props} className={`${inputClass} w-full appearance-none pr-8 ${className}`}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  );
+}
 
 function tabClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -583,14 +606,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     </button>
                   </div>
                 ) : (
-                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={`${inputClass} w-full`}>
+                  <StyledSelect value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                     <option value="">— Sin categoría —</option>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </StyledSelect>
                 )}
               </div>
 
@@ -600,7 +623,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className={`${inputClass} resize-none`}
+                  className={`${textareaClass} resize-none`}
                   placeholder="Opcional - detalle visible al editar el artículo"
                 />
               </label>
@@ -659,10 +682,9 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     + nuevo proveedor
                   </button>
                 </div>
-                <select
+                <StyledSelect
                   value={preferredSupplierId}
                   onChange={(e) => setPreferredSupplierId(e.target.value)}
-                  className={`${inputClass} w-full`}
                 >
                   <option value="">— Ninguno —</option>
                   {suppliers.map((s) => (
@@ -670,7 +692,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       {s.name}
                     </option>
                   ))}
-                </select>
+                </StyledSelect>
               </div>
 
               <div className={`grid ${hasVariants ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
@@ -748,13 +770,13 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Unidad de medida</span>
-                <select value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)} className={inputClass}>
+                <StyledSelect value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)}>
                   {UNIT_OF_MEASURE_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
                       {u.label}
                     </option>
                   ))}
-                </select>
+                </StyledSelect>
               </label>
             </div>
           )}
@@ -763,13 +785,13 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Unidad de medida</span>
-                <select value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)} className={`${inputClass} w-full`}>
+                <StyledSelect value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)}>
                   {UNIT_OF_MEASURE_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
                       {u.label}
                     </option>
                   ))}
-                </select>
+                </StyledSelect>
               </label>
 
               <div className="flex flex-col gap-2">
@@ -962,14 +984,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Depósito inicial</span>
-                <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={inputClass}>
+                <StyledSelect value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
                   <option value="">— Elegir depósito —</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name}
                     </option>
                   ))}
-                </select>
+                </StyledSelect>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
@@ -1010,14 +1032,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Depósito inicial</span>
-                <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={inputClass}>
+                <StyledSelect value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
                   <option value="">— Elegir depósito —</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name}
                     </option>
                   ))}
-                </select>
+                </StyledSelect>
               </label>
               <p className="text-xs text-muted-foreground">
                 La cantidad y el mínimo de cada variante se cargan por fila en la pestaña &quot;Variantes&quot; - este
