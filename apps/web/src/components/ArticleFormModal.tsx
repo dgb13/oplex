@@ -1,12 +1,12 @@
 'use client';
 
 import CompanyFormModal from '@/components/CompanyFormModal';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { inventoryApi, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface CreatedArticleVariantRef {
@@ -54,20 +54,6 @@ const inputClass =
 const textareaClass =
   'rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
-// Un <select> nativo sin `appearance-none` conserva la flechita del SO -
-// se ve "sin estilo" al lado de los inputs/checkboxes ya tokenizados de
-// este mismo modal (reportado por el usuario). Wrapper local en vez de
-// promoverlo a components/ui/ todavía - son 6 usos, todos acá.
-function StyledSelect({ className = '', children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <div className="relative">
-      <select {...props} className={`${inputClass} w-full appearance-none pr-8 ${className}`}>
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-    </div>
-  );
-}
 
 function tabClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -606,14 +592,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     </button>
                   </div>
                 ) : (
-                  <StyledSelect value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                    <option value="">— Sin categoría —</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </StyledSelect>
+                  <Select
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    options={[
+                      { value: '', label: '— Sin categoría —' },
+                      ...categories.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                  />
                 )}
               </div>
 
@@ -682,17 +668,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     + nuevo proveedor
                   </button>
                 </div>
-                <StyledSelect
+                <Select
                   value={preferredSupplierId}
-                  onChange={(e) => setPreferredSupplierId(e.target.value)}
-                >
-                  <option value="">— Ninguno —</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </StyledSelect>
+                  onChange={setPreferredSupplierId}
+                  options={[
+                    { value: '', label: '— Ninguno —' },
+                    ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
               </div>
 
               <div className={`grid ${hasVariants ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
@@ -770,13 +753,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Unidad de medida</span>
-                <StyledSelect value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)}>
-                  {UNIT_OF_MEASURE_OPTIONS.map((u) => (
-                    <option key={u.value} value={u.value}>
-                      {u.label}
-                    </option>
-                  ))}
-                </StyledSelect>
+                <Select value={unitOfMeasure} onChange={setUnitOfMeasure} options={UNIT_OF_MEASURE_OPTIONS} />
               </label>
             </div>
           )}
@@ -785,13 +762,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Unidad de medida</span>
-                <StyledSelect value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)}>
-                  {UNIT_OF_MEASURE_OPTIONS.map((u) => (
-                    <option key={u.value} value={u.value}>
-                      {u.label}
-                    </option>
-                  ))}
-                </StyledSelect>
+                <Select value={unitOfMeasure} onChange={setUnitOfMeasure} options={UNIT_OF_MEASURE_OPTIONS} />
               </label>
 
               <div className="flex flex-col gap-2">
@@ -984,14 +955,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Depósito inicial</span>
-                <StyledSelect value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                  <option value="">— Elegir depósito —</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </StyledSelect>
+                <Select
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  placeholder="— Elegir depósito —"
+                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
@@ -1032,14 +1001,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             <div className="flex flex-col gap-4">
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Depósito inicial</span>
-                <StyledSelect value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                  <option value="">— Elegir depósito —</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </StyledSelect>
+                <Select
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  placeholder="— Elegir depósito —"
+                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                />
               </label>
               <p className="text-xs text-muted-foreground">
                 La cantidad y el mínimo de cada variante se cargan por fila en la pestaña &quot;Variantes&quot; - este
