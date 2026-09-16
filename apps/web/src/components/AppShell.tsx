@@ -13,6 +13,7 @@ import { useDensity } from '@/providers/DensityProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BarChart3,
   Briefcase,
   Building2,
   Calculator,
@@ -52,6 +53,7 @@ type NavEntry = NavLeaf | NavGroup;
 
 const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/dashboard', label: 'Tablero', icon: LayoutDashboard },
+  { kind: 'link', href: '/resumen', label: 'Resumen', icon: BarChart3 },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
   { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket },
   {

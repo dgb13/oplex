@@ -13,6 +13,7 @@ import {
 import { getSocket } from '@/lib/socket';
 import { productionApi } from '@/lib/production';
 import { subscriptionsApi } from '@/lib/subscriptions';
+import { useCountUp } from '@/lib/useCountUp';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -493,32 +494,6 @@ const ACCENT: Record<KpiAccent, { icon: string; tint: string; stroke: string }> 
   amber: { icon: 'text-amber-600 dark:text-amber-400', tint: 'bg-amber-600/10', stroke: '#f59e0b' },
   primary: { icon: 'text-primary', tint: 'bg-primary/10', stroke: '#6366f1' },
 };
-
-/** Cuenta de 0 al valor final con un ease-out propio (sin react-countup -
- * son ~15 líneas, no justifica una dependencia nueva). Reinicia sólo si
- * `active` pasa a false; si el valor objetivo cambia con `active` ya en
- * true (llegó un snapshot nuevo), vuelve a animar desde 0 hasta el valor
- * nuevo - "algo cambió" es información, no un glitch. */
-function useCountUp(target: number, active: boolean, duration = 1100): number {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!active) {
-      setValue(0);
-      return undefined;
-    }
-    let frame: number;
-    const start = performance.now();
-    function tick(now: number) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(target * eased);
-      if (t < 1) frame = requestAnimationFrame(tick);
-    }
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [active, target, duration]);
-  return value;
-}
 
 function KpiCard({ def, index, revealed }: { def: KpiDef; index: number; revealed: boolean }) {
   const shown = useCountUp(def.value, revealed);

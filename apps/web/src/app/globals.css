@@ -82,11 +82,17 @@
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(58.5% 0.233 277.117);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    /* Sin uso hasta ahora (boilerplate de shadcn en gris puro) - se les da
+       valor real acá para el módulo "Resumen", reusando exactamente los
+       mismos 5 hex que ya usa ACCENT en dashboard/page.tsx (el sparkline
+       del Tablero) en vez de inventar una paleta nueva - mismo criterio en
+       claro y oscuro que ese componente ya usa hoy en producción, validado
+       con el validador de paletas de la skill de dataviz. */
+    --chart-1: #6366f1;
+    --chart-2: #10b981;
+    --chart-3: #f59e0b;
+    --chart-4: #0ea5e9;
+    --chart-5: #8b5cf6;
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -118,11 +124,11 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(58.5% 0.233 277.117);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --chart-1: #6366f1;
+    --chart-2: #10b981;
+    --chart-3: #f59e0b;
+    --chart-4: #0ea5e9;
+    --chart-5: #8b5cf6;
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -162,4 +168,14 @@
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Glow ambiental del módulo "Resumen" - ver AmbientBackground.tsx. */
+@keyframes resumen-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-4%, 5%) scale(1.08); }
+}
+@keyframes resumen-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(5%, -4%) scale(1.1); }
 }
