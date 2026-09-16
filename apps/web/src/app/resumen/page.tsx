@@ -10,6 +10,7 @@ import { receivablesApi } from '@/lib/receivables';
 import { reportsApi } from '@/lib/reports';
 import { productionApi } from '@/lib/production';
 import { resumenApi } from '@/lib/resumen';
+import { fmtCompact, fmtMoney } from '@/lib/resumenFormat';
 import { useCountUp } from '@/lib/useCountUp';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -21,24 +22,16 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useState } from 'react';
+import ComprasView from './ComprasView';
+import VentasView from './VentasView';
 
 const NAV_ITEMS: SegmentedNavItem[] = [
   { key: 'resumen', label: 'Resumen', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
-  { key: 'ventas', label: 'Ventas', icon: <TrendingUp className="h-3.5 w-3.5" />, disabled: true, title: 'Próximamente' },
-  { key: 'compras', label: 'Compras', icon: <ShoppingBag className="h-3.5 w-3.5" />, disabled: true, title: 'Próximamente' },
+  { key: 'ventas', label: 'Ventas', icon: <TrendingUp className="h-3.5 w-3.5" /> },
+  { key: 'compras', label: 'Compras', icon: <ShoppingBag className="h-3.5 w-3.5" /> },
   { key: 'inventario', label: 'Inventario', icon: <Boxes className="h-3.5 w-3.5" />, disabled: true, title: 'Requiere una tabla de valuación histórica de stock' },
   { key: 'produccion', label: 'Producción', icon: <Factory className="h-3.5 w-3.5" />, disabled: true, title: 'Próximamente' },
 ];
-
-function fmtMoney(n: number): string {
-  return `$ ${Math.round(n).toLocaleString('es-AR')}`;
-}
-
-function fmtCompact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
-  return `$${n.toFixed(0)}`;
-}
 
 export default function ResumenPage() {
   const [view, setView] = useState('resumen');
@@ -109,7 +102,11 @@ export default function ResumenPage() {
 
       <SegmentedNav items={NAV_ITEMS} active={view} onChange={setView} />
 
-      <BentoGrid>
+      {view === 'ventas' && <VentasView />}
+      {view === 'compras' && <ComprasView />}
+
+      {view === 'resumen' && (
+        <BentoGrid>
         <BentoCell variant="hero">
           <BentoCellHeader
             title="Facturación por mes"
@@ -181,6 +178,7 @@ export default function ResumenPage() {
           <RankedBars items={suppliers} />
         </BentoCell>
       </BentoGrid>
+      )}
     </div>
   );
 }
