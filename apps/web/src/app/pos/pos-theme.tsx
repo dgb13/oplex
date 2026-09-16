@@ -35,6 +35,22 @@ export function PosThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, next);
   }, []);
 
+  // Además del atributo en el wrapper de abajo (que cubre el contenido
+  // visible normal), se replica en <body> para el contenido que Headless
+  // UI saca por portal fuera del árbol de este componente (el popup de
+  // PosSelect, ver PosSelect.tsx) - sin esto, ese popup queda fuera del
+  // selector `pos-dark:`/`pos-contrast:`/`pos-emerald:`
+  // ([data-pos-theme="..."] *) y siempre sale con el estilo claro por
+  // default (bug real, encontrado probando "Nueva caja" en tema
+  // contraste). Se limpia al desmontar para no dejarlo pegado si se
+  // navega fuera de /pos.
+  useEffect(() => {
+    document.body.setAttribute('data-pos-theme', theme);
+    return () => {
+      document.body.removeAttribute('data-pos-theme');
+    };
+  }, [theme]);
+
   return (
     <PosThemeContext.Provider value={{ theme, setTheme }}>
       <div className="contents" data-pos-theme={theme}>

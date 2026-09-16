@@ -5,6 +5,7 @@ import CompanyListView from '@/components/CompanyListView';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { formatCuitInput } from '@/lib/cuit';
 import { INVOICE_PDF_FORMATS, invoicingPreferencesApi, type InvoicePdfFormat } from '@/lib/invoicing';
 import { inventoryApi, type AutoReplenishmentResult } from '@/lib/inventory';
@@ -25,9 +26,6 @@ import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import CurrencySettings from './CurrencySettings';
 import MercadoPagoCard from './MercadoPagoCard';
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function pillClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -368,18 +366,17 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
         <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Condición IVA propia
-            <select
+            <Select
               value={ownTaxCondition}
-              onChange={(e) => setOwnTaxCondition(e.target.value as TenantTaxCondition)}
-              className={`${selectClass} w-56`}
-            >
-              <option value="" disabled>
-                Sin configurar
-              </option>
-              <option value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</option>
-              <option value="MONOTRIBUTO">Monotributo</option>
-              <option value="EXENTO">Exento</option>
-            </select>
+              onChange={(value) => setOwnTaxCondition(value as TenantTaxCondition)}
+              placeholder="Sin configurar"
+              className="w-56"
+              options={[
+                { value: 'RESPONSABLE_INSCRIPTO', label: 'Responsable Inscripto' },
+                { value: 'MONOTRIBUTO', label: 'Monotributo' },
+                { value: 'EXENTO', label: 'Exento' },
+              ]}
+            />
           </label>
           <Button
             type="button"
@@ -703,17 +700,11 @@ function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
         {preferences && (
           <div className="mt-6 flex items-center gap-3 border-t pt-4">
             <span className="text-xs text-muted-foreground">Formato de PDF por defecto</span>
-            <select
+            <Select
               value={preferences.invoicePdfFormat}
-              onChange={(e) => formatMutation.mutate(e.target.value as InvoicePdfFormat)}
-              className={selectClass}
-            >
-              {INVOICE_PDF_FORMATS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => formatMutation.mutate(value as InvoicePdfFormat)}
+              options={INVOICE_PDF_FORMATS}
+            />
           </div>
         )}
       </CardContent>

@@ -6,6 +6,7 @@ import { posApi, type CashSessionListRow } from '@/lib/pos';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useState } from 'react';
+import PosSelect from '../PosSelect';
 import PosThemePicker from '../PosThemePicker';
 
 const DENOMINATION_LABEL: Record<'BILL' | 'COIN', string> = { BILL: 'Billete', COIN: 'Moneda' };
@@ -64,18 +65,14 @@ export default function PosHistoryPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <select
+          <PosSelect
             value={registerId}
-            onChange={(e) => setRegisterId(e.target.value)}
-            className="rounded-lg border border-slate-300 pos-dark:border-slate-700 bg-slate-200 pos-dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 pos-dark:text-slate-100 outline-none focus:border-indigo-500 pos-contrast:border-slate-600 pos-contrast:bg-slate-900 pos-contrast:text-white pos-contrast:focus:border-amber-400 pos-emerald:border-emerald-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-900 pos-emerald:focus:border-emerald-500"
-          >
-            <option value="">Todas las cajas</option>
-            {(registersQuery.data ?? []).map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            onChange={setRegisterId}
+            options={[
+              { value: '', label: 'Todas las cajas' },
+              ...(registersQuery.data ?? []).map((r) => ({ value: r.id, label: r.name })),
+            ]}
+          />
           <DateRangeFilter
             from={from}
             to={to}

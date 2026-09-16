@@ -6,6 +6,7 @@ import { posApi } from '@/lib/pos';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import PosSelect from './PosSelect';
 
 interface Props {
   onClose: () => void;
@@ -82,14 +83,12 @@ export default function CreateRegisterModal({ onClose }: Props) {
                 No hay ninguna empresa con rol Sucursal todavía - creá una en Empresas primero.
               </p>
             ) : (
-              <select className={inputClass} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-                <option value="">Elegir...</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+              <PosSelect
+                value={branchId}
+                onChange={setBranchId}
+                placeholder="Elegir..."
+                options={branches.map((b) => ({ value: b.id, label: b.name }))}
+              />
             )}
           </div>
 
@@ -97,14 +96,12 @@ export default function CreateRegisterModal({ onClose }: Props) {
             <label className="text-sm text-slate-600 pos-dark:text-slate-300 pos-contrast:text-slate-200 pos-emerald:text-slate-600">
               Depósito
             </label>
-            <select className={inputClass} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">Elegir...</option>
-              {(warehousesQuery.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
+            <PosSelect
+              value={warehouseId}
+              onChange={setWarehouseId}
+              placeholder="Elegir..."
+              options={(warehousesQuery.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+            />
           </div>
 
           {error && (

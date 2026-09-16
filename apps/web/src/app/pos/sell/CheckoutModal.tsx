@@ -9,6 +9,7 @@ import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useMemo, useState } from 'react';
+import PosSelect from '../PosSelect';
 import type { TicketLine } from './types';
 
 interface Props {
@@ -240,14 +241,14 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           <label className="text-sm text-slate-600 pos-dark:text-slate-300 pos-contrast:text-slate-200 pos-emerald:text-slate-600">
             Cliente
           </label>
-          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">Consumidor Final</option>
-            {(customersQuery.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <PosSelect
+            value={customerId}
+            onChange={setCustomerId}
+            options={[
+              { value: '', label: 'Consumidor Final' },
+              ...(customersQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
           <p className="text-xs text-slate-400 pos-dark:text-slate-500 pos-contrast:text-slate-400 pos-emerald:text-slate-400">
             Factura {documentLetter} - {letterSuggestion.reason}
           </p>
@@ -310,17 +311,12 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           {payments.map((payment, i) => (
             <div key={i} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <select
-                  className={`${inputClass} flex-1`}
+                <PosSelect
+                  className="flex-1"
                   value={payment.method}
-                  onChange={(e) => updatePayment(i, { method: e.target.value })}
-                >
-                  {POS_PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => updatePayment(i, { method: value })}
+                  options={POS_PAYMENT_METHODS}
+                />
                 <input
                   type="number"
                   step="any"
