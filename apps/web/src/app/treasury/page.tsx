@@ -1,6 +1,7 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { reportsApi } from '@/lib/reports';
 import {
@@ -17,9 +18,6 @@ import { useState } from 'react';
 import DateRangeFilter from '../reports/DateRangeFilter';
 import DepositCheckModal from './DepositCheckModal';
 import RejectCheckModal from './RejectCheckModal';
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const STATUS_OPTIONS: CheckStatus[] = [
   'PORTFOLIO',
@@ -84,22 +82,26 @@ export default function TreasuryPage() {
       <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Estado
-          <select className={selectClass} value={status} onChange={(e) => setStatus(e.target.value as CheckStatus | '')}>
-            <option value="">Todos</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {describeCheckStatus(s).label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={status}
+            onChange={(value) => setStatus(value as CheckStatus | '')}
+            options={[
+              { value: '', label: 'Todos' },
+              ...STATUS_OPTIONS.map((s) => ({ value: s, label: describeCheckStatus(s).label })),
+            ]}
+          />
         </label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Tipo
-          <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as CheckKind | '')}>
-            <option value="">Todos</option>
-            <option value="THIRD_PARTY">{CHECK_KIND_LABELS.THIRD_PARTY}</option>
-            <option value="OWN">{CHECK_KIND_LABELS.OWN}</option>
-          </select>
+          <Select
+            value={kind}
+            onChange={(value) => setKind(value as CheckKind | '')}
+            options={[
+              { value: '', label: 'Todos' },
+              { value: 'THIRD_PARTY', label: CHECK_KIND_LABELS.THIRD_PARTY },
+              { value: 'OWN', label: CHECK_KIND_LABELS.OWN },
+            ]}
+          />
         </label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Banco

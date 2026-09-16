@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { taxesApi, type TaxCalculationType } from '@/lib/taxes';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -10,9 +11,6 @@ import { useState } from 'react';
 interface Props {
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const CALC_TYPE_OPTIONS: { value: TaxCalculationType; label: string }[] = [
   { value: 'PERCENTAGE', label: 'Porcentual' },
@@ -85,17 +83,11 @@ export default function NewTaxDefinitionModal({ onClose }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Tipo de cálculo</label>
-            <select
-              className={selectClass}
+            <Select
               value={calculationType}
-              onChange={(e) => setCalculationType(e.target.value as TaxCalculationType)}
-            >
-              {CALC_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setCalculationType(value as TaxCalculationType)}
+              options={CALC_TYPE_OPTIONS}
+            />
           </div>
           {calculationType === 'PERCENTAGE' && (
             <div className="flex flex-col gap-1">

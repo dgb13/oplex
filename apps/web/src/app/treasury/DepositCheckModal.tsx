@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import type { FinancialAccount } from '@/lib/reports';
 import { treasuryApi, type Check } from '@/lib/treasury';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,9 +13,6 @@ interface Props {
   accounts: FinancialAccount[];
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function DepositCheckModal({ check, accounts, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -64,17 +62,11 @@ export default function DepositCheckModal({ check, accounts, onClose }: Props) {
                 No hay cuentas financieras creadas todavía (Reportes → Financiero).
               </p>
             ) : (
-              <select
-                className={selectClass}
+              <Select
                 value={financialAccountId}
-                onChange={(e) => setFinancialAccountId(e.target.value)}
-              >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setFinancialAccountId}
+                options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+              />
             )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}

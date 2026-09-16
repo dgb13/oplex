@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { ARGENTINE_JURISDICTION_LABELS, withholdingRegimesApi, type ArgentineJurisdiction, type WithholdingRegime } from '@/lib/taxes';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -11,9 +12,6 @@ interface Props {
   regime: WithholdingRegime;
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const JURISDICTION_OPTIONS = Object.keys(ARGENTINE_JURISDICTION_LABELS) as ArgentineJurisdiction[];
 
@@ -74,18 +72,12 @@ export default function ReviseWithholdingRegimeModal({ regime, onClose }: Props)
           {regime.taxType === 'GROSS_INCOME' && (
             <div className="flex flex-col gap-1">
               <label className="text-sm text-muted-foreground">Jurisdicción</label>
-              <select
-                className={selectClass}
+              <Select
                 value={jurisdiction}
-                onChange={(e) => setJurisdiction(e.target.value as ArgentineJurisdiction)}
-              >
-                <option value="">Elegí una provincia...</option>
-                {JURISDICTION_OPTIONS.map((j) => (
-                  <option key={j} value={j}>
-                    {ARGENTINE_JURISDICTION_LABELS[j]}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setJurisdiction(value as ArgentineJurisdiction)}
+                placeholder="Elegí una provincia..."
+                options={JURISDICTION_OPTIONS.map((j) => ({ value: j, label: ARGENTINE_JURISDICTION_LABELS[j] }))}
+              />
             </div>
           )}
           <div className="flex flex-col gap-1">

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { invoicingApi } from '@/lib/invoicing';
 import { reportsApi, type FinancialAccountProvider } from '@/lib/reports';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,9 +12,6 @@ import { useState } from 'react';
 interface Props {
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const PROVIDER_OPTIONS: { value: FinancialAccountProvider; label: string }[] = [
   { value: 'BANK', label: 'Banco' },
@@ -89,29 +87,21 @@ export default function NewFinancialAccountModal({ onClose }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Proveedor</label>
-            <select
-              className={selectClass}
+            <Select
               value={provider}
-              onChange={(e) => setProvider(e.target.value as FinancialAccountProvider)}
-            >
-              {PROVIDER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setProvider(value as FinancialAccountProvider)}
+              options={PROVIDER_OPTIONS}
+            />
           </div>
           {showCurrencyField && (
             <div className="flex flex-col gap-1">
               <label className="text-sm text-muted-foreground">Moneda</label>
-              <select className={selectClass} value={currencyId} onChange={(e) => setCurrencyId(e.target.value)}>
-                <option value="">Moneda base del tenant</option>
-                {currencies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} — {c.name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={currencyId}
+                onChange={setCurrencyId}
+                placeholder="Moneda base del tenant"
+                options={currencies.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` }))}
+              />
             </div>
           )}
           <div className="flex flex-col gap-1">

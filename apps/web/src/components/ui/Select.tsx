@@ -46,9 +46,14 @@ export default function Select({ value, onChange, options, placeholder, disabled
          * contra su contenido - necesita ganarle a ese z-index, no sólo
          * usar uno "alto" arbitrario (bug real: con z-[60] el modal lo
          * tapaba por completo, encontrado probando en vivo). */}
+        {/* min-w, no w: el botón se angosta al ancho de la opción
+         * ELEGIDA (ej. "Todos"), no de la más larga del listado (ej.
+         * "Endosado") - con un ancho fijo el popup truncaba las opciones
+         * más largas que la seleccionada actual (bug real, visto en
+         * "Cartera de Cheques" y "Vencimientos" con listas de estados). */}
         <ListboxOptions
           anchor="bottom start"
-          className="z-[80] mt-1 max-h-72 w-[var(--button-width)] overflow-y-auto rounded-xl border bg-popover py-1 shadow-xl outline-none"
+          className="z-[80] mt-1 max-h-72 min-w-[var(--button-width)] overflow-y-auto rounded-xl border bg-popover py-1 shadow-xl outline-none"
         >
           {options.map((o) => (
             <ListboxOption

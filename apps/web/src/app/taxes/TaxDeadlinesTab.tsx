@@ -2,12 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { taxDeadlinesApi, TAX_DEADLINE_KIND_LABELS, type TaxDeadlineKind, type TaxDeadlineStatus } from '@/lib/memberships';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function pillClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -71,13 +69,11 @@ export default function TaxDeadlinesTab() {
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">Tipo</label>
-          <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as TaxDeadlineKind)}>
-            {KIND_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={kind}
+            onChange={(value) => setKind(value as TaxDeadlineKind)}
+            options={KIND_OPTIONS.map(([value, label]) => ({ value, label }))}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">Vencimiento</label>
