@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AccountingModule } from '@plexo/accounting';
 import { ActivityLogModule } from '@plexo/activity-log';
 import { JwtAuthGuard, ModuleAccessGuard, MustChangePasswordGuard, RolesGuard } from '@plexo/auth';
+import { CalendarModule } from '@plexo/calendar';
 import { CompaniesModule } from '@plexo/companies';
 import { DatabaseModule } from '@plexo/database';
 import { EncryptionModule } from '@plexo/encryption';
@@ -30,6 +31,7 @@ import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AgendaModule } from './agenda/agenda.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BankReconciliationModule } from './bank-reconciliation/bank-reconciliation.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
@@ -70,6 +72,8 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     ReportsFinancialModule,
     SalesModule,
     DashboardModule,
+    CalendarModule,
+    AgendaModule,
     SchedulerModule,
     TenantSettingsModule,
     ActivityLogModule,

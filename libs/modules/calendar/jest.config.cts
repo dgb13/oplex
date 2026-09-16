@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 const { readFileSync } = require('fs');
 
 // Reading the SWC compilation config for the spec files
@@ -10,18 +10,12 @@ const swcJestConfig = JSON.parse(
 swcJestConfig.swcrc = false;
 
 module.exports = {
-  displayName: 'api',
-  preset: '../../jest.preset.js',
+  displayName: 'calendar',
+  preset: '../../../jest.preset.js',
   testEnvironment: 'node',
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
-  // AgendaService (composition root de la Agenda) importa PayablesService/
-  // TaxDeadlineService vía sus paquetes @plexo/* - esos barrels re-exportan
-  // sus servicios de PDF, que dependen de @react-pdf/renderer (ESM-only).
-  // Mismo motivo/mismo fix ya aplicado en libs/modules/taxes|purchases|
-  // invoicing|quotes|inventory-cart/jest.config.cts.
-  transformIgnorePatterns: [],
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage',
 };

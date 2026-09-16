@@ -18,6 +18,7 @@ import {
   Briefcase,
   Building2,
   Calculator,
+  CalendarDays,
   ChevronDown,
   Factory,
   LayoutDashboard,
@@ -55,6 +56,7 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/dashboard', label: 'Tablero', icon: LayoutDashboard },
   { kind: 'link', href: '/resumen', label: 'Resumen', icon: BarChart3 },
+  { kind: 'link', href: '/agenda', label: 'Agenda', icon: CalendarDays },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
   { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket },
   {

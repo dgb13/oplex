@@ -1,6 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, getTenantId, getUserId, type TaxDeadline, type TaxDeadlineStatus } from '@plexo/database';
+import type { CalendarEntry } from '@plexo/types';
 import type { CreateTaxDeadlineDto } from './dto/create-tax-deadline.dto.js';
+
+const KIND_LABEL: Record<TaxDeadline['kind'], string> = {
+  IVA: 'IVA',
+  MONOTRIBUTO: 'Monotributo',
+  IIBB: 'IIBB',
+  GANANCIAS: 'Ganancias',
+  OTRO: 'Otro',
+};
 
 @Injectable()
 export class TaxDeadlineService {
@@ -30,5 +39,26 @@ export class TaxDeadlineService {
       throw new NotFoundException('Vencimiento no encontrado');
     }
     return db.taxDeadline.update({ where: { id }, data: { status: 'DONE' } });
+  }
+
+  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+   * propia tabla, nunca importa otro módulo de negocio. Se muestran los
+   * vencimientos pendientes y ya cumplidos por igual: la Agenda es una
+   * vista de "qué vence cuándo", no un filtro de pendientes. */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const deadlines = await getTenantDb().taxDeadline.findMany({
+      where: { dueDate: { gte: from, lte: to } },
+      orderBy: { dueDate: 'asc' },
+    });
+    return deadlines.map((d) => ({
+      id: d.id,
+      source: 'tax',
+      title: d.description,
+      date: d.dueDate.toISOString(),
+      amount: null,
+      flow: 'out',
+      ref: KIND_LABEL[d.kind],
+      editable: false,
+    }));
   }
 }

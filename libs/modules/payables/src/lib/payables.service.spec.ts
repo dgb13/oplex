@@ -44,6 +44,41 @@ describe('PayablesService.getAgingReport', () => {
   });
 });
 
+describe('PayablesService.getCalendarEntries', () => {
+  it('maps open purchase invoices with a dueDate in range to CalendarEntry', async () => {
+    const invoice = {
+      id: 'pi-1',
+      supplierName: 'Distribuidora Sur S.A.',
+      balanceDue: new Prisma.Decimal(92300),
+      dueDate: new Date('2026-09-05T00:00:00.000Z'),
+      supplierInvoiceNumber: 'OC-0088',
+    };
+    const db = { purchaseInvoice: { findMany: jest.fn().mockResolvedValue([invoice]) } };
+    const service = new PayablesService();
+
+    const entries = await runInTenant(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(db.purchaseInvoice.findMany).toHaveBeenCalledWith({
+      where: { balanceDue: { gt: 0 }, dueDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-30') } },
+    });
+    expect(entries).toEqual([
+      {
+        id: 'pi-1',
+        source: 'pay',
+        title: 'Distribuidora Sur S.A.',
+        date: '2026-09-05T00:00:00.000Z',
+        amount: 92300,
+        flow: 'out',
+        ref: 'OC-0088',
+        editable: false,
+        link: { module: 'purchase-invoice', id: 'pi-1' },
+      },
+    ]);
+  });
+});
+
 describe('PayablesService.listSupplierBalances', () => {
   it('joins the grouped balances back to supplier name', async () => {
     const db = {

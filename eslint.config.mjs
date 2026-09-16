@@ -48,6 +48,10 @@ export default [
             { sourceTag: 'scope:payables', onlyDependOnLibsWithTags: ['scope:payables', 'scope:shared'] },
             { sourceTag: 'scope:treasury', onlyDependOnLibsWithTags: ['scope:treasury', 'scope:shared'] },
             { sourceTag: 'scope:mercadopago', onlyDependOnLibsWithTags: ['scope:mercadopago', 'scope:shared'] },
+            // Agenda (ver docs/plan-agenda.md): sólo su propia tabla
+            // CalendarEvent - la composición con taxes/receivables/payables
+            // vive en apps/api (AgendaModule), nunca acá.
+            { sourceTag: 'scope:calendar', onlyDependOnLibsWithTags: ['scope:calendar', 'scope:shared'] },
             {
               sourceTag: 'scope:api',
               onlyDependOnLibsWithTags: [
@@ -74,6 +78,7 @@ export default [
                 'scope:bank-reconciliation',
                 'scope:pos',
                 'scope:ai-invoice-scan',
+                'scope:calendar',
               ],
             },
             {
@@ -97,6 +102,7 @@ export default [
                 'scope:purchases',
                 'scope:payables',
                 'scope:treasury',
+                'scope:calendar',
               ],
             },
             // type: layering. apps/features can use anything below them,

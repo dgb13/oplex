@@ -6,19 +6,15 @@
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "react-jsx",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts"],
   "references": [
-    {
-      "path": "../../shared/types/tsconfig.lib.json"
-    },
     {
       "path": "../../shared/database/tsconfig.lib.json"
     },
     {
-      "path": "../../shared/auth/tsconfig.lib.json"
+      "path": "../../shared/types/tsconfig.lib.json"
     }
   ],
   "exclude": [

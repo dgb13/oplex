@@ -97,5 +97,6 @@ export type {
   ProductionOrder,
   ProductionConsumption,
   ProductionOutput,
+  CalendarEvent,
 } from './generated/client.js';
 export * from './generated/enums.js';

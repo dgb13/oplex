@@ -107,6 +107,9 @@
     },
     {
       "path": "./libs/modules/reports-purchases"
+    },
+    {
+      "path": "./libs/modules/calendar"
     }
   ],
   "compilerOptions": {}

@@ -1,5 +1,5 @@
 {
-  "name": "@plexo/payables",
+  "name": "@plexo/calendar",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,12 +17,9 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
-    "@plexo/auth": "^0.0.1",
     "@plexo/database": "^0.0.1",
     "@plexo/types": "^0.0.1",
-    "@react-pdf/renderer": "^4.5.0",
     "class-validator": "^0.15.1",
-    "exceljs": "^4.4.0",
     "tslib": "^2.3.0"
   }
 }

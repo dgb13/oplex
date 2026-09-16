@@ -83,3 +83,45 @@ describe('TaxDeadlineService.markDone', () => {
     expect(db.taxDeadline.update).toHaveBeenCalledWith({ where: { id: 'd1' }, data: { status: 'DONE' } });
   });
 });
+
+describe('TaxDeadlineService.getCalendarEntries', () => {
+  it('maps deadlines in range to CalendarEntry, pending and done alike', async () => {
+    const deadlines = [
+      { id: 'd1', kind: 'IVA', dueDate: new Date('2026-09-02T00:00:00.000Z'), description: 'Vto. IVA — DDJJ mensual', status: 'PENDING' },
+      { id: 'd2', kind: 'IIBB', dueDate: new Date('2026-09-12T00:00:00.000Z'), description: 'Vto. IIBB — Convenio Multilateral', status: 'DONE' },
+    ];
+    const db = { taxDeadline: { findMany: jest.fn().mockResolvedValue(deadlines) } };
+    const service = new TaxDeadlineService();
+
+    const entries = await runInTenant(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(db.taxDeadline.findMany).toHaveBeenCalledWith({
+      where: { dueDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-30') } },
+      orderBy: { dueDate: 'asc' },
+    });
+    expect(entries).toEqual([
+      {
+        id: 'd1',
+        source: 'tax',
+        title: 'Vto. IVA — DDJJ mensual',
+        date: '2026-09-02T00:00:00.000Z',
+        amount: null,
+        flow: 'out',
+        ref: 'IVA',
+        editable: false,
+      },
+      {
+        id: 'd2',
+        source: 'tax',
+        title: 'Vto. IIBB — Convenio Multilateral',
+        date: '2026-09-12T00:00:00.000Z',
+        amount: null,
+        flow: 'out',
+        ref: 'IIBB',
+        editable: false,
+      },
+    ]);
+  });
+});

@@ -3653,3 +3653,57 @@ enum AssistantMessageFeedback {
   UP
   DOWN
 }
+
+// Agenda (ver docs/plan-agenda.md) - la ÚNICA tabla propia del módulo. El
+// resto de lo que se ve en el calendario (vencimientos de Impuestos, Cuentas
+// a Cobrar/Pagar) se proyecta en caliente desde las tablas de esos módulos
+// vía getCalendarEntries(from,to) de cada uno - no se duplica acá. id simple
+// (no @@id compuesto [tenantId, id]): a diferencia de Invoice/PurchaseOrder,
+// esta tabla no tiene ninguna tabla hija que necesite referenciarla vía FK
+// compuesta, así que sigue el mismo patrón que la enorme mayoría del schema
+// (id String @id @default(uuid())), no el de las relaciones fiscales
+// sensibles.
+enum CalendarEventKind {
+  MEETING
+  TASK
+  REMINDER
+  CUSTOM
+}
+
+enum CalendarEventStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+
+model CalendarEvent {
+  id       String @id @default(uuid())
+  tenantId String
+
+  title    String
+  startsAt DateTime
+  endsAt   DateTime?
+  allDay   Boolean  @default(false)
+
+  kind   CalendarEventKind   @default(CUSTOM)
+  status CalendarEventStatus @default(PENDING)
+
+  // Vínculo opcional a un documento de otro módulo (ej. 'invoice'/id) - sin
+  // FK real a propósito, el mismo campo puede apuntar a tablas distintas
+  // según linkType y ningún módulo de negocio puede depender de esta tabla
+  // para declarar una relation() en sentido contrario (ver principio de
+  // arquitectura del plan). Fase 2: navegación desde la Agenda al origen.
+  linkType String?
+  linkId   String?
+
+  // userId sin @relation, mismo criterio que TaxDeadline.createdByUserId
+  // (bare string, no FK) - habilita "agenda por usuario/contador" a futuro
+  // (Fase 2), sin filtro todavía en GET /calendar.
+  assignedTo String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, startsAt])
+  @@map("calendar_events")
+}

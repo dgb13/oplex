@@ -46,6 +46,43 @@ describe('ReceivablesService.getAgingReport', () => {
   });
 });
 
+describe('ReceivablesService.getCalendarEntries', () => {
+  it('maps open invoices with a dueDate in range to CalendarEntry', async () => {
+    const invoice = {
+      id: 'inv-1',
+      customerName: 'Panadería La Espiga',
+      balanceDue: new Prisma.Decimal(184500),
+      dueDate: new Date('2026-09-16T00:00:00.000Z'),
+      documentLetter: 'A',
+      pointOfSale: '0001',
+      number: '00000234',
+    };
+    const db = { invoice: { findMany: jest.fn().mockResolvedValue([invoice]) } };
+    const service = new ReceivablesService();
+
+    const entries = await runInTenant(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(db.invoice.findMany).toHaveBeenCalledWith({
+      where: { balanceDue: { gt: 0 }, dueDate: { gte: new Date('2026-09-01'), lte: new Date('2026-09-30') } },
+    });
+    expect(entries).toEqual([
+      {
+        id: 'inv-1',
+        source: 'collect',
+        title: 'Panadería La Espiga',
+        date: '2026-09-16T00:00:00.000Z',
+        amount: 184500,
+        flow: 'in',
+        ref: 'A 0001-00000234',
+        editable: false,
+        link: { module: 'invoice', id: 'inv-1' },
+      },
+    ]);
+  });
+});
+
 describe('ReceivablesService.listCustomerBalances', () => {
   it('joins the grouped balances back to customer name/credit limit', async () => {
     const db = {

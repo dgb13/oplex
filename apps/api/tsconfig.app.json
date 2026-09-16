@@ -52,6 +52,9 @@
       "path": "../../libs/modules/ai-invoice-scan/tsconfig.lib.json"
     },
     {
+      "path": "../../libs/modules/calendar/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/shared/subscriptions/tsconfig.lib.json"
     },
     {

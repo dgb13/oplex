@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, Prisma, type Company, type PurchaseInvoice } from '@plexo/database';
+import type { CalendarEntry } from '@plexo/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -137,6 +138,28 @@ export class PayablesService {
     }
 
     return [...bySupplier.values()].sort((a, b) => b.totalOutstanding.cmp(a.totalOutstanding));
+  }
+
+  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+   * propia tabla, nunca importa otro módulo de negocio. Sólo facturas con
+   * saldo pendiente y dueDate cargado (PurchaseInvoice.dueDate es opcional -
+   * sin fecha de vencimiento no hay nada que agendar, mismo criterio que
+   * getAgingReport la trata como "corriente" en vez de excluirla ahí). */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const invoices = await getTenantDb().purchaseInvoice.findMany({
+      where: { balanceDue: { gt: 0 }, dueDate: { gte: from, lte: to } },
+    });
+    return invoices.map((invoice) => ({
+      id: invoice.id,
+      source: 'pay',
+      title: invoice.supplierName,
+      date: (invoice.dueDate as Date).toISOString(),
+      amount: invoice.balanceDue.toNumber(),
+      flow: 'out',
+      ref: invoice.supplierInvoiceNumber,
+      editable: false,
+      link: { module: 'purchase-invoice', id: invoice.id },
+    }));
   }
 
   /** Mirrors ReceivablesService.listCustomerBalances() - no credit-limit

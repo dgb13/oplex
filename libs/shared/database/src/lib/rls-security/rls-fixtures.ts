@@ -361,6 +361,16 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
     recpamAmount: 100,
     createdByUserId: userId,
   });
+  // Agenda (ver docs/plan-agenda.md) - única tabla propia del módulo, sin
+  // FK a ninguna otra (linkType/linkId/assignedTo son strings sueltos a
+  // propósito, ver el modelo en schema.prisma), así que no depende de nada
+  // insertado arriba.
+  await ins('calendar_events', {
+    tenantId,
+    title: `RLS calendar event ${label}`,
+    startsAt: new Date(),
+    updatedAt: new Date(),
+  });
   await ins('stock_movements', {
     tenantId,
     warehouseId,
@@ -502,6 +512,7 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
  * user_activity_log above.
  */
 const CLEANUP_TABLES_REVERSE = [
+  'calendar_events',
   'payment_intents',
   'connector_secrets',
   'connectors',

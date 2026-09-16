@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, Prisma, type Invoice, type Company } from '@plexo/database';
+import type { CalendarEntry } from '@plexo/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -140,6 +141,27 @@ export class ReceivablesService {
     }
 
     return [...byCustomer.values()].sort((a, b) => b.totalOutstanding.cmp(a.totalOutstanding));
+  }
+
+  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+   * propia tabla, nunca importa otro módulo de negocio. Sólo facturas con
+   * saldo pendiente (balanceDue > 0): una ya cobrada no es un "vencimiento
+   * de cobro" real, aunque su dueDate caiga en el rango. */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const invoices = await getTenantDb().invoice.findMany({
+      where: { balanceDue: { gt: 0 }, dueDate: { gte: from, lte: to } },
+    });
+    return invoices.map((invoice) => ({
+      id: invoice.id,
+      source: 'collect',
+      title: invoice.customerName,
+      date: (invoice.dueDate as Date).toISOString(),
+      amount: invoice.balanceDue.toNumber(),
+      flow: 'in',
+      ref: invoiceDocumentNumber(invoice),
+      editable: false,
+      link: { module: 'invoice', id: invoice.id },
+    }));
   }
 
   async listCustomerBalances(): Promise<CustomerBalance[]> {
