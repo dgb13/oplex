@@ -306,6 +306,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// startsWith solo (sin límite de segmento) hace que un item como "Tablero"
+// (/production) quede marcado activo junto con "Recetas" (/production/bom) a
+// la vez, porque /production/bom también empieza con /production - bug real
+// reportado por el usuario. Acá se exige que lo que sigue sea el final de la
+// ruta o un "/", y de los items que matchean se toma sólo el de href más
+// largo (el más específico), nunca más de uno resaltado en simultáneo.
+function isNavItemActive(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function mostSpecificActiveItem<T extends NavLink>(pathname: string, items: T[]): T | undefined {
+  return items
+    .filter((item) => isNavItemActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
 function NavGroupSection({
   group,
   active,
@@ -317,7 +333,8 @@ function NavGroupSection({
   collapsed: boolean;
   onExpandSidebar: () => void;
 }) {
-  const isActiveGroup = group.items.some((item) => active.startsWith(item.href));
+  const isActiveGroup = group.items.some((item) => isNavItemActive(active, item.href));
+  const activeItem = mostSpecificActiveItem(active, group.items);
   // Se inicializa abierto si el grupo contiene la pantalla actual - cada
   // segmento de primer nivel tiene su propio layout.tsx que monta un
   // AppShell nuevo (ver taxes/layout.tsx, reports/layout.tsx, etc.), así que
@@ -365,7 +382,7 @@ function NavGroupSection({
               key={item.href}
               href={item.href}
               className={`rounded-lg px-2.5 py-1.5 text-sm transition ${
-                active.startsWith(item.href)
+                item === activeItem
                   ? 'font-medium text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
