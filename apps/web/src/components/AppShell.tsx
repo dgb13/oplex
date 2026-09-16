@@ -2,6 +2,7 @@
 
 import { initials, profileApi } from '@/lib/profile';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
+import AmbientBackground from './AmbientBackground';
 import AssistantWidget from './AssistantWidget';
 import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
@@ -299,7 +300,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="relative flex-1 overflow-y-auto p-6">
+            <AmbientBackground />
+            <div className="relative z-10">{children}</div>
+          </main>
         </div>
       </div>
 
