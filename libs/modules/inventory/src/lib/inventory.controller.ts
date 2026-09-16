@@ -166,6 +166,11 @@ export class InventoryController {
     return this.inventoryService.listReorderSuggestions();
   }
 
+  @Get('stock-value-by-category')
+  getStockValueByCategory() {
+    return this.inventoryService.getStockValueByCategory();
+  }
+
   @AuditEntity('article', { labelFields: ['name'] })
   @Roles(...WRITE_ROLES)
   @Post('articles/:id/image')

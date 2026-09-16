@@ -39,6 +39,12 @@ export interface ReorderSuggestion {
   autoReplenish: boolean;
 }
 
+export interface CategoryStockValue {
+  categoryId: string | null;
+  categoryName: string;
+  totalValue: Prisma.Decimal;
+}
+
 export interface WarehouseStockRow {
   warehouseId: string;
   warehouseName: string;
@@ -678,6 +684,38 @@ export class InventoryService {
         };
       })
       .filter((row) => row.currentQuantity < row.minimumQuantity);
+  }
+
+  // Snapshot actual (no histórico - StockLedger sólo guarda el saldo
+  // corriente, ver PriceHistory para lo que sí tiene fecha). Una fila sin
+  // avgUnitCost todavía (nunca tuvo un ingreso costeado, ver el comentario
+  // del propio campo) no aporta valor - no es lo mismo que $0, es "todavía
+  // no lo sabemos", así que se excluye en vez de sumar como cero.
+  async getStockValueByCategory(): Promise<CategoryStockValue[]> {
+    const db = getTenantDb();
+    const rows = await db.stockLedger.findMany({
+      where: { quantity: { gt: 0 }, avgUnitCost: { not: null } },
+      select: {
+        quantity: true,
+        avgUnitCost: true,
+        articleVariant: { select: { article: { select: { categoryId: true, category: { select: { name: true } } } } } },
+      },
+    });
+
+    const byCategory = new Map<string, CategoryStockValue>();
+    for (const row of rows) {
+      const { categoryId, category } = row.articleVariant.article;
+      const key = categoryId ?? '__none__';
+      const existing = byCategory.get(key) ?? {
+        categoryId,
+        categoryName: category?.name ?? 'Sin categoría',
+        totalValue: new Prisma.Decimal(0),
+      };
+      existing.totalValue = existing.totalValue.add(row.quantity.mul(row.avgUnitCost as Prisma.Decimal));
+      byCategory.set(key, existing);
+    }
+
+    return [...byCategory.values()].sort((a, b) => b.totalValue.cmp(a.totalValue));
   }
 }
 

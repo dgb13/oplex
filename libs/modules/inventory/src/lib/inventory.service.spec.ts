@@ -918,3 +918,63 @@ describe('InventoryService.updateArticle', () => {
     );
   });
 });
+
+describe('InventoryService.getStockValueByCategory', () => {
+  function makeRow(quantity: number, avgUnitCost: number | null, categoryId: string | null, categoryName?: string) {
+    return {
+      quantity: new Prisma.Decimal(quantity),
+      avgUnitCost: avgUnitCost === null ? null : new Prisma.Decimal(avgUnitCost),
+      articleVariant: {
+        article: {
+          categoryId,
+          category: categoryId ? { name: categoryName ?? 'Unknown' } : null,
+        },
+      },
+    };
+  }
+
+  it('sums quantity times avg unit cost per category, sorted desc', async () => {
+    const db = {
+      stockLedger: {
+        findMany: jest.fn().mockResolvedValue([
+          makeRow(10, 5, 'cat-1', 'Insumo panadería'),
+          makeRow(4, 2.5, 'cat-1', 'Insumo panadería'),
+          makeRow(100, 1, 'cat-2', 'Electricidad'),
+        ]),
+      },
+    };
+    const service = new InventoryService(makeEventEmitter());
+
+    const result = await runInTenant(db, () => service.getStockValueByCategory());
+
+    expect(db.stockLedger.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { quantity: { gt: 0 }, avgUnitCost: { not: null } } }),
+    );
+    expect(result).toEqual([
+      { categoryId: 'cat-2', categoryName: 'Electricidad', totalValue: new Prisma.Decimal(100) },
+      { categoryId: 'cat-1', categoryName: 'Insumo panadería', totalValue: new Prisma.Decimal(60) },
+    ]);
+  });
+
+  it('groups articles with no category under "Sin categoría"', async () => {
+    const db = {
+      stockLedger: { findMany: jest.fn().mockResolvedValue([makeRow(2, 10, null)]) },
+    };
+    const service = new InventoryService(makeEventEmitter());
+
+    const result = await runInTenant(db, () => service.getStockValueByCategory());
+
+    expect(result).toEqual([
+      { categoryId: null, categoryName: 'Sin categoría', totalValue: new Prisma.Decimal(20) },
+    ]);
+  });
+
+  it('returns an empty list when nothing has a costed stock ledger row', async () => {
+    const db = { stockLedger: { findMany: jest.fn().mockResolvedValue([]) } };
+    const service = new InventoryService(makeEventEmitter());
+
+    const result = await runInTenant(db, () => service.getStockValueByCategory());
+
+    expect(result).toEqual([]);
+  });
+});
