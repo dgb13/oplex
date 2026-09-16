@@ -1,0 +1,9 @@
+{
+  "name": "reports-purchases",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/modules/reports-purchases/src",
+  "projectType": "library",
+  "tags": ["scope:reports-purchases", "type:feature"],
+  "// targets": "to see all targets run: nx show project reports-purchases --web",
+  "targets": {}
+}

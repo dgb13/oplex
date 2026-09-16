@@ -19,6 +19,7 @@ import { QuotesModule } from '@plexo/quotes';
 import { ReceivablesModule } from '@plexo/receivables';
 import { ReportsFinancialModule } from '@plexo/reports-financial';
 import { ReportsPnlModule } from '@plexo/reports-pnl';
+import { ReportsPurchasesModule } from '@plexo/reports-purchases';
 import { ReportsSalesModule } from '@plexo/reports-sales';
 import { SubscriptionModule } from '@plexo/subscriptions';
 import { TaxesModule } from '@plexo/taxes';
@@ -65,6 +66,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     TaxesModule,
     ReportsPnlModule,
     ReportsSalesModule,
+    ReportsPurchasesModule,
     ReportsFinancialModule,
     SalesModule,
     DashboardModule,

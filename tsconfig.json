@@ -104,6 +104,9 @@
     },
     {
       "path": "./libs/modules/production"
+    },
+    {
+      "path": "./libs/modules/reports-purchases"
     }
   ],
   "compilerOptions": {}

@@ -31,13 +31,16 @@
       "path": "../../libs/shared/connectors/tsconfig.lib.json"
     },
     {
-      "path": "../../libs/modules/pos/tsconfig.lib.json"
-    },
-    {
       "path": "../../libs/modules/bank-reconciliation/tsconfig.lib.json"
     },
     {
       "path": "../../libs/shared/auth-email/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/modules/pos/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/modules/reports-purchases/tsconfig.lib.json"
     },
     {
       "path": "../../libs/modules/quotes/tsconfig.lib.json"
