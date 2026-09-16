@@ -38,14 +38,21 @@ export default function SeveritySpectrum({ buckets }: { buckets: SeverityBucket[
 function SpectrumSegment({ bucket, delay }: { bucket: SeverityBucket; delay: number }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  // Ancho animado con JS (igual que RankedBars/Leaderboard), no `scale-x` -
+  // un `transform` en un hijo de un contenedor `overflow-hidden` +
+  // `rounded-full` dispara un bug de Chromium que lo clipea por completo
+  // (el radio, casi la mitad de la altura en una barra tan fina, hace que
+  // la máscara de recorte del layer compositado del hijo transformado
+  // quede mal calculada) - visto en vivo: `getBoundingClientRect` reportaba
+  // ancho 0 pese a que `offsetWidth`/el layout eran correctos.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const timer = setTimeout(() => {
-      el.style.transform = 'scaleX(1)';
+      el.style.width = `${bucket.pct}%`;
     }, delay + 60);
     return () => clearTimeout(timer);
-  }, [delay]);
+  }, [bucket.pct, delay]);
 
   if (bucket.pct <= 0) {
     return null;
@@ -54,8 +61,7 @@ function SpectrumSegment({ bucket, delay }: { bucket: SeverityBucket; delay: num
   return (
     <div
       ref={ref}
-      style={{ width: `${bucket.pct}%` }}
-      className={`h-full origin-left scale-x-0 transition-transform duration-700 ease-out ${bucket.colorClassName}`}
+      className={`h-full w-0 shrink-0 transition-[width] duration-700 ease-out ${bucket.colorClassName}`}
     />
   );
 }
