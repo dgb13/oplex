@@ -1190,3 +1190,33 @@ Continuación a pedido del usuario: migrados los 2 `<select>` nativos de `prefer
 `nx run-many -t lint,test,build --projects=web` 100% verde. Commit `b0654a9`.
 
 **Pendiente explícito para la próxima sesión**: nada bloqueante. Cerrar a mano el turno abierto de "Caja QA test" si molesta en el tenant demo. El resto de los `<select>` nativos de la app (Cotizaciones, Cuentas a Cobrar/Pagar, Empresas/Clientes/Proveedores, etc.) sigue sin tocarse a propósito, mismo criterio de ir de a uno.
+
+## Sesión 2026-09-15 (cont. 3, PC_DEPARTAMENTO) — Bug real en el sidebar: dos items resaltados a la vez
+
+El usuario reportó que en "Recetas de producción" (`/production/bom`), el menú lateral dejaba pintados tanto "Recetas de producción" como "Tablero" al mismo tiempo, dentro del grupo "Producción". Causa raíz en `AppShell.tsx`: el chequeo de item activo usaba `active.startsWith(item.href)`, y el href de "Tablero" (`/production`) es literalmente un prefijo del href de "Recetas" (`/production/bom`) - cualquier ruta que empezara con `/production` matcheaba ambos.
+
+**Fix central, no puntual**: `isNavItemActive(pathname, href)` (exige match exacto o `pathname.startsWith(href + '/')`, no cualquier prefijo de string) + `mostSpecificActiveItem()` (entre los candidatos que matchean, se queda con el href más largo/específico) - beneficia a todos los grupos del sidebar actuales y futuros, no sólo Producción. Se revisó el resto de los grupos (Ventas, Compras, Contabilidad, etc.) buscando la misma relación de prefijo literal entre hrefs hermanos - no se encontró otro caso.
+
+Se aprovechó que la app ya estaba levantada para volver a probar el checkout del POS a pedido del usuario - sin bugs nuevos, mismo comportamiento ya verificado en la sesión anterior (bloqueo esperado por falta de certificado AFIP en este entorno).
+
+Commit `c96f944`.
+
+**Pendiente explícito para la próxima sesión**: nada bloqueante.
+
+## Sesión 2026-09-16 (PC_DEPARTAMENTO) — Módulo nuevo "Resumen": informes con gráficos, diseño moderno, implementado en 7 fases (0-6)
+
+A pedido del usuario ("planifica un modulo de informes, busca en la competencia que tipo de informes hacen... quiero muchos gráficos, animaciones, iconos, con un estilo espectacular y moderno"): investigación de cómo otros ERPs (Xubio, Tango, QuickBooks, Zoho Books) resuelven sus pantallas de reportes, y diseño desde cero de un módulo nuevo bajo el nombre **"Resumen"** - un hub con navegación por categoría (control segmentado), separado del "Tablero" (`/dashboard`, KPIs generales) y del "Reportes" viejo dentro de Contabilidad (tablas planas sin gráficos) - ambos quedan intactos, consolidarlos es una decisión para una sesión futura.
+
+**Dos iteraciones de boceto visual vía Artifact, con feedback real del usuario en cada una**: la primera versión se mostró con gráficos y KPIs pero el usuario pidió explícitamente más originalidad ("esperaba más de tu creatividad y modernidad") - se rehizo como un diseño "command center" dark-first con fondo degradado animado (glow ambiental), layout tipo bento (cards de distinto tamaño) y el control segmentado con píldora deslizante. A pedido del usuario se agregaron rankings con avatar de las personas ("Vendedores" en Ventas, "Compradores" en Compras) aprovechando que `Invoice.issuedByUserId`/`PurchaseOrder.createdByUserId` ya existían en el schema sin necesitar migración. Plan técnico completo escrito y aprobado en Plan Mode (`C:\Users\German\.claude\plans\linked-riding-meadow.md`).
+
+**Decisión explícitamente diferida por el usuario, no implementada todavía**: "el fondo degradado... me gustaría que esté en las demás categorías, no sólo en Resumen. Pero en otro momento" - queda pendiente de confirmar con el usuario si ya se satisface solo (el glow se monta una vez en `resumen/layout.tsx`, que envuelve tanto la vista de Resumen como las de Ventas/Compras nuevas) o si pedía algo más amplio (aplicarlo a *toda* la app, fuera de "Resumen").
+
+**Backend, todo aditivo y sin migraciones** (Fases 0-2, commits `99253a1`/`59fdba8`/`9d54038`): `getRevenueByMonth`/`getSalesBySeller` nuevos en `reports-sales` (mismo patrón de netting de notas de crédito ya usado por `getSalesByCustomer`); librería Nx nueva `reports-purchases` (`getPurchasesBySupplier`/`getPurchasesByBuyer` sobre `PurchaseOrder`, sin necesitar `PurchaseInvoice`); `getStockValueByCategory` nuevo en `inventory` (snapshot actual a costo promedio, no histórico - un valuación histórica de stock quedó fuera de alcance a propósito, pide trabajo real de backend). Cada endpoint verificado con `curl` contra datos reales del tenant demo, no sólo mocks (ej. compras: CRIPSA $108.600 + INFOANTINA SA $30.000 = $138.600 total, verificado con la suma).
+
+**Frontend** (Fases 3-6, commits `ba78530`/`69edeb3`): kit de UI compartido nuevo en `components/resumen/` (`AmbientBackground`, `SegmentedNav`, `BentoCell`/`BentoGrid`, `RingStat`, `SeveritySpectrum`, `Leaderboard`, `RankedBars`, `TrendChart`) + `useCountUp` extraído de `dashboard/page.tsx` (estaba duplicado ahí). Paleta `--chart-1..5` de `globals.css` (antes boilerplate gris de shadcn sin uso) pasa a ser la misma que ya usa el sparkline del Tablero. Pantalla `/resumen` nueva con entrada propia en el sidebar: categoría "Resumen" (vista general, datos de las 3 fases de backend + antigüedad de cartera/producción ya existentes), "Ventas" (tendencia mensual + vendedores + clientes/productos ya existentes) y "Compras" (compradores + proveedores) - "Inventario" y "Producción" quedan marcadas "próximamente" en el selector, fuera de alcance de esta primera entrega. Cada categoría fetchea sus propios datos con `useQuery` bajo queryKeys compartidos con el resto de la app (dedupe de cache, sin pedidos nuevos innecesarios).
+
+**Verificado en vivo en Chrome, modo claro y oscuro, sesión real (`owner@demo.plexo`)**: las tres categorías muestran exactamente los mismos números ya confirmados por curl en el backend, sin errores de consola; la pestaña deshabilitada "Inventario" no reacciona al click.
+
+`nx run-many -t lint,build --projects=web` 100% verde en cada fase. Los 5 commits quedaron **sólo locales, sin pushear** (mismo criterio de todas las fases de este proyecto: no pushear sin pedido explícito).
+
+**Pendiente explícito para la próxima sesión**: confirmar con el usuario si el fondo degradado ya quedó "en las demás categorías" tal como pidió (estructuralmente sí, para Ventas/Compras) o si esperaba algo más amplio. Categorías "Inventario" y "Producción" como secciones propias (hoy sólo resumidas dentro de "Resumen") quedan para una sesión futura, a pedido explícito o cuando se justifique el backend adicional que piden (valuación histórica de stock, etc.).
