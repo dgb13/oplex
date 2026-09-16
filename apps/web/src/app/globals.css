@@ -59,12 +59,12 @@
        (components/ui/Select.tsx), reportado también acá por el usuario. */
     color-scheme: light;
     /* Antes oklch(1 0 0) puro - blanco clínico sin ninguna separación con
-       --card (también blanco), apoyado sólo en el borde. Un gris cálido
-       apenas perceptible, con el mismo sesgo de tono que --primary (índigo,
-       hue ~277), hace que las cards floten sobre el fondo en vez de
-       fundirse con él - pedido explícito del usuario ("se puede mejorar
-       con leves cambios?"), sin tocar --card ni ningún otro token. */
-    --background: oklch(0.984 0.004 277);
+       --card (también blanco), apoyado sólo en el borde. Gris verdoso
+       apenas perceptible (pedido explícito del usuario, primero probamos
+       un sesgo índigo pero pidió "un poquito más gris verdoso, no tan
+       blanco") - hace que las cards floten sobre el fondo en vez de
+       fundirse con él, sin tocar --card ni ningún otro token. */
+    --background: oklch(0.975 0.007 155);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
