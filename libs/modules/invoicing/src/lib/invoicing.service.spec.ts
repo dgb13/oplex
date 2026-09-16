@@ -1478,3 +1478,129 @@ describe('InvoicingService.sendOverdueInvoiceAlert', () => {
     );
   });
 });
+
+describe('InvoicingService.getCalendarEntries', () => {
+  function makeService() {
+    return new InvoicingService(
+      makeEmailSender(),
+      makeElectronicInvoicing(),
+      makeEventEmitter(),
+      makeSubscriptionService(),
+      makeBnaExchangeRate(),
+      makeInvoicePdfService(),
+    );
+  }
+
+  it('returns nothing when the tenant never enabled recurring reminders', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ arReminderIntervalDays: null }) },
+      invoice: { findMany: jest.fn() },
+    };
+    const service = makeService();
+
+    const entries = await runWithoutUser(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(entries).toEqual([]);
+    expect(db.invoice.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns nothing when the tenant has no TenantSettings row yet', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      invoice: { findMany: jest.fn() },
+    };
+    const service = makeService();
+
+    const entries = await runWithoutUser(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(entries).toEqual([]);
+  });
+
+  it('projects the next reminder date from lastOverdueReminderAt when set', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ arReminderIntervalDays: 7 }) },
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-1',
+            customerName: 'Kiosco 24',
+            balanceDue: new Prisma.Decimal(31200),
+            dueDate: new Date('2026-08-01T00:00:00.000Z'),
+            lastOverdueReminderAt: new Date('2026-09-08T00:00:00.000Z'),
+          },
+        ]),
+      },
+    };
+    const service = makeService();
+
+    const entries = await runWithoutUser(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(entries).toEqual([
+      {
+        id: 'inv-1',
+        source: 'sale',
+        title: 'Kiosco 24',
+        date: '2026-09-15T00:00:00.000Z',
+        amount: 31200,
+        flow: 'in',
+        ref: 'Recordatorio recurrente',
+        editable: false,
+        link: { module: 'invoice', id: 'inv-1' },
+      },
+    ]);
+  });
+
+  it('falls back to dueDate when the invoice was never reminded yet', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ arReminderIntervalDays: 10 }) },
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-2',
+            customerName: 'Electro Mayorista',
+            balanceDue: new Prisma.Decimal(540000),
+            dueDate: new Date('2026-09-05T00:00:00.000Z'),
+            lastOverdueReminderAt: null,
+          },
+        ]),
+      },
+    };
+    const service = makeService();
+
+    const entries = await runWithoutUser(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(entries[0]?.date).toBe('2026-09-15T00:00:00.000Z');
+  });
+
+  it('excludes invoices whose next reminder falls outside the range', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ arReminderIntervalDays: 30 }) },
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-3',
+            customerName: 'Fuera de rango',
+            balanceDue: new Prisma.Decimal(1000),
+            dueDate: new Date('2026-08-01T00:00:00.000Z'),
+            lastOverdueReminderAt: null,
+          },
+        ]),
+      },
+    };
+    const service = makeService();
+
+    const entries = await runWithoutUser(db, () =>
+      service.getCalendarEntries(new Date('2026-09-01'), new Date('2026-09-30')),
+    );
+
+    expect(entries).toEqual([]);
+  });
+});

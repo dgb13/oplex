@@ -7,6 +7,7 @@ import {
   type CashMovement,
   type CashMovementType,
 } from '@plexo/database';
+import type { CalendarEntry } from '@plexo/types';
 import { isValidArsDenomination } from './ars-denominations.js';
 import type { CashMovementDto } from './dto/cash-movement.dto.js';
 import type { CloseCashSessionDto } from './dto/close-cash-session.dto.js';
@@ -360,5 +361,42 @@ export class CashSessionsService {
     });
 
     return { session: await this.getSessionDetail(id), expectedAmount: summary.expectedAmount };
+  }
+
+  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). El plan
+   * habla de "cierre de turno PROGRAMADO", pero CashSession no tiene ningún
+   * campo de cierre planificado a futuro (el turno se abre/cierra a mano,
+   * en el momento) - se proyecta el cierre REAL (closedAt) como lo que
+   * efectivamente es: un registro de qué caja cerró y cuándo, no una
+   * agenda de cierres futuros. */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const sessions = await getTenantDb().cashSession.findMany({
+      where: { closedAt: { gte: from, lte: to } },
+      include: { register: { select: { name: true } } },
+    });
+    return sessions.map((session) => {
+      const difference = session.difference;
+      let ref = 'arqueo';
+      if (difference != null && !difference.isZero()) {
+        const sign = difference.gt(0) ? '+' : '-';
+        const abs = Math.abs(difference.toNumber()).toLocaleString('es-AR');
+        ref = `arqueo con diferencia (${sign}$${abs})`;
+      }
+      return {
+        id: session.id,
+        source: 'cash' as const,
+        title: `Cierre de turno · ${session.register.name}`,
+        date: (session.closedAt as Date).toISOString(),
+        // Nunca un monto in/out real (mismo criterio que el prototipo,
+        // amount:null para 'cash') - la diferencia, si la hay, va en `ref`
+        // como texto ya con signo, no como cifra que DayPanel pintaría con
+        // el color/signo de un flujo de dinero que acá no existe.
+        amount: null,
+        flow: null,
+        ref,
+        editable: false,
+        link: { module: 'cash-session', id: session.id },
+      };
+    });
   }
 }

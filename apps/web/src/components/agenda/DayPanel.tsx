@@ -1,7 +1,9 @@
 'use client';
 
 import type { CalendarEntry } from '@/lib/calendar';
+import { resolveCalendarLink } from '@/lib/calendarLinks';
 import { Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import { ENTRY_TYPES } from './FilterChips';
 
 const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -73,18 +75,28 @@ export default function DayPanel({ date, today, entries, onDeleteEvent, onAddEve
           <div>
             {entries.map((ev) => {
               const meta = ENTRY_TYPES[ev.source];
+              const href = ev.link ? resolveCalendarLink(ev.link) : null;
+              const body = (
+                <div className="min-w-0 flex-1">
+                  <div className="mb-0.5 truncate text-[13.5px] font-medium text-agenda-text">{ev.title}</div>
+                  <div className="flex items-center gap-2 text-xs text-agenda-text-dim">
+                    <span className={`rounded px-1.5 py-px text-[10.5px] font-semibold ${EV_TAG_TEXT[ev.source]} ${EV_TAG_BG[ev.source]}`}>
+                      {meta.label}
+                    </span>
+                    {ev.ref && <span className="truncate">{ev.ref}</span>}
+                  </div>
+                </div>
+              );
               return (
                 <div key={ev.id} className="flex gap-2.5 border-b border-agenda-border-soft py-2.5 last:border-b-0 last:pb-0">
                   <div className={`w-[3px] shrink-0 rounded-full ${EV_BAR[ev.source]}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 truncate text-[13.5px] font-medium text-agenda-text">{ev.title}</div>
-                    <div className="flex items-center gap-2 text-xs text-agenda-text-dim">
-                      <span className={`rounded px-1.5 py-px text-[10.5px] font-semibold ${EV_TAG_TEXT[ev.source]} ${EV_TAG_BG[ev.source]}`}>
-                        {meta.label}
-                      </span>
-                      {ev.ref && <span className="truncate">{ev.ref}</span>}
-                    </div>
-                  </div>
+                  {href ? (
+                    <Link href={href} className="min-w-0 flex-1 rounded transition hover:opacity-80" title="Ver en su módulo">
+                      {body}
+                    </Link>
+                  ) : (
+                    body
+                  )}
                   {ev.amount != null && (
                     <div
                       className={`shrink-0 self-center font-mono text-[13.5px] font-semibold tabular-nums ${

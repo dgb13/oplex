@@ -59,6 +59,7 @@ export class TaxDeadlineService {
       flow: 'out',
       ref: KIND_LABEL[d.kind],
       editable: false,
+      link: { module: 'tax-deadline', id: d.id },
     }));
   }
 }

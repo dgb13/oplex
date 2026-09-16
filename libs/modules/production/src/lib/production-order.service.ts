@@ -7,6 +7,7 @@ import {
   type ProductionOrder,
   type ProductionOutput,
 } from '@plexo/database';
+import type { CalendarEntry } from '@plexo/types';
 import { BomService } from './bom.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
 import type { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
@@ -267,5 +268,54 @@ export class ProductionOrderService {
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). El plan
+   * habla de "inicio / entrega estimada / entrega final" pero el modelo no
+   * tiene ninguna fecha PLANIFICADA (una orden en DRAFT/PLANNED no tiene
+   * startedAt todavía) - se proyectan las dos fechas reales que sí existen
+   * (startedAt/finishedAt), nunca una estimación inventada. Una orden con
+   * ambas fechas dentro del rango aporta 2 entries (inicio y entrega), con
+   * ids distintos para no colisionar en el merge. */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const orders = await getTenantDb().productionOrder.findMany({
+      where: {
+        status: { not: 'CANCELLED' },
+        OR: [{ startedAt: { gte: from, lte: to } }, { finishedAt: { gte: from, lte: to } }],
+      },
+      include: { outputArticleVariant: { include: { article: true } } },
+    });
+
+    const entries: CalendarEntry[] = [];
+    for (const order of orders) {
+      const articleName = order.outputArticleVariant.article.name;
+      if (order.startedAt && order.startedAt >= from && order.startedAt <= to) {
+        entries.push({
+          id: `${order.id}-start`,
+          source: 'prod',
+          title: articleName,
+          date: order.startedAt.toISOString(),
+          amount: null,
+          flow: null,
+          ref: 'Inicio de producción',
+          editable: false,
+          link: { module: 'production-order', id: order.id },
+        });
+      }
+      if (order.finishedAt && order.finishedAt >= from && order.finishedAt <= to) {
+        entries.push({
+          id: `${order.id}-finish`,
+          source: 'prod',
+          title: articleName,
+          date: order.finishedAt.toISOString(),
+          amount: null,
+          flow: null,
+          ref: 'Entrega de producción',
+          editable: false,
+          link: { module: 'production-order', id: order.id },
+        });
+      }
+    }
+    return entries;
   }
 }

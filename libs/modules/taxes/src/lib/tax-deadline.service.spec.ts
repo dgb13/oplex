@@ -111,6 +111,7 @@ describe('TaxDeadlineService.getCalendarEntries', () => {
         flow: 'out',
         ref: 'IVA',
         editable: false,
+        link: { module: 'tax-deadline', id: 'd1' },
       },
       {
         id: 'd2',
@@ -121,6 +122,7 @@ describe('TaxDeadlineService.getCalendarEntries', () => {
         flow: 'out',
         ref: 'IIBB',
         editable: false,
+        link: { module: 'tax-deadline', id: 'd2' },
       },
     ]);
   });

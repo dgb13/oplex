@@ -449,3 +449,74 @@ describe('CashSessionsService.getDailyPosition', () => {
     expect(position.closedTodayDifferenceTotal.toNumber()).toBe(30);
   });
 });
+
+describe('CashSessionsService.getCalendarEntries', () => {
+  const FROM = new Date('2026-09-01');
+  const TO = new Date('2026-09-30');
+
+  it('maps a session closed with no difference to a plain "arqueo" ref, amount always null', async () => {
+    const db = {
+      cashSession: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'session-1',
+            register: { name: 'Caja Mostrador' },
+            closedAt: new Date('2026-09-10T20:00:00.000Z'),
+            difference: new Prisma.Decimal(0),
+          },
+        ]),
+      },
+    };
+    const service = new CashSessionsService();
+
+    const entries = await runInTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(entries).toEqual([
+      {
+        id: 'session-1',
+        source: 'cash',
+        title: 'Cierre de turno · Caja Mostrador',
+        date: '2026-09-10T20:00:00.000Z',
+        amount: null,
+        flow: null,
+        ref: 'arqueo',
+        editable: false,
+        link: { module: 'cash-session', id: 'session-1' },
+      },
+    ]);
+  });
+
+  it('mentions a non-zero difference in ref, with sign, still with amount null', async () => {
+    const db = {
+      cashSession: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'session-2',
+            register: { name: 'Caja 2' },
+            closedAt: new Date('2026-09-29T21:00:00.000Z'),
+            difference: new Prisma.Decimal(-350),
+          },
+        ]),
+      },
+    };
+    const service = new CashSessionsService();
+
+    const entries = await runInTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(entries[0]?.amount).toBeNull();
+    expect(entries[0]?.ref).toBe('arqueo con diferencia (-$350)');
+  });
+
+  it('queries only sessions closed within the range', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = { cashSession: { findMany } };
+    const service = new CashSessionsService();
+
+    await runInTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { closedAt: { gte: FROM, lte: TO } },
+      include: { register: { select: { name: true } } },
+    });
+  });
+});

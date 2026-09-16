@@ -176,3 +176,72 @@ describe('ProductionOrderService.getById', () => {
     await expect(runAsTenant(db, () => service.getById('missing'))).rejects.toThrow('not found');
   });
 });
+
+describe('ProductionOrderService.getCalendarEntries', () => {
+  const FROM = new Date('2026-09-01');
+  const TO = new Date('2026-09-30');
+
+  function orderWithDates(overrides: Record<string, unknown>) {
+    return {
+      ...makeOrder(),
+      status: 'DONE',
+      outputArticleVariant: { article: { name: 'Cartelería vial' } },
+      startedAt: null,
+      finishedAt: null,
+      ...overrides,
+    };
+  }
+
+  it('emits one entry for startedAt and one for finishedAt when both are in range', async () => {
+    const order = orderWithDates({
+      startedAt: new Date('2026-09-16T10:00:00.000Z'),
+      finishedAt: new Date('2026-09-19T15:00:00.000Z'),
+    });
+    const findMany = jest.fn().mockResolvedValue([order]);
+    const db = makeDb({ productionOrder: { findMany } });
+    const service = makeService({ db });
+
+    const entries = await runAsTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(entries).toEqual([
+      {
+        id: 'order-1-start',
+        source: 'prod',
+        title: 'Cartelería vial',
+        date: '2026-09-16T10:00:00.000Z',
+        amount: null,
+        flow: null,
+        ref: 'Inicio de producción',
+        editable: false,
+        link: { module: 'production-order', id: 'order-1' },
+      },
+      {
+        id: 'order-1-finish',
+        source: 'prod',
+        title: 'Cartelería vial',
+        date: '2026-09-19T15:00:00.000Z',
+        amount: null,
+        flow: null,
+        ref: 'Entrega de producción',
+        editable: false,
+        link: { module: 'production-order', id: 'order-1' },
+      },
+    ]);
+  });
+
+  it('queries only non-CANCELLED orders with a start or finish date in range', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const db = makeDb({ productionOrder: { findMany } });
+    const service = makeService({ db });
+
+    await runAsTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        status: { not: 'CANCELLED' },
+        OR: [{ startedAt: { gte: FROM, lte: TO } }, { finishedAt: { gte: FROM, lte: TO } }],
+      },
+      include: { outputArticleVariant: { include: { article: true } } },
+    });
+  });
+});

@@ -25,6 +25,7 @@ import {
   type TaxLineKind,
 } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
+import type { CalendarEntry } from '@plexo/types';
 import { BNA_EXCHANGE_RATE, type BnaExchangeRatePort } from './bna-exchange-rate.port.js';
 import type { CreateCreditNoteDto } from './dto/create-credit-note.dto.js';
 import type { CreateCurrencyDto } from './dto/create-currency.dto.js';
@@ -926,5 +927,44 @@ export class InvoicingService {
   ): Promise<string> {
     const count = await getTenantDb().creditNote.count({ where: { pointOfSale, documentLetter } });
     return String(count + 1).padStart(8, '0');
+  }
+
+  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md) - fuente
+   * "Ventas/Facturación": la fecha del PRÓXIMO recordatorio recurrente de
+   * cobranza (TenantSettings.arReminderIntervalDays), no el vencimiento
+   * original de la factura (eso ya lo cubre ReceivablesService.
+   * getCalendarEntries, fuente 'collect' - duplicarlo acá mostraría la
+   * misma fecha dos veces bajo dos colores distintos). Vacío si el tenant
+   * nunca activó recordatorios recurrentes (arReminderIntervalDays null,
+   * default) o todavía no tiene fila en TenantSettings. */
+  async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
+    const db = getTenantDb();
+    const settings = await db.tenantSettings.findUnique({ where: { tenantId: getTenantId() } });
+    const intervalDays = settings?.arReminderIntervalDays;
+    if (!intervalDays) return [];
+
+    const invoices = await db.invoice.findMany({
+      where: { balanceDue: { gt: 0 }, status: 'OVERDUE' },
+    });
+
+    const entries: CalendarEntry[] = [];
+    for (const invoice of invoices) {
+      const base = invoice.lastOverdueReminderAt ?? invoice.dueDate;
+      if (!base) continue;
+      const nextReminder = new Date(base.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+      if (nextReminder < from || nextReminder > to) continue;
+      entries.push({
+        id: invoice.id,
+        source: 'sale',
+        title: invoice.customerName,
+        date: nextReminder.toISOString(),
+        amount: invoice.balanceDue.toNumber(),
+        flow: 'in',
+        ref: 'Recordatorio recurrente',
+        editable: false,
+        link: { module: 'invoice', id: invoice.id },
+      });
+    }
+    return entries;
   }
 }
