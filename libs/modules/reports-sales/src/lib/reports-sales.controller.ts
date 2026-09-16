@@ -26,4 +26,22 @@ export class ReportsSalesController {
       query.to ? new Date(query.to) : undefined,
     );
   }
+
+  @RequireModuleAccess(MODULE, 'read')
+  @Get('by-month')
+  getRevenueByMonth(@Query() query: DateRangeQueryDto) {
+    return this.reportsSalesService.getRevenueByMonth(
+      query.from ? new Date(query.from) : undefined,
+      query.to ? new Date(query.to) : undefined,
+    );
+  }
+
+  @RequireModuleAccess(MODULE, 'read')
+  @Get('by-seller')
+  getSalesBySeller(@Query() query: DateRangeQueryDto) {
+    return this.reportsSalesService.getSalesBySeller(
+      query.from ? new Date(query.from) : undefined,
+      query.to ? new Date(query.to) : undefined,
+    );
+  }
 }

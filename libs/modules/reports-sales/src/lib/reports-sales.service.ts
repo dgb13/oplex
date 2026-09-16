@@ -16,6 +16,22 @@ export interface ProductSales {
   revenue: Prisma.Decimal;
 }
 
+export interface MonthlyRevenue {
+  month: string; // 'YYYY-MM', UTC
+  invoiceCount: number;
+  subtotal: Prisma.Decimal;
+  taxTotal: Prisma.Decimal;
+  total: Prisma.Decimal;
+}
+
+export interface SellerSales {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  invoiceCount: number;
+  totalSales: Prisma.Decimal;
+}
+
 function defaultRange(from?: Date, to?: Date): { from: Date; to: Date } {
   const rangeTo = to ?? new Date();
   // A "to" of just a calendar day (the common case from a date-picker,
@@ -25,6 +41,34 @@ function defaultRange(from?: Date, to?: Date): { from: Date; to: Date } {
   rangeTo.setUTCHours(23, 59, 59, 999);
   const rangeFrom = from ?? new Date(Date.UTC(rangeTo.getUTCFullYear(), rangeTo.getUTCMonth(), 1));
   return { from: rangeFrom, to: rangeTo };
+}
+
+// Distinto de defaultRange: una tendencia mensual necesita varios meses de
+// ventana, no "lo que va del mes actual" (eso dejaría un gráfico de
+// tendencia con un solo punto sin fechas explícitas).
+function defaultTrendRange(from?: Date, to?: Date): { from: Date; to: Date } {
+  const rangeTo = to ?? new Date();
+  rangeTo.setUTCHours(23, 59, 59, 999);
+  const rangeFrom = from ?? new Date(Date.UTC(rangeTo.getUTCFullYear(), rangeTo.getUTCMonth() - 5, 1));
+  return { from: rangeFrom, to: rangeTo };
+}
+
+function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Todos los meses del rango, incluidos los que no tuvieron actividad - un
+// gráfico de tendencia con huecos salteados en vez de puntos en cero es
+// engañoso (el eje X dejaría de ser uniforme).
+function monthsBetween(from: Date, to: Date): string[] {
+  const months: string[] = [];
+  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), 1));
+  while (cursor <= end) {
+    months.push(monthKey(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  return months;
 }
 
 @Injectable()
@@ -142,5 +186,109 @@ export class ReportsSalesService {
         };
       })
       .sort((a, b) => b.revenue.cmp(a.revenue));
+  }
+
+  async getRevenueByMonth(from?: Date, to?: Date): Promise<MonthlyRevenue[]> {
+    const range = defaultTrendRange(from, to);
+    const db = getTenantDb();
+
+    const invoices = await db.invoice.findMany({
+      where: { issueDate: { gte: range.from, lte: range.to }, status: { not: 'CANCELLED' } },
+      select: { issueDate: true, subtotal: true, taxTotal: true, total: true },
+    });
+    // Netted into the month the credit note itself was issued, not the
+    // original invoice's month - same convention as getSalesByCustomer.
+    const creditNotes = await db.creditNote.findMany({
+      where: { issueDate: { gte: range.from, lte: range.to } },
+      select: { issueDate: true, subtotal: true, taxTotal: true, total: true },
+    });
+
+    const zeroBucket = () => ({
+      count: 0,
+      subtotal: new Prisma.Decimal(0),
+      taxTotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(0),
+    });
+    const byMonth = new Map<string, ReturnType<typeof zeroBucket>>();
+    for (const month of monthsBetween(range.from, range.to)) {
+      byMonth.set(month, zeroBucket());
+    }
+    for (const invoice of invoices) {
+      const bucket = byMonth.get(monthKey(invoice.issueDate)) ?? zeroBucket();
+      bucket.count += 1;
+      bucket.subtotal = bucket.subtotal.add(invoice.subtotal);
+      bucket.taxTotal = bucket.taxTotal.add(invoice.taxTotal);
+      bucket.total = bucket.total.add(invoice.total);
+      byMonth.set(monthKey(invoice.issueDate), bucket);
+    }
+    for (const creditNote of creditNotes) {
+      const bucket = byMonth.get(monthKey(creditNote.issueDate)) ?? zeroBucket();
+      bucket.subtotal = bucket.subtotal.sub(creditNote.subtotal);
+      bucket.taxTotal = bucket.taxTotal.sub(creditNote.taxTotal);
+      bucket.total = bucket.total.sub(creditNote.total);
+      byMonth.set(monthKey(creditNote.issueDate), bucket);
+    }
+
+    return [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, b]) => ({
+        month,
+        invoiceCount: b.count,
+        subtotal: b.subtotal,
+        taxTotal: b.taxTotal,
+        total: b.total,
+      }));
+  }
+
+  async getSalesBySeller(from?: Date, to?: Date): Promise<SellerSales[]> {
+    const range = defaultRange(from, to);
+    const db = getTenantDb();
+
+    const grouped = await db.invoice.groupBy({
+      by: ['issuedByUserId'],
+      where: { issueDate: { gte: range.from, lte: range.to }, status: { not: 'CANCELLED' } },
+      _sum: { total: true },
+      _count: true,
+    });
+
+    // Netted against the ORIGINAL invoice's seller, not whoever happened to
+    // issue the credit note (often a different person, e.g. a manager
+    // processing the return) - same convention as getSalesByCustomer.
+    const creditNotes = await db.creditNote.findMany({
+      where: { issueDate: { gte: range.from, lte: range.to } },
+      select: { total: true, invoice: { select: { issuedByUserId: true } } },
+    });
+    const creditedBySeller = new Map<string, Prisma.Decimal>();
+    for (const creditNote of creditNotes) {
+      const sellerId = creditNote.invoice.issuedByUserId;
+      creditedBySeller.set(
+        sellerId,
+        (creditedBySeller.get(sellerId) ?? new Prisma.Decimal(0)).add(creditNote.total),
+      );
+    }
+
+    const sellerIds = new Set([...grouped.map((g) => g.issuedByUserId), ...creditedBySeller.keys()]);
+    if (sellerIds.size === 0) {
+      return [];
+    }
+
+    const users = await db.user.findMany({ where: { id: { in: [...sellerIds] } } });
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const groupedBySeller = new Map(grouped.map((g) => [g.issuedByUserId, g]));
+
+    return [...sellerIds]
+      .map((userId) => {
+        const g = groupedBySeller.get(userId);
+        const credited = creditedBySeller.get(userId) ?? new Prisma.Decimal(0);
+        const user = userById.get(userId);
+        return {
+          userId,
+          userName: user?.name ?? user?.email ?? 'Usuario',
+          avatarUrl: user?.avatarUrl ?? null,
+          invoiceCount: g?._count ?? 0,
+          totalSales: (g?._sum.total ?? new Prisma.Decimal(0)).sub(credited),
+        };
+      })
+      .sort((a, b) => b.totalSales.cmp(a.totalSales));
   }
 }
