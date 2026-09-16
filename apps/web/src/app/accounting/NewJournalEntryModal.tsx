@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { accountingApi, type JournalLineDirection } from '@/lib/accounting';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -17,8 +18,10 @@ interface LineForm {
   amount: string;
 }
 
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+const DIRECTION_OPTIONS: { value: JournalLineDirection; label: string }[] = [
+  { value: 'DEBIT', label: 'Debe' },
+  { value: 'CREDIT', label: 'Haber' },
+];
 
 export default function NewJournalEntryModal({ onClose }: Props) {
   const queryClient = useQueryClient();
@@ -127,28 +130,18 @@ export default function NewJournalEntryModal({ onClose }: Props) {
             </div>
             {lines.map((line, index) => (
               <div key={index} className="flex items-center gap-2">
-                <select
-                  className={`${selectClass} flex-1`}
+                <Select
+                  className="flex-1"
                   value={line.accountId}
-                  onChange={(e) => updateLine(index, { accountId: e.target.value })}
-                >
-                  <option value="">Cuenta...</option>
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.code} — {acc.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className={selectClass}
+                  onChange={(value) => updateLine(index, { accountId: value })}
+                  placeholder="Cuenta..."
+                  options={accounts.map((acc) => ({ value: acc.id, label: `${acc.code} — ${acc.name}` }))}
+                />
+                <Select
                   value={line.direction}
-                  onChange={(e) =>
-                    updateLine(index, { direction: e.target.value as JournalLineDirection })
-                  }
-                >
-                  <option value="DEBIT">Debe</option>
-                  <option value="CREDIT">Haber</option>
-                </select>
+                  onChange={(value) => updateLine(index, { direction: value as JournalLineDirection })}
+                  options={DIRECTION_OPTIONS}
+                />
                 <Input
                   type="number"
                   step="any"

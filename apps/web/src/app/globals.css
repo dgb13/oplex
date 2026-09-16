@@ -51,6 +51,13 @@
 }
 
 :root {
+    /* Sin esto, los controles nativos del navegador que no se pueden
+       reemplazar con CSS propio (el popup de calendario de
+       input[type=date], la casilla de checkbox, la barra de scroll) se
+       pintan siempre con el esquema claro del SO, sin importar el tema de
+       la app - mismo bug de fondo que el de los <select> nativos
+       (components/ui/Select.tsx), reportado también acá por el usuario. */
+    color-scheme: light;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -92,6 +99,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);

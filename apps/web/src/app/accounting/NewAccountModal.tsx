@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { accountingApi, type AccountType } from '@/lib/accounting';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -10,9 +11,6 @@ import { useState } from 'react';
 interface Props {
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
   { value: 'ASSET', label: 'Activo' },
@@ -72,13 +70,11 @@ export default function NewAccountModal({ onClose }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Tipo</label>
-            <select className={selectClass} value={type} onChange={(e) => setType(e.target.value as AccountType)}>
-              {TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={type}
+              onChange={(value) => setType(value as AccountType)}
+              options={TYPE_OPTIONS}
+            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">

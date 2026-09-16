@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
+import Select from '@/components/ui/Select';
 import { accountingApi } from '@/lib/accounting';
 import { useDensity } from '@/providers/DensityProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -30,18 +31,13 @@ export default function LedgerTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <select
+      <Select
         value={accountId}
-        onChange={(e) => setAccountId(e.target.value)}
-        className="h-8 w-full max-w-sm rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <option value="">Elegí una cuenta...</option>
-        {accounts.map((acc) => (
-          <option key={acc.id} value={acc.id}>
-            {acc.code} — {acc.name}
-          </option>
-        ))}
-      </select>
+        onChange={setAccountId}
+        placeholder="Elegí una cuenta..."
+        className="w-full max-w-sm"
+        options={accounts.map((acc) => ({ value: acc.id, label: `${acc.code} — ${acc.name}` }))}
+      />
 
       <Card>
         <CardContent>
