@@ -1,12 +1,15 @@
 'use client';
 
+import AttachmentSlot from '@/components/AttachmentSlot';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import ImageCropper from '@/components/ImageCropper';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { inventoryApi, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { Archive, FileText, Image as ImageIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface CreatedArticleVariantRef {
@@ -168,10 +171,40 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   const [minimumStockInput, setMinimumStockInput] = useState('');
 
   // Adjuntos - se suben recién después de crear el artículo (necesitan
-  // su id), así que hasta entonces sólo quedan guardados acá.
+  // su id), así que hasta entonces sólo quedan guardados acá. `imageFile`
+  // es siempre el resultado YA recortado (ver ImageCropper) - el archivo
+  // elegido en crudo vive aparte en `pendingCropFile` hasta que se aplica
+  // o se cancela el recorte, nunca llega a subirse tal cual.
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [brochureFile, setBrochureFile] = useState<File | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
+
+  // Revoca el object URL de la miniatura cuando se reemplaza o se quita la
+  // imagen - si no, cada recorte sucesivo deja un blob colgado en memoria.
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  function handleImageCropApplied(cropped: File) {
+    setImageFile(cropped);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(cropped);
+    });
+    setPendingCropFile(null);
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }
 
   const [error, setError] = useState('');
 
@@ -1016,37 +1049,35 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           )}
 
           {tab === 'media' && (
-            <div className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1">
-                <span className="text-sm text-muted-foreground">Imagen principal</span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                  className="text-sm  "
-                />
-                {imageFile && <span className="text-xs text-muted-foreground">{imageFile.name}</span>}
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-sm text-muted-foreground">Folleto (PDF)</span>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setBrochureFile(e.target.files?.[0] ?? null)}
-                  className="text-sm  "
-                />
-                {brochureFile && <span className="text-xs text-muted-foreground">{brochureFile.name}</span>}
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-sm text-muted-foreground">Adjunto (ZIP)</span>
-                <input
-                  type="file"
-                  accept=".zip,application/zip,application/x-zip-compressed"
-                  onChange={(e) => setZipFile(e.target.files?.[0] ?? null)}
-                  className="text-sm  "
-                />
-                {zipFile && <span className="text-xs text-muted-foreground">{zipFile.name}</span>}
-              </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <AttachmentSlot
+                label="Imagen principal"
+                hint="JPG, PNG o WebP"
+                icon={ImageIcon}
+                accept="image/jpeg,image/png,image/webp"
+                file={imageFile}
+                previewUrl={imagePreviewUrl}
+                onPick={setPendingCropFile}
+                onRemove={handleRemoveImage}
+              />
+              <AttachmentSlot
+                label="Folleto"
+                hint="PDF"
+                icon={FileText}
+                accept="application/pdf"
+                file={brochureFile}
+                onPick={setBrochureFile}
+                onRemove={() => setBrochureFile(null)}
+              />
+              <AttachmentSlot
+                label="Adjunto"
+                hint="Archivo ZIP"
+                icon={Archive}
+                accept=".zip,application/zip,application/x-zip-compressed"
+                file={zipFile}
+                onPick={setZipFile}
+                onRemove={() => setZipFile(null)}
+              />
             </div>
           )}
         </div>
@@ -1077,6 +1108,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           lockedRole="SUPPLIER"
           onClose={() => setCreatingSupplier(false)}
           onSaved={(c) => setPreferredSupplierId(c.id)}
+        />
+      )}
+
+      {pendingCropFile && (
+        <ImageCropper
+          file={pendingCropFile}
+          onCancel={() => setPendingCropFile(null)}
+          onApply={handleImageCropApplied}
         />
       )}
     </div>
