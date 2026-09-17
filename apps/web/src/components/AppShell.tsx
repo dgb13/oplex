@@ -237,10 +237,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           } ${sidebarCollapsed ? 'md:w-16 md:px-2' : ''}`}
         >
           <div className="flex items-center justify-between px-1">
-            <PlexoLogo size={22} iconOnly={sidebarCollapsed} />
+            <PlexoLogo
+              size={22}
+              iconOnly={sidebarCollapsed}
+              colorClassName="text-white dark:text-indigo-400"
+            />
             <button
               onClick={() => setMobileNavOpen(false)}
-              className="rounded-lg p-1 text-muted-foreground hover:bg-muted md:hidden"
+              className="rounded-lg p-1 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground md:hidden"
               aria-label="Cerrar menú"
             >
               <X className="h-4.5 w-4.5" />
@@ -258,8 +262,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     sidebarCollapsed ? 'md:justify-center md:px-2' : ''
                   } ${
                     pathname?.startsWith(entry.href)
-                      ? 'bg-primary/10 font-medium text-primary'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      ? 'bg-sidebar-primary/10 font-medium text-sidebar-primary dark:bg-primary/10 dark:text-primary'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground'
                   }`}
                 >
                   <entry.icon className="h-4 w-4 shrink-0" />
@@ -361,7 +365,9 @@ function NavGroupSection({
         onClick={onExpandSidebar}
         title={group.label}
         className={`hidden md:flex w-full items-center justify-center rounded-lg px-2 py-2 text-sm transition ${
-          isActiveGroup ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          isActiveGroup
+            ? 'bg-sidebar-primary/10 text-sidebar-primary dark:bg-primary/10 dark:text-primary'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground'
         }`}
       >
         <group.icon className="h-4 w-4 shrink-0" />
@@ -375,7 +381,9 @@ function NavGroupSection({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition ${
-          isActiveGroup ? 'font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          isActiveGroup
+            ? 'font-medium text-sidebar-foreground dark:text-foreground'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground'
         }`}
         aria-expanded={open}
       >
@@ -384,15 +392,15 @@ function NavGroupSection({
         <ChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="ml-[1.15rem] flex flex-col gap-0.5 border-l py-0.5 pl-3">
+        <div className="ml-[1.15rem] flex flex-col gap-0.5 border-l border-sidebar-border py-0.5 pl-3">
           {group.items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={`rounded-lg px-2.5 py-1.5 text-sm transition ${
                 item === activeItem
-                  ? 'font-medium text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'font-medium text-sidebar-primary dark:text-primary'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground'
               }`}
             >
               {item.label}
