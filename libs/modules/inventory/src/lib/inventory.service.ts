@@ -488,6 +488,7 @@ export class InventoryService {
         const reserved = await getReservedQuantity(db, {
           warehouseId: dto.warehouseId,
           articleVariantId: dto.articleVariantId,
+          excludeReservationId: dto.excludeReservationId,
         });
         const available = (priorLedger?.quantity ?? new Prisma.Decimal(0)).sub(reserved);
         if (available.lt(-delta)) {

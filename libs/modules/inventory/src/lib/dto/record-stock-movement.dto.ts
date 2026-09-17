@@ -61,4 +61,12 @@ export class RecordStockMovementDto {
   @IsOptional()
   @IsUUID()
   goodsReceiptLineId?: string;
+
+  // Sólo ProductionService.consumeReservation la manda: la StockReservation
+  // que este PRODUCTION_OUT está saldando, para que el chequeo de
+  // "disponible" de abajo no la cuente como reservada por otra orden contra
+  // sí misma (ver stock-availability.domain.ts para el bug que esto evita).
+  @IsOptional()
+  @IsUUID()
+  excludeReservationId?: string;
 }

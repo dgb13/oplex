@@ -110,6 +110,7 @@ export class ProductionService {
         quantity: reservation.quantityReserved.toNumber(),
         sourceType: 'ProductionOrder',
         sourceId: order.id,
+        excludeReservationId: reservation.id,
       });
       const cost = (movement.unitCost ?? new Prisma.Decimal(0)).mul(reservation.quantityReserved);
       await this.orderService.recordConsumption({
@@ -180,6 +181,7 @@ export class ProductionService {
       quantity: reservation.quantityReserved.toNumber(),
       sourceType: 'ProductionOrder',
       sourceId: order.id,
+      excludeReservationId: reservation.id,
     });
 
     return consumedCost;
