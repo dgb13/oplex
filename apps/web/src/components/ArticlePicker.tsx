@@ -27,6 +27,7 @@ export interface ArticlePickerOption {
   // y Cotizaciones la usan para prefillar la fila al elegir este artículo.
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
+  isManufactured: boolean;
 }
 
 function flattenOptions(articles: Article[]): ArticlePickerOption[] {
@@ -43,6 +44,7 @@ function flattenOptions(articles: Article[]): ArticlePickerOption[] {
       minimumStock: variant.minimumStock,
       taxRate: article.taxRate,
       taxKind: article.taxKind,
+      isManufactured: article.isManufactured,
     })),
   );
 }
@@ -53,6 +55,13 @@ interface ArticlePickerProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  // Restringe qué opciones se listan/buscan, sin tocar el fetch compartido
+  // (['inventory-articles'], deduplicado con los otros 6+ formularios que
+  // usan este picker) - p. ej. production/bom/page.tsx lo usa en "Producto a
+  // fabricar" para no mezclar insumos con productos terminados
+  // (`(o) => o.isManufactured`). undefined = sin filtrar, comportamiento de
+  // siempre en el resto de los formularios.
+  filter?: (option: ArticlePickerOption) => boolean;
 }
 
 /** Selector de artículo/variante compartido, con búsqueda por nombre/SKU e
@@ -72,6 +81,7 @@ export default function ArticlePicker({
   placeholder,
   disabled,
   className,
+  filter,
 }: ArticlePickerProps) {
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
@@ -80,9 +90,21 @@ export default function ArticlePicker({
   const [query, setQuery] = useState('');
   const [creatingArticle, setCreatingArticle] = useState(false);
 
-  const options = useMemo(() => flattenOptions(articlesQuery.data ?? []), [articlesQuery.data]);
-  const selected = options.find((o) => o.id === value) ?? null;
+  const allOptions = useMemo(() => flattenOptions(articlesQuery.data ?? []), [articlesQuery.data]);
+  const options = useMemo(() => (filter ? allOptions.filter(filter) : allOptions), [allOptions, filter]);
+  // El valor ya elegido se sigue resolviendo contra TODAS las opciones, no
+  // sólo las filtradas - si el filtro cambia el resultado no debería dejar
+  // de mostrar lo que ya estaba seleccionado (p. ej. bom/page.tsx precarga
+  // el producto de una receta existente antes de que isManufactured se
+  // haya podido marcar retroactivamente).
+  const selected = allOptions.find((o) => o.id === value) ?? null;
   const isEmpty = !articlesQuery.isLoading && options.length === 0;
+  // Distingue "no hay ningún artículo cargado todavía" de "hay artículos,
+  // pero ninguno pasa el filtro" (p. ej. ningún producto marcado como
+  // fabricable en Recetas) - lo segundo no debería sonar a catálogo vacío,
+  // el "+ nuevo artículo" de al lado sigue siendo el camino para el primero.
+  const emptyPlaceholder =
+    filter && allOptions.length > 0 ? 'Sin artículos que coincidan con el filtro' : 'Sin artículos cargados';
 
   // Lector de código de barras / tipear el SKU completo + Enter: sin
   // ningún manejo especial, si el filtro deja un único resultado Combobox
@@ -133,6 +155,11 @@ export default function ArticlePicker({
       // taxDefinition en el backend (resolveArticleTax/resolveLineTax).
       taxRate: 0,
       taxKind: 'GRAVADO',
+      // El alta rápida no pasa por el checkbox "Se fabrica" del modal
+      // completo - si el que abrió este picker filtraba por isManufactured,
+      // el refetch que ArticleFormModal ya dispara corrige esto en cuanto
+      // vuelva a abrirse el dropdown, no hace falta adivinarlo acá.
+      isManufactured: false,
     });
     setCreatingArticle(false);
   }
@@ -154,7 +181,7 @@ export default function ArticlePicker({
                   : ''
               }
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={isEmpty ? 'Sin artículos cargados' : (placeholder ?? 'Buscar artículo o SKU...')}
+              placeholder={isEmpty ? emptyPlaceholder : (placeholder ?? 'Buscar artículo o SKU...')}
             />
             <button
               type="button"

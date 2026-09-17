@@ -95,6 +95,14 @@ export interface ArticleListItem {
   brochureUrl: string | null;
   attachmentZipUrl: string | null;
   hasVariants: boolean;
+  // true = este artículo tiene (o tuvo alguna vez) una receta (BOM) propia -
+  // ver el comentario del campo en schema.prisma. BomService.create() lo
+  // fija en true solo, y ArticleFormModal deja tildarlo a mano para poder
+  // elegir un producto como "Producto a fabricar" en Recetas ANTES de
+  // cargarle su primera receta (si no, ese selector nunca tendría nada para
+  // ofrecer la primera vez). Usado por ArticlePicker en modo `filter` para
+  // no mezclar insumos con productos terminados en ese selector.
+  isManufactured: boolean;
   // Alícuota por defecto del artículo (Article.taxDefinition) - lo que
   // Facturación/Cotizaciones usan como default de línea al elegir este
   // artículo en ArticlePicker, antes de cualquier override manual. null de
@@ -152,6 +160,7 @@ export class InventoryService {
         isService: dto.isService,
         isPublished: dto.isPublished,
         hasVariants: dto.hasVariants,
+        isManufactured: dto.isManufactured,
       },
     });
   }
@@ -224,6 +233,7 @@ export class InventoryService {
         brochureUrl: article.brochureUrl,
         attachmentZipUrl: article.attachmentZipUrl,
         hasVariants: article.hasVariants,
+        isManufactured: article.isManufactured,
         taxRate,
         taxKind,
         variants: article.variants.map((variant) => {

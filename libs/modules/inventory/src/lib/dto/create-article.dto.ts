@@ -32,4 +32,12 @@ export class CreateArticleDto {
   @IsOptional()
   @IsBoolean()
   hasVariants?: boolean;
+
+  // Marca manual de "este producto se fabrica" - sólo hace falta tildarlo acá
+  // si se lo quiere elegir como "Producto a fabricar" en Recetas ANTES de
+  // cargarle su primera receta. BomService.create() lo termina fijando en
+  // true solo de cualquier forma en cuanto exista una receta.
+  @IsOptional()
+  @IsBoolean()
+  isManufactured?: boolean;
 }

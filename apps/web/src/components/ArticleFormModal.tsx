@@ -147,6 +147,11 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   const [isService, setIsService] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
   const [hasVariants, setHasVariants] = useState(false);
+  // Sólo hace falta tildarlo a mano para poder elegir este producto como
+  // "Producto a fabricar" en Recetas ANTES de cargarle su primera receta -
+  // BomService.create() lo termina fijando en true solo apenas exista una
+  // (ver ArticlePicker, prop `filter`, usado en production/bom/page.tsx).
+  const [isManufactured, setIsManufactured] = useState(false);
 
   // Precios y proveedor
   const [preferredSupplierId, setPreferredSupplierId] = useState('');
@@ -332,6 +337,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           isService,
           isPublished,
           hasVariants,
+          isManufactured,
         });
         articleId = article.id;
         setCreatedArticleId(article.id);
@@ -682,6 +688,21 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   type="checkbox"
                   checked={hasVariants}
                   onChange={(e) => setHasVariants(e.target.checked)}
+                  className="h-5 w-5 accent-primary"
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-lg border border p-3">
+                <span className="text-sm  ">
+                  Se fabrica (tiene receta)
+                  <span className="block text-xs text-muted-foreground">
+                    Aparece como &quot;Producto a fabricar&quot; en Recetas del módulo Producción
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={isManufactured}
+                  onChange={(e) => setIsManufactured(e.target.checked)}
                   className="h-5 w-5 accent-primary"
                 />
               </label>

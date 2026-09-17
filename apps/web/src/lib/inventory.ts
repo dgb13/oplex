@@ -100,6 +100,10 @@ export interface Article {
   // Informativo - ver el comentario del campo en schema.prisma. No impide
   // que un artículo con hasVariants=false tenga más de un ArticleVariant.
   hasVariants: boolean;
+  // true = tiene (o tuvo alguna vez) una receta propia - ver el comentario
+  // en InventoryService.listArticles (backend). Usado por ArticlePicker en
+  // modo `filter` para el selector "Producto a fabricar" de Recetas.
+  isManufactured: boolean;
   // Alícuota por defecto (Article.taxDefinition) - lo que ArticlePicker
   // arrastra a la fila de Facturación/Cotizaciones al elegir este artículo,
   // antes de cualquier override manual del usuario en esa línea.
@@ -125,6 +129,7 @@ export interface CreateArticleInput {
   isService?: boolean;
   isPublished?: boolean;
   hasVariants?: boolean;
+  isManufactured?: boolean;
 }
 
 export interface CreateArticleVariantInput {

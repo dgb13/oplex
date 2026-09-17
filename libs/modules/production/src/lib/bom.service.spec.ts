@@ -23,6 +23,14 @@ function makeDb(overrides: Record<string, unknown> = {}) {
         }),
       ),
     },
+    // create() marca el Article como isManufactured al final - ver el
+    // comentario en BomService.create.
+    articleVariant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ articleId: 'article-output' }),
+    },
+    article: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
     ...overrides,
   };
 }
@@ -43,6 +51,28 @@ describe('BomService.create', () => {
     expect(bom.version).toBe(1);
     expect(bom.isActive).toBe(true);
     expect(db.billOfMaterials.update).not.toHaveBeenCalled();
+  });
+
+  it('marks the output article as isManufactured (skipped in Prisma if already true)', async () => {
+    const db = makeDb();
+    const service = new BomService();
+
+    await runAsTenant(db, () =>
+      service.create({
+        outputArticleVariantId: 'variant-output',
+        name: 'Prepizza 30cm',
+        lines: [{ inputArticleVariantId: 'variant-harina', quantity: 250 }],
+      }),
+    );
+
+    expect(db.articleVariant.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: 'variant-output' },
+      select: { articleId: true },
+    });
+    expect(db.article.updateMany).toHaveBeenCalledWith({
+      where: { id: 'article-output', isManufactured: false },
+      data: { isManufactured: true },
+    });
   });
 
   it('deactivates the previous active version and bumps the version number', async () => {

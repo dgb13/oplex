@@ -328,6 +328,7 @@ export default function BomPage() {
                   }}
                   placeholder="Buscar producto..."
                   className="mt-1"
+                  filter={(o) => o.isManufactured}
                 />
               </div>
             </CardContent>

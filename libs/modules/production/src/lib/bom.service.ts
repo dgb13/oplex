@@ -51,7 +51,7 @@ export class BomService {
       await db.billOfMaterials.update({ where: { id: previousActive.id }, data: { isActive: false } });
     }
 
-    return db.billOfMaterials.create({
+    const bom = await db.billOfMaterials.create({
       data: {
         tenantId,
         outputArticleVariantId: dto.outputArticleVariantId,
@@ -65,6 +65,23 @@ export class BomService {
       },
       include: DETAIL_INCLUDE,
     });
+
+    // Marca el producto como "se fabrica" solo, aunque quien lo creó se haya
+    // olvidado de tildar el checkbox al alta del artículo (ver
+    // ArticleFormModal/isManufactured) - una receta real es la prueba más
+    // fuerte posible de que esto se fabrica. updateMany + isManufactured:
+    // false en el where evita un write de más en el caso común de una
+    // nueva versión sobre un producto que ya lo tenía.
+    const { articleId } = await db.articleVariant.findUniqueOrThrow({
+      where: { id: dto.outputArticleVariantId },
+      select: { articleId: true },
+    });
+    await db.article.updateMany({
+      where: { id: articleId, isManufactured: false },
+      data: { isManufactured: true },
+    });
+
+    return bom;
   }
 
   async getActiveBom(outputArticleVariantId: string): Promise<BomDetail | null> {
