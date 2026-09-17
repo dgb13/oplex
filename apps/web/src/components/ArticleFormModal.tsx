@@ -58,6 +58,16 @@ const textareaClass =
   'rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 
+const MEASUREMENT_TYPE_OPTIONS: {
+  value: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+  label: string;
+}[] = [
+  { value: 'DISCRETE', label: 'Unidad' },
+  { value: 'CONTINUOUS', label: 'Continuo (peso/volumen)' },
+  { value: 'LINEAL_1D', label: 'Lineal (por metro)' },
+  { value: 'SURFACE_2D', label: 'Superficie (por m²)' },
+];
+
 function tabClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
     active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
@@ -152,6 +162,20 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   // BomService.create() lo termina fijando en true solo apenas exista una
   // (ver ArticlePicker, prop `filter`, usado en production/bom/page.tsx).
   const [isManufactured, setIsManufactured] = useState(false);
+
+  // "Medida comercial" - discriminador de cómo se mide/consume el stock
+  // (measurementType) + los campos propios de cada tipo. Fijo una vez
+  // creado el artículo, no hay UPDATE para esto (ver UpdateArticleInput) -
+  // cambiarlo con stock/piezas/BOM ya cargados rompería su interpretación.
+  const [measurementType, setMeasurementType] = useState<'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D'>(
+    'DISCRETE',
+  );
+  const [purchaseSize, setPurchaseSize] = useState('');
+  const [baseUnit, setBaseUnit] = useState('gr');
+  const [commercialLength, setCommercialLength] = useState('');
+  const [minUsableLength, setMinUsableLength] = useState('');
+  const [sheetWidth, setSheetWidth] = useState('');
+  const [sheetLength, setSheetLength] = useState('');
 
   // Precios y proveedor
   const [preferredSupplierId, setPreferredSupplierId] = useState('');
@@ -338,6 +362,20 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           isPublished,
           hasVariants,
           isManufactured,
+          measurementType,
+          // Sólo se mandan los campos del tipo elegido - el resto queda
+          // undefined (el backend los deja en null, no hay ambigüedad con
+          // "0" o "vacío" para un tipo que no los usa).
+          purchaseSize:
+            measurementType === 'CONTINUOUS' && purchaseSize.trim() !== '' ? Number(purchaseSize) : undefined,
+          baseUnit: measurementType === 'CONTINUOUS' ? baseUnit : undefined,
+          commercialLength:
+            measurementType === 'LINEAL_1D' && commercialLength.trim() !== '' ? Number(commercialLength) : undefined,
+          minUsableLength:
+            measurementType === 'LINEAL_1D' && minUsableLength.trim() !== '' ? Number(minUsableLength) : undefined,
+          sheetWidth: measurementType === 'SURFACE_2D' && sheetWidth.trim() !== '' ? Number(sheetWidth) : undefined,
+          sheetLength:
+            measurementType === 'SURFACE_2D' && sheetLength.trim() !== '' ? Number(sheetLength) : undefined,
         });
         articleId = article.id;
         setCreatedArticleId(article.id);
@@ -706,6 +744,117 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   className="h-5 w-5 accent-primary"
                 />
               </label>
+
+              <div className="flex flex-col gap-2 rounded-lg border border p-3">
+                <span className="text-sm  ">
+                  Tipo de medición
+                  <span className="block text-xs text-muted-foreground">
+                    Cómo se mide/consume el stock - fijo una vez creado el artículo
+                  </span>
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {MEASUREMENT_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMeasurementType(opt.value)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                        measurementType === opt.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {measurementType === 'CONTINUOUS' && (
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Tamaño de la presentación de compra</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={purchaseSize}
+                        onChange={(e) => setPurchaseSize(e.target.value)}
+                        className={inputClass}
+                        placeholder="p. ej. 35000"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Unidad base de stock</span>
+                      <select
+                        value={baseUnit}
+                        onChange={(e) => setBaseUnit(e.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="gr">gr</option>
+                        <option value="ml">ml</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                {measurementType === 'LINEAL_1D' && (
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Largo comercial (mm)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={commercialLength}
+                        onChange={(e) => setCommercialLength(e.target.value)}
+                        className={inputClass}
+                        placeholder="p. ej. 6000"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Merma mínima aprovechable (mm)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={minUsableLength}
+                        onChange={(e) => setMinUsableLength(e.target.value)}
+                        className={inputClass}
+                        placeholder="Opcional"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {measurementType === 'SURFACE_2D' && (
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Ancho de plancha estándar (mm)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={sheetWidth}
+                        onChange={(e) => setSheetWidth(e.target.value)}
+                        className={inputClass}
+                        placeholder="p. ej. 1200"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Largo de plancha estándar (mm)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={sheetLength}
+                        onChange={(e) => setSheetLength(e.target.value)}
+                        className={inputClass}
+                        placeholder="p. ej. 2400"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

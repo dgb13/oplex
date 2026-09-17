@@ -32,6 +32,12 @@ export interface ArticleVariant {
   totalStock: number;
   minimumStock: number | null;
   stockByWarehouse: WarehouseStockRow[];
+  // Sólo tiene sentido cuando el Article dueño es measurementType
+  // LINEAL_1D - desglose EXACTO (piezas reales, no una cuenta) de
+  // totalStock en barras/rollos sin cortar vs recortes reutilizables. Ver
+  // formatStock más abajo.
+  wholePiecesCount: number;
+  offcutsCount: number;
 }
 
 /** Único lugar que arma la etiqueta visible de una variante ("Rojo / M") -
@@ -104,12 +110,88 @@ export interface Article {
   // en InventoryService.listArticles (backend). Usado por ArticlePicker en
   // modo `filter` para el selector "Producto a fabricar" de Recetas.
   isManufactured: boolean;
+  // "Medida comercial" (ver ArticleFormModal, sección "Tipo de medición") -
+  // fija desde que se crea el artículo, sin forma de editarla después (ver
+  // UpdateArticleInput, no la incluye a propósito). null en los campos que
+  // no le corresponden al measurementType elegido.
+  measurementType: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+  purchaseSize: number | null;
+  baseUnit: string | null;
+  commercialLength: number | null;
+  minUsableLength: number | null;
+  sheetWidth: number | null;
+  sheetLength: number | null;
   // Alícuota por defecto (Article.taxDefinition) - lo que ArticlePicker
   // arrastra a la fila de Facturación/Cotizaciones al elegir este artículo,
   // antes de cualquier override manual del usuario en esa línea.
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
   variants: ArticleVariant[];
+}
+
+export interface StockDisplay {
+  /** "3 barras + 3 recortes", "3,28 m²", "12 un." - lo primero que se ve. */
+  primary: string;
+  /** "24.856 mm disponibles en total", "≈ 1,1 planchas" - contexto/detalle
+   * opcional en letra chica debajo de `primary`. */
+  secondary: string | null;
+  /** "exact" = sale de contar StockPiece reales (sólo LINEAL_1D, ver
+   * wholePiecesCount/offcutsCount). "approx" = total ÷ medida comercial
+   * configurada, sin pieza física verificable detrás (SURFACE_2D/CONTINUOUS
+   * - "no hay nesting/recortes 2D rastreables en v1", ver schema.prisma).
+   * null = no hay medida comercial cargada, nada para estimar. */
+  badge: 'exact' | 'approx' | null;
+}
+
+const NUMBER_FORMAT = new Intl.NumberFormat('es-AR');
+const DECIMAL_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
+
+/** Traduce el stock crudo de una variante al idioma de su measurementType,
+ * en vez del número pelado que se mostraba antes (sin unidad, sin
+ * contexto) - ver docs de la sesión "Medida Comercial". Un artículo
+ * LINEAL_1D sin ninguna compra recibida todavía (wholePiecesCount=0,
+ * offcutsCount=0 pero totalStock>0 no debería pasar nunca en la práctica,
+ * pero por las dudas cae al mm crudo en vez de mostrar "0 barras" con
+ * stock real arriba). */
+export function formatStock(article: Article, variant: ArticleVariant): StockDisplay {
+  const total = variant.totalStock;
+  switch (article.measurementType) {
+    case 'LINEAL_1D': {
+      const { wholePiecesCount: whole, offcutsCount: offcuts } = variant;
+      if (whole === 0 && offcuts === 0) {
+        return { primary: `${NUMBER_FORMAT.format(total)} mm`, secondary: null, badge: null };
+      }
+      const parts: string[] = [];
+      if (whole > 0) parts.push(`${whole} barra${whole === 1 ? '' : 's'}`);
+      if (offcuts > 0) parts.push(`${offcuts} recorte${offcuts === 1 ? '' : 's'}`);
+      return {
+        primary: parts.join(' + '),
+        secondary: `${NUMBER_FORMAT.format(total)} mm disponibles en total`,
+        badge: 'exact',
+      };
+    }
+    case 'SURFACE_2D': {
+      const primary = `${DECIMAL_FORMAT.format(total)} m²`;
+      if (!article.sheetWidth || !article.sheetLength) {
+        return { primary, secondary: null, badge: null };
+      }
+      const sheetArea = (article.sheetWidth / 1000) * (article.sheetLength / 1000);
+      const estimatedSheets = sheetArea > 0 ? total / sheetArea : 0;
+      return { primary, secondary: `≈ ${DECIMAL_FORMAT.format(estimatedSheets)} planchas`, badge: 'approx' };
+    }
+    case 'CONTINUOUS': {
+      const unit = article.baseUnit ?? '';
+      const primary = `${NUMBER_FORMAT.format(total)}${unit ? ` ${unit}` : ''}`;
+      if (!article.purchaseSize) {
+        return { primary, secondary: null, badge: null };
+      }
+      const estimatedUnits = total / article.purchaseSize;
+      const label = estimatedUnits === 1 ? 'unidad de compra' : 'unidades de compra';
+      return { primary, secondary: `≈ ${DECIMAL_FORMAT.format(estimatedUnits)} ${label}`, badge: 'approx' };
+    }
+    default:
+      return { primary: `${NUMBER_FORMAT.format(total)} un.`, secondary: null, badge: null };
+  }
 }
 
 export interface UpdateArticleInput {
@@ -130,6 +212,13 @@ export interface CreateArticleInput {
   isPublished?: boolean;
   hasVariants?: boolean;
   isManufactured?: boolean;
+  measurementType?: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+  purchaseSize?: number;
+  baseUnit?: string;
+  commercialLength?: number;
+  minUsableLength?: number;
+  sheetWidth?: number;
+  sheetLength?: number;
 }
 
 export interface CreateArticleVariantInput {

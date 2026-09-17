@@ -7,7 +7,7 @@ import Select from '@/components/ui/Select';
 import { inventoryApi } from '@/lib/inventory';
 import { productionApi, type PieceStatus } from '@/lib/production';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ProductionPlanGateBanner, useProductionGate } from '../ProductionPlanGate';
 
 const PIECE_STATUS_LABELS: Record<PieceStatus, string> = {
@@ -37,6 +37,19 @@ export default function StockPiecesPage() {
     queryFn: () => productionApi.listPieces(articleVariantId, warehouseId || undefined),
     enabled: gate.enabled && !!articleVariantId,
   });
+
+  // Mismo criterio sourceType que ya usa la columna "Origen" de la tabla de
+  // abajo ("Compra"/"Recorte") - acá sólo se cuenta, nada nuevo del back:
+  // esta pantalla ya trae la lista completa de piezas de este insumo.
+  const summary = useMemo(() => {
+    const available = (piecesQuery.data ?? []).filter((p) => p.status === 'AVAILABLE');
+    if (available.length === 0) return null;
+    return {
+      wholeCount: available.filter((p) => p.sourceType === 'FULL_STOCK').length,
+      offcutCount: available.filter((p) => p.sourceType === 'OFFCUT').length,
+      totalMm: available.reduce((sum, p) => sum + Number(p.currentLength), 0),
+    };
+  }, [piecesQuery.data]);
 
   if (gate.isLoading) {
     return null;
@@ -69,6 +82,27 @@ export default function StockPiecesPage() {
               </div>
             </CardContent>
           </Card>
+
+          {articleVariantId && summary && (
+            <Card>
+              <CardContent className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+                  <span className="font-mono text-base font-bold text-primary">{summary.wholeCount}</span>
+                  barra{summary.wholeCount === 1 ? '' : 's'} entera{summary.wholeCount === 1 ? '' : 's'}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+                  <span className="font-mono text-base font-bold text-primary">{summary.offcutCount}</span>
+                  recorte{summary.offcutCount === 1 ? '' : 's'} reutilizable{summary.offcutCount === 1 ? '' : 's'}
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+                  <span className="font-mono text-base font-bold text-primary">
+                    {summary.totalMm.toLocaleString('es-AR')}mm
+                  </span>
+                  disponibles en total
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {articleVariantId && (
             <Card>

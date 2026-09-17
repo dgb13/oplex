@@ -1,6 +1,6 @@
 'use client';
 
-import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
+import { buildVariantLabel, formatStock, inventoryApi, resolveUploadUrl, type Article, type StockDisplay } from '@/lib/inventory';
 import { getSocket } from '@/lib/socket';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -41,6 +41,7 @@ interface VariantRow {
   totalStock: number;
   minimumStock: number | null;
   stockByWarehouseId: Record<string, number>;
+  stockDisplay: StockDisplay;
 }
 
 type SortKey = 'articleName' | 'sku' | 'categoryName' | 'unitPrice' | 'totalStock' | 'minimumStock';
@@ -111,6 +112,7 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       stockByWarehouseId: Object.fromEntries(
         variant.stockByWarehouse.map((row) => [row.warehouseId, row.quantity]),
       ),
+      stockDisplay: formatStock(article, variant),
     })),
   );
 }
@@ -457,8 +459,13 @@ export default function InventoryPage() {
                       <td
                         className={`py-2 pr-4 text-right font-semibold ${belowMinimum ? 'text-destructive' : 'text-primary'}`}
                       >
-                        {row.totalStock}
+                        {row.stockDisplay.primary}
                         {belowMinimum && <span title="Por debajo del stock mínimo"> ⚠</span>}
+                        {row.stockDisplay.secondary && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {row.stockDisplay.secondary}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-4 text-right text-muted-foreground">{row.minimumStock ?? '—'}</td>
                     </tr>

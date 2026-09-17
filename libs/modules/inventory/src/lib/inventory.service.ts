@@ -66,6 +66,14 @@ export interface ArticleVariantListItem {
   // stock across warehouses.
   minimumStock: number | null;
   stockByWarehouse: WarehouseStockRow[];
+  // Sólo tiene sentido cuando el Article dueño es LINEAL_1D - desglose
+  // EXACTO (sale de contar StockPiece reales, no de una cuenta) de cuánto
+  // de totalStock son barras/rollos sin cortar vs recortes reutilizables.
+  // Mismo criterio sourceType que ya usa /production/pieces ("Compra" vs
+  // "Recorte") - 0/0 en cualquier otro measurementType, o en un 1D que
+  // todavía no recibió ninguna compra.
+  wholePiecesCount: number;
+  offcutsCount: number;
 }
 
 // All optional/additive - the original zero-param listArticles() call
@@ -103,6 +111,20 @@ export interface ArticleListItem {
   // ofrecer la primera vez). Usado por ArticlePicker en modo `filter` para
   // no mezclar insumos con productos terminados en ese selector.
   isManufactured: boolean;
+  // Discriminador de medida/consumo de stock + su "medida comercial" (ver el
+  // comentario de measurementType en schema.prisma) - null en los campos
+  // que no le corresponden al tipo elegido. InventoryService.listArticles
+  // es el único lugar que los completa hoy (no hay UPDATE todavía, ver
+  // UpdateArticleDto - measurementType queda fijo una vez creado el
+  // artículo, cambiarlo con stock/piezas/BOM ya cargados rompería su
+  // interpretación).
+  measurementType: string;
+  purchaseSize: number | null;
+  baseUnit: string | null;
+  commercialLength: number | null;
+  minUsableLength: number | null;
+  sheetWidth: number | null;
+  sheetLength: number | null;
   // Alícuota por defecto del artículo (Article.taxDefinition) - lo que
   // Facturación/Cotizaciones usan como default de línea al elegir este
   // artículo en ArticlePicker, antes de cualquier override manual. null de
@@ -161,6 +183,13 @@ export class InventoryService {
         isPublished: dto.isPublished,
         hasVariants: dto.hasVariants,
         isManufactured: dto.isManufactured,
+        measurementType: dto.measurementType,
+        purchaseSize: dto.purchaseSize,
+        baseUnit: dto.baseUnit,
+        commercialLength: dto.commercialLength,
+        minUsableLength: dto.minUsableLength,
+        sheetWidth: dto.sheetWidth,
+        sheetLength: dto.sheetLength,
       },
     });
   }
@@ -210,7 +239,16 @@ export class InventoryService {
         category: true,
         preferredSupplier: { select: { id: true, name: true } },
         taxDefinition: true,
-        variants: { include: { stockLedger: { include: { warehouse: true } }, minimumStocks: true } },
+        variants: {
+          include: {
+            stockLedger: { include: { warehouse: true } },
+            minimumStocks: true,
+            // Liviano a propósito (sólo sourceType, sin largo/depósito) -
+            // acá sólo hace falta contar, el detalle completo por pieza ya
+            // lo sirve GET /production/pieces.
+            stockPieces: { where: { status: 'AVAILABLE' }, select: { sourceType: true } },
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
@@ -234,6 +272,13 @@ export class InventoryService {
         attachmentZipUrl: article.attachmentZipUrl,
         hasVariants: article.hasVariants,
         isManufactured: article.isManufactured,
+        measurementType: article.measurementType,
+        purchaseSize: article.purchaseSize?.toNumber() ?? null,
+        baseUnit: article.baseUnit,
+        commercialLength: article.commercialLength?.toNumber() ?? null,
+        minUsableLength: article.minUsableLength?.toNumber() ?? null,
+        sheetWidth: article.sheetWidth?.toNumber() ?? null,
+        sheetLength: article.sheetLength?.toNumber() ?? null,
         taxRate,
         taxKind,
         variants: article.variants.map((variant) => {
@@ -256,6 +301,8 @@ export class InventoryService {
               ? null
               : variant.minimumStocks.reduce((sum, ms) => sum + ms.minimumQuantity.toNumber(), 0),
           stockByWarehouse,
+          wholePiecesCount: variant.stockPieces.filter((p) => p.sourceType === 'FULL_STOCK').length,
+          offcutsCount: variant.stockPieces.filter((p) => p.sourceType === 'OFFCUT').length,
         };
       }),
       };
