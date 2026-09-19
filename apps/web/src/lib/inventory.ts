@@ -67,10 +67,11 @@ export interface ArticleVariantLookupEntry {
   articleName: string;
   variantLabel: string | null;
   sku: string;
+  imageUrl: string | null;
 }
 
-/** articleVariantId -> nombre/SKU legible, para pantallas que sólo tienen
- * el UUID a mano (BOM/órdenes/piezas de Producción, que devuelven el
+/** articleVariantId -> nombre/SKU/imagen legibles, para pantallas que sólo
+ * tienen el UUID a mano (BOM/órdenes/piezas de Producción, que devuelven el
  * modelo crudo de Prisma sin joinear nombres) - se arma en el cliente a
  * partir de ['inventory-articles'] (ya cacheado por ArticlePicker/el
  * catálogo, React Query lo dedupea) en vez de agregar un include al
@@ -79,7 +80,12 @@ export function buildArticleVariantLookup(articles: Article[]): Record<string, A
   const map: Record<string, ArticleVariantLookupEntry> = {};
   for (const article of articles) {
     for (const variant of article.variants) {
-      map[variant.id] = { articleName: article.name, variantLabel: buildVariantLabel(variant), sku: variant.sku };
+      map[variant.id] = {
+        articleName: article.name,
+        variantLabel: buildVariantLabel(variant),
+        sku: variant.sku,
+        imageUrl: article.imageUrl,
+      };
     }
   }
   return map;

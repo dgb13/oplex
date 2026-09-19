@@ -4,10 +4,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Select from '@/components/ui/Select';
-import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
+import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
 import { productionApi } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { FileArchive, FileText, Package } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
@@ -41,6 +42,12 @@ export default function ProductionOrderDetailPage() {
     () => Object.fromEntries((warehousesQuery.data ?? []).map((w) => [w.id, w.name])),
     [warehousesQuery.data],
   );
+  const bomId = orderQuery.data?.bomId;
+  const attachmentsQuery = useQuery({
+    queryKey: ['production-bom-attachments', bomId],
+    queryFn: () => productionApi.listBomAttachments(bomId as string),
+    enabled: gate.enabled && !!bomId,
+  });
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['production-order', id] });
@@ -92,17 +99,26 @@ export default function ProductionOrderDetailPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                {article ? `${article.articleName}${article.variantLabel ? ` (${article.variantLabel})` : ''}` : order.outputArticleVariantId}
-                <Badge className={PRODUCTION_STATUS_COLORS[order.status]}>
-                  {PRODUCTION_STATUS_LABELS[order.status]}
-                </Badge>
-                {order.status === 'PLANNED' && order.isShortOnMaterials && (
-                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                    Esperando insumos
+              <div className="flex items-start justify-between gap-4">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                  {article ? `${article.articleName}${article.variantLabel ? ` (${article.variantLabel})` : ''}` : order.outputArticleVariantId}
+                  <Badge className={PRODUCTION_STATUS_COLORS[order.status]}>
+                    {PRODUCTION_STATUS_LABELS[order.status]}
                   </Badge>
-                )}
-              </CardTitle>
+                  {order.status === 'PLANNED' && order.isShortOnMaterials && (
+                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                      Esperando insumos
+                    </Badge>
+                  )}
+                </CardTitle>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
+                  {article?.imageUrl ? (
+                    <img src={resolveUploadUrl(article.imageUrl) ?? undefined} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Package className="h-5 w-5" />
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -127,6 +143,31 @@ export default function ProductionOrderDetailPage() {
                   </div>
                 )}
               </div>
+
+              {(attachmentsQuery.data?.length ?? 0) > 0 && (
+                <div className="flex flex-col gap-1.5 border-t pt-4">
+                  <p className="text-xs text-muted-foreground">Documentos de la receta</p>
+                  <ul className="flex flex-wrap gap-2">
+                    {attachmentsQuery.data?.map((att) => (
+                      <li key={att.id}>
+                        <a
+                          href={resolveUploadUrl(att.fileUrl) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1.5 rounded-lg border bg-muted/20 px-2.5 py-1.5 text-sm text-primary hover:underline"
+                        >
+                          {att.fileType === 'PDF' ? (
+                            <FileText className="h-4 w-4 shrink-0 text-red-500" />
+                          ) : (
+                            <FileArchive className="h-4 w-4 shrink-0 text-amber-600" />
+                          )}
+                          {att.fileName}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 

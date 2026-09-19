@@ -354,7 +354,9 @@ export default function InventoryPage() {
               variantLabel: row.variantLabel,
               unitPrice: row.unitPrice,
               totalStock: row.totalStock,
+              active: row.active,
             }))}
+            onDetails={setDetailsArticleId}
           />
         ) : (
           <div className="overflow-x-auto">
