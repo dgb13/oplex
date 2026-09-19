@@ -917,6 +917,74 @@ describe('InventoryService.updateArticle', () => {
       expect.objectContaining({ data: expect.objectContaining({ preferredSupplierId: undefined }) }),
     );
   });
+
+  describe('active:false (soft delete)', () => {
+    function makeDb(overrides: {
+      openOutputOrder?: unknown;
+      activeReservation?: unknown;
+    } = {}) {
+      return {
+        productionOrder: { findFirst: jest.fn().mockResolvedValue(overrides.openOutputOrder ?? null) },
+        stockReservation: { findFirst: jest.fn().mockResolvedValue(overrides.activeReservation ?? null) },
+        article: { update: jest.fn((args) => Promise.resolve({ id: 'article-1', ...args.data })) },
+      };
+    }
+
+    it('deactivates when nothing ties the article to an open production order', async () => {
+      const db = makeDb();
+      const service = new InventoryService(makeEventEmitter());
+
+      const result = await runInTenant(db, () => service.updateArticle('article-1', { active: false }));
+
+      expect(db.productionOrder.findFirst).toHaveBeenCalledWith({
+        where: {
+          outputArticleVariant: { articleId: 'article-1' },
+          status: { in: ['DRAFT', 'PLANNED', 'IN_PROGRESS'] },
+        },
+      });
+      expect(db.stockReservation.findFirst).toHaveBeenCalledWith({
+        where: { articleVariant: { articleId: 'article-1' }, status: 'ACTIVE' },
+      });
+      expect(result).toEqual(expect.objectContaining({ active: false }));
+    });
+
+    it('rejects deactivating the output of an open production order', async () => {
+      const db = makeDb({ openOutputOrder: { id: 'order-1' } });
+      const service = new InventoryService(makeEventEmitter());
+
+      await expect(
+        runInTenant(db, () => service.updateArticle('article-1', { active: false })),
+      ).rejects.toThrow('orden de producción en curso');
+      expect(db.article.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects deactivating an input reserved by an open production order', async () => {
+      const db = makeDb({ activeReservation: { id: 'reservation-1' } });
+      const service = new InventoryService(makeEventEmitter());
+
+      await expect(
+        runInTenant(db, () => service.updateArticle('article-1', { active: false })),
+      ).rejects.toThrow('reservado');
+      expect(db.article.update).not.toHaveBeenCalled();
+    });
+
+    it('does not run the production guard when reactivating (active:true)', async () => {
+      const db = {
+        productionOrder: { findFirst: jest.fn() },
+        stockReservation: { findFirst: jest.fn() },
+        article: { update: jest.fn((args) => Promise.resolve({ id: 'article-1', ...args.data })) },
+      };
+      const service = new InventoryService(makeEventEmitter());
+
+      await runInTenant(db, () => service.updateArticle('article-1', { active: true }));
+
+      expect(db.productionOrder.findFirst).not.toHaveBeenCalled();
+      expect(db.stockReservation.findFirst).not.toHaveBeenCalled();
+      expect(db.article.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ active: true }) }),
+      );
+    });
+  });
 });
 
 describe('InventoryService.getStockValueByCategory', () => {

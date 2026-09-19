@@ -94,6 +94,7 @@ export interface Article {
   categoryName: string | null;
   isService: boolean;
   isPublished: boolean;
+  active: boolean;
   imageUrl: string | null;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
@@ -197,10 +198,17 @@ export function formatStock(article: Article, variant: ArticleVariant): StockDis
 export interface UpdateArticleInput {
   isService?: boolean;
   isPublished?: boolean;
+  isManufactured?: boolean;
   // null clears it, undefined/omitted leaves it untouched.
   preferredSupplierId?: string | null;
   markupPercent?: number | null;
   description?: string | null;
+  name?: string;
+  categoryId?: string | null;
+  unitOfMeasure?: string;
+  // "Eliminar"/reactivar (soft delete) - ver Article.active. El backend
+  // rechaza active:false si el artículo está en producción.
+  active?: boolean;
 }
 
 export interface CreateArticleInput {
@@ -306,6 +314,7 @@ export interface ListArticlesFilters {
   search?: string;
   categoryId?: string;
   isPublished?: boolean;
+  includeInactive?: boolean;
 }
 
 export interface ReorderSuggestion {

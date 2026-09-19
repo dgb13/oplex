@@ -1,8 +1,12 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/textarea';
-import { inventoryApi, resolveUploadUrl } from '@/lib/inventory';
+import type { Category } from '@/lib/inventory';
+import { inventoryApi, resolveUploadUrl, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { FileArchive, FileText } from 'lucide-react';
@@ -15,26 +19,80 @@ interface Props {
     description: string | null;
     brochureUrl: string | null;
     attachmentZipUrl: string | null;
+    categoryId: string | null;
+    unitOfMeasure: string;
+    isService: boolean;
+    isPublished: boolean;
+    isManufactured: boolean;
+    active: boolean;
   };
+  categories: Category[];
   onClose: () => void;
 }
 
-/** "Dato extra" del artículo (descripción larga + folleto PDF + adjunto
- * ZIP) - a propósito en su propio modal, no en el panel principal de
- * Inventario, ni en el alta rápida de ArticleFormModal. Sin <form> (mismo
- * criterio que ArticleFormModal tras el bug de forms anidados encontrado
- * esa sesión) - cada acción es su propio botón con su propia mutation. */
-export default function ArticleDetailsModal({ article, onClose }: Props) {
+/** "Detalles" de un artículo ya creado - el único lugar para editarlo
+ * después del alta (ArticleFormModal es sólo alta, ver su Props). No
+ * incluye measurementType/purchaseSize/commercialLength/etc (ver el
+ * comentario de esos campos en schema.prisma - cambiarlos con stock/
+ * piezas/BOM ya cargados rompería su interpretación), ni precio/proveedor/
+ * imagen (cada uno ya tiene su propio modal). Sin <form> (mismo criterio
+ * que ArticleFormModal tras el bug de forms anidados encontrado esa
+ * sesión) - cada acción es su propio botón con su propia mutation. */
+export default function ArticleDetailsModal({ article, categories, onClose }: Props) {
   const queryClient = useQueryClient();
+  const [name, setName] = useState(article.name);
+  const [categoryId, setCategoryId] = useState(article.categoryId ?? '');
+  const [unitOfMeasure, setUnitOfMeasure] = useState(article.unitOfMeasure);
+  const [isService, setIsService] = useState(article.isService);
+  const [isPublished, setIsPublished] = useState(article.isPublished);
+  const [isManufactured, setIsManufactured] = useState(article.isManufactured);
+  const [fieldsSaved, setFieldsSaved] = useState(false);
+  const [fieldsError, setFieldsError] = useState('');
+
   const [description, setDescription] = useState(article.description ?? '');
   const [descriptionSaved, setDescriptionSaved] = useState(false);
   const [brochureFile, setBrochureFile] = useState<File | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [activeError, setActiveError] = useState('');
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['inventory-articles'] });
   }
+
+  const fieldsMutation = useMutation({
+    mutationFn: () =>
+      inventoryApi.updateArticle(article.id, {
+        name: name.trim(),
+        categoryId: categoryId === '' ? null : categoryId,
+        unitOfMeasure,
+        isService,
+        isPublished,
+        isManufactured,
+      }),
+    onSuccess: () => {
+      invalidate();
+      setFieldsSaved(true);
+      setFieldsError('');
+      setTimeout(() => setFieldsSaved(false), 1500);
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudieron guardar los cambios';
+      setFieldsError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: () => inventoryApi.updateArticle(article.id, { active: !article.active }),
+    onSuccess: () => {
+      invalidate();
+      setActiveError('');
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudo cambiar el estado del artículo';
+      setActiveError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
 
   const descriptionMutation = useMutation({
     mutationFn: () =>
@@ -86,15 +144,79 @@ export default function ArticleDetailsModal({ article, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Detalles de {article.name}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">Detalles de {article.name}</h2>
+            {!article.active && (
+              <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Inactivo</Badge>
+            )}
+          </div>
           <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
             ✕
           </button>
         </div>
 
         <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3 rounded-lg border p-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Nombre</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Categoría</label>
+              <Select
+                value={categoryId}
+                onChange={setCategoryId}
+                options={[{ value: '', label: 'Sin categoría' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Unidad de medida</label>
+              <Select value={unitOfMeasure} onChange={setUnitOfMeasure} options={UNIT_OF_MEASURE_OPTIONS} />
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isService}
+                  onChange={(e) => setIsService(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                Es servicio
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isPublished}
+                  onChange={(e) => setIsPublished(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                Publicado
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isManufactured}
+                  onChange={(e) => setIsManufactured(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                Se fabrica
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                size="sm"
+                onClick={() => fieldsMutation.mutate()}
+                disabled={fieldsMutation.isPending || name.trim() === ''}
+              >
+                {fieldsMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+              </Button>
+              {fieldsSaved && <span className="text-xs text-green-600 dark:text-green-400">Guardado</span>}
+            </div>
+            {fieldsError && <p className="text-sm text-destructive">{fieldsError}</p>}
+          </div>
+
           <div className="flex flex-col gap-2">
             <label className="text-sm text-muted-foreground">Descripción</label>
             <Textarea
@@ -204,11 +326,27 @@ export default function ArticleDetailsModal({ article, onClose }: Props) {
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-between">
+          <button
+            onClick={() => toggleActiveMutation.mutate()}
+            disabled={toggleActiveMutation.isPending}
+            className={
+              article.active
+                ? 'rounded-lg border border-destructive/30 px-3 py-1.5 text-xs text-destructive transition hover:bg-destructive/10 disabled:opacity-50'
+                : 'rounded-lg border border-green-300 px-3 py-1.5 text-xs text-green-600 transition hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950'
+            }
+          >
+            {toggleActiveMutation.isPending
+              ? 'Guardando...'
+              : article.active
+                ? 'Desactivar artículo'
+                : 'Activar artículo'}
+          </button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cerrar
           </Button>
         </div>
+        {activeError && <p className="mt-2 text-right text-xs text-destructive">{activeError}</p>}
       </div>
     </div>
   );

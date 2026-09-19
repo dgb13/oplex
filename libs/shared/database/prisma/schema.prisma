@@ -1172,11 +1172,21 @@ model Article {
   // se fuerza a uno solo), sólo es lo que ArticleFormModal usa para decidir
   // si mostrar el creador de atributos/matriz o la alta simple de un SKU.
   hasVariants         Boolean        @default(false)
+  // "Eliminar" un artículo en realidad lo desactiva (no hard delete) -
+  // mismo criterio que Company.active/CashRegister.active. Ocultado por
+  // defecto de listArticles (ver InventoryService.listArticles,
+  // includeInactive), pero sigue existiendo para no romper documentos
+  // históricos (facturas, movimientos, etc.) que ya lo referencian.
+  // InventoryService.updateArticle rechaza el pasaje a false si alguna
+  // variante está en producción (orden abierta como output, o insumo con
+  // reserva ACTIVE) - ver ese método.
+  active              Boolean        @default(true)
   createdAt           DateTime       @default(now())
 
   variants ArticleVariant[]
 
   @@index([tenantId])
+  @@index([tenantId, active])
   @@map("articles")
 }
 

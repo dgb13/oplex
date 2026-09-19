@@ -1,4 +1,5 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { UnitOfMeasure } from '@plexo/database';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class UpdateArticleDto {
   @IsOptional()
@@ -29,4 +30,32 @@ export class UpdateArticleDto {
   @IsOptional()
   @IsString()
   description?: string | null;
+
+  // "Eliminar"/reactivar un artículo (soft delete, ver Article.active).
+  // InventoryService.updateArticle rechaza el pasaje a false si el
+  // artículo está en producción.
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isManufactured?: boolean;
+
+  // Unidad "simple" (UNIT/KG/etc.) - distinta de measurementType, que
+  // queda fija una vez creado el artículo (ver el comentario de ese campo
+  // en schema.prisma). Esta sí se puede corregir después (típicamente un
+  // error de carga, ej. cargaron "UNIT" y era "KG").
+  @IsOptional()
+  @IsEnum(UnitOfMeasure)
+  unitOfMeasure?: UnitOfMeasure;
 }

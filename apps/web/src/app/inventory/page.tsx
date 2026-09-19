@@ -2,6 +2,7 @@
 
 import { buildVariantLabel, formatStock, inventoryApi, resolveUploadUrl, type Article, type StockDisplay } from '@/lib/inventory';
 import { getSocket } from '@/lib/socket';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,9 @@ interface VariantRow {
   categoryName: string | null;
   isService: boolean;
   isPublished: boolean;
+  isManufactured: boolean;
+  active: boolean;
+  unitOfMeasure: string;
   imageUrl: string | null;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
@@ -96,6 +100,9 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       categoryName: article.categoryName,
       isService: article.isService,
       isPublished: article.isPublished,
+      isManufactured: article.isManufactured,
+      active: article.active,
+      unitOfMeasure: article.unitOfMeasure,
       imageUrl: article.imageUrl,
       preferredSupplierId: article.preferredSupplierId,
       preferredSupplierName: article.preferredSupplierName,
@@ -123,6 +130,7 @@ export default function InventoryPage() {
   const [categoryId, setCategoryId] = useState('');
   const [onlyServices, setOnlyServices] = useState(false);
   const [onlyPublished, setOnlyPublished] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [view, setView] = useState<'table' | 'catalog' | 'alerts'>('table');
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -164,10 +172,12 @@ export default function InventoryPage() {
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
     // Client-side filtering below already handles search/category/service/
-    // published (see the `rows` useMemo) - not wiring those into the query
-    // key here, that would need debouncing to avoid a refetch per
-    // keystroke over a dataset this page already has in full.
-    queryFn: () => inventoryApi.listArticles(),
+    // published/active (see the `rows` useMemo) - not wiring those into the
+    // query key here, that would need debouncing to avoid a refetch per
+    // keystroke over a dataset this page already has in full. Siempre pide
+    // includeInactive - el checkbox "Mostrar inactivos" sólo filtra en el
+    // cliente, mismo motivo.
+    queryFn: () => inventoryApi.listArticles({ includeInactive: true }),
   });
   const warehousesQuery = useQuery({
     queryKey: ['inventory-warehouses'],
@@ -204,11 +214,12 @@ export default function InventoryPage() {
       const matchesCategory = categoryId === '' || row.categoryId === categoryId;
       const matchesService = !onlyServices || row.isService;
       const matchesPublished = !onlyPublished || row.isPublished;
-      return matchesSearch && matchesCategory && matchesService && matchesPublished;
+      const matchesActive = showInactive || row.active;
+      return matchesSearch && matchesCategory && matchesService && matchesPublished && matchesActive;
     });
     const sorted = filtered.sort((a, b) => compareRows(a, b, sort.key));
     return sort.direction === 'asc' ? sorted : sorted.reverse();
-  }, [articles, search, categoryId, onlyServices, onlyPublished, sort]);
+  }, [articles, search, categoryId, onlyServices, onlyPublished, showInactive, sort]);
 
   const detailsRow = useMemo(
     () => rows.find((row) => row.articleId === detailsArticleId) ?? null,
@@ -274,6 +285,15 @@ export default function InventoryPage() {
             className="h-4 w-4 accent-primary"
           />
           Sólo publicados
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+          Mostrar inactivos
         </label>
         <div className="flex gap-1 rounded-lg border p-0.5 sm:ml-auto">
           <Button
@@ -379,7 +399,7 @@ export default function InventoryPage() {
                   return (
                     <tr
                       key={row.variantId}
-                      className={`border-b border-border/50 hover:bg-muted/40 ${belowMinimum ? 'bg-destructive/5' : ''}`}
+                      className={`border-b border-border/50 hover:bg-muted/40 ${belowMinimum ? 'bg-destructive/5' : ''} ${!row.active ? 'opacity-50' : ''}`}
                     >
                       <td className="py-2 pr-2">
                         <button
@@ -404,7 +424,14 @@ export default function InventoryPage() {
                         </button>
                       </td>
                       <td className="py-2 pr-4">
-                        <p>{row.articleName}</p>
+                        <div className="flex items-center gap-2">
+                          <p>{row.articleName}</p>
+                          {!row.active && (
+                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                              Inactivo
+                            </Badge>
+                          )}
+                        </div>
                         {row.variantLabel && <p className="text-xs text-muted-foreground">{row.variantLabel}</p>}
                         <div className="flex items-center gap-2">
                           <button
@@ -423,7 +450,7 @@ export default function InventoryPage() {
                           <button
                             type="button"
                             onClick={() => setDetailsArticleId(row.articleId)}
-                            title="Detalles (descripción, folleto, adjunto)"
+                            title="Detalles (editar, activar/desactivar, descripción, folleto, adjunto)"
                             className="text-muted-foreground hover:text-primary"
                           >
                             <Info className="h-3.5 w-3.5" />
@@ -506,7 +533,14 @@ export default function InventoryPage() {
             description: detailsRow.description,
             brochureUrl: detailsRow.brochureUrl,
             attachmentZipUrl: detailsRow.attachmentZipUrl,
+            categoryId: detailsRow.categoryId,
+            unitOfMeasure: detailsRow.unitOfMeasure,
+            isService: detailsRow.isService,
+            isPublished: detailsRow.isPublished,
+            isManufactured: detailsRow.isManufactured,
+            active: detailsRow.active,
           }}
+          categories={categories}
           onClose={() => setDetailsArticleId(null)}
         />
       )}

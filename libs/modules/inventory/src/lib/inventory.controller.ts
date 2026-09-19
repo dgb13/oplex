@@ -72,11 +72,13 @@ export class InventoryController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('isPublished') isPublished?: string,
+    @Query('includeInactive') includeInactive?: string,
   ) {
     return this.inventoryService.listArticles({
       search,
       categoryId,
       isPublished: isPublished === undefined ? undefined : isPublished === 'true',
+      includeInactive: includeInactive === 'true',
     });
   }
 

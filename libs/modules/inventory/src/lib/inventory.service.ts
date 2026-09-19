@@ -5,6 +5,8 @@ import {
   getTenantId,
   getUserId,
   Prisma,
+  ProductionStatus,
+  ReservationStatus,
   type Article,
   type Category,
   type MinimumStock,
@@ -85,6 +87,10 @@ export interface ArticleListFilters {
   search?: string;
   categoryId?: string;
   isPublished?: boolean;
+  // Artículos desactivados (Article.active=false, ver
+  // InventoryService.updateArticle) quedan afuera por defecto - mismo
+  // criterio que CompaniesService.listCompanies/includeInactive.
+  includeInactive?: boolean;
 }
 
 export interface ArticleListItem {
@@ -96,6 +102,7 @@ export interface ArticleListItem {
   categoryName: string | null;
   isService: boolean;
   isPublished: boolean;
+  active: boolean;
   imageUrl: string | null;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
@@ -216,14 +223,47 @@ export class InventoryService {
       }
     }
 
+    // "Eliminar" = active:false. Bloqueado si alguna variante está en
+    // producción: es el output de una orden abierta (DRAFT/PLANNED/
+    // IN_PROGRESS - todavía necesita este artículo para terminar), o tiene
+    // una StockReservation ACTIVE (insumo ya reservado por una orden en
+    // curso). No se valida nada al reactivar (active:true).
+    if (dto.active === false) {
+      const [openOutputOrder, activeReservation] = await Promise.all([
+        db.productionOrder.findFirst({
+          where: {
+            outputArticleVariant: { articleId: id },
+            status: { in: [ProductionStatus.DRAFT, ProductionStatus.PLANNED, ProductionStatus.IN_PROGRESS] },
+          },
+        }),
+        db.stockReservation.findFirst({
+          where: {
+            articleVariant: { articleId: id },
+            status: ReservationStatus.ACTIVE,
+          },
+        }),
+      ]);
+      if (openOutputOrder) {
+        throw new BadRequestException('No se puede desactivar: es el producto de una orden de producción en curso');
+      }
+      if (activeReservation) {
+        throw new BadRequestException('No se puede desactivar: está reservado como insumo de una orden de producción en curso');
+      }
+    }
+
     return db.article.update({
       where: { id },
       data: {
+        name: dto.name,
+        categoryId: dto.categoryId,
+        unitOfMeasure: dto.unitOfMeasure,
         isService: dto.isService,
         isPublished: dto.isPublished,
+        isManufactured: dto.isManufactured,
         preferredSupplierId: dto.preferredSupplierId,
         markupPercent: dto.markupPercent,
         description: dto.description,
+        active: dto.active,
       },
     });
   }
@@ -234,6 +274,7 @@ export class InventoryService {
         name: filters?.search ? { contains: filters.search, mode: 'insensitive' } : undefined,
         categoryId: filters?.categoryId,
         isPublished: filters?.isPublished,
+        active: filters?.includeInactive ? undefined : true,
       },
       include: {
         category: true,
@@ -264,6 +305,7 @@ export class InventoryService {
         categoryName: article.category?.name ?? null,
         isService: article.isService,
         isPublished: article.isPublished,
+        active: article.active,
         imageUrl: article.imageUrl,
         preferredSupplierId: article.preferredSupplierId,
         preferredSupplierName: article.preferredSupplier?.name ?? null,
