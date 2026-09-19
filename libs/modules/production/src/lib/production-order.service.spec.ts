@@ -140,6 +140,87 @@ describe('ProductionOrderService.confirm', () => {
   });
 });
 
+describe('ProductionOrderService.retryReservation', () => {
+  function makeShortOrderDb(existingReservations: Record<string, unknown>[]) {
+    return makeDb({
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'PLANNED', isShortOnMaterials: true })),
+        update: jest.fn((args) =>
+          Promise.resolve({ ...makeOrder({ status: 'PLANNED', isShortOnMaterials: true }), ...args.data }),
+        ),
+      },
+      stockReservation: {
+        create: jest.fn((args) => Promise.resolve({ id: 'reservation-new', ...args.data })),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue(existingReservations),
+      },
+    });
+  }
+
+  it('only tops up the still-missing insumo, leaving the already-reserved one untouched', async () => {
+    const db = makeShortOrderDb([
+      {
+        inputArticleVariantId: 'variant-harina',
+        quantityReserved: new Prisma.Decimal(1000),
+        warehouseId: 'warehouse-1',
+      },
+    ]);
+    const service = makeService({
+      db,
+      bomLines: [
+        { inputArticleVariantId: 'variant-harina', quantity: 250 },
+        { inputArticleVariantId: 'variant-azucar', quantity: 100 },
+      ],
+      // harina ya está cubierta (1000 reservado = 250*4 requerido) - sólo
+      // azúcar (100*4 = 400 requerido) todavía falta, y ahora hay 500.
+      disponible: { 'variant-harina': 0, 'variant-azucar': 500 },
+    });
+
+    const order = await runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-1'));
+
+    expect(db.stockReservation.create).toHaveBeenCalledTimes(1);
+    const call = (db.stockReservation.create as jest.Mock).mock.calls[0][0].data;
+    expect(call.inputArticleVariantId).toBe('variant-azucar');
+    expect(call.quantityReserved.toString()).toBe('400');
+    expect(order.isShortOnMaterials).toBe(false);
+  });
+
+  it('still sets isShortOnMaterials when the top-up itself falls short', async () => {
+    const db = makeShortOrderDb([]);
+    const service = makeService({
+      db,
+      bomLines: [{ inputArticleVariantId: 'variant-azucar', quantity: 100 }],
+      disponible: { 'variant-azucar': 50 },
+    });
+
+    const order = await runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-1'));
+
+    expect(order.isShortOnMaterials).toBe(true);
+  });
+
+  it('rejects retrying an order that is not PLANNED+isShortOnMaterials', async () => {
+    const db = makeDb({
+      productionOrder: { findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'PLANNED' })) },
+    });
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-1'))).rejects.toThrow(
+      'planificada con insumos faltantes',
+    );
+  });
+
+  it('rejects a different warehouse than the one already reserved against', async () => {
+    const db = makeShortOrderDb([
+      { inputArticleVariantId: 'variant-harina', quantityReserved: new Prisma.Decimal(1), warehouseId: 'warehouse-1' },
+    ]);
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-2'))).rejects.toThrow(
+      'ya tiene insumos reservados en otro depósito',
+    );
+  });
+});
+
 describe('ProductionOrderService.cancel', () => {
   it('releases active reservations and cancels a PLANNED order', async () => {
     const db = makeDb({

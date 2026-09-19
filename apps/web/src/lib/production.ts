@@ -186,6 +186,8 @@ export const productionApi = {
     api.post<ProductionOrder>('/production/orders', dto).then((r) => r.data),
   confirmOrder: (id: string, warehouseId: string) =>
     api.post<ProductionOrder>(`/production/orders/${id}/confirm`, { warehouseId }).then((r) => r.data),
+  retryReservation: (id: string, warehouseId: string) =>
+    api.post<ProductionOrder>(`/production/orders/${id}/retry-reservation`, { warehouseId }).then((r) => r.data),
   cancelOrder: (id: string) => api.post<ProductionOrder>(`/production/orders/${id}/cancel`).then((r) => r.data),
   completeOrder: (id: string) => api.post<ProductionOrder>(`/production/orders/${id}/complete`).then((r) => r.data),
   listPieces: (articleVariantId: string, warehouseId?: string) =>

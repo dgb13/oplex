@@ -121,6 +121,13 @@ export class ProductionController {
   }
 
   @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Post('orders/:id/retry-reservation')
+  async retryReservation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ConfirmProductionOrderDto) {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.orderService.retryReservation(id, dto.warehouseId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'INVENTORY')
   @Post('orders/:id/cancel')
   async cancelOrder(@Param('id', ParseUUIDPipe) id: string) {
     await this.subscriptionService.assertCanUseProduction();

@@ -173,8 +173,20 @@ export default function ProductionOrderDetailPage() {
   }
 
   const confirmMutation = useAction(() => productionApi.confirmOrder(id, confirmWarehouseId));
+  const retryReservationMutation = useAction(() => productionApi.retryReservation(id, confirmWarehouseId));
   const completeMutation = useAction(() => productionApi.completeOrder(id));
   const cancelMutation = useAction(() => productionApi.cancelOrder(id));
+
+  // Si ya hay algo reservado, todas las reservas de esta orden comparten
+  // depósito a la fuerza (ver retryReservation en el backend) - precarga
+  // ese mismo depósito en vez de dejar que el usuario elija uno distinto
+  // y se encuentre con el 400 recién al tocar "Reintentar".
+  const existingReservationWarehouseId = order?.reservations.find((r) => r.status === 'ACTIVE')?.warehouseId;
+  useEffect(() => {
+    if (existingReservationWarehouseId && !confirmWarehouseId) {
+      setConfirmWarehouseId(existingReservationWarehouseId);
+    }
+  }, [existingReservationWarehouseId, confirmWarehouseId]);
 
   if (gate.isLoading) {
     return null;
@@ -291,6 +303,32 @@ export default function ProductionOrderDetailPage() {
                     disabled={!confirmWarehouseId || confirmMutation.isPending}
                   >
                     {confirmMutation.isPending ? 'Confirmando...' : 'Confirmar y reservar'}
+                  </Button>
+                </div>
+              )}
+
+              {order.status === 'PLANNED' && order.isShortOnMaterials && (
+                <div className="flex flex-wrap items-end gap-3 border-t pt-4">
+                  {existingReservationWarehouseId ? (
+                    <p className="text-sm text-muted-foreground">
+                      Depósito: <span className="font-medium text-foreground">{warehouseLookup[existingReservationWarehouseId] ?? existingReservationWarehouseId}</span>
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm text-muted-foreground">Depósito para reservar</label>
+                      <Select
+                        value={confirmWarehouseId}
+                        onChange={setConfirmWarehouseId}
+                        placeholder="Elegir depósito..."
+                        options={(warehousesQuery.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+                      />
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => retryReservationMutation.mutate()}
+                    disabled={!confirmWarehouseId || retryReservationMutation.isPending}
+                  >
+                    {retryReservationMutation.isPending ? 'Reintentando...' : 'Reintentar reserva'}
                   </Button>
                 </div>
               )}

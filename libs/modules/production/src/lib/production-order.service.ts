@@ -7,9 +7,10 @@ import {
   type ProductionConsumption,
   type ProductionOrder,
   type ProductionOutput,
+  type StockReservation,
 } from '@plexo/database';
 import type { CalendarEntry } from '@plexo/types';
-import { BomService } from './bom.service.js';
+import { BomService, type BomDetail } from './bom.service.js';
 import { ProductionNumberingService } from './production-numbering.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
 import type { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
@@ -70,7 +71,6 @@ export class ProductionOrderService {
    */
   async confirm(orderId: string, warehouseId: string): Promise<ProductionOrder> {
     const db = getTenantDb();
-    const tenantId = getTenantId();
 
     // Lock de la orden primero: dos confirmaciones concurrentes de la
     // misma orden no deben poder reservar dos veces.
@@ -87,9 +87,91 @@ export class ProductionOrderService {
     }
 
     const bom = await this.bomService.getById(order.bomId);
+    const isShortOnMaterials = await this.reserveAgainstBom(order, bom, warehouseId, []);
+
+    return db.productionOrder.update({
+      where: { id: order.id },
+      data: { status: 'PLANNED', isShortOnMaterials },
+    });
+  }
+
+  /**
+   * PLANNED + isShortOnMaterials → PLANNED: vuelve a intentar reservar
+   * SÓLO lo que todavía falta de cada insumo (nunca toca lo ya
+   * reservado) - para cuando llegó stock después de confirm() y la
+   * orden quedó "esperando insumos" en cola, sin un endpoint para
+   * retomarla hasta ahora (reportado por el usuario probando OP-000007:
+   * Azúcar tenía 0 disponible al confirmar, 12 disponibles ahora, y no
+   * había forma de que la orden se enterara sin cancelar y recrearla).
+   * Mismo `warehouseId` que ya tenían las reservas existentes - todas
+   * las reservas de una orden comparten depósito (ver
+   * ProductionService.completeOrder, que asume esto).
+   */
+  async retryReservation(orderId: string, warehouseId: string): Promise<ProductionOrder> {
+    const db = getTenantDb();
+
+    await db.$queryRaw`SELECT id FROM production_orders WHERE id = ${orderId} FOR UPDATE`;
+    const order = await db.productionOrder.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Orden de producción no encontrada');
+    }
+    if (order.status !== 'PLANNED' || !order.isShortOnMaterials) {
+      throw new BadRequestException(
+        'Sólo se puede reintentar la reserva de una orden planificada con insumos faltantes',
+      );
+    }
+    if (!order.bomId) {
+      throw new BadRequestException('Esta orden no tiene una receta (BOM) contra la cual reservar');
+    }
+
+    const existingReservations = await db.stockReservation.findMany({
+      where: { productionOrderId: orderId, status: 'ACTIVE' },
+    });
+    const existingWarehouseId = existingReservations[0]?.warehouseId;
+    if (existingWarehouseId && existingWarehouseId !== warehouseId) {
+      throw new BadRequestException(
+        'Esta orden ya tiene insumos reservados en otro depósito - usá ese mismo depósito para completar la reserva',
+      );
+    }
+
+    const bom = await this.bomService.getById(order.bomId);
+    const isShortOnMaterials = await this.reserveAgainstBom(order, bom, warehouseId, existingReservations);
+
+    return db.productionOrder.update({
+      where: { id: order.id },
+      data: { isShortOnMaterials },
+    });
+  }
+
+  /** Núcleo compartido de confirm()/retryReservation(): por cada línea de
+   * la receta, calcula cuánto falta todavía (requerido menos lo que ya
+   * está en `alreadyReserved` para ese insumo) y reserva lo que haya
+   * disponible de esa diferencia - nunca crea una reserva por más de lo
+   * que realmente falta, así retryReservation nunca duplica lo que
+   * confirm() ya reservó. Devuelve si, después de esto, algo sigue
+   * faltando. */
+  private async reserveAgainstBom(
+    order: ProductionOrder,
+    bom: BomDetail,
+    warehouseId: string,
+    alreadyReserved: StockReservation[],
+  ): Promise<boolean> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
     let isShortOnMaterials = false;
 
     for (const line of bom.lines) {
+      const yaReservado = alreadyReserved
+        .filter((r) => r.inputArticleVariantId === line.inputArticleVariantId)
+        .reduce((sum, r) => sum.add(r.quantityReserved), new Prisma.Decimal(0));
+      const requerido = line.quantity
+        .mul(order.quantity)
+        .mul(new Prisma.Decimal(1).add(line.expectedWastePercent.div(100)));
+      const faltante = requerido.sub(yaReservado);
+      if (faltante.lte(0)) {
+        continue;
+      }
+
       // Mismo lock de StockLedger que ya toma
       // InventoryService.recordMovement antes de calcular "disponible" -
       // contrato de concurrencia documentado en el modelo StockReservation.
@@ -105,12 +187,9 @@ export class ProductionOrderService {
         articleVariantId: line.inputArticleVariantId,
         warehouseId,
       });
-      const requerido = line.quantity
-        .mul(order.quantity)
-        .mul(new Prisma.Decimal(1).add(line.expectedWastePercent.div(100)));
 
-      const reservable = Prisma.Decimal.min(Prisma.Decimal.max(disponible, 0), requerido);
-      if (reservable.lt(requerido)) {
+      const reservable = Prisma.Decimal.min(Prisma.Decimal.max(disponible, 0), faltante);
+      if (reservable.lt(faltante)) {
         isShortOnMaterials = true;
       }
       if (reservable.gt(0)) {
@@ -127,10 +206,7 @@ export class ProductionOrderService {
       }
     }
 
-    return db.productionOrder.update({
-      where: { id: order.id },
-      data: { status: 'PLANNED', isShortOnMaterials },
-    });
+    return isShortOnMaterials;
   }
 
   /**
