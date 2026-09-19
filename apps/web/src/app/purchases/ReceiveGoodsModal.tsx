@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { inventoryApi } from '@/lib/inventory';
 import { goodsReceiptsApi, type PurchaseOrderDetail } from '@/lib/purchases';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -115,13 +116,11 @@ export default function ReceiveGoodsModal({ purchaseOrder, onClose }: Props) {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Depósito">
-                <select className={inputClass} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                />
               </Field>
               <Field label="Fecha de recepción">
                 <input

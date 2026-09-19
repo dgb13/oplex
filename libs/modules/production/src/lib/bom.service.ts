@@ -94,7 +94,7 @@ export class BomService {
   async getActiveBomOrThrow(outputArticleVariantId: string): Promise<BomDetail> {
     const bom = await this.getActiveBom(outputArticleVariantId);
     if (!bom) {
-      throw new NotFoundException('This article has no active recipe (BOM)');
+      throw new NotFoundException('Este artículo no tiene una receta (BOM) activa');
     }
     return bom;
   }
@@ -116,7 +116,7 @@ export class BomService {
       include: DETAIL_INCLUDE,
     });
     if (!bom) {
-      throw new NotFoundException('Recipe (BOM) not found');
+      throw new NotFoundException('Receta (BOM) no encontrada');
     }
     return bom;
   }

@@ -103,7 +103,7 @@ describe('StockPieceService.cutPiece', () => {
 
     await expect(
       runAsTenant(db, () => service.cutPiece({ pieceId: 'piece-1', lengthToCut: 600, minUsableLength: 100 })),
-    ).rejects.toThrow('shorter than the requested cut');
+    ).rejects.toThrow('más corta que el corte solicitado');
   });
 
   it('rejects cutting a piece that is not AVAILABLE', async () => {
@@ -113,7 +113,7 @@ describe('StockPieceService.cutPiece', () => {
 
     await expect(
       runAsTenant(db, () => service.cutPiece({ pieceId: 'piece-1', lengthToCut: 100, minUsableLength: 100 })),
-    ).rejects.toThrow('not available');
+    ).rejects.toThrow('no está disponible');
   });
 });
 

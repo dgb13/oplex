@@ -1,18 +1,82 @@
 'use client';
 
+import BulkQuoteRequestModal, { type GroupedPedido } from '@/app/purchases/BulkQuoteRequestModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
+import { invoicingApi } from '@/lib/invoicing';
 import { productionApi } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { FileArchive, FileText, Package } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { FileArchive, FileText, Package, ShoppingCart } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
 import { PRODUCTION_STATUS_COLORS, PRODUCTION_STATUS_LABELS } from '../../status';
+
+// DRAFT/PLANNED/IN_PROGRESS todavía pueden llegar a necesitar estos
+// insumos - DONE ya los consumió (ver "Consumo real") y CANCELLED liberó
+// sus reservas, en ambos casos la barra de faltantes ya no tiene sentido.
+const ACTIVE_STATUSES = new Set(['DRAFT', 'PLANNED', 'IN_PROGRESS']);
+
+interface InsumoRow {
+  articleVariantId: string;
+  requerido: number;
+  reservado: number;
+  falta: number;
+  pct: number;
+}
+
+// El backend calcula "requerido" con Prisma.Decimal (precisión exacta,
+// truncada a 3 decimales) y acá se recalcula con floats de JS - el mismo
+// número real puede diferir en un epsilon minúsculo entre las dos
+// aritméticas (ej. 0.3 reservado contra un requerido que en realidad es
+// 0.30000000000000004). Sin esta tolerancia, "cubierto del todo" mostraba
+// "Faltan 0.00" y la barra quedaba ámbar en vez de verde.
+const EPSILON = 0.005;
+
+function computeInsumoRows(order: {
+  quantity: string;
+  bom: { lines: { inputArticleVariantId: string; quantity: string; expectedWastePercent: string }[] } | null;
+  reservations: { inputArticleVariantId: string; quantityReserved: string; status: string }[];
+}): InsumoRow[] {
+  const lines = order.bom?.lines ?? [];
+  const orderQuantity = Number(order.quantity);
+  return lines.map((line) => {
+    const requerido = Number(line.quantity) * orderQuantity * (1 + Number(line.expectedWastePercent) / 100);
+    const reservado = order.reservations
+      .filter((r) => r.inputArticleVariantId === line.inputArticleVariantId && r.status !== 'RELEASED')
+      .reduce((sum, r) => sum + Number(r.quantityReserved), 0);
+    const diff = Math.max(0, requerido - reservado);
+    // Redondeado a 3 decimales (misma precisión que StockReservation en
+    // la base) - sin esto, el ruido de punto flotante de la resta viajaba
+    // tal cual hasta la cantidad del Pedido de Cotización (ej. "0.6000000000000001 u.").
+    const falta = diff < EPSILON ? 0 : Math.round(diff * 1000) / 1000;
+    const pct = requerido > 0 ? Math.min(100, (reservado / requerido) * 100) : 100;
+    return { articleVariantId: line.inputArticleVariantId, requerido, reservado, falta, pct };
+  });
+}
+
+/** Barra que anima su ancho desde 0% al montar - Tailwind/CSS transition
+ * no dispara si el elemento ya nace en su ancho final, así que arranca en
+ * 0 y un microtask después pasa a `pct`, dando el efecto de "llenado". */
+function ProgressBar({ pct, colorClass }: { pct: number; colorClass: string }) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setWidth(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct]);
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full border border-border bg-muted">
+      <div
+        className={`h-full rounded-full transition-all duration-700 ease-out ${colorClass}`}
+        style={{ width: `${width}%` }}
+      />
+    </div>
+  );
+}
 
 export default function ProductionOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +85,7 @@ export default function ProductionOrderDetailPage() {
   const gate = useProductionGate();
   const [error, setError] = useState('');
   const [confirmWarehouseId, setConfirmWarehouseId] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const orderQuery = useQuery({
     queryKey: ['production-order', id],
@@ -37,6 +102,11 @@ export default function ProductionOrderDetailPage() {
     queryFn: inventoryApi.listWarehouses,
     enabled: gate.enabled,
   });
+  const currenciesQuery = useQuery({
+    queryKey: ['invoicing-currencies'],
+    queryFn: invoicingApi.listCurrencies,
+    enabled: gate.enabled,
+  });
   const lookup = useMemo(() => buildArticleVariantLookup(articlesQuery.data ?? []), [articlesQuery.data]);
   const warehouseLookup = useMemo(
     () => Object.fromEntries((warehousesQuery.data ?? []).map((w) => [w.id, w.name])),
@@ -48,6 +118,43 @@ export default function ProductionOrderDetailPage() {
     queryFn: () => productionApi.listBomAttachments(bomId as string),
     enabled: gate.enabled && !!bomId,
   });
+
+  const order = orderQuery.data;
+  const article = order ? lookup[order.outputArticleVariantId] : undefined;
+  const insumoRows = order ? computeInsumoRows(order) : [];
+  const showInsumos = !!order && ACTIVE_STATUSES.has(order.status) && insumoRows.length > 0;
+
+  function buildMissingGroups(): GroupedPedido[] {
+    if (!order) return [];
+    const bySupplier = new Map<string, GroupedPedido>();
+    for (const row of insumoRows) {
+      if (row.falta <= 0) continue;
+      const insumo = lookup[row.articleVariantId];
+      if (!insumo?.preferredSupplierId) continue;
+      let group = bySupplier.get(insumo.preferredSupplierId);
+      if (!group) {
+        group = {
+          supplierId: insumo.preferredSupplierId,
+          supplierName: insumo.preferredSupplierName ?? '',
+          lines: [],
+          notes: `Solicitado por Orden de producción de ${article?.articleName ?? order.outputArticleVariantId} (#${order.id.slice(0, 8)})`,
+        };
+        bySupplier.set(insumo.preferredSupplierId, group);
+      }
+      group.lines.push({
+        articleVariantId: row.articleVariantId,
+        sku: insumo.sku,
+        articleName: insumo.articleName,
+        variantLabel: insumo.variantLabel,
+        quantity: row.falta,
+      });
+    }
+    return Array.from(bySupplier.values());
+  }
+  const missingGroups = buildMissingGroups();
+  const missingWithoutSupplier = insumoRows.filter(
+    (row) => row.falta > 0 && !lookup[row.articleVariantId]?.preferredSupplierId,
+  ).length;
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['production-order', id] });
@@ -80,9 +187,6 @@ export default function ProductionOrderDetailPage() {
       </div>
     );
   }
-
-  const order = orderQuery.data;
-  const article = order ? lookup[order.outputArticleVariantId] : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -208,6 +312,55 @@ export default function ProductionOrderDetailPage() {
             </CardContent>
           </Card>
 
+          {showInsumos && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Insumos</CardTitle>
+                  {missingGroups.length > 0 && (
+                    <Button size="sm" onClick={() => setBulkOpen(true)}>
+                      <ShoppingCart className="mr-1.5 h-4 w-4" />
+                      Pedir cotización por faltantes
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {insumoRows.map((row) => {
+                  const insumo = lookup[row.articleVariantId];
+                  const colorClass =
+                    row.falta <= 0 ? 'bg-green-500' : row.reservado > 0 ? 'bg-amber-500' : 'bg-red-500';
+                  return (
+                    <div key={row.articleVariantId} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium">{insumo?.articleName ?? row.articleVariantId}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {row.reservado.toFixed(2)} / {row.requerido.toFixed(2)}
+                        </span>
+                      </div>
+                      <ProgressBar pct={row.pct} colorClass={colorClass} />
+                      {row.falta > 0 && (
+                        <p
+                          className={`text-xs ${row.reservado > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
+                        >
+                          Faltan {row.falta.toFixed(2)}
+                          {insumo?.preferredSupplierName ? ` — proveedor preferido: ${insumo.preferredSupplierName}` : ' — sin proveedor preferido'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                {missingWithoutSupplier > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {missingWithoutSupplier} insumo{missingWithoutSupplier !== 1 ? 's' : ''} faltante
+                    {missingWithoutSupplier !== 1 ? 's' : ''} sin proveedor preferido - asignale uno en Inventario
+                    para poder pedirle cotización de un click.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {order.reservations.length > 0 && (
             <Card>
               <CardHeader>
@@ -265,6 +418,15 @@ export default function ProductionOrderDetailPage() {
             </Card>
           )}
         </>
+      )}
+
+      {bulkOpen && (
+        <BulkQuoteRequestModal
+          groups={missingGroups}
+          currencyId={currenciesQuery.data?.[0]?.id ?? ''}
+          onClose={() => setBulkOpen(false)}
+          onDone={() => setBulkOpen(false)}
+        />
       )}
     </div>
   );

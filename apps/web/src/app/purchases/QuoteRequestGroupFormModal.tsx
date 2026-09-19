@@ -2,6 +2,7 @@
 
 import ArticlePicker from '@/components/ArticlePicker';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { invoicingApi } from '@/lib/invoicing';
 import { quoteRequestsApi, type QuoteRequestLineInput } from '@/lib/purchases';
@@ -153,13 +154,11 @@ export default function QuoteRequestGroupFormModal({ onClose }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Moneda">
-                <select className={inputClass} value={currencyId} onChange={(e) => setCurrencyId(e.target.value)}>
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={currencyId}
+                  onChange={setCurrencyId}
+                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
+                />
               </Field>
               <CatalogSelectField
                 type="transport-modes"

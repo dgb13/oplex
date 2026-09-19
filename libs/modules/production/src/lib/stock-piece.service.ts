@@ -123,13 +123,13 @@ export class StockPieceService {
     await db.$queryRaw`SELECT id FROM stock_pieces WHERE id = ${input.pieceId} FOR UPDATE`;
     const piece = await db.stockPiece.findUnique({ where: { id: input.pieceId } });
     if (!piece) {
-      throw new BadRequestException('Stock piece not found');
+      throw new BadRequestException('Pieza de stock no encontrada');
     }
     if (piece.status !== 'AVAILABLE') {
-      throw new BadRequestException('This piece is not available');
+      throw new BadRequestException('Esta pieza no está disponible');
     }
     if (piece.currentLength.lt(lengthToCut)) {
-      throw new BadRequestException('This piece is shorter than the requested cut');
+      throw new BadRequestException('Esta pieza es más corta que el corte solicitado');
     }
 
     const remainder = piece.currentLength.sub(lengthToCut);

@@ -69,13 +69,13 @@ export class ProductionOrderService {
     await db.$queryRaw`SELECT id FROM production_orders WHERE id = ${orderId} FOR UPDATE`;
     const order = await db.productionOrder.findUnique({ where: { id: orderId } });
     if (!order) {
-      throw new NotFoundException('Production order not found');
+      throw new NotFoundException('Orden de producción no encontrada');
     }
     if (order.status !== 'DRAFT') {
-      throw new BadRequestException('Only a DRAFT order can be confirmed');
+      throw new BadRequestException('Sólo se puede confirmar una orden en borrador');
     }
     if (!order.bomId) {
-      throw new BadRequestException('This order has no recipe (BOM) to reserve against');
+      throw new BadRequestException('Esta orden no tiene una receta (BOM) contra la cual reservar');
     }
 
     const bom = await this.bomService.getById(order.bomId);
@@ -137,10 +137,10 @@ export class ProductionOrderService {
     await db.$queryRaw`SELECT id FROM production_orders WHERE id = ${orderId} FOR UPDATE`;
     const order = await db.productionOrder.findUnique({ where: { id: orderId } });
     if (!order) {
-      throw new NotFoundException('Production order not found');
+      throw new NotFoundException('Orden de producción no encontrada');
     }
     if (order.status === 'DONE' || order.status === 'CANCELLED') {
-      throw new BadRequestException(`A ${order.status} order can't be cancelled`);
+      throw new BadRequestException('No se puede cancelar una orden que ya fue completada o cancelada');
     }
 
     await db.stockReservation.updateMany({
@@ -174,14 +174,14 @@ export class ProductionOrderService {
     await db.$queryRaw`SELECT id FROM production_orders WHERE id = ${orderId} FOR UPDATE`;
     const order = await db.productionOrder.findUnique({ where: { id: orderId } });
     if (!order) {
-      throw new NotFoundException('Production order not found');
+      throw new NotFoundException('Orden de producción no encontrada');
     }
     if (order.status !== 'PLANNED') {
-      throw new BadRequestException('Only a PLANNED order can be completed');
+      throw new BadRequestException('Sólo se puede completar una orden planificada');
     }
     if (order.isShortOnMaterials) {
       throw new BadRequestException(
-        'This order is still short on materials - confirm it again once there is enough stock',
+        'A esta orden todavía le faltan insumos - volvé a confirmarla cuando haya stock suficiente',
       );
     }
     return order;
@@ -251,14 +251,22 @@ export class ProductionOrderService {
   // (que sólo necesitan los campos propios de ProductionOrder), el detalle
   // de una orden (pantalla "Nueva orden / detalle", Fase 6) necesita ver
   // qué se reservó/consumió/produjo realmente, no sólo el estado. Lectura
-  // pura, no requiere ningún Service de otro módulo.
+  // pura, no requiere ningún Service de otro módulo. `bom.lines` viaja
+  // acá (no sólo bomId) para que el frontend pueda calcular cuánto falta
+  // de cada insumo (requerido de la receta CONGELADA vs. lo reservado) sin
+  // un segundo request - la receta activa hoy puede ya ser otra versión.
   async getById(orderId: string) {
     const order = await getTenantDb().productionOrder.findUnique({
       where: { id: orderId },
-      include: { reservations: true, consumptions: true, outputs: true },
+      include: {
+        reservations: true,
+        consumptions: true,
+        outputs: true,
+        bom: { include: { lines: true } },
+      },
     });
     if (!order) {
-      throw new NotFoundException('Production order not found');
+      throw new NotFoundException('Orden de producción no encontrada');
     }
     return order;
   }

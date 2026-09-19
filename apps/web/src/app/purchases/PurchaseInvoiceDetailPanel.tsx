@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { resolveUploadUrl } from '@/lib/inventory';
 import {
   describePurchaseInvoiceStatus,
@@ -328,18 +329,18 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                   <div className="mt-3 flex flex-col gap-3 rounded-lg border p-3">
                     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                       Forma de pago
-                      <select
-                        className={inputClass}
+                      <Select
                         value={payMode}
-                        onChange={(e) => {
-                          setPayMode(e.target.value as typeof payMode);
+                        onChange={(v) => {
+                          setPayMode(v as typeof payMode);
                           setEndorseCheckId('');
                         }}
-                      >
-                        <option value="CASH">Efectivo / transferencia</option>
-                        <option value="ENDORSE">Endosar cheque de cartera</option>
-                        <option value="OWN_CHECK">Emitir cheque propio</option>
-                      </select>
+                        options={[
+                          { value: 'CASH', label: 'Efectivo / transferencia' },
+                          { value: 'ENDORSE', label: 'Endosar cheque de cartera' },
+                          { value: 'OWN_CHECK', label: 'Emitir cheque propio' },
+                        ]}
+                      />
                     </label>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -377,18 +378,15 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                             No hay cheques de tercero en cartera disponibles para endosar.
                           </p>
                         ) : (
-                          <select
-                            className={inputClass}
+                          <Select
                             value={endorseCheckId}
-                            onChange={(e) => setEndorseCheckId(e.target.value)}
-                          >
-                            <option value="">Elegir...</option>
-                            {endorsableChecks.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                Nº {c.number} — {c.bankName} — ${Number(c.amount).toFixed(2)}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setEndorseCheckId}
+                            placeholder="Elegir..."
+                            options={endorsableChecks.map((c) => ({
+                              value: c.id,
+                              label: `Nº ${c.number} — ${c.bankName} — $${Number(c.amount).toFixed(2)}`,
+                            }))}
+                          />
                         )}
                       </div>
                     )}
@@ -440,20 +438,12 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                               No hay cuentas financieras creadas todavía (Reportes → Financiero).
                             </p>
                           ) : (
-                            <select
-                              className={inputClass}
-                              value={ownCheck.financialAccountId}
-                              onChange={(e) =>
-                                setOwnCheck((prev) => ({ ...prev, financialAccountId: e.target.value }))
-                              }
-                            >
-                              <option value="">Elegir...</option>
-                              {(financialAccounts ?? []).map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.name}
-                                </option>
-                              ))}
-                            </select>
+                            <Select
+                              value={ownCheck.financialAccountId ?? ''}
+                              onChange={(v) => setOwnCheck((prev) => ({ ...prev, financialAccountId: v }))}
+                              placeholder="Elegir..."
+                              options={(financialAccounts ?? []).map((a) => ({ value: a.id, label: a.name }))}
+                            />
                           )}
                         </label>
                       </div>
@@ -481,23 +471,21 @@ export default function PurchaseInvoiceDetailPanel({ purchaseInvoiceId, onClose 
                         const regime = regimeById.get(row.regimeId);
                         return (
                           <div key={row.key} className="flex items-center gap-2">
-                            <select
-                              className={`${inputClass} flex-1`}
+                            <Select
+                              className="flex-1"
                               value={row.regimeId}
-                              onChange={(e) => {
-                                const newRegime = regimeById.get(e.target.value);
+                              onChange={(v) => {
+                                const newRegime = regimeById.get(v);
                                 updateWithholdingRow(row.key, {
-                                  regimeId: e.target.value,
+                                  regimeId: v,
                                   amount: newRegime ? suggestAmount(newRegime) : 0,
                                 });
                               }}
-                            >
-                              {availableRegimes.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name} ({WITHHOLDING_TAX_TYPE_LABELS[r.taxType]} {r.rate}%)
-                                </option>
-                              ))}
-                            </select>
+                              options={availableRegimes.map((r) => ({
+                                value: r.id,
+                                label: `${r.name} (${WITHHOLDING_TAX_TYPE_LABELS[r.taxType]} ${r.rate}%)`,
+                              }))}
+                            />
                             <input
                               type="number"
                               min={0}

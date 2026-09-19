@@ -15,6 +15,7 @@ import { AuditEntity, PdfStyle, type PurchaseDocumentStatus } from '@plexo/datab
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto.js';
 import { MarkSentWhatsappDto } from './dto/mark-sent-whatsapp.dto.js';
 import { SendFollowUpEmailDto } from './dto/send-follow-up-email.dto.js';
+import { SendPurchaseOrderEmailDto } from './dto/send-purchase-order-email.dto.js';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto.js';
 import { PurchaseOrderService } from './purchase-order.service.js';
 
@@ -63,8 +64,8 @@ export class PurchaseOrderController {
   @AuditEntity('purchaseOrder', { labelFields: ['number'] })
   @Roles(...WRITE_ROLES)
   @Post(':id/send-email')
-  sendEmail(@Param('id', ParseUUIDPipe) id: string) {
-    return this.purchaseOrderService.sendEmail(id);
+  sendEmail(@Param('id', ParseUUIDPipe) id: string, @Body() dto?: SendPurchaseOrderEmailDto) {
+    return this.purchaseOrderService.sendEmail(id, dto);
   }
 
   // No @AuditEntity: a follow-up nudge doesn't change anything on the

@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { buildVariantLabel, resolveUploadUrl } from '@/lib/inventory';
 import { PDF_STYLES, purchaseOrdersApi, purchasePreferencesApi, type PdfStyle } from '@/lib/purchases';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -222,20 +223,15 @@ export default function PurchaseOrderDetailPanel({ purchaseOrderId, onClose }: P
 
             <section className="flex flex-col gap-2 border-t pt-4">
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  className="rounded-lg border bg-muted px-2 py-1.5 text-xs"
+                <Select
+                  className="w-40"
                   value={pdfStyle}
-                  onChange={(e) => {
-                    setPdfStyle(e.target.value as PdfStyle);
+                  onChange={(v) => {
+                    setPdfStyle(v as PdfStyle);
                     setStyleTouched(true);
                   }}
-                >
-                  {PDF_STYLES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+                  options={PDF_STYLES.map((s) => ({ value: s.value, label: s.label }))}
+                />
                 <button
                   type="button"
                   onClick={() => void purchaseOrdersApi.openPdf(purchaseOrderId, pdfStyle)}

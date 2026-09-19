@@ -128,6 +128,11 @@ export interface ProductionOrderDetail extends ProductionOrder {
   reservations: StockReservation[];
   consumptions: ProductionConsumption[];
   outputs: ProductionOutput[];
+  // Receta CONGELADA al momento de confirmar la orden (bomId/bomVersion),
+  // no necesariamente la versión activa hoy - null si la orden nunca se
+  // confirmó contra una receta. Usado para calcular cuánto falta de cada
+  // insumo (requerido de bom.lines vs. lo reservado).
+  bom: (BomSummary & { lines: BomLine[] }) | null;
 }
 
 export interface StockPiece {

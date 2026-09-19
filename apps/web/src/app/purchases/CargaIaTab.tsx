@@ -1,6 +1,7 @@
 'use client';
 
 import { aiInvoiceScanApi, type AiInvoiceExtractionResult, type AiInvoiceScanUsage, type ExtractedField } from '@/lib/ai-invoice-scan';
+import Select from '@/components/ui/Select';
 import { companiesApi, type Company } from '@/lib/companies';
 import type { DocumentLetter } from '@/lib/documentLetter';
 import { invoicingApi } from '@/lib/invoicing';
@@ -425,31 +426,19 @@ export default function CargaIaTab() {
             />
           </Field>
           <Field label="Letra" field={extraction.documentLetter}>
-            <select
+            <Select
               value={form.documentLetter}
-              onChange={(e) => setForm({ ...form, documentLetter: e.target.value as DocumentLetter | '' })}
-              className={inputClass}
-            >
-              <option value="">—</option>
-              {(['A', 'B', 'C', 'M'] as const).map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setForm({ ...form, documentLetter: v as DocumentLetter | '' })}
+              placeholder="—"
+              options={(['A', 'B', 'C', 'M'] as const).map((l) => ({ value: l, label: l }))}
+            />
           </Field>
           <Field label="Moneda" field={extraction.currencyCode}>
-            <select
+            <Select
               value={form.currencyCode}
-              onChange={(e) => setForm({ ...form, currencyCode: e.target.value })}
-              className={inputClass}
-            >
-              {(currenciesQuery.data ?? []).map((c) => (
-                <option key={c.id} value={c.code}>
-                  {c.code}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setForm({ ...form, currencyCode: v })}
+              options={(currenciesQuery.data ?? []).map((c) => ({ value: c.code, label: c.code }))}
+            />
           </Field>
           <Field label="Punto de venta" field={extraction.pointOfSale}>
             <input value={form.pointOfSale} onChange={(e) => setForm({ ...form, pointOfSale: e.target.value })} className={inputClass} />
@@ -475,21 +464,15 @@ export default function CargaIaTab() {
               return (
                 <div key={i} className="grid grid-cols-4 items-end gap-2">
                   <Field label="Tipo" field={extractedLine.concept}>
-                    <select
+                    <Select
                       value={line.type}
-                      onChange={(e) => {
+                      onChange={(v) => {
                         const next = [...form.taxLines];
-                        next[i] = { ...line, type: e.target.value as PurchaseInvoiceTaxLineType };
+                        next[i] = { ...line, type: v as PurchaseInvoiceTaxLineType };
                         setForm({ ...form, taxLines: next });
                       }}
-                      className={inputClass}
-                    >
-                      {Object.entries(TAX_LINE_TYPE_LABELS).map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
+                      options={Object.entries(TAX_LINE_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
+                    />
                   </Field>
                   <Field label="Concepto" field={extractedLine.concept}>
                     <input

@@ -2,6 +2,7 @@
 
 import ArticlePicker from '@/components/ArticlePicker';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { invoicingApi } from '@/lib/invoicing';
 import { purchaseOrdersApi, type PurchaseOrderLineInput } from '@/lib/purchases';
@@ -128,22 +129,18 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
                   </button>
                 }
               >
-                <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={supplierId}
+                  onChange={setSupplierId}
+                  options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                />
               </Field>
               <Field label="Moneda">
-                <select className={inputClass} value={currencyId} onChange={(e) => setCurrencyId(e.target.value)}>
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={currencyId}
+                  onChange={setCurrencyId}
+                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
+                />
               </Field>
               <CatalogSelectField
                 type="transport-modes"

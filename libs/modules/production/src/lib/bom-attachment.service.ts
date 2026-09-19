@@ -51,21 +51,21 @@ export class BomAttachmentService {
     const db = getTenantDb();
     const uploadedByUserId = getUserId();
     if (!uploadedByUserId) {
-      throw new BadRequestException('An authenticated user is required to upload an attachment');
+      throw new BadRequestException('Se requiere un usuario autenticado para subir un adjunto');
     }
     const bom = await db.billOfMaterials.findUnique({ where: { id: bomId } });
     if (!bom) {
-      throw new NotFoundException('Recipe (BOM) not found');
+      throw new NotFoundException('Receta (BOM) no encontrada');
     }
 
     const isPdf = mimeType === PDF_MIME_TYPE && originalFilename.toLowerCase().endsWith('.pdf');
     const isZip = ZIP_MIME_TYPES.has(mimeType) && originalFilename.toLowerCase().endsWith('.zip');
     if (!isPdf && !isZip) {
-      throw new BadRequestException('Only PDF or ZIP files are allowed');
+      throw new BadRequestException('Sólo se permiten archivos PDF o ZIP');
     }
     const maxSize = isPdf ? PDF_MAX_SIZE_BYTES : ZIP_MAX_SIZE_BYTES;
     if (buffer.length > maxSize) {
-      throw new BadRequestException(`The file must be smaller than ${maxSize / (1024 * 1024)}MB`);
+      throw new BadRequestException(`El archivo debe pesar menos de ${maxSize / (1024 * 1024)}MB`);
     }
 
     const extension = isPdf ? 'pdf' : 'zip';
@@ -89,7 +89,7 @@ export class BomAttachmentService {
     const db = getTenantDb();
     const attachment = await db.bomAttachment.findUnique({ where: { id: attachmentId } });
     if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+      throw new NotFoundException('Adjunto no encontrado');
     }
     await db.bomAttachment.delete({ where: { id: attachmentId } });
 

@@ -1,5 +1,7 @@
 'use client';
 
+import Select from '@/components/ui/Select';
+
 export type VatKind = 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
 
 export interface VatValue {
@@ -44,11 +46,10 @@ export default function VatRateSelect({
 
   return (
     <div className={`flex items-center gap-1 ${className ?? ''}`}>
-      <select
-        className={`${inputClass} w-32`}
+      <Select
+        className="w-32"
         value={selectValue}
-        onChange={(e) => {
-          const v = e.target.value;
+        onChange={(v) => {
           if (v === 'EXENTO' || v === 'NO_GRAVADO') {
             onChange({ taxKind: v, taxRate: 0 });
           } else if (v === OTHER_RATE) {
@@ -57,16 +58,13 @@ export default function VatRateSelect({
             onChange({ taxKind: 'GRAVADO', taxRate: Number(v) });
           }
         }}
-      >
-        {STANDARD_VAT_RATES.map((r) => (
-          <option key={r} value={r}>
-            IVA {formatRate(r)}%
-          </option>
-        ))}
-        <option value="EXENTO">Exento</option>
-        <option value="NO_GRAVADO">No Gravado</option>
-        <option value={OTHER_RATE}>Otra alícuota</option>
-      </select>
+        options={[
+          ...STANDARD_VAT_RATES.map((r) => ({ value: String(r), label: `IVA ${formatRate(r)}%` })),
+          { value: 'EXENTO', label: 'Exento' },
+          { value: 'NO_GRAVADO', label: 'No Gravado' },
+          { value: OTHER_RATE, label: 'Otra alícuota' },
+        ]}
+      />
       {selectValue === OTHER_RATE && (
         <input
           type="number"

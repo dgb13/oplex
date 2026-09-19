@@ -136,7 +136,38 @@ describe('PurchaseOrderService.sendEmail', () => {
           sentAt: expect.any(Date),
           sentVia: 'EMAIL',
           sentToEmail: 'compras@norte.com',
+          sentToContactName: null,
+          sentToContactAvatarUrl: null,
         },
+      }),
+    );
+  });
+
+  it('sends to a specific contact instead of the institutional email when given one', async () => {
+    const db = {
+      purchaseOrder: {
+        findUnique: jest.fn().mockResolvedValue(makeOrderRow()),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Mi Tenant', taxId: '30-1-1' }) },
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ purchaseDocumentPdfStyle: 'MODERNO' }) },
+    };
+    const emailSender = makeEmailSender();
+    const service = new PurchaseOrderService(makeNumbering(), makePdfGenerator(), emailSender);
+
+    await runAsUser(db, () =>
+      service.sendEmail('po-1', { to: 'juan@norte.com', contactName: 'Juan Vendedor' }),
+    );
+
+    expect(emailSender.sendPurchaseOrderEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'juan@norte.com' }),
+    );
+    expect(db.purchaseOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sentToEmail: 'juan@norte.com',
+          sentToContactName: 'Juan Vendedor',
+        }),
       }),
     );
   });

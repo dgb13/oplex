@@ -68,6 +68,8 @@ export interface ArticleVariantLookupEntry {
   variantLabel: string | null;
   sku: string;
   imageUrl: string | null;
+  preferredSupplierId: string | null;
+  preferredSupplierName: string | null;
 }
 
 /** articleVariantId -> nombre/SKU/imagen legibles, para pantallas que sólo
@@ -85,6 +87,8 @@ export function buildArticleVariantLookup(articles: Article[]): Record<string, A
         variantLabel: buildVariantLabel(variant),
         sku: variant.sku,
         imageUrl: article.imageUrl,
+        preferredSupplierId: article.preferredSupplierId,
+        preferredSupplierName: article.preferredSupplierName,
       };
     }
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { catalogsApi, type CatalogRouteType } from '@/lib/purchases';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -72,14 +73,11 @@ export default function CatalogSelectField({
           </button>
         </div>
       ) : (
-        <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
-          <option value="">— Ninguno —</option>
-          {(items ?? []).map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={value}
+          onChange={onChange}
+          options={[{ value: '', label: '— Ninguno —' }, ...(items ?? []).map((item) => ({ value: item.id, label: item.name }))]}
+        />
       )}
     </div>
   );

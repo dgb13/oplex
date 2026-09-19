@@ -91,7 +91,7 @@ describe('BomAttachmentService.upload', () => {
 
     await expect(
       runInTenant(db, () => service.upload('bom-1', 'image/png', 'foto.png', Buffer.from('x'))),
-    ).rejects.toThrow('Only PDF or ZIP files are allowed');
+    ).rejects.toThrow('Sólo se permiten archivos PDF o ZIP');
     expect(writeFile).not.toHaveBeenCalled();
   });
 
@@ -101,7 +101,7 @@ describe('BomAttachmentService.upload', () => {
 
     await expect(
       runInTenant(db, () => service.upload('bom-1', 'application/zip', 'planos.rar', Buffer.from('x'))),
-    ).rejects.toThrow('Only PDF or ZIP files are allowed');
+    ).rejects.toThrow('Sólo se permiten archivos PDF o ZIP');
   });
 
   it('rejects a PDF larger than 10MB', async () => {
@@ -111,7 +111,7 @@ describe('BomAttachmentService.upload', () => {
 
     await expect(
       runInTenant(db, () => service.upload('bom-1', 'application/pdf', 'plano.pdf', bigBuffer)),
-    ).rejects.toThrow('smaller than');
+    ).rejects.toThrow('pesar menos de');
   });
 
   it('rejects when the BOM does not exist', async () => {
@@ -120,7 +120,7 @@ describe('BomAttachmentService.upload', () => {
 
     await expect(
       runInTenant(db, () => service.upload('bom-missing', 'application/pdf', 'plano.pdf', Buffer.from('x'))),
-    ).rejects.toThrow('not found');
+    ).rejects.toThrow('no encontrada');
   });
 
   it('rejects when there is no authenticated user', async () => {
@@ -129,7 +129,7 @@ describe('BomAttachmentService.upload', () => {
 
     await expect(
       runWithoutUser(db, () => service.upload('bom-1', 'application/pdf', 'plano.pdf', Buffer.from('x'))),
-    ).rejects.toThrow('authenticated user');
+    ).rejects.toThrow('usuario autenticado');
   });
 });
 
@@ -148,6 +148,6 @@ describe('BomAttachmentService.remove', () => {
     const db = makeDb({ bomAttachment: { findUnique: jest.fn().mockResolvedValue(null) } });
     const service = new BomAttachmentService();
 
-    await expect(runInTenant(db, () => service.remove('missing'))).rejects.toThrow('not found');
+    await expect(runInTenant(db, () => service.remove('missing'))).rejects.toThrow('no encontrado');
   });
 });

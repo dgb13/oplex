@@ -2941,24 +2941,26 @@ model PurchaseOrder {
   // both still null.
   sentAt                 DateTime?
   sentVia                PurchaseSendChannel?
-  // Snapshot of who actually got the last send - sentToEmail for EMAIL
-  // (always the supplier's email at that moment, see sendEmail()),
-  // sentToPhone/sentToContactName for WHATSAPP (the contact picked in
-  // SendPurchaseOrderDialog, since Company.people has no "primary" contact
-  // and WhatsApp has no delivery receipt to confirm any of this after the
-  // fact). Denormalized on purpose, same reasoning as everywhere else in
-  // this schema that snapshots a name at the time of the event: the
-  // Person/email on file can change or the contact can be deleted later,
-  // but this order was sent to whoever/whatever it actually was sent to.
-  // Orders sent before this field existed keep these null - shown as "no
-  // registrado" in the UI, not backfilled.
+  // Snapshot of who actually got the last send - sentToEmail (the address
+  // actually used, institutional or a contact's own) and sentToContactName/
+  // sentToContactAvatarUrl (null when sent to the institutional email/
+  // phone instead of a Company.people contact, since Company.people has no
+  // "primary" contact) for EMAIL, sentToPhone/sentToContactName for
+  // WHATSAPP (WhatsApp has no delivery receipt to confirm any of this
+  // after the fact). Denormalized on purpose, same reasoning as everywhere
+  // else in this schema that snapshots a name at the time of the event:
+  // the Person/email on file can change or the contact can be deleted
+  // later, but this order was sent to whoever/whatever it actually was
+  // sent to. Orders sent before this field existed keep these null - shown
+  // as "no registrado" in the UI, not backfilled.
   sentToEmail            String?
   sentToPhone            String?
   sentToContactName      String?
   // Same snapshot-at-send-time reasoning as sentToContactName above -
-  // copies Person.avatarUrl at the moment of the WhatsApp send (whatever
-  // it was then, whether uploaded to /uploads/people or a pasted URL).
-  // Null for EMAIL sends and for WhatsApp sends before this field existed.
+  // copies Person.avatarUrl at the moment of the send (whatever it was
+  // then, whether uploaded to /uploads/people or a pasted URL). Null when
+  // sent to the institutional email/phone, or for sends before this field
+  // existed.
   sentToContactAvatarUrl String?
 
   createdByUserId String

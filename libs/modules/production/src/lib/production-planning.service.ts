@@ -45,7 +45,7 @@ export class ProductionPlanningService {
       select: { article: { select: { measurementType: true } } },
     });
     if (!variant) {
-      throw new NotFoundException('Article variant not found');
+      throw new NotFoundException('Variante de artículo no encontrada');
     }
 
     const reserved = await getReservedQuantity(db, input);

@@ -226,7 +226,7 @@ describe('ProductionService.completeOrder', () => {
     );
 
     await expect(runAsTenant(db, () => service.completeOrder('order-1'))).rejects.toThrow(
-      'no active reservation',
+      'ninguna reserva activa',
     );
   });
 });

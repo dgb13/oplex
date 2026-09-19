@@ -424,8 +424,8 @@ export const purchaseOrdersApi = {
   update: (id: string, dto: Partial<CreatePurchaseOrderInput>) =>
     api.patch<PurchaseOrderDetail>(`/purchases/purchase-orders/${id}`, dto).then((r) => r.data),
   cancel: (id: string) => api.patch(`/purchases/purchase-orders/${id}/cancel`).then(() => undefined),
-  sendEmail: (id: string) =>
-    api.post<PurchaseOrderDetail>(`/purchases/purchase-orders/${id}/send-email`).then((r) => r.data),
+  sendEmail: (id: string, dto?: { to?: string; contactName?: string; contactAvatarUrl?: string }) =>
+    api.post<PurchaseOrderDetail>(`/purchases/purchase-orders/${id}/send-email`, dto).then((r) => r.data),
   sendFollowUpEmail: (id: string, dto: { to: string; subject?: string; text: string }) =>
     api.post<void>(`/purchases/purchase-orders/${id}/follow-up-email`, dto).then(() => undefined),
   whatsappLink: (id: string, phone: string) =>

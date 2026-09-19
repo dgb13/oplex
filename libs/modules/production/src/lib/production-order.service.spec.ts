@@ -121,7 +121,7 @@ describe('ProductionOrderService.confirm', () => {
     const service = makeService({ db });
 
     await expect(runAsTenant(db, () => service.confirm('order-1', 'warehouse-1'))).rejects.toThrow(
-      'Only a DRAFT order can be confirmed',
+      'Sólo se puede confirmar una orden en borrador',
     );
   });
 });
@@ -151,12 +151,12 @@ describe('ProductionOrderService.cancel', () => {
     });
     const service = makeService({ db });
 
-    await expect(runAsTenant(db, () => service.cancel('order-1'))).rejects.toThrow("can't be cancelled");
+    await expect(runAsTenant(db, () => service.cancel('order-1'))).rejects.toThrow('No se puede cancelar');
   });
 });
 
 describe('ProductionOrderService.getById', () => {
-  it('includes reservations/consumptions/outputs', async () => {
+  it('includes reservations/consumptions/outputs/bom.lines', async () => {
     const findUnique = jest.fn().mockResolvedValue(makeOrder());
     const db = makeDb({ productionOrder: { findUnique } });
     const service = makeService({ db });
@@ -165,7 +165,12 @@ describe('ProductionOrderService.getById', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'order-1' },
-      include: { reservations: true, consumptions: true, outputs: true },
+      include: {
+        reservations: true,
+        consumptions: true,
+        outputs: true,
+        bom: { include: { lines: true } },
+      },
     });
   });
 
@@ -173,7 +178,7 @@ describe('ProductionOrderService.getById', () => {
     const db = makeDb({ productionOrder: { findUnique: jest.fn().mockResolvedValue(null) } });
     const service = makeService({ db });
 
-    await expect(runAsTenant(db, () => service.getById('missing'))).rejects.toThrow('not found');
+    await expect(runAsTenant(db, () => service.getById('missing'))).rejects.toThrow('no encontrada');
   });
 });
 

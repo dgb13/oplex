@@ -5,6 +5,7 @@ import CompanyFormModal from '@/components/CompanyFormModal';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/textarea';
 import VatLineSummary from '@/components/VatLineSummary';
 import VatRateSelect, { type VatKind } from '@/components/VatRateSelect';
@@ -20,9 +21,6 @@ interface Props {
   quote?: QuoteDetail;
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function QuoteFormModal({ quote, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -162,30 +160,18 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                   </button>
                 }
               >
-                <select
-                  className={`${selectClass} w-full`}
+                <Select
                   value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCustomerId}
+                  options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                />
               </Field>
               <Field label="Moneda">
-                <select
-                  className={`${selectClass} w-full`}
+                <Select
                   value={currencyId}
-                  onChange={(e) => setCurrencyId(e.target.value)}
-                >
-                  {currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCurrencyId}
+                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
+                />
               </Field>
               <Field label="Válida hasta">
                 <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />

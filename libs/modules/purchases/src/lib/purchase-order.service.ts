@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
 import type { PdfStyle, PurchaseDocumentStatus, PurchaseSendChannel } from '@plexo/database';
 import type { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto.js';
+import type { SendPurchaseOrderEmailDto } from './dto/send-purchase-order-email.dto.js';
 import type { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto.js';
 import { PURCHASE_EMAIL_SENDER, type PurchaseEmailSender } from './email/purchase-email-sender.port.js';
 import { getReceivedQuantitiesByLine } from './goods-receipt.service.js';
@@ -223,15 +224,19 @@ export class PurchaseOrderService {
    * of "Enviar" afterward. Returns the updated order (not just void) so
    * the controller's @AuditEntity('purchaseOrder') logs a real diff
    * (status/sentAt/sentVia) instead of an empty one - the interceptor
-   * diffs whatever the handler returns, it never re-fetches on its own. */
-  async sendEmail(id: string) {
+   * diffs whatever the handler returns, it never re-fetches on its own.
+   * `dto.to` lets the dialog target a specific Company.people contact's
+   * own email instead of the institutional one - omitted, this is
+   * unchanged from before (always the supplier's email on file). */
+  async sendEmail(id: string, dto?: SendPurchaseOrderEmailDto) {
     const purchaseOrder = await this.findOrThrow(id);
-    if (!purchaseOrder.supplier.email) {
+    const toEmail = dto?.to || purchaseOrder.supplier.email;
+    if (!toEmail) {
       throw new BadRequestException('This supplier has no email on file');
     }
     const { buffer, filename } = await this.generatePdf(id);
     await this.emailSender.sendPurchaseOrderEmail({
-      to: purchaseOrder.supplier.email,
+      to: toEmail,
       purchaseOrderNumber: purchaseOrder.number,
       supplierName: purchaseOrder.supplier.name,
       total: purchaseOrder.total.toString(),
@@ -239,7 +244,11 @@ export class PurchaseOrderService {
       pdfBuffer: buffer,
       pdfFilename: filename,
     });
-    return this.markSent(id, 'EMAIL', { sentToEmail: purchaseOrder.supplier.email });
+    return this.markSent(id, 'EMAIL', {
+      sentToEmail: toEmail,
+      sentToContactName: dto?.contactName ?? null,
+      sentToContactAvatarUrl: dto?.contactAvatarUrl ?? null,
+    });
   }
 
   /** Server-side text so wording stays in one place (mirrors invoicing's

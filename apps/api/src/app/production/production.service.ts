@@ -35,7 +35,7 @@ export class ProductionService {
     const order = await this.orderService.assertCompletable(orderId);
     const reservations = await this.orderService.getActiveReservations(orderId);
     if (reservations.length === 0) {
-      throw new BadRequestException('This order has no active reservation to consume');
+      throw new BadRequestException('Esta orden no tiene ninguna reserva activa para consumir');
     }
 
     let totalConsumptionCost = new Prisma.Decimal(0);
@@ -46,7 +46,7 @@ export class ProductionService {
     }
 
     if (!order.bomId) {
-      throw new BadRequestException('This order has no recipe (BOM) to determine its outputs');
+      throw new BadRequestException('Esta orden no tiene una receta (BOM) para determinar lo producido');
     }
     const bom = await this.bomService.getById(order.bomId);
     // Todas las reservas de una misma orden comparten depósito - confirm()
@@ -144,7 +144,7 @@ export class ProductionService {
         }));
       if (!piece) {
         throw new BadRequestException(
-          'Not enough physical stock pieces to complete this reservation',
+          'No hay suficientes piezas físicas en stock para completar esta reserva',
         );
       }
       const cutAmount = bestFit ? remaining : Prisma.Decimal.min(piece.currentLength, remaining);

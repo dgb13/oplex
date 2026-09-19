@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { resolveUploadUrl } from '@/lib/inventory';
 import { purchaseInvoicesApi, type ListPurchaseInvoicesFilters } from '@/lib/purchases';
@@ -59,14 +60,11 @@ export default function GaleriaIaTab() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-muted-foreground">Proveedor</span>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectClass}>
-            <option value="">Todos</option>
-            {(suppliersQuery.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={supplierId}
+            onChange={setSupplierId}
+            options={[{ value: '', label: 'Todos' }, ...(suppliersQuery.data ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+          />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-muted-foreground">Desde</span>
@@ -78,24 +76,28 @@ export default function GaleriaIaTab() {
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-muted-foreground">Confianza</span>
-          <select
+          <Select
             value={confidenceLevel}
-            onChange={(e) => setConfidenceLevel(e.target.value as typeof confidenceLevel)}
-            className={selectClass}
-          >
-            <option value="">Todas</option>
-            <option value="alta">🟢 Alta</option>
-            <option value="media">🟡 Media</option>
-            <option value="baja">🔴 Baja</option>
-          </select>
+            onChange={(v) => setConfidenceLevel(v as typeof confidenceLevel)}
+            options={[
+              { value: '', label: 'Todas' },
+              { value: 'alta', label: '🟢 Alta' },
+              { value: 'media', label: '🟡 Media' },
+              { value: 'baja', label: '🔴 Baja' },
+            ]}
+          />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-muted-foreground">Editada antes de confirmar</span>
-          <select value={edited} onChange={(e) => setEdited(e.target.value as typeof edited)} className={selectClass}>
-            <option value="">Todas</option>
-            <option value="true">Sí, se corrigió algo</option>
-            <option value="false">No, tal cual la leyó la IA</option>
-          </select>
+          <Select
+            value={edited}
+            onChange={(v) => setEdited(v as typeof edited)}
+            options={[
+              { value: '', label: 'Todas' },
+              { value: 'true', label: 'Sí, se corrigió algo' },
+              { value: 'false', label: 'No, tal cual la leyó la IA' },
+            ]}
+          />
         </label>
         {(supplierId || dateFrom || dateTo || confidenceLevel || edited) && (
           <button
