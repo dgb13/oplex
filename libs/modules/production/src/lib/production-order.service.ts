@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   getTenantDb,
   getTenantId,
+  getUserId,
   Prisma,
   type ProductionConsumption,
   type ProductionOrder,
@@ -9,6 +10,7 @@ import {
 } from '@plexo/database';
 import type { CalendarEntry } from '@plexo/types';
 import { BomService } from './bom.service.js';
+import { ProductionNumberingService } from './production-numbering.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
 import type { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
 
@@ -31,19 +33,25 @@ export class ProductionOrderService {
   constructor(
     private readonly bomService: BomService,
     private readonly planningService: ProductionPlanningService,
+    private readonly numbering: ProductionNumberingService,
   ) {}
 
   /** Congela bomId/bomVersion contra la receta activa AHORA - si la
    * receta cambia después, esta orden sigue produciendo con la versión
    * que tenía al crearse (mismo criterio "congelado" que unitCost en
-   * StockMovement). */
+   * StockMovement). Numera contra la serie propia del usuario que la crea
+   * (ver ProductionNumberingService) - createdByUserId queda null sólo en
+   * las órdenes de antes de que este campo existiera. */
   async create(dto: CreateProductionOrderDto): Promise<ProductionOrder> {
     const db = getTenantDb();
     const bom = await this.bomService.getActiveBomOrThrow(dto.outputArticleVariantId);
+    const number = await this.numbering.nextNumber();
 
     return db.productionOrder.create({
       data: {
         tenantId: getTenantId(),
+        number,
+        createdByUserId: getUserId(),
         outputArticleVariantId: dto.outputArticleVariantId,
         bomId: bom.id,
         bomVersion: bom.version,

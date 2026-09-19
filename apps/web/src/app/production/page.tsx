@@ -211,6 +211,7 @@ function ProductionDashboardBody({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Número</th>
                     <th className="py-2 pr-3 font-medium">Producto</th>
                     <th className="py-2 pr-3 font-medium">Cantidad</th>
                     <th className="py-2 pr-3 font-medium">Estado</th>
@@ -224,8 +225,11 @@ function ProductionDashboardBody({
                       <tr key={order.id} className="border-b last:border-0 hover:bg-muted/40">
                         <td className="py-2 pr-3">
                           <Link href={`/production/orders/${order.id}`} className="font-medium text-primary">
-                            {article ? `${article.articleName}${article.variantLabel ? ` (${article.variantLabel})` : ''}` : order.outputArticleVariantId}
+                            {order.number}
                           </Link>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {article ? `${article.articleName}${article.variantLabel ? ` (${article.variantLabel})` : ''}` : order.outputArticleVariantId}
                         </td>
                         <td className="py-2 pr-3 tabular-nums">{Number(order.quantity)}</td>
                         <td className="py-2 pr-3">

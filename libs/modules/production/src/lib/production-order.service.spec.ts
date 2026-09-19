@@ -1,6 +1,7 @@
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import { ProductionOrderService } from './production-order.service.js';
 import type { BomService } from './bom.service.js';
+import type { ProductionNumberingService } from './production-numbering.service.js';
 import type { ProductionPlanningService } from './production-planning.service.js';
 
 function runAsTenant<T>(db: Record<string, unknown>, fn: () => T): T {
@@ -61,18 +62,31 @@ function makeService(input: {
       Promise.resolve(new Prisma.Decimal(input.disponible?.[articleVariantId] ?? 0)),
     ),
   };
-  return new ProductionOrderService(bomService as unknown as BomService, planningService as unknown as ProductionPlanningService);
+  const numbering = { nextNumber: jest.fn().mockResolvedValue('OP-000001') };
+  return new ProductionOrderService(
+    bomService as unknown as BomService,
+    planningService as unknown as ProductionPlanningService,
+    numbering as unknown as ProductionNumberingService,
+  );
 }
 
 describe('ProductionOrderService.create', () => {
-  it('freezes bomId/bomVersion from the currently active recipe', async () => {
+  it('freezes bomId/bomVersion from the currently active recipe and numbers it against the creating user', async () => {
     const db = makeDb();
     const service = makeService({ db });
 
     await runAsTenant(db, () => service.create({ outputArticleVariantId: 'variant-prepizza', quantity: 4 }));
 
     expect(db.productionOrder.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ bomId: 'bom-1', bomVersion: 1, status: 'DRAFT' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          bomId: 'bom-1',
+          bomVersion: 1,
+          status: 'DRAFT',
+          number: 'OP-000001',
+          createdByUserId: 'user-1',
+        }),
+      }),
     );
   });
 });

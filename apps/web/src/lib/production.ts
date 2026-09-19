@@ -83,6 +83,9 @@ export interface ProducibleResult {
 
 export interface ProductionOrder {
   id: string;
+  // "{prefix}-{n padded a 6}", propio de quien la creó - ver
+  // User.productionOrderPrefix, configurable en Producción → Configuración.
+  number: string;
   outputArticleVariantId: string;
   bomId: string | null;
   bomVersion: number | null;
@@ -200,4 +203,15 @@ export const productionApi = {
   },
   deleteBomAttachment: (attachmentId: string) =>
     api.delete(`/production/bom/attachments/${attachmentId}`).then((r) => r.data),
+};
+
+export interface ProductionPreferences {
+  productionOrderPrefix: string;
+  productionOrderNextNumber: number;
+}
+
+export const productionPreferencesApi = {
+  get: () => api.get<ProductionPreferences>('/production/preferences').then((r) => r.data),
+  update: (dto: Partial<{ productionOrderPrefix: string }>) =>
+    api.patch<ProductionPreferences>('/production/preferences', dto).then((r) => r.data),
 };

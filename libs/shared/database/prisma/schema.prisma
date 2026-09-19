@@ -670,6 +670,13 @@ model User {
   quotePrefix              String     @default("PRE")
   quoteNextNumber          Int        @default(1)
   quotePdfStyle            PdfStyle   @default(MODERNO)
+  // Same per-user numbering pattern as the Compras/Cotizaciones fields
+  // above, for ProductionOrder.number (@plexo/production) - no PDF style
+  // here, a production order doesn't have one. Existing orders from
+  // before this field existed were backfilled tenant-wide (not per-user,
+  // there was no creator to attribute them to - see the migration).
+  productionOrderPrefix     String     @default("OP")
+  productionOrderNextNumber Int        @default(1)
   createdAt                DateTime   @default(now())
   // null = todavía no verificado. Backfill a createdAt para toda fila
   // existente al momento de esta migración (ver 20260826000000_auth_onboarding)
@@ -693,6 +700,7 @@ model User {
   createdInflationAdjustments InflationAdjustment[]
   cartItems                  InventoryCartItem[]
   createdQuotes              Quote[]
+  createdProductionOrders    ProductionOrder[]
   uploadedBomAttachments     BomAttachment[]
   emailVerificationCode      EmailVerificationCode?
   passwordResetTokens        PasswordResetToken[]
@@ -1530,6 +1538,16 @@ model BomByproduct {
 model ProductionOrder {
   id                     String                  @id @default(uuid())
   tenantId               String
+  // "{createdBy.productionOrderPrefix}-{n padded to 6}", same frozen-at-
+  // creation/per-user-series rule as QuoteRequest.number/PurchaseOrder.number
+  // (ver User.productionOrderPrefix). createdByUserId es nullable porque las
+  // órdenes ya existentes cuando se agregó este campo no tienen a quién
+  // atribuírselo (se numeraron tenant-wide en la migración, no por usuario)
+  // - toda orden nueva sí lo trae siempre (ProductionOrderService.create
+  // requiere un usuario autenticado para numerar).
+  number                 String
+  createdByUserId        String?
+  createdBy              User?                   @relation(fields: [createdByUserId], references: [id])
   outputArticleVariantId String
   outputArticleVariant   ArticleVariant          @relation("ProductionOrderOutput", fields: [outputArticleVariantId], references: [id])
   bomId                  String?
@@ -1556,6 +1574,7 @@ model ProductionOrder {
   journalEntry           JournalEntry?
 
   @@unique([tenantId, id])
+  @@unique([tenantId, number])
   @@index([tenantId, status])
   @@map("production_orders")
 }

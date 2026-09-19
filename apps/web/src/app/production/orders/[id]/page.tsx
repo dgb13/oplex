@@ -137,7 +137,7 @@ export default function ProductionOrderDetailPage() {
           supplierId: insumo.preferredSupplierId,
           supplierName: insumo.preferredSupplierName ?? '',
           lines: [],
-          notes: `Solicitado por Orden de producción de ${article?.articleName ?? order.outputArticleVariantId} (#${order.id.slice(0, 8)})`,
+          notes: `Solicitado por Orden de producción ${order.number} (${article?.articleName ?? order.outputArticleVariantId})`,
         };
         bySupplier.set(insumo.preferredSupplierId, group);
       }
@@ -191,7 +191,7 @@ export default function ProductionOrderDetailPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Orden de producción</h1>
+        <h1 className="text-xl font-semibold">Orden de producción{order ? ` ${order.number}` : ''}</h1>
         <Button variant="ghost" onClick={() => router.push('/production')}>
           Volver
         </Button>
