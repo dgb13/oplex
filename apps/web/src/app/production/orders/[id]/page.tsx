@@ -44,10 +44,22 @@ function computeInsumoRows(order: {
 }): InsumoRow[] {
   const lines = order.bom?.lines ?? [];
   const orderQuantity = Number(order.quantity);
-  return lines.map((line) => {
+  // Un mismo insumo puede aparecer en más de una línea de la receta (ej.
+  // el mismo material cortado a dos medidas distintas) - se agrupa acá
+  // para que cada insumo tenga una sola fila con el requerido sumado, en
+  // vez de una fila por línea (que duplicaba la key de React y mostraba
+  // el reservado total del insumo repetido en cada una de sus líneas).
+  const requeridoByInsumo = new Map<string, number>();
+  for (const line of lines) {
     const requerido = Number(line.quantity) * orderQuantity * (1 + Number(line.expectedWastePercent) / 100);
+    requeridoByInsumo.set(
+      line.inputArticleVariantId,
+      (requeridoByInsumo.get(line.inputArticleVariantId) ?? 0) + requerido,
+    );
+  }
+  return Array.from(requeridoByInsumo.entries()).map(([articleVariantId, requerido]) => {
     const reservado = order.reservations
-      .filter((r) => r.inputArticleVariantId === line.inputArticleVariantId && r.status !== 'RELEASED')
+      .filter((r) => r.inputArticleVariantId === articleVariantId && r.status !== 'RELEASED')
       .reduce((sum, r) => sum + Number(r.quantityReserved), 0);
     const diff = Math.max(0, requerido - reservado);
     // Redondeado a 3 decimales (misma precisión que StockReservation en
@@ -55,7 +67,7 @@ function computeInsumoRows(order: {
     // tal cual hasta la cantidad del Pedido de Cotización (ej. "0.6000000000000001 u.").
     const falta = diff < EPSILON ? 0 : Math.round(diff * 1000) / 1000;
     const pct = requerido > 0 ? Math.min(100, (reservado / requerido) * 100) : 100;
-    return { articleVariantId: line.inputArticleVariantId, requerido, reservado, falta, pct };
+    return { articleVariantId, requerido, reservado, falta, pct };
   });
 }
 
