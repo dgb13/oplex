@@ -34,6 +34,11 @@ yarn-error.log
 testem.log
 /typings
 
+# logs de servidores de desarrollo locales (nx serve api/web redirigido a
+# archivo para poder leerlos entre turnos) - nunca contenido a versionar
+.api-dev.log
+.web-dev.log
+
 # System Files
 .DS_Store
 Thumbs.db
