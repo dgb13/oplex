@@ -2,6 +2,7 @@ import type { AccountingService } from '@plexo/accounting';
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { InventoryService } from '@plexo/inventory';
 import type { SupplierReturnService } from '@plexo/purchases';
+import type { StockPieceService } from '@plexo/production';
 import { SupplierReturnsService } from './supplier-returns.service.js';
 
 // @plexo/purchases' barrel also re-exports PdfGeneratorService, which pulls
@@ -16,13 +17,25 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
 }
 
 /** Not-yet-invoiced by default (findFirst resolves null) - matches every
- * existing test's assumption before the already-invoiced branch existed. */
+ * existing test's assumption before the already-invoiced branch existed.
+ * articleVariant defaults to DISCRETE (factor 1, no StockPiece handling) -
+ * matches every existing test's assumption from before the LINEAL_1D
+ * conversion existed; the LINEAL_1D-specific tests override it. */
 function makeDb(overrides: Record<string, unknown> = {}) {
   return {
     purchaseInvoiceReceipt: { findFirst: jest.fn().mockResolvedValue(null) },
     purchaseInvoice: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
+    articleVariant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        article: { measurementType: 'DISCRETE', purchaseSize: null, commercialLength: null },
+      }),
+    },
     ...overrides,
   };
+}
+
+function makeStockPieceService(overrides: Record<string, unknown> = {}) {
+  return { returnFullPieces: jest.fn().mockResolvedValue([]), ...overrides } as unknown as StockPieceService;
 }
 
 function makeSupplierReturn(overrides: Record<string, unknown> = {}) {
@@ -55,7 +68,12 @@ describe('SupplierReturnsService.createReturn', () => {
       reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
       reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new SupplierReturnsService(supplierReturnService, inventoryService, accountingService);
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      makeStockPieceService(),
+    );
     const dto = {
       goodsReceiptId: 'receipt-1',
       reason: 'tapa en mal estado',
@@ -93,7 +111,12 @@ describe('SupplierReturnsService.createReturn', () => {
       reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
       reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new SupplierReturnsService(supplierReturnService, inventoryService, accountingService);
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      makeStockPieceService(),
+    );
 
     await expect(
       runInTenant(makeDb(), () =>
@@ -118,7 +141,12 @@ describe('SupplierReturnsService.createReturn', () => {
       reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
       reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new SupplierReturnsService(supplierReturnService, inventoryService, accountingService);
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      makeStockPieceService(),
+    );
     const db = makeDb({
       purchaseInvoiceReceipt: {
         findFirst: jest.fn().mockResolvedValue({ purchaseInvoiceId: 'invoice-1' }),
@@ -161,7 +189,12 @@ describe('SupplierReturnsService.createReturn', () => {
       reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
       reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new SupplierReturnsService(supplierReturnService, inventoryService, accountingService);
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      makeStockPieceService(),
+    );
     const db = makeDb({
       purchaseInvoiceReceipt: {
         findFirst: jest.fn().mockResolvedValue({ purchaseInvoiceId: 'invoice-1' }),
@@ -196,7 +229,12 @@ describe('SupplierReturnsService.createReturn', () => {
       reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
       reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
-    const service = new SupplierReturnsService(supplierReturnService, inventoryService, accountingService);
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      makeStockPieceService(),
+    );
     const db = makeDb({
       purchaseInvoiceReceipt: {
         findFirst: jest.fn().mockResolvedValue({ purchaseInvoiceId: 'invoice-1' }),
@@ -219,5 +257,80 @@ describe('SupplierReturnsService.createReturn', () => {
     ).rejects.toThrow(/supera el saldo pendiente/);
     expect(db.purchaseInvoice.update).not.toHaveBeenCalled();
     expect(accountingService.reverseSupplierReturnAgainstPayable).not.toHaveBeenCalled();
+  });
+
+  it('LINEAL_1D: converts the returned line quantity (barras) to stock units (mm) via commercialLength, same factor as GoodsReceiptsService.createReceipt', async () => {
+    const supplierReturn = makeSupplierReturn();
+    const supplierReturnService = {
+      create: jest.fn().mockResolvedValue(supplierReturn),
+    } as unknown as SupplierReturnService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
+      reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const stockPieceService = makeStockPieceService();
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      stockPieceService,
+    );
+    const db = makeDb({
+      articleVariant: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          article: { measurementType: 'LINEAL_1D', purchaseSize: null, commercialLength: new Prisma.Decimal(2000) },
+        }),
+      },
+    });
+
+    await runInTenant(db, () =>
+      service.createReturn({
+        goodsReceiptId: 'receipt-1',
+        reason: 'barras de más',
+        // 2 barras devueltas (misma unidad que PurchaseOrderLine.quantity).
+        lines: [{ goodsReceiptLineId: 'receipt-line-1', quantity: 2 }],
+      }),
+    );
+
+    // 2 barras * 2000mm = 4000mm - no 2, que hubiera dejado el ledger
+    // descontado de menos contra lo que sumó la recepción original.
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ quantity: 4000 }),
+    );
+    expect(stockPieceService.returnFullPieces).toHaveBeenCalledWith({
+      articleVariantId: 'variant-1',
+      warehouseId: 'warehouse-1',
+      count: 2,
+    });
+  });
+
+  it('non-1D articles never touch StockPieceService', async () => {
+    const supplierReturn = makeSupplierReturn();
+    const supplierReturnService = {
+      create: jest.fn().mockResolvedValue(supplierReturn),
+    } as unknown as SupplierReturnService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
+      reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const stockPieceService = makeStockPieceService();
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      stockPieceService,
+    );
+
+    await runInTenant(makeDb(), () =>
+      service.createReturn({
+        goodsReceiptId: 'receipt-1',
+        reason: 'defectuoso',
+        lines: [{ goodsReceiptLineId: 'receipt-line-1', quantity: 2 }],
+      }),
+    );
+
+    expect(stockPieceService.returnFullPieces).not.toHaveBeenCalled();
   });
 });

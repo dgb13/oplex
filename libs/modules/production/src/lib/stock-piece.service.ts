@@ -43,6 +43,52 @@ export class StockPieceService {
     });
   }
 
+  /**
+   * Reversa de createFullStockPiece - usada por SupplierReturnsService
+   * (apps/api) cuando se devuelven barras/rollos enteros al proveedor.
+   * Sólo puede devolver piezas TODAVÍA INTACTAS (currentLength ==
+   * originalLength, nunca cortadas) - una barra ya cortada no es "la misma
+   * barra" que se recibió, físicamente no hay nada entero para devolver.
+   * Las más nuevas primero (LIFO): una devolución normalmente ocurre poco
+   * después de la recepción que la originó, así que son las que con más
+   * probabilidad siguen intactas y es menos probable que ya se haya
+   * planificado producción sobre una pieza más vieja. Igual que cutPiece,
+   * nunca hace hard-delete - las marca DEPLETED (mismo estado que "ya se
+   * consumió", no hay un estado separado para "devuelta"; la traza de la
+   * propia SupplierReturn en Compras es lo que documenta el motivo).
+   * Explota (no devuelve parcial) si no hay `count` piezas intactas - mejor
+   * que dejar el conteo silenciosamente descuadrado contra lo que el
+   * usuario pidió devolver.
+   */
+  async returnFullPieces(input: {
+    articleVariantId: string;
+    warehouseId: string;
+    count: number;
+  }): Promise<StockPiece[]> {
+    const db = getTenantDb();
+    const pieces = await db.stockPiece.findMany({
+      where: {
+        articleVariantId: input.articleVariantId,
+        warehouseId: input.warehouseId,
+        status: 'AVAILABLE',
+        sourceType: 'FULL_STOCK',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const intact = pieces.filter((p) => p.currentLength.equals(p.originalLength));
+    if (intact.length < input.count) {
+      throw new BadRequestException(
+        `Sólo hay ${intact.length} pieza(s) entera(s) sin cortar disponibles para devolver - se pidieron ${input.count}.`,
+      );
+    }
+    const toReturn = intact.slice(0, input.count);
+    await db.stockPiece.updateMany({
+      where: { id: { in: toReturn.map((p) => p.id) } },
+      data: { status: 'DEPLETED', currentLength: 0 },
+    });
+    return toReturn;
+  }
+
   /** La pieza AVAILABLE más chica donde entra el corte pedido - "el
    * sistema sugiere el recorte óptimo" del diseño (§1). El operario puede
    * cambiarla manualmente (llamando cutPiece con otro pieceId), esto es

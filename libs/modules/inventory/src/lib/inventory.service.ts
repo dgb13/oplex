@@ -483,7 +483,14 @@ export class InventoryService {
    * this turns out to be a common enough flow to deserve its own
    * quantity+price DTO and an auto-posting path like invoices get.
    */
-  async recordMovement(dto: RecordStockMovementDto) {
+  // `blockManualLineal1D` sólo lo pasa en true InventoryController.
+  // recordMovement (el endpoint HTTP manual) - GoodsReceiptsService,
+  // ProductionService, SalesService, SupplierReturnsService y
+  // ArticleImportService siguen llamando a este mismo método sin el flag,
+  // comportamiento intacto. Ver el comentario del guard más abajo para el
+  // motivo (StockLedger vs StockPiece desincronizados, encontrado en QA
+  // 2026-09-21).
+  async recordMovement(dto: RecordStockMovementDto, opts: { blockManualLineal1D?: boolean } = {}) {
     if (dto.type === 'ADJUSTMENT') {
       if (dto.quantity === 0) {
         throw new BadRequestException('ADJUSTMENT quantity must not be zero');
@@ -498,6 +505,32 @@ export class InventoryService {
     const db = getTenantDb();
     const tenantId = getTenantId();
     const delta = computeStockDelta(dto.type, dto.quantity);
+
+    // StockLedger.quantity (lo que este método mueve) y StockPiece
+    // (barras/recortes reales de un artículo LINEAL_1D, ver
+    // @plexo/production StockPieceService) son dos tablas separadas que
+    // sólo se mantienen en sync cuando el movimiento nace de un flujo que
+    // sabe crear/cortar la pieza física - GoodsReceiptsService.create
+    // (compra) o ProductionService.consumeReservation (consumo), ninguno
+    // de los dos pasa `blockManualLineal1D`. Un movimiento manual desde
+    // Inventario > "Nuevo movimiento" (o el stock inicial al crear un
+    // artículo) movería sólo el número agregado sin ninguna pieza detrás,
+    // descuadrando Inventario contra "Piezas y recortes" - por eso el
+    // frontend ya oculta estos artículos en esos dos formularios
+    // (ArticlePicker filter en StockMovementModal, tab "Stock inicial"
+    // oculto en ArticleFormModal), y esto cierra el mismo gap del lado
+    // del servidor.
+    if (opts.blockManualLineal1D) {
+      const variant = await db.articleVariant.findUniqueOrThrow({
+        where: { id: dto.articleVariantId },
+        select: { article: { select: { measurementType: true } } },
+      });
+      if (variant.article.measurementType === 'LINEAL_1D') {
+        throw new BadRequestException(
+          'Este artículo se mide por pieza (barras/recortes) - registrá la entrada desde Compras > Recibir mercadería, o el consumo desde una Orden de producción. Un movimiento manual no crea la pieza física.',
+        );
+      }
+    }
 
     // Referencing a real Orden de Compra is only meaningful for an actual
     // purchase, and only for one that already has a line for this exact

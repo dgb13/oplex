@@ -96,8 +96,18 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
             <ArticlePicker
               value={form.articleVariantId}
               onChange={(variantId) => setForm({ ...form, articleVariantId: variantId })}
+              // LINEAL_1D (barras/recortes) no puede entrar por acá - el
+              // backend lo rechaza igual (InventoryController.recordMovement),
+              // esto sólo evita que el usuario llegue a intentarlo. Ver
+              // "Recibir mercadería" (Compras) / Producción para esos
+              // artículos, que sí crean la StockPiece física.
+              filter={(o) => o.measurementType !== 'LINEAL_1D'}
             />
           </Field>
+          <p className="text-xs text-muted-foreground">
+            Los artículos medidos por pieza (barras/recortes) no aparecen acá - registrá su entrada desde
+            Compras &gt; Recibir mercadería, o su consumo desde una Orden de producción.
+          </p>
 
           <Field label="Depósito">
             <select

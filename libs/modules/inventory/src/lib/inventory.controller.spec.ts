@@ -55,7 +55,7 @@ describe('InventoryController.recordMovement', () => {
 
     const result = controller.recordMovement(dto);
 
-    expect(recordMovement).toHaveBeenCalledWith(dto);
+    expect(recordMovement).toHaveBeenCalledWith(dto, { blockManualLineal1D: true });
     expect(result).toBe('ok');
   });
 });

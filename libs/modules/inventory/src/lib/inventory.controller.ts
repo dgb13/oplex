@@ -152,6 +152,13 @@ export class InventoryController {
   // (quantity capped at what's pending, cost read from the order's own
   // line, entregas parciales acumuladas) - closing exactly the gap this
   // was built to fix, not just hiding it in the UI. See PROGRESS.md.
+  //
+  // LINEAL_1D (barras/recortes) se bloquea del mismo modo, pero el check en
+  // sí vive en InventoryService.recordMovement (necesita leer el
+  // measurementType del artículo, y ese service es el único que ya toca la
+  // DB acá - ver el comentario ahí para el motivo completo). Este método
+  // se queda sync/sin DB a propósito, mismo shape que ya cubre
+  // inventory.controller.spec.ts - sólo pasa el flag que activa ese check.
   @Roles(...WRITE_ROLES)
   @Post('movements')
   recordMovement(@Body() dto: RecordStockMovementDto) {
@@ -160,7 +167,7 @@ export class InventoryController {
         'Para recibir mercadería contra una Orden de Compra, usá "Recibir mercadería" desde Compras - no este movimiento manual.',
       );
     }
-    return this.inventoryService.recordMovement(dto);
+    return this.inventoryService.recordMovement(dto, { blockManualLineal1D: true });
   }
 
   @Get('reorder-suggestions')

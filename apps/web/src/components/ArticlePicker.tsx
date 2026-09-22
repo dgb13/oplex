@@ -28,6 +28,7 @@ export interface ArticlePickerOption {
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
   isManufactured: boolean;
+  measurementType: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
 }
 
 function flattenOptions(articles: Article[]): ArticlePickerOption[] {
@@ -45,6 +46,7 @@ function flattenOptions(articles: Article[]): ArticlePickerOption[] {
       taxRate: article.taxRate,
       taxKind: article.taxKind,
       isManufactured: article.isManufactured,
+      measurementType: article.measurementType,
     })),
   );
 }

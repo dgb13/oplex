@@ -3,6 +3,7 @@ import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 import { SupplierReturnService, type CreateSupplierReturnDto } from '@plexo/purchases';
+import { StockPieceService } from '@plexo/production';
 
 /**
  * Composes SupplierReturnService (libs/modules/purchases - creates the
@@ -43,6 +44,17 @@ import { SupplierReturnService, type CreateSupplierReturnDto } from '@plexo/purc
  * runs through getTenantDb(), the same per-request transaction - if any
  * recordMovement()/accounting call throws, the whole transaction rolls
  * back, including the SupplierReturn just created above.
+ *
+ * Unidad de compra -> unidad de stock: SupplierReturnLine.quantity está en
+ * la MISMA unidad que GoodsReceiptLine/PurchaseOrderLine.quantity ("3
+ * barras", no "3000mm" - ver SupplierReturnService.create, que valida
+ * contra receiptLine.quantity, esa unidad). GoodsReceiptsService.
+ * createReceipt aplica esta misma conversión (factor = commercialLength/
+ * purchaseSize) al RECIBIR - acá hay que deshacerla exactamente igual al
+ * devolver, si no el ledger queda descontado de menos (encontrado en QA
+ * 2026-09-21: recibir 1000 barras de 2000mm sube el ledger en 2.000.000,
+ * pero devolver esas mismas 1000 "barras" sólo bajaba el ledger en 1000 si
+ * no se convertía acá).
  */
 @Injectable()
 export class SupplierReturnsService {
@@ -50,25 +62,54 @@ export class SupplierReturnsService {
     private readonly supplierReturnService: SupplierReturnService,
     private readonly inventoryService: InventoryService,
     private readonly accountingService: AccountingService,
+    private readonly stockPieceService: StockPieceService,
   ) {}
 
   async createReturn(dto: CreateSupplierReturnDto) {
     const supplierReturn = await this.supplierReturnService.create(dto);
+    const db = getTenantDb();
     let reversalAmount = new Prisma.Decimal(0);
     for (const line of supplierReturn.lines) {
+      const articleVariantId = line.goodsReceiptLine.purchaseOrderLine.articleVariantId;
+      const variant = await db.articleVariant.findUniqueOrThrow({
+        where: { id: articleVariantId },
+        select: { article: { select: { measurementType: true, purchaseSize: true, commercialLength: true } } },
+      });
+      const article = variant.article;
+      // Mismo factor que GoodsReceiptsService.createReceipt - ver el
+      // comentario ahí, éste es exactamente su inverso.
+      const factor =
+        (article.measurementType === 'CONTINUOUS' && article.purchaseSize) ||
+        (article.measurementType === 'LINEAL_1D' && article.commercialLength) ||
+        new Prisma.Decimal(1);
+
       await this.inventoryService.recordMovement({
         warehouseId: supplierReturn.goodsReceipt.warehouseId,
-        articleVariantId: line.goodsReceiptLine.purchaseOrderLine.articleVariantId,
+        articleVariantId,
         type: 'SUPPLIER_RETURN',
-        quantity: line.quantity.toNumber(),
+        quantity: line.quantity.mul(factor).toNumber(),
         goodsReceiptLineId: line.goodsReceiptLineId,
         sourceType: 'SUPPLIER_RETURN',
         sourceId: supplierReturn.id,
       });
+
+      // 1D: además del espejo de StockLedger de arriba, cada barra/rollo
+      // devuelto tiene que dejar de existir como StockPiece - si no,
+      // "Piezas y recortes" sigue mostrándola disponible aunque ya volvió
+      // al proveedor. Sólo se pueden devolver piezas TODAVÍA INTACTAS (ver
+      // StockPieceService.returnFullPieces) - explota si ya se cortó
+      // alguna, en vez de dejar el conteo descuadrado en silencio.
+      if (article.measurementType === 'LINEAL_1D' && article.commercialLength) {
+        await this.stockPieceService.returnFullPieces({
+          articleVariantId,
+          warehouseId: supplierReturn.goodsReceipt.warehouseId,
+          count: Math.round(line.quantity.toNumber()),
+        });
+      }
+
       reversalAmount = reversalAmount.add(line.quantity.mul(line.goodsReceiptLine.purchaseOrderLine.unitCost));
     }
 
-    const db = getTenantDb();
     const invoiceLink = await db.purchaseInvoiceReceipt.findFirst({
       where: { goodsReceiptId: supplierReturn.goodsReceiptId },
       select: { purchaseInvoiceId: true },

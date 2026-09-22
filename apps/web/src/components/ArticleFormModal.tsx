@@ -400,7 +400,13 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           if (minimumQuantity > 0) {
             await inventoryApi.setMinimumStock({ warehouseId, articleVariantId: variant.id, minimumQuantity });
           }
-          if (stockQuantity > 0) {
+          // measurementType === 'LINEAL_1D' nunca llega hasta acá con
+          // stockQuantity > 0 en un uso normal (el tab "Stock inicial" está
+          // oculto para ese tipo, ver `tabs` más abajo) - el guard es sólo
+          // por si quedó un valor viejo tipeado antes de cambiar el tipo de
+          // medición. El backend lo rechazaría igual (InventoryController.
+          // recordMovement), pero mejor no ni intentarlo.
+          if (stockQuantity > 0 && measurementType !== 'LINEAL_1D') {
             await inventoryApi.recordMovement({
               warehouseId,
               articleVariantId: variant.id,
@@ -446,7 +452,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             if (minQ > 0) {
               await inventoryApi.setMinimumStock({ warehouseId, articleVariantId: variant.id, minimumQuantity: minQ });
             }
-            if (stockQ > 0) {
+            if (stockQ > 0 && measurementType !== 'LINEAL_1D') {
               await inventoryApi.recordMovement({
                 warehouseId,
                 articleVariantId: variant.id,
@@ -591,7 +597,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
     { key: 'general', label: 'Datos generales' },
     { key: 'pricing', label: 'Precios y proveedor' },
     { key: 'variant', label: hasVariants ? 'Variantes' : 'Variante' },
-    ...(isService ? [] : [{ key: 'stock' as const, label: 'Stock inicial' }]),
+    ...(isService || measurementType === 'LINEAL_1D' ? [] : [{ key: 'stock' as const, label: 'Stock inicial' }]),
     { key: 'media', label: 'Adjuntos' },
   ];
 
@@ -824,6 +830,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       />
                     </label>
                   </div>
+                )}
+
+                {measurementType === 'LINEAL_1D' && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Sin "Stock inicial" acá - un artículo por pieza necesita saber el largo de cada barra, así
+                    que su stock se carga desde Compras &gt; Recibir mercadería (o Producción, si es un
+                    recorte). Podés crear el artículo ahora y cargarle stock después.
+                  </p>
                 )}
 
                 {measurementType === 'SURFACE_2D' && (

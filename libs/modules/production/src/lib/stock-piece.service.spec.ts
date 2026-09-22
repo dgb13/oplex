@@ -27,7 +27,9 @@ function makeDb(overrides: Record<string, unknown> = {}) {
       create: jest.fn((args) => Promise.resolve({ id: 'piece-new', ...args.data })),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn((args) => Promise.resolve({ id: args.where.id, ...args.data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       aggregate: jest.fn().mockResolvedValue({ _sum: { currentLength: null } }),
     },
     ...overrides,
@@ -114,6 +116,65 @@ describe('StockPieceService.cutPiece', () => {
     await expect(
       runAsTenant(db, () => service.cutPiece({ pieceId: 'piece-1', lengthToCut: 100, minUsableLength: 100 })),
     ).rejects.toThrow('no está disponible');
+  });
+});
+
+describe('StockPieceService.returnFullPieces', () => {
+  it('depletes the N newest intact pieces (LIFO)', async () => {
+    const older = makePiece({ id: 'piece-old', createdAt: new Date('2026-09-14') });
+    const newer1 = makePiece({ id: 'piece-new-1', createdAt: new Date('2026-09-22T10:00:00Z') });
+    const newer2 = makePiece({ id: 'piece-new-2', createdAt: new Date('2026-09-22T10:00:01Z') });
+    // findMany already comes back ordered newest-first (orderBy createdAt desc, as the service requests).
+    const findMany = jest.fn().mockResolvedValue([newer2, newer1, older]);
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const db = makeDb({ stockPiece: { findMany, updateMany } });
+    const service = new StockPieceService();
+
+    const result = await runAsTenant(db, () =>
+      service.returnFullPieces({ articleVariantId: 'variant-cable', warehouseId: 'warehouse-1', count: 2 }),
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        articleVariantId: 'variant-cable',
+        warehouseId: 'warehouse-1',
+        status: 'AVAILABLE',
+        sourceType: 'FULL_STOCK',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['piece-new-2', 'piece-new-1'] } },
+      data: { status: 'DEPLETED', currentLength: 0 },
+    });
+    expect(result.map((p) => p.id)).toEqual(['piece-new-2', 'piece-new-1']);
+  });
+
+  it('ignores pieces that were already cut (currentLength != originalLength) even if AVAILABLE', async () => {
+    const cut = makePiece({ id: 'piece-cut', currentLength: new Prisma.Decimal(500) });
+    const intact = makePiece({ id: 'piece-intact' });
+    const db = makeDb({ stockPiece: { findMany: jest.fn().mockResolvedValue([intact, cut]) } });
+    const service = new StockPieceService();
+
+    await expect(
+      runAsTenant(db, () =>
+        service.returnFullPieces({ articleVariantId: 'variant-cable', warehouseId: 'warehouse-1', count: 2 }),
+      ),
+    ).rejects.toThrow('Sólo hay 1 pieza(s) entera(s) sin cortar disponibles para devolver - se pidieron 2.');
+  });
+
+  it('rejects returning more than what is intact, without touching any row', async () => {
+    const db = makeDb({
+      stockPiece: { findMany: jest.fn().mockResolvedValue([makePiece()]), updateMany: jest.fn() },
+    });
+    const service = new StockPieceService();
+
+    await expect(
+      runAsTenant(db, () =>
+        service.returnFullPieces({ articleVariantId: 'variant-cable', warehouseId: 'warehouse-1', count: 5 }),
+      ),
+    ).rejects.toThrow('se pidieron 5');
+    expect(db.stockPiece.updateMany).not.toHaveBeenCalled();
   });
 });
 

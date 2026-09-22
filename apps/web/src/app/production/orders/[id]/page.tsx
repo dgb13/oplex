@@ -171,6 +171,12 @@ export default function ProductionOrderDetailPage() {
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['production-order', id] });
     void queryClient.invalidateQueries({ queryKey: ['production-orders'] });
+    // confirm/retryReservation/complete/cancel mueven o liberan stock
+    // (StockLedger.quantity) - sin esto, Inventario (['inventory-articles'],
+    // el mismo query key que invalida StockMovementModal tras un movimiento
+    // manual) queda mostrando cantidades viejas hasta un F5, aunque el
+    // backend ya haya actualizado todo.
+    void queryClient.invalidateQueries({ queryKey: ['inventory-articles'] });
   }
 
   function useAction(fn: () => Promise<unknown>) {
