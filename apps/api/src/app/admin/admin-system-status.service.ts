@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, getTenantDb, withTenantContext } from '@plexo/database';
+import { SubscriptionService } from '@plexo/subscriptions';
 
 const execFileAsync = promisify(execFile);
 
@@ -40,6 +41,18 @@ export interface WhatsAppLinkSummary {
    * frontend la rotula "mensajes del asistente (todos los canales)" para
    * no insinuar una precisión que no existe. */
   messageCount: number;
+  /** Consumo del cupo mensual del Asistente de IA - a diferencia de
+   * messageCount de arriba (por usuario, todo el historial), este es
+   * SIEMPRE por tenant y SIEMPRE del mes en curso (mismo alcance que
+   * assertCanUseAssistant/getAssistantUsage - el cupo del plan no
+   * distingue qué usuario ni qué canal mandó cada mensaje). Se repite
+   * igual en cada link de un mismo tenant a propósito, para que la fila
+   * sea autocontenida - no es "el consumo de este número", es "el consumo
+   * del tenant al que pertenece este número". planQuota:null = el plan no
+   * incluye el Asistente de IA (mismo significado que en toda la app). */
+  planName: string;
+  planQuota: number | null;
+  planUsed: number;
 }
 
 export interface LiveTokenCheckResult {
@@ -111,7 +124,10 @@ function missingVars(names: string[]): string[] {
  */
 @Injectable()
 export class AdminSystemStatusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   async getStatus(): Promise<SystemStatusItem[]> {
     const whatsapp = this.checkGroup('whatsapp', 'WhatsApp (Meta Cloud API)', [
@@ -190,6 +206,13 @@ export class AdminSystemStatusService {
    * tenant, además, un N+1 de assistant_messages por link - lista chica de
    * un reporte de Admin sin volumen, mismo criterio ya usado en
    * AssistantSettingsService.getUnansweredQuestions().
+   *
+   * getAssistantUsage() se llama UNA vez por tenant (no por link) y se
+   * copia a cada link de ese tenant - es el mismo consumo tenant-wide para
+   * todos ellos, ver el doc comment de planQuota/planUsed en
+   * WhatsAppLinkSummary. Corre dentro del withTenantContext de este
+   * tenant, así que getTenantId()/getTenantDb() (que usa internamente)
+   * resuelven bien sin pasarle el tenantId a mano.
    */
   async listWhatsAppLinks(): Promise<WhatsAppLinkSummary[]> {
     const tenantIds = await this.listTenantIds();
@@ -198,12 +221,13 @@ export class AdminSystemStatusService {
     for (const tenantId of tenantIds) {
       const tenantResults = await withTenantContext(this.prisma, tenantId, async () => {
         const db = getTenantDb();
-        const [tenant, links] = await Promise.all([
+        const [tenant, links, planUsage] = await Promise.all([
           db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } }),
           db.whatsAppLink.findMany({
             include: { user: { select: { email: true } } },
             orderBy: { createdAt: 'desc' },
           }),
+          this.subscriptionService.getAssistantUsage(),
         ]);
         return Promise.all(
           links.map(async (link) => ({
@@ -214,6 +238,9 @@ export class AdminSystemStatusService {
             messageCount: await db.assistantMessage.count({
               where: { role: 'USER', conversation: { userId: link.userId } },
             }),
+            planName: planUsage.planName,
+            planQuota: planUsage.quota,
+            planUsed: planUsage.used,
           })),
         );
       });

@@ -164,6 +164,13 @@ export interface WhatsAppLinkSummary {
   tenantName: string;
   linkedAt: string;
   messageCount: number;
+  /** Consumo del cupo mensual del Asistente de IA del TENANT (no de este
+   * número puntual) - ver el doc comment de WhatsAppLinkSummary del lado
+   * del backend (AdminSystemStatusService). planQuota null = el plan no
+   * incluye el Asistente de IA. */
+  planName: string;
+  planQuota: number | null;
+  planUsed: number;
 }
 
 export const adminSystemStatusApi = {

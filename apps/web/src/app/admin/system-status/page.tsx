@@ -179,12 +179,42 @@ function WhatsAppStatusRow({ item }: { item: SystemStatusItem }) {
   );
 }
 
+/**
+ * Barra de progreso del cupo mensual del Asistente de IA - del TENANT
+ * completo (todos los usuarios/canales), no de este número puntual, ver
+ * el doc comment de planQuota/planUsed en WhatsAppLinkSummary. quota=null
+ * significa que el plan de ese tenant no incluye el Asistente de IA -
+ * nada que medir, se muestra el nombre del plan nomás. Mismos cortes de
+ * color que el resto de la app usa para semáforos de cupo (verde hasta
+ * 70%, amber hasta 90%, rojo de ahí en adelante).
+ */
+function PlanUsageBar({ planName, quota, used }: { planName: string; quota: number | null; used: number }) {
+  if (quota == null) {
+    return <span className="text-slate-500">{planName} (sin Asistente de IA)</span>;
+  }
+  const pct = quota === 0 ? 100 : Math.min(100, Math.round((used / quota) * 100));
+  const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-green-500';
+  return (
+    <div className="flex min-w-[140px] flex-col gap-1">
+      <span className="text-slate-400">
+        {used}/{quota} · {planName}
+      </span>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 /** Detalle por número - se pide recién al abrir (ver el doc comment de
  * AdminSystemStatusController.listWhatsAppLinks), no en cada carga de la
  * página. messageCount es "mensajes del asistente de ese usuario, todos
  * los canales" - AssistantConversation no distingue canal, así que no hay
  * forma de aislar sólo lo mandado por WhatsApp (ver el doc comment de
- * WhatsAppLinkSummary). */
+ * WhatsAppLinkSummary). El consumo del plan (columna aparte) es distinto:
+ * siempre del TENANT completo y del mes en curso, no de este usuario ni
+ * de todo el historial - se repite igual en cada fila de un mismo tenant
+ * a propósito. */
 function WhatsAppLinksPanel() {
   const { data: links, isLoading } = useQuery({
     queryKey: ['admin-whatsapp-links'],
@@ -205,7 +235,8 @@ function WhatsAppLinksPanel() {
               <th className="pb-2 pr-4 font-normal">Usuario</th>
               <th className="pb-2 pr-4 font-normal">Tenant</th>
               <th className="pb-2 pr-4 font-normal">Vinculado</th>
-              <th className="pb-2 font-normal">Mensajes del asistente (todos los canales)</th>
+              <th className="pb-2 pr-4 font-normal">Mensajes del asistente (todos los canales)</th>
+              <th className="pb-2 font-normal">Consumo del plan (tenant, mes en curso)</th>
             </tr>
           </thead>
           <tbody>
@@ -215,7 +246,10 @@ function WhatsAppLinksPanel() {
                 <td className="py-2 pr-4 text-slate-200">{link.userEmail}</td>
                 <td className="py-2 pr-4 text-slate-200">{link.tenantName}</td>
                 <td className="py-2 pr-4 text-slate-400">{DATE_TIME_FORMAT.format(new Date(link.linkedAt))}</td>
-                <td className="py-2 text-slate-200">{link.messageCount}</td>
+                <td className="py-2 pr-4 text-slate-200">{link.messageCount}</td>
+                <td className="py-2">
+                  <PlanUsageBar planName={link.planName} quota={link.planQuota} used={link.planUsed} />
+                </td>
               </tr>
             ))}
           </tbody>
