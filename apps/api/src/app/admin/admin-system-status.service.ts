@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 const execFileAsync = promisify(execFile);
 
@@ -11,6 +11,47 @@ export interface SystemStatusItem {
   /** Human-readable hint when configured=false (which env vars are
    * missing, or why) - never the value of any var, only its name. */
   detail?: string;
+}
+
+export interface LiveTokenCheckResult {
+  valid: boolean;
+  /** Siempre en español para mostrar en la UI (ver translateMetaError) -
+   * el mensaje crudo de Meta (en inglés) nunca llega hasta acá, sólo al
+   * log del server. Nunca incluye el valor de ninguna credencial. */
+  detail?: string;
+}
+
+interface MetaErrorBody {
+  error?: { message?: string; type?: string; code?: number; error_subcode?: number };
+}
+
+/**
+ * Meta devuelve sus mensajes de error siempre en inglés, sin i18n - esta
+ * función traduce los casos conocidos (por code/error_subcode, más
+ * estables entre versiones de la Graph API que parsear el texto) y cae a
+ * un genérico en español para cualquier otro. El texto crudo de Meta se
+ * loguea server-side (útil para debug) pero nunca se lo devuelve tal cual
+ * al frontend - ver LiveTokenCheckResult.
+ */
+function translateMetaError(body: MetaErrorBody | null, httpStatus: number): string {
+  const error = body?.error;
+  if (error?.message) {
+    new Logger('AdminSystemStatusService').warn(`Meta rechazó el token de WhatsApp: ${error.message}`);
+  }
+  // code 190 = OAuthException (token inválido/vencido en cualquiera de
+  // sus variantes) - subcode 463 es específicamente "la sesión venció",
+  // el caso que en la práctica se da casi siempre con el token temporal
+  // de la pantalla "Test API" de Meta.
+  if (error?.code === 190 && error.error_subcode === 463) {
+    return 'El token venció. Generá uno nuevo desde "Test API"/API Setup en tu app de developers.facebook.com.';
+  }
+  if (error?.code === 190) {
+    return 'Meta rechazó el token de acceso (ya no es válido).';
+  }
+  if (httpStatus === 401 || httpStatus === 403) {
+    return 'Meta rechazó las credenciales (no autorizado).';
+  }
+  return `Meta respondió con un error (código ${error?.code ?? httpStatus}).`;
 }
 
 function isSet(name: string): boolean {
@@ -64,8 +105,59 @@ export class AdminSystemStatusService {
       // docs/plan-asistente-ia-conversacional.md, sección 2: son dos
       // consumos de facturación de Anthropic distintos a propósito.
       this.checkGroup('assistant', 'Asistente de IA (Anthropic)', ['ANTHROPIC_ASSISTANT_API_KEY']),
+      // Fase 5b del asistente (docs/plan-asistente-ia-conversacional.md,
+      // sección 6.3) - "Configurado" acá sólo dice que las 4 credenciales
+      // de la app de Meta están cargadas, NO que el token siga siendo
+      // válido (el de la pantalla "Test API" vence a las 24hs y a veces
+      // antes) - esa distinción es la misma que ya documenta la clase
+      // arriba, vale la pena repetirla acá porque es la integración con
+      // el token más volátil de todas las de esta lista.
+      this.checkGroup('whatsapp', 'WhatsApp (Meta Cloud API)', [
+        'WHATSAPP_CLOUD_API_TOKEN',
+        'WHATSAPP_PHONE_NUMBER_ID',
+        'WHATSAPP_VERIFY_TOKEN',
+        'WHATSAPP_APP_SECRET',
+      ]),
       await this.checkBackups(),
     ];
+  }
+
+  /**
+   * A real ping against Meta's Graph API - the deliberate exception to
+   * this class's "structural-only" rule above, opt-in only (the frontend
+   * calls this from a "Verificar ahora" button, never automatically on
+   * page load) precisely so it doesn't inherit the latency/false-negative
+   * problems that rule exists to avoid. WhatsApp gets this and not the
+   * other integrations because its token is uniquely short-lived (the
+   * Meta "Test API" screen's temp token, ~24h or less before it silently
+   * invalidates - see PROGRESS.md) - reading `verified_name` on the
+   * configured phone number is the cheapest authenticated GET that
+   * actually exercises the token, mirrors WhatsAppCloudApiClient.sendText
+   * (apps/api/src/app/whatsapp/) in going straight at the real API with
+   * `fetch`, no SDK.
+   */
+  async verifyWhatsAppToken(): Promise<LiveTokenCheckResult> {
+    const token = process.env['WHATSAPP_CLOUD_API_TOKEN'];
+    const phoneNumberId = process.env['WHATSAPP_PHONE_NUMBER_ID'];
+    if (!token || !phoneNumberId) {
+      return { valid: false, detail: 'Faltan WHATSAPP_CLOUD_API_TOKEN/WHATSAPP_PHONE_NUMBER_ID' };
+    }
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=verified_name`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (response.ok) {
+        return { valid: true };
+      }
+      const body = (await response.json().catch(() => null)) as MetaErrorBody | null;
+      return { valid: false, detail: translateMetaError(body, response.status) };
+    } catch (err) {
+      new Logger('AdminSystemStatusService').warn(
+        `No se pudo contactar a Meta para verificar el token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return { valid: false, detail: 'No se pudo contactar a Meta - revisá la conexión del servidor.' };
+    }
   }
 
   private checkGroup(key: string, label: string, vars: string[]): SystemStatusItem {

@@ -151,8 +151,18 @@ export interface SystemStatusItem {
   detail?: string;
 }
 
+export interface LiveTokenCheckResult {
+  valid: boolean;
+  detail?: string;
+}
+
 export const adminSystemStatusApi = {
   getStatus: () => api.get<SystemStatusItem[]>('/admin/system-status').then((r) => r.data),
+  // Chequeo en vivo, opt-in - ver el doc comment de
+  // AdminSystemStatusService.verifyWhatsAppToken (apps/api) para por qué
+  // esto no es parte de getStatus().
+  verifyWhatsApp: () =>
+    api.post<LiveTokenCheckResult>('/admin/system-status/whatsapp/verify').then((r) => r.data),
 };
 
 export interface AdminPlan {

@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { PlatformAdminGuard } from '@plexo/auth';
 import { AdminSystemStatusService } from './admin-system-status.service.js';
 
@@ -10,5 +10,13 @@ export class AdminSystemStatusController {
   @Get()
   getStatus() {
     return this.adminSystemStatusService.getStatus();
+  }
+
+  // POST, no GET: dispara una llamada real (con efecto de red, aunque sin
+  // side-effect en nuestros datos) contra Meta - ver el doc comment de
+  // verifyWhatsAppToken para por qué esto vive aparte de getStatus().
+  @Post('whatsapp/verify')
+  verifyWhatsApp() {
+    return this.adminSystemStatusService.verifyWhatsAppToken();
   }
 }

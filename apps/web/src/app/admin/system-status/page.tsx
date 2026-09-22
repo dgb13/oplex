@@ -1,7 +1,8 @@
 'use client';
 
-import { adminSystemStatusApi, type SystemStatusItem } from '@/lib/admin';
-import { useQuery } from '@tanstack/react-query';
+import { adminSystemStatusApi, type LiveTokenCheckResult, type SystemStatusItem } from '@/lib/admin';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
 /**
  * "¿Está configurado o no?" para cada integración externa opcional que
@@ -40,9 +41,13 @@ export default function AdminSystemStatusPage() {
             </div>
           )}
           <div className="flex flex-col gap-3">
-            {items.map((item) => (
-              <StatusRow key={item.key} item={item} />
-            ))}
+            {items.map((item) =>
+              item.key === 'whatsapp' ? (
+                <WhatsAppStatusRow key={item.key} item={item} />
+              ) : (
+                <StatusRow key={item.key} item={item} />
+              ),
+            )}
           </div>
         </>
       )}
@@ -50,7 +55,7 @@ export default function AdminSystemStatusPage() {
   );
 }
 
-function StatusRow({ item }: { item: SystemStatusItem }) {
+function StatusRow({ item, liveCheck }: { item: SystemStatusItem; liveCheck?: React.ReactNode }) {
   return (
     <div
       className={`flex items-center justify-between gap-4 rounded-xl border p-4 ${
@@ -67,13 +72,81 @@ function StatusRow({ item }: { item: SystemStatusItem }) {
           {item.detail && <p className="mt-0.5 text-xs text-red-300">{item.detail}</p>}
         </div>
       </div>
-      <span
-        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-          item.configured ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
-        }`}
-      >
-        {item.configured ? 'Configurado' : 'Falta configurar'}
-      </span>
+      <div className="flex shrink-0 items-center gap-3">
+        {liveCheck}
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+            item.configured ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+          }`}
+        >
+          {item.configured ? 'Configurado' : 'Falta configurar'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Verificar ahora" es la única excepción a "nunca pegar en vivo contra el
+ * proveedor" de esta pantalla (ver AdminSystemStatusService.
+ * verifyWhatsAppToken) - opt-in, sólo en esta fila, porque el token de
+ * WhatsApp es el único de esta lista que vence solo en horas sin que nadie
+ * lo toque (el de la pantalla "Test API" de Meta). El resultado vive en
+ * estado local nomás - no se persiste ni se vuelve a pedir en cada carga
+ * de la página, es una foto del momento en que se apretó el botón.
+ */
+function WhatsAppStatusRow({ item }: { item: SystemStatusItem }) {
+  const [result, setResult] = useState<LiveTokenCheckResult | null>(null);
+  const mutation = useMutation({
+    mutationFn: adminSystemStatusApi.verifyWhatsApp,
+    onSuccess: setResult,
+  });
+
+  const button = (
+    <button
+      type="button"
+      onClick={() => {
+        setResult(null);
+        mutation.mutate();
+      }}
+      disabled={mutation.isPending || !item.configured}
+      className="shrink-0 rounded-full border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+      title={!item.configured ? 'Faltan variables de entorno - no hay nada que verificar todavía' : undefined}
+    >
+      {mutation.isPending ? 'Verificando...' : 'Verificar ahora'}
+    </button>
+  );
+
+  // El estado "estructural" (item.configured) manda mientras no haya un
+  // resultado en vivo todavía, o mientras las variables directamente
+  // faltan (ahí no tiene sentido mostrar amarillo - no hay token que
+  // pegarle). Un resultado en vivo inválido pisa el verde con amarillo;
+  // uno válido simplemente confirma el verde que ya estaba.
+  if (!item.configured || !result) {
+    return <StatusRow item={item} liveCheck={button} />;
+  }
+
+  if (result.valid) {
+    return <StatusRow item={{ ...item, detail: undefined }} liveCheck={button} />;
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-900 bg-amber-950/30 p-4">
+      <div className="flex items-center gap-3">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" aria-hidden />
+        <div>
+          <p className="text-sm font-medium text-slate-200">{item.label}</p>
+          <p className="mt-0.5 text-xs text-amber-300">
+            {result.detail ?? 'El token está cargado pero Meta lo rechazó.'}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        {button}
+        <span className="shrink-0 rounded-full bg-amber-900/50 px-2.5 py-1 text-xs font-medium text-amber-300">
+          Token inválido
+        </span>
+      </div>
     </div>
   );
 }
