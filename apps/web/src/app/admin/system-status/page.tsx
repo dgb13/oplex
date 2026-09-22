@@ -4,6 +4,8 @@ import { adminSystemStatusApi, type LiveTokenCheckResult, type SystemStatusItem 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+
 /**
  * "¿Está configurado o no?" para cada integración externa opcional que
  * este servidor lee de su .env - nunca "¿el token todavía es válido?"
@@ -97,12 +99,13 @@ function StatusRow({ item, liveCheck }: { item: SystemStatusItem; liveCheck?: Re
  */
 function WhatsAppStatusRow({ item }: { item: SystemStatusItem }) {
   const [result, setResult] = useState<LiveTokenCheckResult | null>(null);
+  const [showLinks, setShowLinks] = useState(false);
   const mutation = useMutation({
     mutationFn: adminSystemStatusApi.verifyWhatsApp,
     onSuccess: setResult,
   });
 
-  const button = (
+  const verifyButton = (
     <button
       type="button"
       onClick={() => {
@@ -117,36 +120,107 @@ function WhatsAppStatusRow({ item }: { item: SystemStatusItem }) {
     </button>
   );
 
+  // El conteo de números vinculados no depende de si el .env está
+  // configurado ni de si el token es válido - son datos nuestros, no de
+  // Meta (ver AdminSystemStatusService.getStatus). Siempre clickeable,
+  // incluso en 0, para que el admin pueda confirmar que efectivamente no
+  // hay ninguno vinculado todavía.
+  const linksButton = (
+    <button
+      type="button"
+      onClick={() => setShowLinks((v) => !v)}
+      className="shrink-0 rounded-full border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+    >
+      {item.linksCount ?? 0} número{item.linksCount === 1 ? '' : 's'} vinculado{item.linksCount === 1 ? '' : 's'}
+    </button>
+  );
+  const liveCheck = (
+    <>
+      {linksButton}
+      {verifyButton}
+    </>
+  );
+
   // El estado "estructural" (item.configured) manda mientras no haya un
   // resultado en vivo todavía, o mientras las variables directamente
   // faltan (ahí no tiene sentido mostrar amarillo - no hay token que
   // pegarle). Un resultado en vivo inválido pisa el verde con amarillo;
   // uno válido simplemente confirma el verde que ya estaba.
-  if (!item.configured || !result) {
-    return <StatusRow item={item} liveCheck={button} />;
-  }
-
-  if (result.valid) {
-    return <StatusRow item={{ ...item, detail: undefined }} liveCheck={button} />;
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-900 bg-amber-950/30 p-4">
-      <div className="flex items-center gap-3">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" aria-hidden />
-        <div>
-          <p className="text-sm font-medium text-slate-200">{item.label}</p>
-          <p className="mt-0.5 text-xs text-amber-300">
-            {result.detail ?? 'El token está cargado pero Meta lo rechazó.'}
-          </p>
+  const row =
+    !item.configured || !result ? (
+      <StatusRow item={item} liveCheck={liveCheck} />
+    ) : result.valid ? (
+      <StatusRow item={{ ...item, detail: undefined }} liveCheck={liveCheck} />
+    ) : (
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-900 bg-amber-950/30 p-4">
+        <div className="flex items-center gap-3">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" aria-hidden />
+          <div>
+            <p className="text-sm font-medium text-slate-200">{item.label}</p>
+            <p className="mt-0.5 text-xs text-amber-300">
+              {result.detail ?? 'El token está cargado pero Meta lo rechazó.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {liveCheck}
+          <span className="shrink-0 rounded-full bg-amber-900/50 px-2.5 py-1 text-xs font-medium text-amber-300">
+            Token inválido
+          </span>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        {button}
-        <span className="shrink-0 rounded-full bg-amber-900/50 px-2.5 py-1 text-xs font-medium text-amber-300">
-          Token inválido
-        </span>
-      </div>
+    );
+
+  return (
+    <div className="flex flex-col gap-2">
+      {row}
+      {showLinks && <WhatsAppLinksPanel />}
+    </div>
+  );
+}
+
+/** Detalle por número - se pide recién al abrir (ver el doc comment de
+ * AdminSystemStatusController.listWhatsAppLinks), no en cada carga de la
+ * página. messageCount es "mensajes del asistente de ese usuario, todos
+ * los canales" - AssistantConversation no distingue canal, así que no hay
+ * forma de aislar sólo lo mandado por WhatsApp (ver el doc comment de
+ * WhatsAppLinkSummary). */
+function WhatsAppLinksPanel() {
+  const { data: links, isLoading } = useQuery({
+    queryKey: ['admin-whatsapp-links'],
+    queryFn: adminSystemStatusApi.listWhatsAppLinks,
+  });
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+      {isLoading || !links ? (
+        <p className="text-xs text-slate-500">Cargando...</p>
+      ) : links.length === 0 ? (
+        <p className="text-xs text-slate-500">Ningún número vinculado todavía en esta plataforma.</p>
+      ) : (
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="pb-2 pr-4 font-normal">Teléfono</th>
+              <th className="pb-2 pr-4 font-normal">Usuario</th>
+              <th className="pb-2 pr-4 font-normal">Tenant</th>
+              <th className="pb-2 pr-4 font-normal">Vinculado</th>
+              <th className="pb-2 font-normal">Mensajes del asistente (todos los canales)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {links.map((link) => (
+              <tr key={link.phoneE164} className="border-t border-slate-800/60">
+                <td className="py-2 pr-4 text-slate-200">{link.phoneE164}</td>
+                <td className="py-2 pr-4 text-slate-200">{link.userEmail}</td>
+                <td className="py-2 pr-4 text-slate-200">{link.tenantName}</td>
+                <td className="py-2 pr-4 text-slate-400">{DATE_TIME_FORMAT.format(new Date(link.linkedAt))}</td>
+                <td className="py-2 text-slate-200">{link.messageCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

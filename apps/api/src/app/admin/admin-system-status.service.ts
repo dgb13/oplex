@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService, getTenantDb, withTenantContext } from '@plexo/database';
 
 const execFileAsync = promisify(execFile);
 
@@ -11,6 +12,34 @@ export interface SystemStatusItem {
   /** Human-readable hint when configured=false (which env vars are
    * missing, or why) - never the value of any var, only its name. */
   detail?: string;
+  /** Sólo en el item 'whatsapp' - cantidad de números vinculados
+   * (whatsapp_links), platform-wide. `whatsapp_links` tiene FORCE ROW LEVEL
+   * SECURITY por tenantId, y `tenants` mismo tiene FORCE ROW LEVEL SECURITY
+   * propia (policy tenant_self_only, keyed por "id" - ver
+   * 20260723000001_row_level_security) - no es el caso de webhook_events
+   * (deliberadamente global, sin RLS, ver AdminMercadoPagoService). Este
+   * count se resuelve loopeando list_tenant_ids() (función SECURITY
+   * DEFINER, mismo mecanismo que AdminTenantsService.listTenants) con
+   * withTenantContext por tenant - ver countAllWhatsAppLinks. El detalle
+   * por número (usuario/tenant/mensajes) es más caro todavía (un N+1 de
+   * assistant_messages por link, adentro de cada tenant) y se pide aparte,
+   * sólo al abrir el detalle - ver listWhatsAppLinks. */
+  linksCount?: number;
+}
+
+export interface WhatsAppLinkSummary {
+  phoneE164: string;
+  userEmail: string;
+  tenantName: string;
+  linkedAt: string;
+  /** Mensajes USER del usuario vinculado, TODOS los canales (web +
+   * WhatsApp) - AssistantConversation no distingue canal (Fase 0 del
+   * asistente, ver el comment en schema.prisma), así que no hay forma de
+   * aislar "sólo lo que mandó por WhatsApp" sin agregar esa columna. Se
+   * muestra igual porque es la mejor aproximación disponible, pero el
+   * frontend la rotula "mensajes del asistente (todos los canales)" para
+   * no insinuar una precisión que no existe. */
+  messageCount: number;
 }
 
 export interface LiveTokenCheckResult {
@@ -82,7 +111,17 @@ function missingVars(names: string[]): string[] {
  */
 @Injectable()
 export class AdminSystemStatusService {
+  constructor(private readonly prisma: PrismaService) {}
+
   async getStatus(): Promise<SystemStatusItem[]> {
+    const whatsapp = this.checkGroup('whatsapp', 'WhatsApp (Meta Cloud API)', [
+      'WHATSAPP_CLOUD_API_TOKEN',
+      'WHATSAPP_PHONE_NUMBER_ID',
+      'WHATSAPP_VERIFY_TOKEN',
+      'WHATSAPP_APP_SECRET',
+    ]);
+    whatsapp.linksCount = await this.countAllWhatsAppLinks();
+
     return [
       this.checkGroup('mercadopago', 'Mercado Pago', [
         'MP_CLIENT_ID',
@@ -112,14 +151,76 @@ export class AdminSystemStatusService {
       // antes) - esa distinción es la misma que ya documenta la clase
       // arriba, vale la pena repetirla acá porque es la integración con
       // el token más volátil de todas las de esta lista.
-      this.checkGroup('whatsapp', 'WhatsApp (Meta Cloud API)', [
-        'WHATSAPP_CLOUD_API_TOKEN',
-        'WHATSAPP_PHONE_NUMBER_ID',
-        'WHATSAPP_VERIFY_TOKEN',
-        'WHATSAPP_APP_SECRET',
-      ]),
+      whatsapp,
       await this.checkBackups(),
     ];
+  }
+
+  /** `tenants` tiene su propia FORCE ROW LEVEL SECURITY (tenant_self_only,
+   * keyed por "id"), así que ni siquiera listar los tenants en sí anda con
+   * el PrismaService crudo - list_tenant_ids() (SECURITY DEFINER, migración
+   * 20260726000000_list_tenant_ids_function) es el único camino ya
+   * provisto para eso, mismo que usa AdminTenantsService.listTenants. */
+  private async listTenantIds(): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM list_tenant_ids() AS id`;
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * `whatsapp_links` tiene FORCE ROW LEVEL SECURITY (tenantId = current
+   * tenant) - no es el mismo caso que webhook_events (deliberadamente
+   * global, sin RLS, ver AdminMercadoPagoService). Se resuelve loopeando
+   * list_tenant_ids() con withTenantContext por tenant, mismo recipe que
+   * AdminTenantsService.listTenants.
+   */
+  private async countAllWhatsAppLinks(): Promise<number> {
+    const tenantIds = await this.listTenantIds();
+    let total = 0;
+    for (const tenantId of tenantIds) {
+      total += await withTenantContext(this.prisma, tenantId, () => getTenantDb().whatsAppLink.count());
+    }
+    return total;
+  }
+
+  /**
+   * Detalle por número vinculado - platform-wide. Mismo problema de RLS
+   * que countAllWhatsAppLinks de arriba, mismo mecanismo: loopea
+   * list_tenant_ids() con withTenantContext en vez de pegarle a
+   * whatsapp_links/tenants con el PrismaService crudo. Adentro de cada
+   * tenant, además, un N+1 de assistant_messages por link - lista chica de
+   * un reporte de Admin sin volumen, mismo criterio ya usado en
+   * AssistantSettingsService.getUnansweredQuestions().
+   */
+  async listWhatsAppLinks(): Promise<WhatsAppLinkSummary[]> {
+    const tenantIds = await this.listTenantIds();
+    const results: WhatsAppLinkSummary[] = [];
+
+    for (const tenantId of tenantIds) {
+      const tenantResults = await withTenantContext(this.prisma, tenantId, async () => {
+        const db = getTenantDb();
+        const [tenant, links] = await Promise.all([
+          db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } }),
+          db.whatsAppLink.findMany({
+            include: { user: { select: { email: true } } },
+            orderBy: { createdAt: 'desc' },
+          }),
+        ]);
+        return Promise.all(
+          links.map(async (link) => ({
+            phoneE164: link.phoneE164,
+            userEmail: link.user.email,
+            tenantName: tenant.name,
+            linkedAt: link.createdAt.toISOString(),
+            messageCount: await db.assistantMessage.count({
+              where: { role: 'USER', conversation: { userId: link.userId } },
+            }),
+          })),
+        );
+      });
+      results.push(...tenantResults);
+    }
+
+    return results.sort((a, b) => b.linkedAt.localeCompare(a.linkedAt));
   }
 
   /**

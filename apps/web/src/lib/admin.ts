@@ -149,6 +149,8 @@ export interface SystemStatusItem {
   label: string;
   configured: boolean;
   detail?: string;
+  /** Sólo presente en el item 'whatsapp' - ver AdminSystemStatusService.getStatus. */
+  linksCount?: number;
 }
 
 export interface LiveTokenCheckResult {
@@ -156,8 +158,18 @@ export interface LiveTokenCheckResult {
   detail?: string;
 }
 
+export interface WhatsAppLinkSummary {
+  phoneE164: string;
+  userEmail: string;
+  tenantName: string;
+  linkedAt: string;
+  messageCount: number;
+}
+
 export const adminSystemStatusApi = {
   getStatus: () => api.get<SystemStatusItem[]>('/admin/system-status').then((r) => r.data),
+  listWhatsAppLinks: () =>
+    api.get<WhatsAppLinkSummary[]>('/admin/system-status/whatsapp/links').then((r) => r.data),
   // Chequeo en vivo, opt-in - ver el doc comment de
   // AdminSystemStatusService.verifyWhatsAppToken (apps/api) para por qué
   // esto no es parte de getStatus().
