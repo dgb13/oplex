@@ -28,6 +28,7 @@ import {
   ShoppingBag,
   ShoppingBasket,
   ShoppingCart,
+  Store,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -93,6 +94,7 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
+  { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store },
   { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase },
 ];
 

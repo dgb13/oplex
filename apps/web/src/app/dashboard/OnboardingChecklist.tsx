@@ -54,7 +54,11 @@ export default function OnboardingChecklist() {
   const steps: Step[] =
     companies && articles && invoices && profile
       ? [
-          { label: 'Agregá tu primera empresa', done: companies.length > 0, href: '/companies' },
+          {
+            label: 'Agregá tu primera sucursal',
+            done: companies.some((c) => c.roles.some((r) => r.role === 'BRANCH')),
+            href: '/branches?openBranch=1',
+          },
           { label: 'Cargá tu primer artículo', done: articles.length > 0, href: '/inventory' },
           { label: 'Emití tu primera factura', done: invoices.length > 0, href: '/invoicing' },
           { label: 'Completá tu perfil', done: Boolean(profile.name), href: '/profile' },

@@ -40,6 +40,12 @@ interface Props {
    * contactos de una), no para /companies ni "Mis sucursales" (una sucursal
    * no puede tener contactos, ver CompaniesService.createPerson). */
   promptContactsAfterCreate?: boolean;
+  /** Opens CompanyFormModal immediately on mount instead of waiting for a
+   * "+ Nuevo..." click - used to deep-link straight into the create form
+   * (e.g. OnboardingChecklist's "Agregá tu primera sucursal" step), matching
+   * what the user actually expects from that link instead of just landing
+   * on the list. No effect when `editable` is false. */
+  autoOpenNew?: boolean;
 }
 
 export default function CompanyListView({
@@ -49,11 +55,12 @@ export default function CompanyListView({
   newLabel,
   variant = 'page',
   promptContactsAfterCreate,
+  autoOpenNew,
 }: Props) {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<CompanyRoleType | ''>('');
   const [showInactive, setShowInactive] = useState(false);
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(Boolean(autoOpenNew && editable));
   const [selected, setSelected] = useState<Company | null>(null);
   const [editing, setEditing] = useState<Company | null>(null);
   const [addingContactsTo, setAddingContactsTo] = useState<Company | null>(null);
