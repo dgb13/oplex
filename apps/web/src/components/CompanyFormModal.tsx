@@ -86,6 +86,8 @@ export default function CompanyFormModal({
     company?.withholdsGrossIncome ?? false,
   );
   const [logoUrl, setLogoUrl] = useState(company?.logoUrl ?? '');
+  const [phone, setPhone] = useState(company?.phone ?? '');
+  const [website, setWebsite] = useState(company?.website ?? '');
   const [roles, setRoles] = useState<CompanyRoleType[]>(
     company?.roles.map((r) => r.role) ?? ['CUSTOMER'],
   );
@@ -98,6 +100,15 @@ export default function CompanyFormModal({
   const [mergeCandidate, setMergeCandidate] = useState<Company | null>(null);
 
   const effectiveRoles = lockedRole ? [lockedRole] : roles;
+  // A sucursal is the tenant's OWN location, not a separate legal entity -
+  // su CUIT/razón social/condición de IVA/rubro/IIBB ya se cargan UNA vez
+  // en Preferencias (Tenant.taxId, ownTaxCondition, certificado, "Datos
+  // fiscales para la Factura"), pedírselos de nuevo acá sería duplicar ese
+  // dato. Sólo se aplica cuando el formulario está bloqueado a BRANCH -
+  // el multi-rol genérico (sin lockedRole) no se usa hoy en ningún lugar
+  // real de la app (todo llamador pasa un lockedRole explícito), pero
+  // sigue soportado tal cual para no romperlo si algún día se usa.
+  const isBranchOnly = lockedRole === 'BRANCH';
 
   const afipLookup = useMutation({
     mutationFn: () => companiesApi.lookupAfip(taxId),
@@ -106,11 +117,11 @@ export default function CompanyFormModal({
       setTaxCondition(data.taxCondition ?? '');
       setFiscalAddress(data.fiscalAddress ?? '');
       setAfipError('');
-      setAfipMessage('Datos encontrados en AFIP');
+      setAfipMessage('Datos encontrados en ARCA');
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       setAfipMessage('');
-      const message = err.response?.data?.message ?? 'No se pudo consultar AFIP';
+      const message = err.response?.data?.message ?? 'No se pudo consultar ARCA';
       setAfipError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
@@ -131,6 +142,8 @@ export default function CompanyFormModal({
         withholdsIncomeTax: effectiveRoles.includes('CUSTOMER') ? withholdsIncomeTax : undefined,
         withholdsGrossIncome: effectiveRoles.includes('CUSTOMER') ? withholdsGrossIncome : undefined,
         logoUrl: logoUrl || undefined,
+        phone: phone || undefined,
+        website: website || undefined,
       };
       if (company) {
         return companiesApi.update(company.id, {
@@ -254,37 +267,44 @@ export default function CompanyFormModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="CUIT / Tax ID">
-              <div className="flex gap-2">
-                <Input
-                  value={taxId}
-                  onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
-                  placeholder="30-71659554-9"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => afipLookup.mutate()}
-                  disabled={afipLookup.isPending || !taxId.trim()}
-                >
-                  {afipLookup.isPending ? 'Consultando AFIP...' : 'Buscar en AFIP'}
-                </Button>
-              </div>
-              {afipMessage && <p className="text-xs text-muted-foreground">{afipMessage}</p>}
-              {afipError && <p className="text-xs text-destructive">{afipError}</p>}
-              {(taxCondition || fiscalAddress) && (
-                <p className="text-xs text-muted-foreground">
-                  {[taxCondition, fiscalAddress].filter(Boolean).join(' · ')}
-                </p>
-              )}
-            </Field>
+            {isBranchOnly ? (
+              <p className="rounded-lg border bg-muted p-3 text-xs text-muted-foreground">
+                El CUIT, la razón social, la condición de IVA y el certificado de esta empresa ya se
+                cargan una sola vez en Preferencias - acá sólo lo que puede variar por sucursal.
+              </p>
+            ) : (
+              <Field label="CUIT / Tax ID">
+                <div className="flex gap-2">
+                  <Input
+                    value={taxId}
+                    onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
+                    placeholder="30-71659554-9"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => afipLookup.mutate()}
+                    disabled={afipLookup.isPending || !taxId.trim()}
+                  >
+                    {afipLookup.isPending ? 'Consultando ARCA...' : 'Buscar en ARCA'}
+                  </Button>
+                </div>
+                {afipMessage && <p className="text-xs text-muted-foreground">{afipMessage}</p>}
+                {afipError && (
+                  <p className="text-xs text-destructive">
+                    {afipError} - si el padrón de ARCA no responde, podés completar los datos a mano
+                    acá abajo.
+                  </p>
+                )}
+              </Field>
+            )}
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Nombre / Razón Social">
+              <Field label={isBranchOnly ? 'Nombre de la sucursal' : 'Nombre / Razón Social'}>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Se completa solo al buscar el CUIT en AFIP"
+                  placeholder={isBranchOnly ? 'Sucursal Centro' : 'Se puede escribir a mano o buscar el CUIT en ARCA'}
                 />
               </Field>
               <Field label="Email">
@@ -292,25 +312,59 @@ export default function CompanyFormModal({
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Rubro">
-                <select
-                  className={`${selectClass} w-full`}
-                  value={industry}
-                  onChange={(e) => setIndustry(e.target.value as CompanyIndustry | '')}
-                >
-                  <option value="">Sin especificar</option>
-                  {INDUSTRY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+            {isBranchOnly ? (
+              <Field label="Domicilio comercial (si es distinto del fiscal)">
+                <Input
+                  value={fiscalAddress}
+                  onChange={(e) => setFiscalAddress(e.target.value)}
+                  placeholder="Av. Corrientes 1234, CABA"
+                />
               </Field>
-              <Field label="Ingresos Brutos (IIBB)">
-                <Input value={grossIncomeNumber} onChange={(e) => setGrossIncomeNumber(e.target.value)} />
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Condición de IVA">
+                  <Input
+                    value={taxCondition}
+                    onChange={(e) => setTaxCondition(e.target.value)}
+                    placeholder="Responsable Inscripto"
+                  />
+                </Field>
+                <Field label="Domicilio fiscal">
+                  <Input value={fiscalAddress} onChange={(e) => setFiscalAddress(e.target.value)} />
+                </Field>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Teléfono">
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+54 11 4444-5555" />
+              </Field>
+              <Field label="Sitio web">
+                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." />
               </Field>
             </div>
+
+            {!isBranchOnly && (
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Rubro">
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value as CompanyIndustry | '')}
+                  >
+                    <option value="">Sin especificar</option>
+                    {INDUSTRY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Ingresos Brutos (IIBB)">
+                  <Input value={grossIncomeNumber} onChange={(e) => setGrossIncomeNumber(e.target.value)} />
+                </Field>
+              </div>
+            )}
 
             <div className="grid grid-cols-4 gap-4">
               <div className={effectiveRoles.includes('CUSTOMER') ? 'col-span-3' : 'col-span-4'}>
@@ -367,7 +421,7 @@ export default function CompanyFormModal({
             )}
 
             {effectiveRoles.includes('CUSTOMER') && (
-              <Field label="Retenciones (agente AFIP/ARBA)">
+              <Field label="Retenciones (agente ARCA/ARBA)">
                 <div className="flex flex-col gap-2 rounded-lg border bg-muted p-3">
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -398,7 +452,7 @@ export default function CompanyFormModal({
             )}
 
             {effectiveRoles.includes('BRANCH') && (
-              <Field label="Punto de venta (AFIP)">
+              <Field label="Punto de venta (ARCA)">
                 <Input
                   value={pointOfSaleNumber}
                   onChange={(e) => setPointOfSaleNumber(e.target.value)}

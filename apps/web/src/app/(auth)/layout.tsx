@@ -57,7 +57,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </h2>
           <p className="mt-3 text-sm text-slate-300">
             Facturación, inventario, compras y contabilidad en un solo lugar — con aislamiento
-            multi-tenant real y AFIP integrado.
+            multi-tenant real y ARCA integrado.
           </p>
         </motion.div>
       </div>

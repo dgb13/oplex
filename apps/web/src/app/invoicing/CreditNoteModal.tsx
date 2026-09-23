@@ -121,10 +121,10 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
           </div>
           {!afipConfigured && (
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              Todavía no configuraste el certificado AFIP de esta empresa - la nota de crédito no va
+              Todavía no configuraste el certificado ARCA de esta empresa - la nota de crédito no va
               a poder pedir CAE hasta que lo cargues en{' '}
               <Link href="/preferences" className="font-medium underline">
-                Preferencias → Certificado AFIP
+                Preferencias → Certificado ARCA
               </Link>
               .
             </p>
@@ -138,7 +138,7 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
             <Button
               type="submit"
               disabled={mutation.isPending || detailQuery.isLoading || !afipConfigured}
-              title={!afipConfigured ? 'Configurá el certificado AFIP en Preferencias primero' : undefined}
+              title={!afipConfigured ? 'Configurá el certificado ARCA en Preferencias primero' : undefined}
               className="bg-red-700 text-white hover:bg-red-600"
             >
               {mutation.isPending ? 'Emitiendo...' : 'Emitir nota de crédito'}

@@ -77,7 +77,7 @@ function resolveIvaId(rate: Prisma.Decimal): number {
   const key = rate.toFixed(1);
   const id = IVA_ALICUOTA_ID[key];
   if (!id) {
-    throw new Error(`Alícuota de IVA ${key}% no reconocida por AFIP (0/10.5/21/27)`);
+    throw new Error(`Alícuota de IVA ${key}% no reconocida por ARCA (0/10.5/21/27)`);
   }
   return id;
 }
@@ -236,22 +236,22 @@ export class AfipWsfeClient {
         const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);
         throw new Error(
           faultMatch
-            ? `AFIP WSFE rechazó la solicitud: ${faultMatch[1]}`
-            : `AFIP WSFE respondió ${response.status}: ${responseText.slice(0, 500)}`,
+            ? `ARCA WSFE rechazó la solicitud: ${faultMatch[1]}`
+            : `ARCA WSFE respondió ${response.status}: ${responseText.slice(0, 500)}`,
         );
       }
     } catch (err) {
       if (
         err instanceof Error &&
-        (err.message.startsWith('AFIP WSFE respondió') || err.message.startsWith('AFIP WSFE rechazó'))
+        (err.message.startsWith('ARCA WSFE respondió') || err.message.startsWith('ARCA WSFE rechazó'))
       )
         throw err;
-      throw new Error(`No se pudo conectar con AFIP WSFE: ${(err as Error).message}`);
+      throw new Error(`No se pudo conectar con ARCA WSFE: ${(err as Error).message}`);
     }
 
     const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);
     if (faultMatch) {
-      throw new Error(`AFIP WSFE rechazó la solicitud: ${faultMatch[1]}`);
+      throw new Error(`ARCA WSFE rechazó la solicitud: ${faultMatch[1]}`);
     }
 
     const parsed = xmlParser.parse(responseText);

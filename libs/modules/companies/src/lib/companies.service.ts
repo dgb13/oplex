@@ -62,6 +62,8 @@ export class CompaniesService {
         withholdsIncomeTax: dto.withholdsIncomeTax,
         withholdsGrossIncome: dto.withholdsGrossIncome,
         logoUrl: dto.logoUrl,
+        phone: dto.phone,
+        website: dto.website,
         roles: { createMany: { data: dto.roles.map((role) => ({ tenantId, role })) } },
       },
       include: { roles: true },
@@ -146,6 +148,8 @@ export class CompaniesService {
         withholdsIncomeTax: dto.withholdsIncomeTax,
         withholdsGrossIncome: dto.withholdsGrossIncome,
         logoUrl: dto.logoUrl,
+        phone: dto.phone,
+        website: dto.website,
         active: dto.active,
       },
       include: { roles: true },
@@ -228,7 +232,7 @@ export class CompaniesService {
     } catch (err) {
       if (err instanceof AfipNotConfiguredError) {
         throw new BadRequestException(
-          'La consulta a AFIP no está configurada en este servidor',
+          'La consulta a ARCA no está configurada en este servidor',
         );
       }
       if (err instanceof AfipLookupError) {
@@ -238,7 +242,7 @@ export class CompaniesService {
     }
 
     if (!result) {
-      throw new NotFoundException('AFIP no tiene datos para ese CUIT');
+      throw new NotFoundException('ARCA no tiene datos para ese CUIT');
     }
     return result;
   }

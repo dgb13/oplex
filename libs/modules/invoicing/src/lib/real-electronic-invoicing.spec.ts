@@ -31,7 +31,7 @@ describe('RealElectronicInvoicingService.requestCae', () => {
     const service = new RealElectronicInvoicingService(afipCredentials);
 
     await expect(service.requestCae(makeInvoice())).rejects.toThrow(BadRequestException);
-    await expect(service.requestCae(makeInvoice())).rejects.toThrow(/certificado AFIP/);
+    await expect(service.requestCae(makeInvoice())).rejects.toThrow(/certificado ARCA/);
   });
 
   it('wraps an AFIP-side failure (unreachable, rejected cert, ...) as a 502, not a raw 500', async () => {

@@ -937,6 +937,12 @@ model Company {
   // URL only, no upload/storage infra - same convention as
   // User.avatarUrl/Person.avatarUrl.
   logoUrl              String?
+  // Free text, printed in the invoice PDF header when set - mainly useful
+  // for a BRANCH (each physical point of sale can have its own phone/site),
+  // but not restricted to that role at the schema level, same criterion as
+  // every other optional Company field here.
+  phone                String?
+  website              String?
   // Soft delete: a Company can be referenced by historical fiscal records
   // (Invoice/Quote have no onDelete cascade on purpose - see the migration
   // for why), so "deleting" one means hiding it from active use, not

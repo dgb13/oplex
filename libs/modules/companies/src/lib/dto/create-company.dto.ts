@@ -81,6 +81,14 @@ export class CreateCompanyDto {
   @IsString()
   logoUrl?: string;
 
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayUnique()

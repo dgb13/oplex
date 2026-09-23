@@ -64,21 +64,21 @@ export class AfipWsaaClient {
     });
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(`AFIP WSAA rechazó la solicitud: ${this.describeFault(responseText)}`);
+      throw new Error(`ARCA WSAA rechazó la solicitud: ${this.describeFault(responseText)}`);
     }
 
     const envelope = xmlParser.parse(responseText);
     const loginCmsReturn: string | undefined =
       envelope?.Envelope?.Body?.loginCmsResponse?.loginCmsReturn;
     if (!loginCmsReturn) {
-      throw new Error(`Respuesta de AFIP WSAA sin loginCmsReturn: ${responseText.slice(0, 300)}`);
+      throw new Error(`Respuesta de ARCA WSAA sin loginCmsReturn: ${responseText.slice(0, 300)}`);
     }
 
     const ticketXml = xmlParser.parse(loginCmsReturn);
     const header = ticketXml?.loginTicketResponse?.header;
     const ticketCredentials = ticketXml?.loginTicketResponse?.credentials;
     if (!header?.expirationTime || !ticketCredentials?.token || !ticketCredentials?.sign) {
-      throw new Error(`No se pudo leer el ticket de AFIP WSAA: ${loginCmsReturn.slice(0, 300)}`);
+      throw new Error(`No se pudo leer el ticket de ARCA WSAA: ${loginCmsReturn.slice(0, 300)}`);
     }
 
     const ticket: WsaaTicket = {

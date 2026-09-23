@@ -91,7 +91,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       setAfipResult(null);
       setCuitMessage('');
-      const message = err.response?.data?.message ?? 'No se pudo consultar AFIP';
+      const message = err.response?.data?.message ?? 'No se pudo consultar ARCA';
       setCuitError(Array.isArray(message) ? message.join(', ') : message);
     },
   });

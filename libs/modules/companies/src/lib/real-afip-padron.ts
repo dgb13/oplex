@@ -67,7 +67,7 @@ export class RealAfipPadronService implements AfipPadronPort {
     try {
       ticket = await wsaa.getTicket(PADRON_SERVICE);
     } catch (err) {
-      throw new AfipLookupError('No se pudo autenticar contra AFIP (WSAA)', err);
+      throw new AfipLookupError('No se pudo autenticar contra ARCA (WSAA)', err);
     }
 
     const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
@@ -92,10 +92,10 @@ export class RealAfipPadronService implements AfipPadronPort {
       });
       responseText = await response.text();
       if (!response.ok) {
-        throw new Error(`AFIP respondió ${response.status}`);
+        throw new Error(`ARCA respondió ${response.status}`);
       }
     } catch (err) {
-      throw new AfipLookupError('No se pudo consultar el padrón de AFIP', err);
+      throw new AfipLookupError('No se pudo consultar el padrón de ARCA', err);
     }
 
     const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);

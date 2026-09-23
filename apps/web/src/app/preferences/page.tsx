@@ -210,7 +210,7 @@ function daysUntil(iso: string): number {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
-/** Certificado/clave AFIP del tenant - reemplaza lo que antes eran
+/** Certificado/clave ARCA (ex AFIP) del tenant - reemplaza lo que antes eran
  * variables de entorno del proceso (un solo CUIT para toda la instancia,
  * ver companies.module.ts). Se pegan/suben como archivos .crt/.key, viajan
  * como texto y el backend los cifra (AES-256-GCM) antes de guardarlos; acá
@@ -314,11 +314,11 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
     <Card>
       <CardContent>
         <h2 className="mb-1 text-sm font-medium text-muted-foreground">
-          Certificado AFIP (facturación electrónica)
+          Certificado ARCA (facturación electrónica)
         </h2>
         <p className="mb-4 text-xs text-muted-foreground">
           Certificado digital (.crt) y clave privada (.key) propios de esta empresa, autorizados para
-          WSFE en el Administrador de Relaciones de Clave Fiscal de AFIP. El Punto de Venta se define
+          WSFE en el Administrador de Relaciones de Clave Fiscal de ARCA. El Punto de Venta se define
           por sucursal (ver &quot;Sucursales&quot; en el menú principal).
         </p>
 
@@ -349,7 +349,7 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
           {taxIdMessage && <p className="text-xs text-green-600 dark:text-green-400">{taxIdMessage}</p>}
           {!settings.tenantTaxId && (
             <p className="w-full text-xs text-amber-600 dark:text-amber-400">
-              El certificado AFIP se registra a nombre de este CUIT - sin él, el certificado no queda
+              El certificado ARCA se registra a nombre de este CUIT - sin él, el certificado no queda
               realmente configurado aunque lo hayas subido.
             </p>
           )}
@@ -393,7 +393,7 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
 
         <details className="mb-4 rounded-lg border p-4 text-xs text-muted-foreground">
           <summary className="cursor-pointer text-sm font-medium text-foreground">
-            ¿Cómo consigo el certificado AFIP? (guía paso a paso)
+            ¿Cómo consigo el certificado ARCA? (guía paso a paso)
           </summary>
           <div className="mt-3 flex flex-col gap-4">
             <div>
@@ -410,9 +410,9 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
               </pre>
               <p className="mt-1">
                 Esto genera dos archivos: <span className="font-mono">empresa.key</span> (clave
-                privada - nunca se sube a AFIP, sólo acá) y{' '}
+                privada - nunca se sube a ARCA, sólo acá) y{' '}
                 <span className="font-mono">empresa.csr</span> (pedido de certificado, ese sí va a
-                AFIP).
+                ARCA).
               </p>
             </div>
             <div>
@@ -420,7 +420,7 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
                 2. Para probar primero (Homologación - recomendado)
               </p>
               <ol className="ml-4 list-decimal">
-                <li>Entrá a AFIP con Clave Fiscal → &quot;Administrador de Relaciones de Clave Fiscal&quot;.</li>
+                <li>Entrá a ARCA con Clave Fiscal → &quot;Administrador de Relaciones de Clave Fiscal&quot;.</li>
                 <li>
                   Buscá el servicio &quot;WSASS&quot; (Administración de Certificados Digitales),
                   sección de testing/homologación.
@@ -542,7 +542,7 @@ function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
   );
 }
 
-/** El fisco (AFIP/ARBA/etc.) es quien otorga el carácter de agente de
+/** El fisco (ARCA/ARBA/etc.) es quien otorga el carácter de agente de
  * retención, no es algo que se active solo - por eso estos 3 flags son un
  * checkbox explícito, no un default en true. Gatillan si puede
  * crearse/aplicarse un WithholdingRegime de ese taxType (ver /taxes ->
@@ -578,7 +578,7 @@ function WithholdingAgentCard({ settings }: { settings: TenantSettings }) {
       <CardContent>
         <h2 className="mb-1 text-sm font-medium text-muted-foreground">Retenciones a proveedores</h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Marcá sólo los impuestos para los que AFIP/ARBA (u otro organismo provincial) ya te otorgó el
+          Marcá sólo los impuestos para los que ARCA/ARBA (u otro organismo provincial) ya te otorgó el
           carácter de agente de retención. Habilita el catálogo de regímenes en Impuestos → Retenciones
           y la opción de retener al registrar un pago en Compras.
         </p>
@@ -654,7 +654,7 @@ function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
         <h2 className="mb-1 text-sm font-medium text-muted-foreground">Datos fiscales para la Factura</h2>
         <p className="mb-4 text-xs text-muted-foreground">
           Domicilio, Ingresos Brutos e inicio de actividades del emisor - se imprimen en el PDF de
-          Facturación (CUIT y razón social ya se cargan arriba, en Certificado AFIP).
+          Facturación (CUIT y razón social ya se cargan arriba, en Certificado ARCA).
         </p>
         <div className="grid grid-cols-2 gap-4">
           <label className="col-span-2 flex flex-col gap-1">

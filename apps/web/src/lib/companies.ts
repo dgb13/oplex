@@ -31,6 +31,8 @@ export interface Company {
   withholdsIncomeTax: boolean;
   withholdsGrossIncome: boolean;
   logoUrl: string | null;
+  phone: string | null;
+  website: string | null;
   active: boolean;
   createdAt: string;
   roles: { role: CompanyRoleType }[];
@@ -68,6 +70,8 @@ export interface CreateCompanyInput {
   withholdsIncomeTax?: boolean;
   withholdsGrossIncome?: boolean;
   logoUrl?: string;
+  phone?: string;
+  website?: string;
   roles: CompanyRoleType[];
 }
 
@@ -85,6 +89,8 @@ export interface UpdateCompanyInput {
   withholdsIncomeTax?: boolean;
   withholdsGrossIncome?: boolean;
   logoUrl?: string;
+  phone?: string;
+  website?: string;
   roles?: CompanyRoleType[];
   active?: boolean;
 }

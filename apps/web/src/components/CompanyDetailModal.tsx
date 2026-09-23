@@ -190,14 +190,28 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
           </div>
           {company.taxCondition && (
             <div>
-              <p className="text-xs text-muted-foreground">Condición IVA (AFIP)</p>
+              <p className="text-xs text-muted-foreground">Condición IVA (ARCA)</p>
               <p className="">{company.taxCondition}</p>
             </div>
           )}
           {company.fiscalAddress && (
             <div>
-              <p className="text-xs text-muted-foreground">Domicilio fiscal (AFIP)</p>
+              <p className="text-xs text-muted-foreground">
+                {company.roles.some((r) => r.role === 'BRANCH') ? 'Domicilio comercial' : 'Domicilio fiscal (ARCA)'}
+              </p>
               <p className="">{company.fiscalAddress}</p>
+            </div>
+          )}
+          {company.phone && (
+            <div>
+              <p className="text-xs text-muted-foreground">Teléfono</p>
+              <p className="">{company.phone}</p>
+            </div>
+          )}
+          {company.website && (
+            <div>
+              <p className="text-xs text-muted-foreground">Sitio web</p>
+              <p className="">{company.website}</p>
             </div>
           )}
           {company.industry && (
@@ -229,7 +243,7 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
           {company.roles.some((r) => r.role === 'CUSTOMER') &&
             (company.withholdsVat || company.withholdsIncomeTax || company.withholdsGrossIncome) && (
               <div className="col-span-2">
-                <p className="text-xs text-muted-foreground">Retenciones (agente AFIP/ARBA)</p>
+                <p className="text-xs text-muted-foreground">Retenciones (agente ARCA/ARBA)</p>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {company.withholdsVat && (
                     <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">

@@ -70,6 +70,6 @@ export function suggestDocumentLetter(
     letter: 'B',
     locked: false,
     reason:
-      'No se conoce la condición IVA de este cliente (usá "Buscar en AFIP" en su ficha) - se sugiere Factura B por defecto. Cambiá a A sólo si confirmás que es Responsable Inscripto.',
+      'No se conoce la condición IVA de este cliente (usá "Buscar en ARCA" en su ficha) - se sugiere Factura B por defecto. Cambiá a A sólo si confirmás que es Responsable Inscripto.',
   };
 }
