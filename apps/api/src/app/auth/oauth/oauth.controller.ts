@@ -109,6 +109,13 @@ export class OAuthController {
       redirectUrl = `${FRONTEND_URL}/oauth/callback?oauthSignupToken=${encodeURIComponent(outcome.oauthSignupToken)}`;
     }
 
-    reply.redirect(redirectUrl);
+    // Fastify's reply.redirect(url) only defaults to 302 when no status code
+    // has been set on the reply yet - Nest's platform-fastify adapter
+    // already stamps 200 on every reply before a handler body runs, so an
+    // unqualified reply.redirect(url) here silently reuses that 200 (same
+    // root cause already fixed in mercadopago.controller.ts's `redirect()`
+    // helper) and the browser never actually navigates - blank page, stuck
+    // on this URL. Always pass 302 explicitly.
+    reply.redirect(redirectUrl, 302);
   }
 }

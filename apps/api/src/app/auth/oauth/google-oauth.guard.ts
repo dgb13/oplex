@@ -20,4 +20,15 @@ export class GoogleOAuthGuard extends AuthGuard('google') {
     }
     return super.canActivate(context);
   }
+
+  // Passport's own `strategy.redirect()` (the "go to Google's consent
+  // screen" step) writes directly on `res` (`res.statusCode`/`setHeader`/
+  // `end()`) - it never goes through the verify callback, see passport's
+  // authenticate.js. Nest's Fastify adapter hands guards the FastifyReply
+  // wrapper, which has no `setHeader`/`end` (`TypeError: res.setHeader is
+  // not a function`) - `.raw` is the real underlying http.ServerResponse
+  // Passport expects.
+  override getResponse(context: ExecutionContext) {
+    return context.switchToHttp().getResponse().raw;
+  }
 }
