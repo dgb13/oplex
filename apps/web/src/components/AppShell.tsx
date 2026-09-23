@@ -8,6 +8,7 @@ import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
 import MembershipSessionBanner from './MembershipSessionBanner';
 import TrialBanner from './TrialBanner';
+import { UserAvatar } from './UserAvatar';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
 import { useDensity } from '@/providers/DensityProvider';
@@ -527,16 +528,10 @@ function UserMenu() {
         className="flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-transparent transition hover:ring-ring/50"
         aria-label="Menú de usuario"
       >
-        {profile?.avatarUrl ? (
-          <img
-            src={profile.avatarUrl}
-            alt=""
-            className="h-9 w-9 rounded-full object-cover"
-          />
+        {profile ? (
+          <UserAvatar avatarUrl={profile.avatarUrl} name={profile.name} email={profile.email} size={36} />
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            {profile ? initials(profile.name, profile.email) : '·'}
-          </div>
+          <div className="h-9 w-9 rounded-full bg-primary/50" />
         )}
       </button>
 

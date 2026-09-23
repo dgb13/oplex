@@ -1,11 +1,13 @@
 'use client';
 
+import AvatarPickerModal from '@/components/AvatarPickerModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { UserAvatar } from '@/components/UserAvatar';
 import { activityLogApi } from '@/lib/activityLog';
-import { initials, profileApi, type UserProfile } from '@/lib/profile';
+import { profileApi, type UserProfile } from '@/lib/profile';
 import { disconnectSocket } from '@/lib/socket';
 import { whatsAppLinkApi, type WhatsAppLinkRequestResult } from '@/lib/whatsappLink';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -96,12 +98,12 @@ function ActivityCard() {
 
 function AccountCard({ profile, onSaved }: { profile: UserProfile; onSaved: () => void }) {
   const [name, setName] = useState(profile.name ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? '');
   const [showOnlinePresence, setShowOnlinePresence] = useState(profile.showOnlinePresence);
   const [message, setMessage] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => profileApi.updateMe({ name, avatarUrl, showOnlinePresence }),
+    mutationFn: () => profileApi.updateMe({ name, showOnlinePresence }),
     onSuccess: () => {
       setMessage('Guardado');
       onSaved();
@@ -120,25 +122,28 @@ function AccountCard({ profile, onSaved }: { profile: UserProfile; onSaved: () =
         <h2 className="mb-4 text-sm font-medium text-muted-foreground">Datos de la cuenta</h2>
 
         <div className="mb-6 flex items-center gap-4">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-16 w-16 rounded-full border object-cover" />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
-              {initials(profile.name, profile.email)}
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="group relative rounded-full transition hover:opacity-90"
+            aria-label="Cambiar avatar"
+          >
+            <UserAvatar avatarUrl={profile.avatarUrl} name={profile.name} email={profile.email} size={64} />
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-[10px] font-medium text-transparent transition group-hover:bg-black/40 group-hover:text-white">
+              Cambiar
+            </span>
+          </button>
           <div>
             <p>{profile.name || profile.email}</p>
             <p className="text-xs text-muted-foreground">{profile.email}</p>
           </div>
         </div>
 
+        {pickerOpen && <AvatarPickerModal profile={profile} onClose={() => setPickerOpen(false)} />}
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Field label="Nombre">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" />
-          </Field>
-          <Field label="URL de avatar">
-            <Input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." />
           </Field>
           <label className="flex items-center gap-2 text-sm">
             <input

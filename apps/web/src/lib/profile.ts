@@ -27,6 +27,12 @@ export const profileApi = {
   getMe: () => api.get<UserProfile>('/auth/me').then((r) => r.data),
   updateMe: (dto: UpdateProfileInput) => api.patch<UserProfile>('/auth/me', dto).then((r) => r.data),
   changePassword: (dto: ChangePasswordInput) => api.post('/auth/change-password', dto).then((r) => r.data),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<UserProfile>('/auth/me/avatar', formData).then((r) => r.data);
+  },
+  removeAvatar: () => api.delete<UserProfile>('/auth/me/avatar').then((r) => r.data),
 };
 
 export function initials(name: string | null, email: string): string {

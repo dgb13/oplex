@@ -18,6 +18,7 @@ import { OAuthController } from './oauth/oauth.controller.js';
 import { OAuthService } from './oauth/oauth.service.js';
 import { SignupService } from './signup.service.js';
 import { TenantProvisioningService } from './tenant-provisioning.service.js';
+import { UserAvatarService } from './user-avatar.service.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TenantProvisioningService } from './tenant-provisioning.service.js';
   providers: [
     AuthService,
     TenantProvisioningService,
+    UserAvatarService,
     SignupService,
     OAuthConfigService,
     OAuthService,
