@@ -1,10 +1,14 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { api } from '@/lib/api';
 import { companiesApi } from '@/lib/companies';
 import { cartCheckoutApi, type CartLine } from '@/lib/inventoryCart';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+
+const CHECKOUT_SELECT_LOOK =
+  'rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100';
 
 interface CurrencyRef {
   id: string;
@@ -85,33 +89,23 @@ export default function QuoteCheckoutModal({ lines, onClose }: Props) {
             <div className="mb-4 grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">Cliente</label>
-                <select
+                <Select
+                  buttonClassName={CHECKOUT_SELECT_LOOK}
                   value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-                >
-                  <option value="">Elegí cliente...</option>
-                  {(customers ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCustomerId}
+                  placeholder="Elegí cliente..."
+                  options={(customers ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">Moneda</label>
-                <select
+                <Select
+                  buttonClassName={CHECKOUT_SELECT_LOOK}
                   value={currencyId}
-                  onChange={(e) => setCurrencyId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-                >
-                  <option value="">Elegí moneda...</option>
-                  {(currencies ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCurrencyId}
+                  placeholder="Elegí moneda..."
+                  options={(currencies ?? []).map((c) => ({ value: c.id, label: c.code }))}
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">Válida hasta</label>

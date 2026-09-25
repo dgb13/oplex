@@ -3,6 +3,7 @@
 import { adminErrorsApi, adminTenantsApi, type SystemErrorLog } from '@/lib/admin';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import AdminSelect from '../AdminSelect';
 
 export default function AdminErrorsPage() {
   const [tenantId, setTenantId] = useState('');
@@ -32,18 +33,13 @@ export default function AdminErrorsPage() {
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-slate-500">Tenant</span>
-          <select
+          <AdminSelect
+            className="min-w-48"
+            buttonClassName="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
             value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
-          >
-            <option value="">Todos</option>
-            {tenants?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+            onChange={setTenantId}
+            options={[{ value: '', label: 'Todos' }, ...(tenants ?? []).map((t) => ({ value: t.id, label: t.name }))]}
+          />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-slate-500">Desde</span>

@@ -791,14 +791,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     </label>
                     <label className="flex flex-col gap-1">
                       <span className="text-xs text-muted-foreground">Unidad base de stock</span>
-                      <select
+                      <Select
                         value={baseUnit}
-                        onChange={(e) => setBaseUnit(e.target.value)}
-                        className={inputClass}
-                      >
-                        <option value="gr">gr</option>
-                        <option value="ml">ml</option>
-                      </select>
+                        onChange={setBaseUnit}
+                        options={[
+                          { value: 'gr', label: 'gr' },
+                          { value: 'ml', label: 'ml' },
+                        ]}
+                      />
                     </label>
                   </div>
                 )}

@@ -4,6 +4,7 @@ import { adminBnaSyncApi } from '@/lib/admin';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import AdminSelect from '../AdminSelect';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
@@ -11,7 +12,10 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return Array.isArray(message) ? message.join(', ') : message;
 }
 
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({
+  value: String(h),
+  label: `${String(h).padStart(2, '0')}:00`,
+}));
 
 /** Único cron de esta plataforma con horario/on-off configurable en
  * caliente (ver ExchangeRateSchedulerService, apps/api) - corre una sola
@@ -75,17 +79,12 @@ export default function AdminBnaSyncPage() {
 
           <div className="flex items-center justify-between border-b border-slate-800 py-4">
             <p className="text-sm font-medium text-slate-200">Horario</p>
-            <select
-              value={settings.bnaSyncHour}
-              onChange={(e) => updateMutation.mutate({ hour: Number(e.target.value) })}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-            >
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, '0')}:00
-                </option>
-              ))}
-            </select>
+            <AdminSelect
+              className="w-28"
+              value={String(settings.bnaSyncHour)}
+              onChange={(h) => updateMutation.mutate({ hour: Number(h) })}
+              options={HOUR_OPTIONS}
+            />
           </div>
 
           <div className="flex items-center justify-between pt-4">

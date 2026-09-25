@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -39,19 +40,13 @@ export default function CuentaCorrienteTab() {
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-sm text-muted-foreground">Cliente</span>
-          <select
+          <Select
+            className="w-72"
             value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="h-8 w-72 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="">Elegir cliente...</option>
-            {filtered.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.taxId ? ` (${c.taxId})` : ''}
-              </option>
-            ))}
-          </select>
+            onChange={setCustomerId}
+            placeholder="Elegir cliente..."
+            options={filtered.map((c) => ({ value: c.id, label: `${c.name}${c.taxId ? ` (${c.taxId})` : ''}` }))}
+          />
         </label>
       </div>
 

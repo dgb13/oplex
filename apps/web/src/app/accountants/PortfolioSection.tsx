@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import MultiSelect from '@/components/ui/MultiSelect';
 import { startMembershipSession } from '@/lib/membership-session';
 import {
   membershipsApi,
@@ -172,24 +173,14 @@ export default function PortfolioSection() {
                         <label className="text-xs font-medium text-muted-foreground">
                           Asignado a {assignedIds.length === 0 && '(todo el estudio)'}
                         </label>
-                        <select
-                          multiple
+                        <MultiSelect
                           value={assignedIds}
-                          onChange={(e) =>
-                            assignMutation.mutate({
-                              id: client.membershipId,
-                              studioUserIds: Array.from(e.target.selectedOptions, (o) => o.value),
-                            })
+                          onChange={(studioUserIds) =>
+                            assignMutation.mutate({ id: client.membershipId, studioUserIds })
                           }
-                          className="rounded-lg border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          size={Math.min(accountants.length, 3)}
-                        >
-                          {accountants.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name ?? a.email}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Todo el estudio"
+                          options={accountants.map((a) => ({ value: a.id, label: a.name ?? a.email }))}
+                        />
                       </div>
                     )}
                     <Button

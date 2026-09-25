@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import type { DocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
@@ -14,9 +15,6 @@ interface Props {
   onClose: () => void;
   onConverted: (invoice: { id: string; number: string }) => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const DOCUMENT_LETTERS: DocumentLetter[] = ['A', 'B', 'C', 'M'];
 
@@ -73,37 +71,27 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Sucursal / PV</label>
-            <select className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.pointOfSaleNumber ?? 'sin PV'})
-                </option>
-              ))}
-            </select>
+            <Select
+              value={branchId}
+              onChange={setBranchId}
+              options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.pointOfSaleNumber ?? 'sin PV'})` }))}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Depósito</label>
-            <select className={selectClass} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={warehouseId}
+              onChange={setWarehouseId}
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Tipo de comprobante</label>
-            <select
-              className={selectClass}
+            <Select
               value={documentLetter}
-              onChange={(e) => setDocumentLetter(e.target.value as DocumentLetter)}
-            >
-              {DOCUMENT_LETTERS.map((l) => (
-                <option key={l} value={l}>
-                  Factura {l}
-                </option>
-              ))}
-            </select>
+              onChange={(l) => setDocumentLetter(l as DocumentLetter)}
+              options={DOCUMENT_LETTERS.map((l) => ({ value: l, label: `Factura ${l}` }))}
+            />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

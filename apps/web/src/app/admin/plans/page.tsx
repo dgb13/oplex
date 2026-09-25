@@ -5,6 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import AdminSelect from '../AdminSelect';
+
+// Mismo aspecto que los <input> del formulario de plan (bg-slate-900, py-1).
+const PLAN_FORM_SELECT_LOOK = 'rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100';
 
 // Same extraction as CompanyFormModal/LoginPage: surface the backend's own
 // validation message (e.g. "maxUsers must not be less than 0", "Ya existe
@@ -298,24 +302,26 @@ function PlanForm({
           />
         </Field>
         <Field label="Activo">
-          <select
+          <AdminSelect
+            buttonClassName={PLAN_FORM_SELECT_LOOK}
             value={form.isActive ? '1' : '0'}
-            onChange={(e) => setForm({ ...form, isActive: e.target.value === '1' })}
-            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
-          >
-            <option value="1">Sí</option>
-            <option value="0">No</option>
-          </select>
+            onChange={(v) => setForm({ ...form, isActive: v === '1' })}
+            options={[
+              { value: '1', label: 'Sí' },
+              { value: '0', label: 'No' },
+            ]}
+          />
         </Field>
         <Field label="Módulo de Producción">
-          <select
+          <AdminSelect
+            buttonClassName={PLAN_FORM_SELECT_LOOK}
             value={form.productionModuleEnabled ? '1' : '0'}
-            onChange={(e) => setForm({ ...form, productionModuleEnabled: e.target.value === '1' })}
-            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
-          >
-            <option value="1">Incluido</option>
-            <option value="0">No incluido</option>
-          </select>
+            onChange={(v) => setForm({ ...form, productionModuleEnabled: v === '1' })}
+            options={[
+              { value: '1', label: 'Incluido' },
+              { value: '0', label: 'No incluido' },
+            ]}
+          />
         </Field>
       </div>
 

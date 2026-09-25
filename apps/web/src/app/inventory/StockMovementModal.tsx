@@ -3,6 +3,7 @@
 import ArticlePicker from '@/components/ArticlePicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { inventoryApi, MOVEMENT_TYPES, type MovementType, type Warehouse } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -13,8 +14,6 @@ interface Props {
   onClose: () => void;
 }
 
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Freeform stock entry - NOT the way to receive against an Orden de
  * Compra anymore (see PurchaseOrderDetailPanel's "Recibir mercadería" /
@@ -110,33 +109,21 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
           </p>
 
           <Field label="Depósito">
-            <select
-              className={selectClass}
+            <Select
               value={form.warehouseId}
-              onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
+              onChange={(warehouseId) => setForm({ ...form, warehouseId })}
               disabled={warehouses.length === 0}
-            >
-              {warehouses.length === 0 && <option value="">Sin depósitos cargados</option>}
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Sin depósitos cargados"
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
           </Field>
 
           <Field label="Tipo de movimiento">
-            <select
-              className={selectClass}
+            <Select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as MovementType })}
-            >
-              {MOVEMENT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+              onChange={(type) => setForm({ ...form, type: type as MovementType })}
+              options={MOVEMENT_TYPES}
+            />
           </Field>
 
           <Field label={isAdjustment ? 'Cantidad (+ entrada / − salida)' : 'Cantidad'}>

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { INVITABLE_ROLES, ROLE_LABELS, teamApi, type CreatedMemberWithPassword, type TeamRole } from '@/lib/team';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -14,9 +15,6 @@ function pillClass(active: boolean): string {
     active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
   }`;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
@@ -153,13 +151,11 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
 
             <div className="flex flex-col gap-1">
               <label className="text-sm text-muted-foreground">Rol</label>
-              <select className={selectClass} value={role} onChange={(e) => setRole(e.target.value as TeamRole)}>
-                {INVITABLE_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={role}
+                onChange={(r) => setRole(r as TeamRole)}
+                options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+              />
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}

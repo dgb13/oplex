@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import { profileApi } from '@/lib/profile';
 import { ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/team';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
@@ -165,18 +166,14 @@ function MemberRow({
             {ROLE_LABELS.OWNER}
           </span>
         ) : (
-          <select
+          <Select
+            className="w-fit"
+            buttonClassName={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES[member.role]}`}
             value={member.role}
-            onChange={(e) => roleMutation.mutate(e.target.value as TeamRole)}
+            onChange={(role) => roleMutation.mutate(role as TeamRole)}
             disabled={roleMutation.isPending}
-            className={`rounded-full border-0 px-2.5 py-1 text-xs font-medium outline-none disabled:opacity-50 ${ROLE_BADGE_CLASSES[member.role]}`}
-          >
-            {ASSIGNABLE_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
-              </option>
-            ))}
-          </select>
+            options={ASSIGNABLE_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
+          />
         )}
       </td>
       <td className="p-3">

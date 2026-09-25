@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import {
   describeQuoteStatus,
   PDF_STYLES,
@@ -16,9 +17,6 @@ import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import ConvertQuoteToInvoiceModal from './ConvertQuoteToInvoiceModal';
 import QuoteFollowUpModal from './QuoteFollowUpModal';
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 interface Props {
   quoteId: string;
@@ -168,20 +166,14 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
 
             <section className="flex flex-col gap-2 border-t pt-4">
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  className={selectClass}
+                <Select
                   value={pdfStyle}
-                  onChange={(e) => {
-                    setPdfStyle(e.target.value as PdfStyle);
+                  onChange={(s) => {
+                    setPdfStyle(s as PdfStyle);
                     setStyleTouched(true);
                   }}
-                >
-                  {PDF_STYLES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+                  options={PDF_STYLES}
+                />
                 <Button
                   type="button"
                   size="sm"

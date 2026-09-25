@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { bankReconciliationApi, type BankStatementLine } from '@/lib/bank-reconciliation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -11,9 +12,6 @@ interface Props {
   line: BankStatementLine;
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function CreateTransactionFromLineModal({ line, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -72,13 +70,12 @@ export default function CreateTransactionFromLineModal({ line, onClose }: Props)
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Tipo de movimiento</label>
-            <select className={selectClass} value={isExpense ? 'EXPENSE' : 'INCOME'} disabled>
-              {isExpense ? (
-                <option value="EXPENSE">Gasto bancario</option>
-              ) : (
-                <option value="INCOME">Ingreso bancario</option>
-              )}
-            </select>
+            <Select
+              value={isExpense ? 'EXPENSE' : 'INCOME'}
+              onChange={() => undefined}
+              disabled
+              options={[isExpense ? { value: 'EXPENSE', label: 'Gasto bancario' } : { value: 'INCOME', label: 'Ingreso bancario' }]}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Descripción</label>

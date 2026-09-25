@@ -7,6 +7,7 @@ import type { AxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import AdminSelect from './AdminSelect';
 
 // Same extraction as CompanyFormModal/LoginPage - without this, a failed
 // suspend/reactivate/impersonate silently reset the row back to its normal
@@ -182,18 +183,14 @@ function TenantRow({ tenant }: { tenant: TenantSummary }) {
             {usersLoading ? (
               <span className="text-xs text-slate-500">Cargando usuarios...</span>
             ) : (
-              <select
+              <AdminSelect
+                className="min-w-56"
+                buttonClassName="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                 value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-              >
-                <option value="">Elegí un usuario</option>
-                {users?.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.email} ({u.role})
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedUserId}
+                placeholder="Elegí un usuario"
+                options={(users ?? []).map((u) => ({ value: u.id, label: `${u.email} (${u.role})` }))}
+              />
             )}
             <button
               type="button"

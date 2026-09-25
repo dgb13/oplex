@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { reportsApi, type FinancialAccount } from '@/lib/reports';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -13,9 +14,6 @@ interface Props {
   onClose: () => void;
 }
 
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
-
 export default function TransferBetweenAccountsModal({ accounts, defaultFromId, onClose }: Props) {
   const queryClient = useQueryClient();
   const [fromId, setFromId] = useState(defaultFromId);
@@ -23,6 +21,7 @@ export default function TransferBetweenAccountsModal({ accounts, defaultFromId, 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -71,23 +70,11 @@ export default function TransferBetweenAccountsModal({ accounts, defaultFromId, 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Desde</label>
-            <select className={selectClass} value={fromId} onChange={(e) => setFromId(e.target.value)}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select value={fromId} onChange={setFromId} options={accountOptions} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Hacia</label>
-            <select className={selectClass} value={toId} onChange={(e) => setToId(e.target.value)}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select value={toId} onChange={setToId} options={accountOptions} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Importe</label>

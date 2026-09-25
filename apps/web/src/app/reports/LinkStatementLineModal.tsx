@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import Select from '@/components/ui/Select';
 import { bankReconciliationApi, type BankStatementLine } from '@/lib/bank-reconciliation';
 import type { FinancialTransaction } from '@/lib/reports';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,9 +13,6 @@ interface Props {
   candidates: FinancialTransaction[];
   onClose: () => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 export default function LinkStatementLineModal({ line, candidates, onClose }: Props) {
   const queryClient = useQueryClient();
@@ -65,14 +63,16 @@ export default function LinkStatementLineModal({ line, candidates, onClose }: Pr
             {candidates.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hay movimientos sin conciliar en esta cuenta.</p>
             ) : (
-              <select className={selectClass} value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
-                {candidates.map((tx) => (
-                  <option key={tx.id} value={tx.id}>
-                    {new Date(tx.occurredAt).toLocaleDateString('es-AR')} — ${Number(tx.amount).toFixed(2)} —{' '}
-                    {tx.externalRef ?? 'sin referencia'}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={transactionId}
+                onChange={setTransactionId}
+                options={candidates.map((tx) => ({
+                  value: tx.id,
+                  label: `${new Date(tx.occurredAt).toLocaleDateString('es-AR')} — $${Number(tx.amount).toFixed(2)} — ${
+                    tx.externalRef ?? 'sin referencia'
+                  }`,
+                }))}
+              />
             )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}

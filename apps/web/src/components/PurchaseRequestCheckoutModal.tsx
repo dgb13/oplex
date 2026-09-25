@@ -1,10 +1,14 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { api } from '@/lib/api';
 import { companiesApi } from '@/lib/companies';
 import { cartCheckoutApi, type CartLine, type PurchaseRequestGroupInput } from '@/lib/inventoryCart';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+
+const CHECKOUT_SELECT_LOOK =
+  'rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100';
 
 interface CurrencyRef {
   id: string;
@@ -100,18 +104,14 @@ export default function PurchaseRequestCheckoutModal({ lines, onClose }: Props) 
           <>
             <div className="mb-4">
               <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">Moneda</label>
-              <select
+              <Select
+                className="w-48"
+                buttonClassName={CHECKOUT_SELECT_LOOK}
                 value={currencyId}
-                onChange={(e) => setCurrencyId(e.target.value)}
-                className="w-48 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              >
-                <option value="">Elegí moneda...</option>
-                {(currencies ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code}
-                  </option>
-                ))}
-              </select>
+                onChange={setCurrencyId}
+                placeholder="Elegí moneda..."
+                options={(currencies ?? []).map((c) => ({ value: c.id, label: c.code }))}
+              />
             </div>
 
             <div className="space-y-2">
@@ -139,20 +139,16 @@ export default function PurchaseRequestCheckoutModal({ lines, onClose }: Props) 
                     className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm"
                     aria-label="Costo estimado"
                   />
-                  <select
+                  <Select
+                    className="min-w-0"
+                    buttonClassName="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm text-slate-900 dark:text-slate-100"
                     value={supplierByLine[line.id] ?? ''}
-                    onChange={(e) =>
-                      setSupplierByLine((prev) => ({ ...prev, [line.id]: e.target.value }))
-                    }
-                    className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm"
-                  >
-                    <option value="">Sin asignar</option>
-                    {(suppliers ?? []).map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(supplierId) => setSupplierByLine((prev) => ({ ...prev, [line.id]: supplierId }))}
+                    options={[
+                      { value: '', label: 'Sin asignar' },
+                      ...(suppliers ?? []).map((s) => ({ value: s.id, label: s.name })),
+                    ]}
+                  />
                 </div>
               ))}
             </div>

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { companiesApi, type Company, type CompanyIndustry, type CompanyRoleType } from '@/lib/companies';
 import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,9 +31,6 @@ interface Props {
    * user chose to merge instead of creating a duplicate. */
   onMerged?: (company: Company) => void;
 }
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const ROLE_OPTIONS: { value: CompanyRoleType; label: string }[] = [
   { value: 'CUSTOMER', label: 'Cliente' },
@@ -347,18 +345,11 @@ export default function CompanyFormModal({
             {!isBranchOnly && (
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Rubro">
-                  <select
-                    className={`${selectClass} w-full`}
+                  <Select
                     value={industry}
-                    onChange={(e) => setIndustry(e.target.value as CompanyIndustry | '')}
-                  >
-                    <option value="">Sin especificar</option>
-                    {INDUSTRY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setIndustry(v as CompanyIndustry | '')}
+                    options={[{ value: '', label: 'Sin especificar' }, ...INDUSTRY_OPTIONS]}
+                  />
                 </Field>
                 <Field label="Ingresos Brutos (IIBB)">
                   <Input value={grossIncomeNumber} onChange={(e) => setGrossIncomeNumber(e.target.value)} />

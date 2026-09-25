@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { invoicingApi, type Invoice } from '@/lib/invoicing';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -11,9 +12,6 @@ interface Props {
   invoice: Invoice;
   onClose: () => void;
 }
-
-const inputClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 const METHODS = ['CASH', 'BANK_TRANSFER', 'CARD', 'CHECK'] as const;
 const METHOD_LABELS: Record<string, string> = {
@@ -100,17 +98,11 @@ export default function ReceiptModal({ invoice, onClose }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground">Método</label>
-            <select
-              className={inputClass}
+            <Select
               value={method}
-              onChange={(e) => setMethod(e.target.value as typeof method)}
-            >
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {METHOD_LABELS[m]}
-                </option>
-              ))}
-            </select>
+              onChange={(m) => setMethod(m as typeof method)}
+              options={METHODS.map((m) => ({ value: m, label: METHOD_LABELS[m] }))}
+            />
           </div>
           {method === 'CHECK' && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
@@ -131,14 +123,14 @@ export default function ReceiptModal({ invoice, onClose }: Props) {
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   Formato
-                  <select
-                    className={inputClass}
+                  <Select
                     value={checkFormat}
-                    onChange={(e) => setCheckFormat(e.target.value as typeof checkFormat)}
-                  >
-                    <option value="PHYSICAL">Físico</option>
-                    <option value="ECHEQ">eCheq</option>
-                  </select>
+                    onChange={(f) => setCheckFormat(f as typeof checkFormat)}
+                    options={[
+                      { value: 'PHYSICAL', label: 'Físico' },
+                      { value: 'ECHEQ', label: 'eCheq' },
+                    ]}
+                  />
                 </label>
               </div>
               <div className="grid grid-cols-2 gap-2">

@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import type { InvoiceTaxLineInput, InvoiceTaxLineKind } from '@/lib/invoicing';
 
 const inputClass =
@@ -69,20 +70,19 @@ export default function InvoiceTaxLinesEditor({
       {lines.map((line, i) => (
         <div key={i} className="flex flex-col gap-1 rounded-lg border border-slate-200 dark:border-slate-800 p-2">
           <div className="flex items-center gap-2">
-            <select
-              className={`${inputClass} w-56`}
+            <Select
+              className="w-56 shrink-0"
+              buttonClassName={inputClass}
               value={line.kind}
-              onChange={(e) => {
-                const kind = e.target.value as InvoiceTaxLineKind;
+              onChange={(v) => {
+                const kind = v as InvoiceTaxLineKind;
                 update(i, { kind, concept: TAX_LINE_KIND_LABELS[kind] });
               }}
-            >
-              {(Object.keys(TAX_LINE_KIND_LABELS) as InvoiceTaxLineKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {TAX_LINE_KIND_LABELS[k]}
-                </option>
-              ))}
-            </select>
+              options={(Object.keys(TAX_LINE_KIND_LABELS) as InvoiceTaxLineKind[]).map((k) => ({
+                value: k,
+                label: TAX_LINE_KIND_LABELS[k],
+              }))}
+            />
             <input
               type="text"
               placeholder="Concepto, p. ej. Percepción IIBB Buenos Aires"

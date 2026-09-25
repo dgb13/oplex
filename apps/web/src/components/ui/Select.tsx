@@ -15,7 +15,16 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  // Reemplaza el aspecto del botón (borde/fondo/alto/texto) - el layout
+  // (flex, ancho completo, chevron a la derecha) se mantiene. Para los
+  // pocos selects que tienen que calzar con inputs de otro estilo o
+  // verse como una pastilla (rol en Equipo). Omitido = el aspecto default.
+  buttonClassName?: string;
 }
+
+const BUTTON_LAYOUT = 'flex w-full items-center justify-between gap-2 outline-none disabled:opacity-50';
+const DEFAULT_BUTTON_LOOK =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** Reemplazo de <select> nativo - un <select> sin estilo muestra el popup
  * de opciones pintado por el SO/navegador, no por nuestro CSS (no
@@ -25,15 +34,21 @@ interface SelectProps {
  * visual que el popup de ArticlePicker (Combobox de Headless UI, ya
  * usado en el resto de la app): rounded-xl/border/shadow-xl/bg-popover,
  * ChevronDown, hover con bg-muted, tilde en la opción elegida. */
-export default function Select({ value, onChange, options, placeholder, disabled, className }: SelectProps) {
+export default function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+  className,
+  buttonClassName,
+}: SelectProps) {
   const selected = options.find((o) => o.value === value);
 
   return (
     <Listbox value={value} onChange={onChange} disabled={disabled}>
       <div className={`relative ${className ?? ''}`}>
-        <ListboxButton
-          className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-        >
+        <ListboxButton className={`${BUTTON_LAYOUT} ${buttonClassName ?? DEFAULT_BUTTON_LOOK}`}>
           <span className={`truncate ${selected ? '' : 'text-muted-foreground'}`}>
             {selected ? selected.label : (placeholder ?? 'Elegir...')}
           </span>

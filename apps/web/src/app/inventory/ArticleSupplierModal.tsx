@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { inventoryApi } from '@/lib/inventory';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,9 +13,6 @@ interface Props {
   article: { id: string; name: string; preferredSupplierId: string | null };
   onClose: () => void;
 }
-
-const inputClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /** One preferred supplier per article (decision with the user,
  * 2026-07-27) - "quién nos vende esto habitualmente", used to pre-fill
@@ -61,14 +59,12 @@ export default function ArticleSupplierModal({ article, onClose }: Props) {
             + nuevo proveedor
           </button>
         </div>
-        <select className={`${inputClass} mb-4 w-full`} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-          <option value="">— Ninguno —</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          className="mb-4"
+          value={supplierId}
+          onChange={setSupplierId}
+          options={[{ value: '', label: '— Ninguno —' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+        />
 
         {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 

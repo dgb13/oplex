@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import {
   INVOICE_PDF_FORMATS,
   invoicingApi,
@@ -233,20 +234,15 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
             {data.afipCae && (
               <section className="flex flex-col gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                  <Select
+                    buttonClassName="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100"
                     value={pdfFormat}
-                    onChange={(e) => {
-                      setPdfFormat(e.target.value as InvoicePdfFormat);
+                    onChange={(f) => {
+                      setPdfFormat(f as InvoicePdfFormat);
                       setFormatTouched(true);
                     }}
-                  >
-                    {INVOICE_PDF_FORMATS.map((f) => (
-                      <option key={f.value} value={f.value}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={INVOICE_PDF_FORMATS}
+                  />
                   <button
                     type="button"
                     onClick={() => void invoicingApi.openPdf(invoice.id, pdfFormat)}
