@@ -122,9 +122,10 @@ export interface Article {
   // modo `filter` para el selector "Producto a fabricar" de Recetas.
   isManufactured: boolean;
   // "Medida comercial" (ver ArticleFormModal, sección "Tipo de medición") -
-  // fija desde que se crea el artículo, sin forma de editarla después (ver
-  // UpdateArticleInput, no la incluye a propósito). null en los campos que
-  // no le corresponden al measurementType elegido.
+  // measurementType queda fijo desde el alta; de los demás, sólo
+  // commercialLength se puede corregir después (ArticleDetailsModal, ver
+  // UpdateArticleInput). null en los campos que no le corresponden al
+  // measurementType elegido.
   measurementType: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
   purchaseSize: number | null;
   baseUnit: string | null;
@@ -219,6 +220,8 @@ export interface UpdateArticleInput {
   // "Eliminar"/reactivar (soft delete) - ver Article.active. El backend
   // rechaza active:false si el artículo está en producción.
   active?: boolean;
+  // Sólo LINEAL_1D (mm) - el backend lo rechaza en otro measurementType.
+  commercialLength?: number;
 }
 
 export interface CreateArticleInput {
@@ -432,6 +435,10 @@ export const inventoryApi = {
     api.delete<Article>(`/inventory/articles/${articleId}/attachment-zip`).then((r) => r.data),
   updateArticle: (id: string, dto: UpdateArticleInput) =>
     api.patch<Article>(`/inventory/articles/${id}`, dto).then((r) => r.data),
+  // reasons vacío = la unidad de medida se puede cambiar (ver
+  // InventoryService.getUnitOfMeasureLockReasons en el backend).
+  getUnitOfMeasureLock: (id: string) =>
+    api.get<{ reasons: string[] }>(`/inventory/articles/${id}/unit-of-measure-lock`).then((r) => r.data),
   createArticle: (dto: CreateArticleInput) =>
     api.post<CreatedArticle>('/inventory/articles', dto).then((r) => r.data),
   createArticleVariant: (dto: CreateArticleVariantInput) =>

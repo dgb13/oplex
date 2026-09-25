@@ -985,6 +985,75 @@ describe('InventoryService.updateArticle', () => {
       );
     });
   });
+
+  describe('unitOfMeasure lock', () => {
+    // Cada fuente de bloqueo como un findFirst que no encuentra nada -
+    // `found` pisa las que sí tienen registros.
+    function makeDb(found: string[] = [], currentUnit = 'UNIT') {
+      const models = [
+        'stockMovement',
+        'billOfMaterials',
+        'bomLine',
+        'bomByproduct',
+        'productionOrder',
+        'quoteRequestLine',
+        'purchaseOrderLine',
+        'quoteLine',
+        'invoiceLine',
+        'minimumStock',
+        'inventoryCartItem',
+      ];
+      return {
+        ...Object.fromEntries(
+          models.map((m) => [m, { findFirst: jest.fn().mockResolvedValue(found.includes(m) ? { id: 'x' } : null) }]),
+        ),
+        article: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({ unitOfMeasure: currentUnit }),
+          update: jest.fn((args) => Promise.resolve({ id: 'article-1', ...args.data })),
+        },
+      } as Record<string, { findFirst?: jest.Mock; findUniqueOrThrow?: jest.Mock; update?: jest.Mock }>;
+    }
+
+    it('allows changing the unit while nothing holds quantities of the article', async () => {
+      const db = makeDb();
+      const service = new InventoryService(makeEventEmitter());
+
+      await runInTenant(db, () => service.updateArticle('article-1', { unitOfMeasure: 'KG' }));
+
+      expect(db.article.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ unitOfMeasure: 'KG' }) }),
+      );
+    });
+
+    it.each([
+      ['stockMovement', 'movimientos de stock'],
+      ['bomLine', 'receta'],
+      ['billOfMaterials', 'receta'],
+      ['productionOrder', 'órdenes de producción'],
+      ['purchaseOrderLine', 'órdenes de compra'],
+      ['invoiceLine', 'facturas'],
+      ['minimumStock', 'stock mínimo'],
+      ['inventoryCartItem', 'carrito'],
+    ])('rejects changing the unit when the article has %s', async (model, message) => {
+      const db = makeDb([model]);
+      const service = new InventoryService(makeEventEmitter());
+
+      await expect(
+        runInTenant(db, () => service.updateArticle('article-1', { unitOfMeasure: 'KG' })),
+      ).rejects.toThrow(message);
+      expect(db.article.update).not.toHaveBeenCalled();
+    });
+
+    it('re-sending the same unit (the details modal always sends it) never runs the lock', async () => {
+      const db = makeDb(['stockMovement'], 'KG');
+      const service = new InventoryService(makeEventEmitter());
+
+      await runInTenant(db, () => service.updateArticle('article-1', { unitOfMeasure: 'KG', name: 'Arroz' }));
+
+      expect(db.stockMovement.findFirst).not.toHaveBeenCalled();
+      expect(db.article.update).toHaveBeenCalled();
+    });
+  });
 });
 
 describe('InventoryService.getStockValueByCategory', () => {

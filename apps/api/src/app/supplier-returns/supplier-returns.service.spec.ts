@@ -30,6 +30,9 @@ function makeDb(overrides: Record<string, unknown> = {}) {
         article: { measurementType: 'DISCRETE', purchaseSize: null, commercialLength: null },
       }),
     },
+    // Sin movimiento PURCHASE_IN por defecto = cae al factor del artículo
+    // actual (fallback) - los tests del factor "de la recepción" lo pisan.
+    stockMovement: { findFirst: jest.fn().mockResolvedValue(null) },
     ...overrides,
   };
 }
@@ -302,7 +305,115 @@ describe('SupplierReturnsService.createReturn', () => {
       articleVariantId: 'variant-1',
       warehouseId: 'warehouse-1',
       count: 2,
+      length: new Prisma.Decimal(2000),
     });
+  });
+
+  it('LINEAL_1D: uses the factor the receipt was booked with, not a commercialLength edited afterwards', async () => {
+    const supplierReturn = makeSupplierReturn({
+      lines: [
+        {
+          id: 'return-line-1',
+          goodsReceiptLineId: 'receipt-line-1',
+          quantity: new Prisma.Decimal(2),
+          goodsReceiptLine: {
+            quantity: new Prisma.Decimal(5),
+            purchaseOrderLine: { articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
+          },
+        },
+      ],
+    });
+    const supplierReturnService = {
+      create: jest.fn().mockResolvedValue(supplierReturn),
+    } as unknown as SupplierReturnService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
+      reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const stockPieceService = makeStockPieceService();
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      stockPieceService,
+    );
+    const db = makeDb({
+      articleVariant: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          // Largo comercial corregido a 5800 después de recibir...
+          article: { measurementType: 'LINEAL_1D', purchaseSize: null, commercialLength: new Prisma.Decimal(5800) },
+        }),
+      },
+      // ...pero el remito entró 5 barras de 6000mm = 30000mm.
+      stockMovement: { findFirst: jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(30000) }) },
+    });
+
+    await runInTenant(db, () =>
+      service.createReturn({
+        goodsReceiptId: 'receipt-1',
+        reason: 'barras de más',
+        lines: [{ goodsReceiptLineId: 'receipt-line-1', quantity: 2 }],
+      }),
+    );
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(expect.objectContaining({ quantity: 12000 }));
+    expect(stockPieceService.returnFullPieces).toHaveBeenCalledWith({
+      articleVariantId: 'variant-1',
+      warehouseId: 'warehouse-1',
+      count: 2,
+      length: new Prisma.Decimal(6000),
+    });
+  });
+
+  it('LINEAL_1D received before commercialLength was set (factor 1): no StockPiece to return', async () => {
+    const supplierReturn = makeSupplierReturn({
+      lines: [
+        {
+          id: 'return-line-1',
+          goodsReceiptLineId: 'receipt-line-1',
+          quantity: new Prisma.Decimal(2),
+          goodsReceiptLine: {
+            quantity: new Prisma.Decimal(5),
+            purchaseOrderLine: { articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
+          },
+        },
+      ],
+    });
+    const supplierReturnService = {
+      create: jest.fn().mockResolvedValue(supplierReturn),
+    } as unknown as SupplierReturnService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = {
+      reverseSupplierReturnAccrual: jest.fn().mockResolvedValue({}),
+      reverseSupplierReturnAgainstPayable: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const stockPieceService = makeStockPieceService();
+    const service = new SupplierReturnsService(
+      supplierReturnService,
+      inventoryService,
+      accountingService,
+      stockPieceService,
+    );
+    const db = makeDb({
+      articleVariant: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          article: { measurementType: 'LINEAL_1D', purchaseSize: null, commercialLength: new Prisma.Decimal(6000) },
+        }),
+      },
+      stockMovement: { findFirst: jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(5) }) },
+    });
+
+    await runInTenant(db, () =>
+      service.createReturn({
+        goodsReceiptId: 'receipt-1',
+        reason: 'barras de más',
+        lines: [{ goodsReceiptLineId: 'receipt-line-1', quantity: 2 }],
+      }),
+    );
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(expect.objectContaining({ quantity: 2 }));
+    expect(stockPieceService.returnFullPieces).not.toHaveBeenCalled();
   });
 
   it('non-1D articles never touch StockPieceService', async () => {

@@ -5,9 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/textarea';
-import type { Category } from '@/lib/inventory';
-import { inventoryApi, resolveUploadUrl, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Article, Category } from '@/lib/inventory';
+import {
+  inventoryApi,
+  resolveUploadUrl,
+  UNIT_OF_MEASURE_OPTIONS,
+} from '@/lib/inventory';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { FileArchive, FileText } from 'lucide-react';
 import { useState } from 'react';
@@ -21,6 +25,8 @@ interface Props {
     attachmentZipUrl: string | null;
     categoryId: string | null;
     unitOfMeasure: string;
+    measurementType: Article['measurementType'];
+    commercialLength: number | null;
     isService: boolean;
     isPublished: boolean;
     isManufactured: boolean;
@@ -31,18 +37,48 @@ interface Props {
 }
 
 /** "Detalles" de un artículo ya creado - el único lugar para editarlo
- * después del alta (ArticleFormModal es sólo alta, ver su Props). No
- * incluye measurementType/purchaseSize/commercialLength/etc (ver el
- * comentario de esos campos en schema.prisma - cambiarlos con stock/
- * piezas/BOM ya cargados rompería su interpretación), ni precio/proveedor/
+ * después del alta (ArticleFormModal es sólo alta, ver su Props). De la
+ * "medida comercial" sólo expone commercialLength (y sólo en LINEAL_1D) -
+ * cada barra ya recibida guarda su propio largo, así que corregirlo sólo
+ * afecta a las que entren después (ver UpdateArticleDto en el backend).
+ * measurementType/purchaseSize/etc siguen fuera (ver el comentario de esos
+ * campos en schema.prisma - cambiarlos con stock/piezas/BOM ya cargados
+ * rompería su interpretación), igual que precio/proveedor/
  * imagen (cada uno ya tiene su propio modal). Sin <form> (mismo criterio
  * que ArticleFormModal tras el bug de forms anidados encontrado esa
  * sesión) - cada acción es su propio botón con su propia mutation. */
-export default function ArticleDetailsModal({ article, categories, onClose }: Props) {
+export default function ArticleDetailsModal({
+  article,
+  categories,
+  onClose,
+}: Props) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(article.name);
   const [categoryId, setCategoryId] = useState(article.categoryId ?? '');
   const [unitOfMeasure, setUnitOfMeasure] = useState(article.unitOfMeasure);
+  // Unidad bloqueada si algo ya guarda cantidades del artículo (stock,
+  // recetas, comprobantes...) - el backend lo rechaza igual, esto es para
+  // deshabilitar el selector y explicar por qué. Mientras carga, también
+  // deshabilitado (no ofrecer un cambio que después se rechace).
+  const unitLockQuery = useQuery({
+    queryKey: ['article-unit-of-measure-lock', article.id],
+    queryFn: () => inventoryApi.getUnitOfMeasureLock(article.id),
+  });
+  const unitLockReasons = unitLockQuery.data?.reasons ?? [];
+  const unitLocked = unitLockQuery.isPending || unitLockReasons.length > 0;
+  const isLineal = article.measurementType === 'LINEAL_1D';
+  const [commercialLength, setCommercialLength] = useState(
+    article.commercialLength === null ? '' : String(article.commercialLength),
+  );
+  const commercialLengthValue = Number(commercialLength);
+  const commercialLengthInvalid =
+    isLineal &&
+    commercialLength.trim() !== '' &&
+    !(Number.isFinite(commercialLengthValue) && commercialLengthValue > 0);
+  const commercialLengthChanged =
+    isLineal &&
+    commercialLength.trim() !== '' &&
+    commercialLengthValue !== article.commercialLength;
   const [isService, setIsService] = useState(article.isService);
   const [isPublished, setIsPublished] = useState(article.isPublished);
   const [isManufactured, setIsManufactured] = useState(article.isManufactured);
@@ -69,6 +105,9 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
         isService,
         isPublished,
         isManufactured,
+        commercialLength: commercialLengthChanged
+          ? commercialLengthValue
+          : undefined,
       }),
     onSuccess: () => {
       invalidate();
@@ -77,33 +116,40 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
       setTimeout(() => setFieldsSaved(false), 1500);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const message = err.response?.data?.message ?? 'No se pudieron guardar los cambios';
+      const message =
+        err.response?.data?.message ?? 'No se pudieron guardar los cambios';
       setFieldsError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: () => inventoryApi.updateArticle(article.id, { active: !article.active }),
+    mutationFn: () =>
+      inventoryApi.updateArticle(article.id, { active: !article.active }),
     onSuccess: () => {
       invalidate();
       setActiveError('');
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const message = err.response?.data?.message ?? 'No se pudo cambiar el estado del artículo';
+      const message =
+        err.response?.data?.message ??
+        'No se pudo cambiar el estado del artículo';
       setActiveError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
 
   const descriptionMutation = useMutation({
     mutationFn: () =>
-      inventoryApi.updateArticle(article.id, { description: description.trim() === '' ? null : description }),
+      inventoryApi.updateArticle(article.id, {
+        description: description.trim() === '' ? null : description,
+      }),
     onSuccess: () => {
       invalidate();
       setDescriptionSaved(true);
       setTimeout(() => setDescriptionSaved(false), 1500);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const message = err.response?.data?.message ?? 'No se pudo guardar la descripción';
+      const message =
+        err.response?.data?.message ?? 'No se pudo guardar la descripción';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
@@ -115,7 +161,8 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
       setBrochureFile(null);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const message = err.response?.data?.message ?? 'No se pudo subir el folleto';
+      const message =
+        err.response?.data?.message ?? 'No se pudo subir el folleto';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
@@ -126,13 +173,15 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
   });
 
   const zipUploadMutation = useMutation({
-    mutationFn: (f: File) => inventoryApi.uploadArticleAttachmentZip(article.id, f),
+    mutationFn: (f: File) =>
+      inventoryApi.uploadArticleAttachmentZip(article.id, f),
     onSuccess: () => {
       invalidate();
       setZipFile(null);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      const message = err.response?.data?.message ?? 'No se pudo subir el archivo ZIP';
+      const message =
+        err.response?.data?.message ?? 'No se pudo subir el archivo ZIP';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
@@ -147,12 +196,19 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Detalles de {article.name}</h2>
+            <h2 className="text-lg font-semibold">
+              Detalles de {article.name}
+            </h2>
             {!article.active && (
-              <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Inactivo</Badge>
+              <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                Inactivo
+              </Badge>
             )}
           </div>
-          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground transition hover:text-foreground"
+          >
             ✕
           </button>
         </div>
@@ -168,13 +224,58 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
               <Select
                 value={categoryId}
                 onChange={setCategoryId}
-                options={[{ value: '', label: 'Sin categoría' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+                options={[
+                  { value: '', label: 'Sin categoría' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
               />
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Unidad de medida</label>
-              <Select value={unitOfMeasure} onChange={setUnitOfMeasure} options={UNIT_OF_MEASURE_OPTIONS} />
+            <div
+              className={
+                isLineal ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-2'
+              }
+            >
+              <div className="flex flex-col gap-2">
+                <label className="text-sm text-muted-foreground">
+                  Unidad de medida
+                </label>
+                <Select
+                  value={unitOfMeasure}
+                  onChange={setUnitOfMeasure}
+                  options={UNIT_OF_MEASURE_OPTIONS}
+                  disabled={unitLocked}
+                />
+              </div>
+              {isLineal && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-muted-foreground">
+                    Largo comercial (mm)
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    inputMode="decimal"
+                    value={commercialLength}
+                    onChange={(e) => setCommercialLength(e.target.value)}
+                    placeholder="Ej. 6000"
+                  />
+                </div>
+              )}
             </div>
+            {unitLockReasons.length > 0 && (
+              <p className="-mt-1 text-xs text-muted-foreground">
+                La unidad no se puede cambiar: {unitLockReasons.join('; ')}. Si
+                está mal cargada, desactivá este artículo y creá uno nuevo con
+                la unidad correcta.
+              </p>
+            )}
+            {isLineal && (
+              <p className="-mt-1 text-xs text-muted-foreground">
+                {commercialLengthInvalid
+                  ? 'Ingresá un largo mayor a 0.'
+                  : 'Se aplica a las barras que se reciban de ahora en más. Las que ya están en stock conservan su largo.'}
+              </p>
+            )}
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -208,13 +309,23 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
               <Button
                 size="sm"
                 onClick={() => fieldsMutation.mutate()}
-                disabled={fieldsMutation.isPending || name.trim() === ''}
+                disabled={
+                  fieldsMutation.isPending ||
+                  name.trim() === '' ||
+                  commercialLengthInvalid
+                }
               >
                 {fieldsMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
               </Button>
-              {fieldsSaved && <span className="text-xs text-green-600 dark:text-green-400">Guardado</span>}
+              {fieldsSaved && (
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  Guardado
+                </span>
+              )}
             </div>
-            {fieldsError && <p className="text-sm text-destructive">{fieldsError}</p>}
+            {fieldsError && (
+              <p className="text-sm text-destructive">{fieldsError}</p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -226,10 +337,20 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
               placeholder="Notas, detalles técnicos, especificaciones... (opcional, no se muestra en el catálogo)"
             />
             <div className="flex items-center gap-3">
-              <Button size="sm" onClick={() => descriptionMutation.mutate()} disabled={descriptionMutation.isPending}>
-                {descriptionMutation.isPending ? 'Guardando...' : 'Guardar descripción'}
+              <Button
+                size="sm"
+                onClick={() => descriptionMutation.mutate()}
+                disabled={descriptionMutation.isPending}
+              >
+                {descriptionMutation.isPending
+                  ? 'Guardando...'
+                  : 'Guardar descripción'}
               </Button>
-              {descriptionSaved && <span className="text-xs text-green-600 dark:text-green-400">Guardado</span>}
+              {descriptionSaved && (
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  Guardado
+                </span>
+              )}
             </div>
           </div>
 
@@ -263,17 +384,23 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
                   onClick={() => brochureRemoveMutation.mutate()}
                   disabled={brochureRemoveMutation.isPending}
                 >
-                  {brochureRemoveMutation.isPending ? 'Quitando...' : 'Quitar folleto'}
+                  {brochureRemoveMutation.isPending
+                    ? 'Quitando...'
+                    : 'Quitar folleto'}
                 </Button>
               ) : (
                 <span />
               )}
               <Button
                 size="sm"
-                onClick={() => brochureFile && brochureUploadMutation.mutate(brochureFile)}
+                onClick={() =>
+                  brochureFile && brochureUploadMutation.mutate(brochureFile)
+                }
                 disabled={!brochureFile || brochureUploadMutation.isPending}
               >
-                {brochureUploadMutation.isPending ? 'Subiendo...' : 'Subir folleto'}
+                {brochureUploadMutation.isPending
+                  ? 'Subiendo...'
+                  : 'Subir folleto'}
               </Button>
             </div>
           </div>
@@ -346,7 +473,11 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
             Cerrar
           </Button>
         </div>
-        {activeError && <p className="mt-2 text-right text-xs text-destructive">{activeError}</p>}
+        {activeError && (
+          <p className="mt-2 text-right text-xs text-destructive">
+            {activeError}
+          </p>
+        )}
       </div>
     </div>
   );

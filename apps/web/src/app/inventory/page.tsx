@@ -1,6 +1,13 @@
 'use client';
 
-import { buildVariantLabel, formatStock, inventoryApi, resolveUploadUrl, type Article, type StockDisplay } from '@/lib/inventory';
+import {
+  buildVariantLabel,
+  formatStock,
+  inventoryApi,
+  resolveUploadUrl,
+  type Article,
+  type StockDisplay,
+} from '@/lib/inventory';
 import { getSocket } from '@/lib/socket';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +19,7 @@ import { AlertTriangle, Info, LayoutGrid, List } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ArticleFormModal from '@/components/ArticleFormModal';
 import ArticleCatalogGrid from './ArticleCatalogGrid';
+import AddToCartIconButton from './AddToCartIconButton';
 import ArticleDetailsModal from './ArticleDetailsModal';
 import ArticleImageModal from './ArticleImageModal';
 import ArticlePriceHistoryModal from './ArticlePriceHistoryModal';
@@ -31,6 +39,8 @@ interface VariantRow {
   isManufactured: boolean;
   active: boolean;
   unitOfMeasure: string;
+  measurementType: Article['measurementType'];
+  commercialLength: number | null;
   imageUrl: string | null;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
@@ -48,7 +58,13 @@ interface VariantRow {
   stockDisplay: StockDisplay;
 }
 
-type SortKey = 'articleName' | 'sku' | 'categoryName' | 'unitPrice' | 'totalStock' | 'minimumStock';
+type SortKey =
+  | 'articleName'
+  | 'sku'
+  | 'categoryName'
+  | 'unitPrice'
+  | 'totalStock'
+  | 'minimumStock';
 type SortDirection = 'asc' | 'desc';
 
 function compareRows(a: VariantRow, b: VariantRow, key: SortKey): number {
@@ -77,7 +93,9 @@ function SortableHeader({
 }) {
   const isActive = currentSort.key === sortKey;
   return (
-    <th className={`pb-2 pr-4 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+    <th
+      className={`pb-2 pr-4 ${align === 'right' ? 'text-right' : 'text-left'}`}
+    >
       <button
         onClick={() => onSort(sortKey)}
         className={`inline-flex items-center gap-1 hover:text-foreground ${isActive ? 'text-foreground' : ''}`}
@@ -103,6 +121,8 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       isManufactured: article.isManufactured,
       active: article.active,
       unitOfMeasure: article.unitOfMeasure,
+      measurementType: article.measurementType,
+      commercialLength: article.commercialLength,
       imageUrl: article.imageUrl,
       preferredSupplierId: article.preferredSupplierId,
       preferredSupplierName: article.preferredSupplierName,
@@ -134,12 +154,16 @@ export default function InventoryPage() {
   const [view, setView] = useState<'table' | 'catalog' | 'alerts'>('table');
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [imageArticle, setImageArticle] = useState<{ id: string; name: string; imageUrl: string | null } | null>(
-    null,
-  );
-  const [supplierArticle, setSupplierArticle] = useState<
-    { id: string; name: string; preferredSupplierId: string | null } | null
-  >(null);
+  const [imageArticle, setImageArticle] = useState<{
+    id: string;
+    name: string;
+    imageUrl: string | null;
+  } | null>(null);
+  const [supplierArticle, setSupplierArticle] = useState<{
+    id: string;
+    name: string;
+    preferredSupplierId: string | null;
+  } | null>(null);
   const [historyVariant, setHistoryVariant] = useState<{
     id: string;
     sku: string;
@@ -203,23 +227,43 @@ export default function InventoryPage() {
   const categories = categoriesQuery.data ?? [];
 
   const rows = useMemo(() => {
-    const searchWords = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const searchWords = search
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
     const filtered = flattenVariants(articles).filter((row) => {
       // Por palabra, no por frase completa - "Remera Rojo" tiene que
       // encontrar "Remera" en el nombre y "Rojo" en la variante, aunque no
       // aparezcan pegados en ningún campo (ver mismo criterio en
       // ArticlePicker.tsx).
-      const haystack = `${row.articleName} ${row.sku} ${row.variantLabel ?? ''}`.toLowerCase();
+      const haystack =
+        `${row.articleName} ${row.sku} ${row.variantLabel ?? ''}`.toLowerCase();
       const matchesSearch = searchWords.every((w) => haystack.includes(w));
-      const matchesCategory = categoryId === '' || row.categoryId === categoryId;
+      const matchesCategory =
+        categoryId === '' || row.categoryId === categoryId;
       const matchesService = !onlyServices || row.isService;
       const matchesPublished = !onlyPublished || row.isPublished;
       const matchesActive = showInactive || row.active;
-      return matchesSearch && matchesCategory && matchesService && matchesPublished && matchesActive;
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesService &&
+        matchesPublished &&
+        matchesActive
+      );
     });
     const sorted = filtered.sort((a, b) => compareRows(a, b, sort.key));
     return sort.direction === 'asc' ? sorted : sorted.reverse();
-  }, [articles, search, categoryId, onlyServices, onlyPublished, showInactive, sort]);
+  }, [
+    articles,
+    search,
+    categoryId,
+    onlyServices,
+    onlyPublished,
+    showInactive,
+    sort,
+  ]);
 
   const detailsRow = useMemo(
     () => rows.find((row) => row.articleId === detailsArticleId) ?? null,
@@ -234,7 +278,8 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-xl font-semibold">Inventario</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            {rows.length} variante{rows.length !== 1 ? 's' : ''} · {warehouses.length} depósito
+            {rows.length} variante{rows.length !== 1 ? 's' : ''} ·{' '}
+            {warehouses.length} depósito
             {warehouses.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -328,204 +373,264 @@ export default function InventoryPage() {
 
       <Card>
         <CardContent>
-        {view === 'alerts' ? (
-          <StockAlertsPanel />
-        ) : isLoading ? (
-          <div className="flex h-40 items-center justify-center text-muted-foreground">
-            Cargando inventario...
-          </div>
-        ) : articlesQuery.error ? (
-          <div className="flex h-40 items-center justify-center text-destructive">
-            Error al cargar el inventario
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="flex h-40 items-center justify-center text-muted-foreground">
-            Sin artículos que coincidan con la búsqueda
-          </div>
-        ) : view === 'catalog' ? (
-          <ArticleCatalogGrid
-            rows={rows.map((row) => ({
-              articleId: row.articleId,
-              articleName: row.articleName,
-              categoryName: row.categoryName,
-              imageUrl: row.imageUrl,
-              variantId: row.variantId,
-              sku: row.sku,
-              variantLabel: row.variantLabel,
-              unitPrice: row.unitPrice,
-              totalStock: row.totalStock,
-              active: row.active,
-            }))}
-            onDetails={setDetailsArticleId}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="pb-2 pr-2" />
-                  <SortableHeader label="Artículo" sortKey="articleName" currentSort={sort} onSort={handleSort} />
-                  <SortableHeader label="SKU" sortKey="sku" currentSort={sort} onSort={handleSort} />
-                  <SortableHeader label="Categoría" sortKey="categoryName" currentSort={sort} onSort={handleSort} />
-                  <SortableHeader
-                    label="Precio"
-                    sortKey="unitPrice"
-                    currentSort={sort}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                  {warehouses.map((w) => (
-                    <th key={w.id} className="pb-2 pr-4 text-right">
-                      {w.name}
-                    </th>
-                  ))}
-                  <SortableHeader
-                    label="Total"
-                    sortKey="totalStock"
-                    currentSort={sort}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                  <SortableHeader
-                    label="Stock mínimo"
-                    sortKey="minimumStock"
-                    currentSort={sort}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const belowMinimum = row.minimumStock !== null && row.totalStock < row.minimumStock;
-                  return (
-                    <tr
-                      key={row.variantId}
-                      className={`border-b border-border/50 hover:bg-muted/40 ${belowMinimum ? 'bg-destructive/5' : ''} ${!row.active ? 'opacity-50' : ''}`}
-                    >
-                      <td className="py-2 pr-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setImageArticle({ id: row.articleId, name: row.articleName, imageUrl: row.imageUrl })
-                          }
-                          title="Imagen del artículo"
-                          className="block h-8 w-8 overflow-hidden rounded border"
-                        >
-                          {row.imageUrl ? (
-                            <img
-                              src={resolveUploadUrl(row.imageUrl) ?? undefined}
-                              alt=""
-                              className="h-8 w-8 object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-8 w-8 items-center justify-center bg-muted text-muted-foreground">
-                              <NoImageIcon />
-                            </span>
-                          )}
-                        </button>
-                      </td>
-                      <td className="py-2 pr-4">
-                        <div className="flex items-center gap-2">
-                          <p>{row.articleName}</p>
-                          {!row.active && (
-                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                              Inactivo
-                            </Badge>
-                          )}
-                        </div>
-                        {row.variantLabel && <p className="text-xs text-muted-foreground">{row.variantLabel}</p>}
-                        <div className="flex items-center gap-2">
+          {view === 'alerts' ? (
+            <StockAlertsPanel />
+          ) : isLoading ? (
+            <div className="flex h-40 items-center justify-center text-muted-foreground">
+              Cargando inventario...
+            </div>
+          ) : articlesQuery.error ? (
+            <div className="flex h-40 items-center justify-center text-destructive">
+              Error al cargar el inventario
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="flex h-40 items-center justify-center text-muted-foreground">
+              Sin artículos que coincidan con la búsqueda
+            </div>
+          ) : view === 'catalog' ? (
+            <ArticleCatalogGrid
+              rows={rows.map((row) => ({
+                articleId: row.articleId,
+                articleName: row.articleName,
+                categoryName: row.categoryName,
+                imageUrl: row.imageUrl,
+                variantId: row.variantId,
+                sku: row.sku,
+                variantLabel: row.variantLabel,
+                unitPrice: row.unitPrice,
+                totalStock: row.totalStock,
+                active: row.active,
+                isService: row.isService,
+                isManufactured: row.isManufactured,
+              }))}
+              onDetails={setDetailsArticleId}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-2" />
+                    <SortableHeader
+                      label="Artículo"
+                      sortKey="articleName"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="SKU"
+                      sortKey="sku"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Categoría"
+                      sortKey="categoryName"
+                      currentSort={sort}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Precio"
+                      sortKey="unitPrice"
+                      currentSort={sort}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    {warehouses.map((w) => (
+                      <th key={w.id} className="pb-2 pr-4 text-right">
+                        {w.name}
+                      </th>
+                    ))}
+                    <SortableHeader
+                      label="Total"
+                      sortKey="totalStock"
+                      currentSort={sort}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <SortableHeader
+                      label="Stock mínimo"
+                      sortKey="minimumStock"
+                      currentSort={sort}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const belowMinimum =
+                      row.minimumStock !== null &&
+                      row.totalStock < row.minimumStock;
+                    return (
+                      <tr
+                        key={row.variantId}
+                        className={`border-b border-border/50 hover:bg-muted/40 ${belowMinimum ? 'bg-destructive/5' : ''} ${!row.active ? 'opacity-50' : ''}`}
+                      >
+                        <td className="py-2 pr-2">
                           <button
                             type="button"
                             onClick={() =>
-                              setSupplierArticle({
+                              setImageArticle({
                                 id: row.articleId,
                                 name: row.articleName,
-                                preferredSupplierId: row.preferredSupplierId,
+                                imageUrl: row.imageUrl,
                               })
                             }
-                            className="text-xs text-primary hover:underline"
+                            title="Imagen del artículo"
+                            className="block h-8 w-8 overflow-hidden rounded border"
                           >
-                            {row.preferredSupplierName ?? '+ proveedor'}
+                            {row.imageUrl ? (
+                              <img
+                                src={
+                                  resolveUploadUrl(row.imageUrl) ?? undefined
+                                }
+                                alt=""
+                                className="h-8 w-8 object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-8 w-8 items-center justify-center bg-muted text-muted-foreground">
+                                <NoImageIcon />
+                              </span>
+                            )}
                           </button>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <p>{row.articleName}</p>
+                            {!row.active && (
+                              <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                                Inactivo
+                              </Badge>
+                            )}
+                          </div>
+                          {row.variantLabel && (
+                            <p className="text-xs text-muted-foreground">
+                              {row.variantLabel}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSupplierArticle({
+                                  id: row.articleId,
+                                  name: row.articleName,
+                                  preferredSupplierId: row.preferredSupplierId,
+                                })
+                              }
+                              className="text-xs text-primary hover:underline"
+                            >
+                              {row.preferredSupplierName ?? '+ proveedor'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDetailsArticleId(row.articleId)}
+                              title="Detalles (editar, activar/desactivar, descripción, folleto, adjunto)"
+                              className="text-muted-foreground hover:text-primary"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                            {!row.isService && !row.isManufactured && (
+                              <AddToCartIconButton variantId={row.variantId} />
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">
+                          {row.sku}
+                        </td>
+                        <td className="py-2 pr-4 text-muted-foreground">
+                          {row.categoryName ?? '—'}
+                        </td>
+                        <td className="py-2 pr-4 text-right">
                           <button
                             type="button"
-                            onClick={() => setDetailsArticleId(row.articleId)}
-                            title="Detalles (editar, activar/desactivar, descripción, folleto, adjunto)"
-                            className="text-muted-foreground hover:text-primary"
+                            onClick={() =>
+                              setHistoryVariant({
+                                id: row.variantId,
+                                sku: row.sku,
+                                articleId: row.articleId,
+                                articleName: row.articleName,
+                                unitPrice: row.unitPrice,
+                                markupPercent: row.markupPercent,
+                              })
+                            }
+                            title="Ver historial de precios"
+                            className="hover:underline hover:decoration-dotted"
                           >
-                            <Info className="h-3.5 w-3.5" />
+                            ${row.unitPrice.toFixed(2)}
                           </button>
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{row.sku}</td>
-                      <td className="py-2 pr-4 text-muted-foreground">{row.categoryName ?? '—'}</td>
-                      <td className="py-2 pr-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setHistoryVariant({
-                              id: row.variantId,
-                              sku: row.sku,
-                              articleId: row.articleId,
-                              articleName: row.articleName,
-                              unitPrice: row.unitPrice,
-                              markupPercent: row.markupPercent,
-                            })
-                          }
-                          title="Ver historial de precios"
-                          className="hover:underline hover:decoration-dotted"
-                        >
-                          ${row.unitPrice.toFixed(2)}
-                        </button>
-                      </td>
-                      {warehouses.map((w) => (
-                        <td key={w.id} className="py-2 pr-4 text-right">
-                          {row.stockByWarehouseId[w.id] ?? 0}
                         </td>
-                      ))}
-                      <td
-                        className={`py-2 pr-4 text-right font-semibold ${belowMinimum ? 'text-destructive' : 'text-primary'}`}
-                      >
-                        {row.stockDisplay.primary}
-                        {belowMinimum && <span title="Por debajo del stock mínimo"> ⚠</span>}
-                        {row.stockDisplay.secondary && (
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            {row.stockDisplay.secondary}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-right text-muted-foreground">{row.minimumStock ?? '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {warehouses.map((w) => (
+                          <td key={w.id} className="py-2 pr-4 text-right">
+                            {row.stockByWarehouseId[w.id] ?? 0}
+                          </td>
+                        ))}
+                        <td
+                          className={`py-2 pr-4 text-right font-semibold ${belowMinimum ? 'text-destructive' : 'text-primary'}`}
+                        >
+                          {row.stockDisplay.primary}
+                          {belowMinimum && (
+                            <span title="Por debajo del stock mínimo"> ⚠</span>
+                          )}
+                          {row.stockDisplay.secondary && (
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {row.stockDisplay.secondary}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-4 text-right text-muted-foreground">
+                          {row.minimumStock ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {modalOpen && (
-        <StockMovementModal warehouses={warehouses} onClose={() => setModalOpen(false)} />
+        <StockMovementModal
+          warehouses={warehouses}
+          onClose={() => setModalOpen(false)}
+        />
       )}
 
-      {importModalOpen && <ImportArticlesModal onClose={() => setImportModalOpen(false)} />}
+      {importModalOpen && (
+        <ImportArticlesModal onClose={() => setImportModalOpen(false)} />
+      )}
 
-      {imageArticle && <ArticleImageModal article={imageArticle} onClose={() => setImageArticle(null)} />}
+      {imageArticle && (
+        <ArticleImageModal
+          article={imageArticle}
+          onClose={() => setImageArticle(null)}
+        />
+      )}
 
       {supplierArticle && (
-        <ArticleSupplierModal article={supplierArticle} onClose={() => setSupplierArticle(null)} />
+        <ArticleSupplierModal
+          article={supplierArticle}
+          onClose={() => setSupplierArticle(null)}
+        />
       )}
 
       {historyVariant && (
-        <ArticlePriceHistoryModal variant={historyVariant} onClose={() => setHistoryVariant(null)} />
+        <ArticlePriceHistoryModal
+          variant={historyVariant}
+          onClose={() => setHistoryVariant(null)}
+        />
       )}
 
-      {creatingArticle && <ArticleFormModal onClose={() => setCreatingArticle(false)} />}
+      {creatingArticle && (
+        <ArticleFormModal onClose={() => setCreatingArticle(false)} />
+      )}
 
-      {creatingWarehouse && <WarehouseFormModal onClose={() => setCreatingWarehouse(false)} />}
+      {creatingWarehouse && (
+        <WarehouseFormModal onClose={() => setCreatingWarehouse(false)} />
+      )}
 
       {detailsRow && (
         <ArticleDetailsModal
@@ -537,6 +642,8 @@ export default function InventoryPage() {
             attachmentZipUrl: detailsRow.attachmentZipUrl,
             categoryId: detailsRow.categoryId,
             unitOfMeasure: detailsRow.unitOfMeasure,
+            measurementType: detailsRow.measurementType,
+            commercialLength: detailsRow.commercialLength,
             isService: detailsRow.isService,
             isPublished: detailsRow.isPublished,
             isManufactured: detailsRow.isManufactured,
@@ -552,7 +659,14 @@ export default function InventoryPage() {
 
 function NoImageIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      className="h-4 w-4"
+    >
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="9" cy="9" r="1.5" />
       <path d="M21 15l-5-5L5 21" />

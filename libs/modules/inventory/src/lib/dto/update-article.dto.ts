@@ -1,5 +1,5 @@
 import { UnitOfMeasure } from '@plexo/database';
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class UpdateArticleDto {
   @IsOptional()
@@ -58,4 +58,15 @@ export class UpdateArticleDto {
   @IsOptional()
   @IsEnum(UnitOfMeasure)
   unitOfMeasure?: UnitOfMeasure;
+
+  // LINEAL_1D: largo de la barra/rollo comercial (mm). A diferencia de
+  // measurementType, sí se puede corregir después del alta: cada StockPiece
+  // ya recibida guarda su propio originalLength, y SupplierReturnsService
+  // deshace cada remito con el largo con el que entró, no con éste - así
+  // que cambiarlo sólo afecta a lo que se reciba de ahora en más.
+  // InventoryService.updateArticle lo rechaza en otros measurementType.
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  commercialLength?: number;
 }

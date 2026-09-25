@@ -251,6 +251,23 @@ export class InventoryService {
       }
     }
 
+    if (dto.unitOfMeasure !== undefined) {
+      const current = await db.article.findUniqueOrThrow({ where: { id }, select: { unitOfMeasure: true } });
+      if (dto.unitOfMeasure !== current.unitOfMeasure) {
+        const reasons = await this.getUnitOfMeasureLockReasons(id);
+        if (reasons.length > 0) {
+          throw new BadRequestException(`No se puede cambiar la unidad de medida: ${reasons.join('; ')}`);
+        }
+      }
+    }
+
+    if (dto.commercialLength !== undefined) {
+      const current = await db.article.findUniqueOrThrow({ where: { id }, select: { measurementType: true } });
+      if (current.measurementType !== 'LINEAL_1D') {
+        throw new BadRequestException('El largo comercial sólo aplica a artículos de medición lineal');
+      }
+    }
+
     return db.article.update({
       where: { id },
       data: {
@@ -264,8 +281,60 @@ export class InventoryService {
         markupPercent: dto.markupPercent,
         description: dto.description,
         active: dto.active,
+        commercialLength: dto.commercialLength,
       },
     });
+  }
+
+  /** Por qué NO se puede cambiar Article.unitOfMeasure - vacío = se puede.
+   * Cambiar la unidad no convierte nada, sólo re-etiqueta: todo lo que ya
+   * guarda una cantidad de este artículo pasaría a leerse en la unidad
+   * nueva (50 "unidades" -> 50 kg). Por eso se bloquea ante cualquier
+   * registro con cantidades, no sólo ante stock actual: stock en 0 con
+   * movimientos igual tiene kardex/costo promedio en la unidad vieja, y una
+   * receta sin órdenes abiertas igual guarda "2,5 de esto". El precio
+   * (unitPrice/PriceHistory) queda afuera a propósito - se ve y se corrige
+   * a mano. Usado por updateArticle (el bloqueo real) y por
+   * ArticleDetailsModal (para deshabilitar el selector y explicar por qué). */
+  async getUnitOfMeasureLockReasons(articleId: string): Promise<string[]> {
+    const db = getTenantDb();
+    const byArticle = { articleVariant: { articleId } };
+    const select = { id: true } as const;
+    const [
+      movement,
+      bomOutput,
+      bomInput,
+      bomByproduct,
+      productionOrder,
+      quoteRequestLine,
+      purchaseOrderLine,
+      quoteLine,
+      invoiceLine,
+      minimumStock,
+      cartItem,
+    ] = await Promise.all([
+      db.stockMovement.findFirst({ where: byArticle, select }),
+      db.billOfMaterials.findFirst({ where: { outputArticleVariant: { articleId } }, select }),
+      db.bomLine.findFirst({ where: { inputArticleVariant: { articleId } }, select }),
+      db.bomByproduct.findFirst({ where: { outputArticleVariant: { articleId } }, select }),
+      db.productionOrder.findFirst({ where: { outputArticleVariant: { articleId } }, select }),
+      db.quoteRequestLine.findFirst({ where: byArticle, select }),
+      db.purchaseOrderLine.findFirst({ where: byArticle, select }),
+      db.quoteLine.findFirst({ where: byArticle, select }),
+      db.invoiceLine.findFirst({ where: byArticle, select }),
+      db.minimumStock.findFirst({ where: byArticle, select }),
+      db.inventoryCartItem.findFirst({ where: byArticle, select }),
+    ]);
+
+    const reasons: string[] = [];
+    if (movement) reasons.push('ya tiene movimientos de stock');
+    if (bomOutput || bomInput || bomByproduct) reasons.push('se usa en una receta de producción');
+    if (productionOrder) reasons.push('tiene órdenes de producción');
+    if (quoteRequestLine || purchaseOrderLine) reasons.push('figura en pedidos de cotización u órdenes de compra');
+    if (quoteLine || invoiceLine) reasons.push('figura en cotizaciones o facturas de venta');
+    if (minimumStock) reasons.push('tiene un stock mínimo configurado');
+    if (cartItem) reasons.push('está en el listado de artículos (carrito)');
+    return reasons;
   }
 
   async listArticles(filters?: ArticleListFilters): Promise<ArticleListItem[]> {

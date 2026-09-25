@@ -76,12 +76,26 @@ export class SupplierReturnsService {
         select: { article: { select: { measurementType: true, purchaseSize: true, commercialLength: true } } },
       });
       const article = variant.article;
-      // Mismo factor que GoodsReceiptsService.createReceipt - ver el
-      // comentario ahí, éste es exactamente su inverso.
+      // El inverso exacto del factor que GoodsReceiptsService.createReceipt
+      // aplicó AL RECIBIR este remito - sale del propio movimiento
+      // PURCHASE_IN de esa línea (mm o gr que entraron / unidades de compra
+      // recibidas), no del commercialLength/purchaseSize actual del
+      // artículo: el largo comercial se puede corregir después del alta
+      // (ver UpdateArticleDto), y usar el valor nuevo descontaría del
+      // ledger una cantidad distinta a la que sumó la recepción. El
+      // artículo actual queda sólo como fallback si no aparece ese
+      // movimiento.
+      const receiptMovement = await db.stockMovement.findFirst({
+        where: { goodsReceiptLineId: line.goodsReceiptLineId, type: 'PURCHASE_IN' },
+        select: { quantity: true },
+      });
+      const receivedQuantity = line.goodsReceiptLine.quantity;
       const factor =
-        (article.measurementType === 'CONTINUOUS' && article.purchaseSize) ||
-        (article.measurementType === 'LINEAL_1D' && article.commercialLength) ||
-        new Prisma.Decimal(1);
+        receiptMovement && receivedQuantity?.gt(0)
+          ? receiptMovement.quantity.div(receivedQuantity)
+          : (article.measurementType === 'CONTINUOUS' && article.purchaseSize) ||
+            (article.measurementType === 'LINEAL_1D' && article.commercialLength) ||
+            new Prisma.Decimal(1);
 
       await this.inventoryService.recordMovement({
         warehouseId: supplierReturn.goodsReceipt.warehouseId,
@@ -98,12 +112,17 @@ export class SupplierReturnsService {
       // "Piezas y recortes" sigue mostrándola disponible aunque ya volvió
       // al proveedor. Sólo se pueden devolver piezas TODAVÍA INTACTAS (ver
       // StockPieceService.returnFullPieces) - explota si ya se cortó
-      // alguna, en vez de dejar el conteo descuadrado en silencio.
-      if (article.measurementType === 'LINEAL_1D' && article.commercialLength) {
+      // alguna, en vez de dejar el conteo descuadrado en silencio. factor=1
+      // en 1D = se recibió antes de configurar el largo comercial, y en ese
+      // caso la recepción no creó piezas - no hay nada que devolver acá.
+      // `length` = el largo con el que nacieron las piezas de ESTE remito,
+      // para no llevarse barras de otro largo si el comercial cambió.
+      if (article.measurementType === 'LINEAL_1D' && !factor.equals(1)) {
         await this.stockPieceService.returnFullPieces({
           articleVariantId,
           warehouseId: supplierReturn.goodsReceipt.warehouseId,
           count: Math.round(line.quantity.toNumber()),
+          length: factor,
         });
       }
 

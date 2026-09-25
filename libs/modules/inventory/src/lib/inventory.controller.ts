@@ -89,6 +89,13 @@ export class InventoryController {
     return this.inventoryService.updateArticle(id, dto);
   }
 
+  // Vacío = la unidad de medida se puede cambiar - ver
+  // InventoryService.getUnitOfMeasureLockReasons.
+  @Get('articles/:id/unit-of-measure-lock')
+  async getUnitOfMeasureLock(@Param('id', ParseUUIDPipe) id: string) {
+    return { reasons: await this.inventoryService.getUnitOfMeasureLockReasons(id) };
+  }
+
   @Roles(...WRITE_ROLES)
   @Get('articles/import/template')
   async downloadImportTemplate() {

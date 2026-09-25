@@ -64,6 +64,10 @@ export class StockPieceService {
     articleVariantId: string;
     warehouseId: string;
     count: number;
+    // Sólo piezas que nacieron con este largo (mm) - el caller pasa el de
+    // la recepción que se está devolviendo, por si el largo comercial del
+    // artículo cambió desde entonces. Omitido = cualquier largo.
+    length?: number | Prisma.Decimal;
   }): Promise<StockPiece[]> {
     const db = getTenantDb();
     const pieces = await db.stockPiece.findMany({
@@ -72,6 +76,7 @@ export class StockPieceService {
         warehouseId: input.warehouseId,
         status: 'AVAILABLE',
         sourceType: 'FULL_STOCK',
+        originalLength: input.length === undefined ? undefined : new Prisma.Decimal(input.length),
       },
       orderBy: { createdAt: 'desc' },
     });
