@@ -70,6 +70,29 @@ export interface ArticleVariantLookupEntry {
   imageUrl: string | null;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
+  // Unidad en la que están las cantidades de stock/reservas/consumos de
+  // este artículo (ver stockUnitLabel) - "gr", "mm", "un.", etc.
+  stockUnit: string;
+  // Cuántas unidades de stock trae UNA unidad de compra (horma de 4000 gr,
+  // barra de 6000 mm) - mismo factor que GoodsReceiptsService aplica al
+  // recibir. null = se compra en la misma unidad en que se stockea.
+  purchaseUnitSize: number | null;
+}
+
+/** Unidad de las cantidades de stock de un artículo - mismo criterio que
+ * formatStock: CONTINUOUS en su unidad base (gr/ml), LINEAL_1D en mm,
+ * SURFACE_2D en m², el resto en unidades. */
+export function stockUnitLabel(article: Article): string {
+  switch (article.measurementType) {
+    case 'LINEAL_1D':
+      return 'mm';
+    case 'SURFACE_2D':
+      return 'm²';
+    case 'CONTINUOUS':
+      return article.baseUnit ?? '';
+    default:
+      return 'un.';
+  }
 }
 
 /** articleVariantId -> nombre/SKU/imagen legibles, para pantallas que sólo
@@ -89,6 +112,13 @@ export function buildArticleVariantLookup(articles: Article[]): Record<string, A
         imageUrl: article.imageUrl,
         preferredSupplierId: article.preferredSupplierId,
         preferredSupplierName: article.preferredSupplierName,
+        stockUnit: stockUnitLabel(article),
+        purchaseUnitSize:
+          article.measurementType === 'CONTINUOUS'
+            ? article.purchaseSize
+            : article.measurementType === 'LINEAL_1D'
+              ? article.commercialLength
+              : null,
       };
     }
   }

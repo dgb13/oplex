@@ -13,6 +13,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
 
+const QUANTITY_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
 export default function NewProductionOrderPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -178,7 +180,7 @@ function ProducibilityPreview({
   isLoading: boolean;
   noRecipe: boolean;
   data: import('@/lib/production').ProducibleResult | undefined;
-  lookup: Record<string, { articleName: string; variantLabel: string | null; sku: string }>;
+  lookup: Record<string, { articleName: string; variantLabel: string | null; sku: string; stockUnit: string }>;
   desiredQuantity: number;
 }) {
   if (isLoading) {
@@ -220,7 +222,8 @@ function ProducibilityPreview({
                   {article ? article.articleName : entry.line.inputArticleVariantId}
                 </span>
                 <span className="text-muted-foreground tabular-nums">
-                  {disponible.toFixed(2)} disponibles
+                  {QUANTITY_FORMAT.format(disponible)}
+                  {article?.stockUnit ? ` ${article.stockUnit}` : ''} disponibles
                 </span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">

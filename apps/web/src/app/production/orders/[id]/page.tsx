@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
 import { invoicingApi } from '@/lib/invoicing';
-import { productionApi } from '@/lib/production';
+import { productionApi, type ReservationStatus } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { FileArchive, FileText, Package, ShoppingCart } from 'lucide-react';
@@ -20,6 +20,26 @@ import { PRODUCTION_STATUS_COLORS, PRODUCTION_STATUS_LABELS } from '../../status
 // insumos - DONE ya los consumió (ver "Consumo real") y CANCELLED liberó
 // sus reservas, en ambos casos la barra de faltantes ya no tiene sentido.
 const ACTIVE_STATUSES = new Set(['DRAFT', 'PLANNED', 'IN_PROGRESS']);
+
+const RESERVATION_STATUS_LABELS: Record<ReservationStatus, string> = {
+  ACTIVE: 'Reservado',
+  CONSUMED: 'Consumido',
+  RELEASED: 'Liberado',
+};
+
+const QUANTITY_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+const MONEY_FORMAT = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Cantidad con la unidad de stock del artículo ("2.000 gr", "10 un.") -
+// sin unidad, "2000.00" no decía si eran gramos, mililitros o unidades.
+function formatQuantity(value: number | string, unit: string | undefined): string {
+  const formatted = QUANTITY_FORMAT.format(Number(value));
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatMoney(value: number | string): string {
+  return `$${MONEY_FORMAT.format(Number(value))}`;
+}
 
 interface InsumoRow {
   articleVariantId: string;
@@ -153,12 +173,17 @@ export default function ProductionOrderDetailPage() {
         };
         bySupplier.set(insumo.preferredSupplierId, group);
       }
+      // El faltante está en unidad de stock (gr, ml, mm) pero el Pedido de
+      // Cotización va en unidad de compra (hormas, potes, barras) - sin
+      // convertir, faltar 2000 gr de jamón pedía 2000 hormas. Redondeado
+      // para arriba: no se compra media horma.
+      const quantity = insumo.purchaseUnitSize ? Math.ceil(row.falta / insumo.purchaseUnitSize) : row.falta;
       group.lines.push({
         articleVariantId: row.articleVariantId,
         sku: insumo.sku,
         articleName: insumo.articleName,
         variantLabel: insumo.variantLabel,
-        quantity: row.falta,
+        quantity,
       });
     }
     return Array.from(bySupplier.values());
@@ -391,7 +416,7 @@ export default function ProductionOrderDetailPage() {
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="font-medium">{insumo?.articleName ?? row.articleVariantId}</span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">
-                          {row.reservado.toFixed(2)} / {row.requerido.toFixed(2)}
+                          {QUANTITY_FORMAT.format(row.reservado)} / {formatQuantity(row.requerido, insumo?.stockUnit)}
                         </span>
                       </div>
                       <ProgressBar pct={row.pct} colorClass={colorClass} />
@@ -399,7 +424,7 @@ export default function ProductionOrderDetailPage() {
                         <p
                           className={`text-xs ${row.reservado > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
                         >
-                          Faltan {row.falta.toFixed(2)}
+                          Faltan {formatQuantity(row.falta, insumo?.stockUnit)}
                           {insumo?.preferredSupplierName ? ` — proveedor preferido: ${insumo.preferredSupplierName}` : ' — sin proveedor preferido'}
                         </p>
                       )}
@@ -428,8 +453,11 @@ export default function ProductionOrderDetailPage() {
                   columns={[
                     { header: 'Insumo', render: (r) => lookup[r.inputArticleVariantId]?.articleName ?? r.inputArticleVariantId },
                     { header: 'Depósito', render: (r) => warehouseLookup[r.warehouseId] ?? r.warehouseId },
-                    { header: 'Cantidad', render: (r) => Number(r.quantityReserved).toFixed(2) },
-                    { header: 'Estado', render: (r) => r.status },
+                    {
+                      header: 'Cantidad',
+                      render: (r) => formatQuantity(r.quantityReserved, lookup[r.inputArticleVariantId]?.stockUnit),
+                    },
+                    { header: 'Estado', render: (r) => RESERVATION_STATUS_LABELS[r.status] ?? r.status },
                   ]}
                 />
               </CardContent>
@@ -446,9 +474,15 @@ export default function ProductionOrderDetailPage() {
                   rows={order.consumptions}
                   columns={[
                     { header: 'Insumo', render: (r) => lookup[r.inputArticleVariantId]?.articleName ?? r.inputArticleVariantId },
-                    { header: 'Cantidad', render: (r) => Number(r.quantityConsumed).toFixed(2) },
-                    { header: 'Merma', render: (r) => Number(r.wasteAmount).toFixed(2) },
-                    { header: 'Costo', render: (r) => `$${Number(r.cost).toFixed(2)}` },
+                    {
+                      header: 'Cantidad',
+                      render: (r) => formatQuantity(r.quantityConsumed, lookup[r.inputArticleVariantId]?.stockUnit),
+                    },
+                    {
+                      header: 'Merma',
+                      render: (r) => formatQuantity(r.wasteAmount, lookup[r.inputArticleVariantId]?.stockUnit),
+                    },
+                    { header: 'Costo', render: (r) => formatMoney(r.cost) },
                   ]}
                 />
               </CardContent>
@@ -466,8 +500,11 @@ export default function ProductionOrderDetailPage() {
                   columns={[
                     { header: 'Producto', render: (r) => lookup[r.articleVariantId]?.articleName ?? r.articleVariantId },
                     { header: 'Tipo', render: (r) => (r.isPrimary ? 'Principal' : 'Subproducto') },
-                    { header: 'Cantidad', render: (r) => Number(r.quantityProduced).toFixed(2) },
-                    { header: 'Costo', render: (r) => `$${Number(r.cost).toFixed(2)}` },
+                    {
+                      header: 'Cantidad',
+                      render: (r) => formatQuantity(r.quantityProduced, lookup[r.articleVariantId]?.stockUnit),
+                    },
+                    { header: 'Costo', render: (r) => formatMoney(r.cost) },
                   ]}
                 />
               </CardContent>
