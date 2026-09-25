@@ -107,6 +107,9 @@ export interface ProductionOrder {
 export interface ProductionHistoryOrder extends ProductionOrder {
   outputs: ProductionOutput[];
   reservations: { warehouseId: string }[];
+  // Versión de la receta vigente hoy para este producto (null si ya no
+  // tiene ninguna activa) - para marcar "v1 (hoy v2)".
+  activeBomVersion: number | null;
 }
 
 /** "2026-09-29" (input type=date, día local) → ISO al mediodía local, así

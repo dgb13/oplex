@@ -457,8 +457,9 @@ export class ProductionOrderService {
    * producto en el frontend). `outputs` trae el costo real de lo
    * producido y `reservations` el depósito que usó (para que "Repetir"
    * proponga el mismo). */
-  listHistory() {
-    return getTenantDb().productionOrder.findMany({
+  async listHistory() {
+    const db = getTenantDb();
+    const orders = await db.productionOrder.findMany({
       where: { status: 'DONE' },
       orderBy: { finishedAt: 'desc' },
       include: {
@@ -467,6 +468,14 @@ export class ProductionOrderService {
         reservations: { select: { warehouseId: true }, take: 1 },
       },
     });
+    // Versión de receta vigente HOY por producto - el Historial marca
+    // "v1 (hoy v2)" cuando la orden se hizo con una receta que ya cambió.
+    const activeBoms = await db.billOfMaterials.findMany({
+      where: { isActive: true, outputArticleVariantId: { in: [...new Set(orders.map((o) => o.outputArticleVariantId))] } },
+      select: { outputArticleVariantId: true, version: true },
+    });
+    const activeVersion = new Map(activeBoms.map((b) => [b.outputArticleVariantId, b.version]));
+    return orders.map((o) => ({ ...o, activeBomVersion: activeVersion.get(o.outputArticleVariantId) ?? null }));
   }
 
   /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). Proyecta

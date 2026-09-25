@@ -74,7 +74,9 @@ export default function ProductionHistoryPage() {
   const gate = useProductionGate();
   const [view, setView] = useState<'product' | 'all'>('product');
   const [search, setSearch] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
+  // undefined = todavía no se eligió nada: se abre el primer producto, como
+  // en el mockup; null = el usuario lo cerró a propósito.
+  const [openId, setOpenId] = useState<string | null | undefined>(undefined);
   const [repeating, setRepeating] = useState<ProductionHistoryOrder | null>(null);
 
   const historyQuery = useQuery({
@@ -115,6 +117,13 @@ export default function ProductionHistoryPage() {
       avgTotal: average(orders.map(totalDays)) ?? 0,
     }));
   }, [filteredOrders]);
+  const effectiveOpenId = openId === undefined ? (groups[0]?.articleVariantId ?? null) : openId;
+  // Promedio de fabricación por producto - la etiqueta de cada orden se
+  // pinta verde si tardó igual o menos que el promedio, ámbar si más.
+  const avgFabricationByProduct = useMemo(
+    () => new Map(groups.map((g) => [g.articleVariantId, g.avgFabrication])),
+    [groups],
+  );
 
   if (gate.isLoading) {
     return null;
@@ -132,7 +141,7 @@ export default function ProductionHistoryPage() {
         </div>
         {gate.enabled && (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border p-0.5" role="group" aria-label="Vista">
+            <div className="inline-flex rounded-lg border border-border bg-card p-0.5" role="group" aria-label="Vista">
               {(
                 [
                   ['product', 'Por producto'],
@@ -153,7 +162,7 @@ export default function ProductionHistoryPage() {
               ))}
             </div>
             <Input
-              className="w-56"
+              className="w-56 border-border bg-card"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar producto u orden..."
@@ -181,8 +190,9 @@ export default function ProductionHistoryPage() {
               key={group.articleVariantId}
               group={group}
               lookup={lookup}
-              open={openId === group.articleVariantId}
-              onToggle={() => setOpenId(openId === group.articleVariantId ? null : group.articleVariantId)}
+              open={effectiveOpenId === group.articleVariantId}
+              onToggle={() => setOpenId(effectiveOpenId === group.articleVariantId ? null : group.articleVariantId)}
+              avgFabricationByProduct={avgFabricationByProduct}
               onRepeat={setRepeating}
             />
           ))}
@@ -190,7 +200,13 @@ export default function ProductionHistoryPage() {
       ) : (
         <Card>
           <CardContent>
-            <OrdersTable orders={filteredOrders} lookup={lookup} withProduct onRepeat={setRepeating} />
+            <OrdersTable
+              orders={filteredOrders}
+              lookup={lookup}
+              withProduct
+              onRepeat={setRepeating}
+              avgFabricationByProduct={avgFabricationByProduct}
+            />
           </CardContent>
         </Card>
       )}
@@ -228,12 +244,14 @@ function ProductCard({
   open,
   onToggle,
   onRepeat,
+  avgFabricationByProduct,
 }: {
   group: ProductGroup;
   lookup: Lookup;
   open: boolean;
   onToggle: () => void;
   onRepeat: (order: ProductionHistoryOrder) => void;
+  avgFabricationByProduct: Map<string, number | null>;
 }) {
   const article = lookup[group.articleVariantId];
   const last = group.orders[0];
@@ -245,7 +263,7 @@ function ProductCard({
 
   return (
     <Card className="gap-0 py-0">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 p-4 lg:grid-cols-[auto_minmax(0,1.6fr)_repeat(4,minmax(0,1fr))_auto]">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 p-4 lg:grid-cols-[auto_minmax(0,1.6fr)_repeat(4,minmax(0,1fr))_11rem]">
         <ProductThumb articleVariantId={group.articleVariantId} lookup={lookup} size="lg" />
         <div className="min-w-0">
           <p className="truncate font-semibold">
@@ -272,7 +290,7 @@ function ProductCard({
           </Stat>
           <Stat label="Costo unit. últ." value={lastCost !== null ? MONEY_FORMAT.format(lastCost) : '—'} />
         </div>
-        <div className="col-start-3 row-start-1 flex items-center gap-1 lg:col-start-7">
+        <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 lg:col-start-7">
           <Button size="sm" onClick={() => onRepeat(last)}>
             Repetir última
           </Button>
@@ -284,7 +302,12 @@ function ProductCard({
       </div>
       {open && (
         <div className="border-t px-4 pb-3">
-          <OrdersTable orders={group.orders} lookup={lookup} onRepeat={onRepeat} />
+          <OrdersTable
+            orders={group.orders}
+            lookup={lookup}
+            onRepeat={onRepeat}
+            avgFabricationByProduct={avgFabricationByProduct}
+          />
         </div>
       )}
     </Card>
@@ -306,28 +329,31 @@ function OrdersTable({
   lookup,
   withProduct,
   onRepeat,
+  avgFabricationByProduct,
 }: {
   orders: ProductionHistoryOrder[];
   lookup: Lookup;
   withProduct?: boolean;
   onRepeat: (order: ProductionHistoryOrder) => void;
+  avgFabricationByProduct: Map<string, number | null>;
 }) {
   const router = useRouter();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
         <thead>
-          <tr className="border-b text-left text-xs text-muted-foreground">
-            {withProduct && <th className="py-2 pr-3 font-medium">Producto</th>}
-            <th className="py-2 pr-3 font-medium">Orden</th>
-            <th className="py-2 pr-3 font-medium">Inició</th>
-            <th className="py-2 pr-3 font-medium">Terminó</th>
-            <th className="py-2 pr-3 font-medium">Fabricación</th>
-            <th className="py-2 pr-3 font-medium">Total</th>
-            <th className="py-2 pr-3 text-right font-medium">Cantidad</th>
-            <th className="py-2 pr-3 text-right font-medium">Costo unit.</th>
-            <th className="py-2 pr-3 font-medium">Receta</th>
-            <th className="py-2 pr-3 font-medium">Creó</th>
+          <tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            {withProduct && <th className="py-2.5 pr-3 font-semibold">Producto</th>}
+            <th className="py-2.5 pr-3 font-semibold">Orden</th>
+            <th className="py-2.5 pr-3 font-semibold">Inició</th>
+            <th className="py-2.5 pr-3 font-semibold">Terminó</th>
+            <th className="py-2.5 pr-3 font-semibold">Fabricación</th>
+            <th className="py-2.5 pr-3 font-semibold">Espera previa</th>
+            <th className="py-2.5 pr-3 font-semibold">Total</th>
+            <th className="py-2.5 pr-3 text-right font-semibold">Cantidad</th>
+            <th className="py-2.5 pr-3 text-right font-semibold">Costo unit.</th>
+            <th className="py-2.5 pr-3 font-semibold">Receta</th>
+            <th className="py-2.5 pr-3 font-semibold">Creó</th>
             <th className="py-2" />
           </tr>
         </thead>
@@ -335,7 +361,11 @@ function OrdersTable({
           {orders.map((order) => {
             const article = lookup[order.outputArticleVariantId];
             const fabrication = fabricationDays(order);
+            const wait = order.startedAt ? calendarDays(order.createdAt, order.startedAt) : null;
+            const avgFabrication = avgFabricationByProduct.get(order.outputArticleVariantId) ?? null;
             const cost = unitCost(order);
+            const recipeChanged =
+              order.bomVersion !== null && order.activeBomVersion !== null && order.activeBomVersion !== order.bomVersion;
             return (
               <tr key={order.id} className="border-b last:border-0">
                 {withProduct && (
@@ -357,13 +387,34 @@ function OrdersTable({
                 </td>
                 <td className="py-2 pr-3 tabular-nums">{formatDate(order.startedAt)}</td>
                 <td className="py-2 pr-3 tabular-nums">{formatDate(order.finishedAt)}</td>
-                <td className="py-2 pr-3">{fabrication !== null ? daysLabel(fabrication) : '—'}</td>
+                <td className="py-2 pr-3">
+                  {fabrication !== null ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        avgFabrication === null || fabrication <= avgFabrication
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                      }`}
+                      title={avgFabrication !== null ? `Promedio: ${daysLabel(Math.round(avgFabrication))}` : undefined}
+                    >
+                      {daysLabel(fabrication)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">{wait !== null && wait > 0 ? daysLabel(wait) : '—'}</td>
                 <td className="py-2 pr-3 text-muted-foreground">{daysLabel(totalDays(order))}</td>
                 <td className="py-2 pr-3 text-right tabular-nums">
                   {Number(order.quantity)} {article?.stockUnit ?? ''}
                 </td>
                 <td className="py-2 pr-3 text-right tabular-nums">{cost !== null ? MONEY_FORMAT.format(cost) : '—'}</td>
-                <td className="py-2 pr-3 text-muted-foreground">{order.bomVersion ? `v${order.bomVersion}` : '—'}</td>
+                <td
+                  className={`py-2 pr-3 text-xs ${recipeChanged ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+                >
+                  {order.bomVersion ? `v${order.bomVersion}` : '—'}
+                  {recipeChanged && ` (hoy v${order.activeBomVersion})`}
+                </td>
                 <td className="py-2 pr-3 text-muted-foreground">
                   <CreatedBy user={order.createdBy} size={20} />
                 </td>
