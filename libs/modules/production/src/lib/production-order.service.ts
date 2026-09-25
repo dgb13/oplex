@@ -160,13 +160,26 @@ export class ProductionOrderService {
     const tenantId = getTenantId();
     let isShortOnMaterials = false;
 
+    // Lo ya reservado es un pozo POR INSUMO que se va descontando línea a
+    // línea - no se le resta entero a cada línea. Una receta puede usar el
+    // mismo insumo en varias líneas (la Mesa de trabajo tiene el tubo
+    // rectangular en 4 tramos distintos); restando el total reservado del
+    // insumo contra cada línea por separado, retryReservation daba por
+    // cubiertas líneas que no lo estaban y dejaba la orden sin faltante con
+    // menos reservado de lo que pide la receta (bug real: 3 de 4 huevos
+    // reservados y isShortOnMaterials=false). En confirm() el pozo arranca
+    // en 0, así que ahí no cambia nada.
+    const pool = new Map<string, Prisma.Decimal>();
+    for (const r of alreadyReserved) {
+      pool.set(r.inputArticleVariantId, (pool.get(r.inputArticleVariantId) ?? new Prisma.Decimal(0)).add(r.quantityReserved));
+    }
+
     for (const line of bom.lines) {
-      const yaReservado = alreadyReserved
-        .filter((r) => r.inputArticleVariantId === line.inputArticleVariantId)
-        .reduce((sum, r) => sum.add(r.quantityReserved), new Prisma.Decimal(0));
       const requerido = line.quantity
         .mul(order.quantity)
         .mul(new Prisma.Decimal(1).add(line.expectedWastePercent.div(100)));
+      const yaReservado = Prisma.Decimal.min(pool.get(line.inputArticleVariantId) ?? new Prisma.Decimal(0), requerido);
+      pool.set(line.inputArticleVariantId, (pool.get(line.inputArticleVariantId) ?? new Prisma.Decimal(0)).sub(yaReservado));
       const faltante = requerido.sub(yaReservado);
       if (faltante.lte(0)) {
         continue;

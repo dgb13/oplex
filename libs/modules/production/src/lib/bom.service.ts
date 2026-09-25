@@ -20,6 +20,18 @@ export class BomService {
     const db = getTenantDb();
     const tenantId = getTenantId();
 
+    // Una receta no puede consumir ni "subproducir" su propio producto -
+    // antes se aceptaba (una Tortilla que necesita 1 Tortilla), y esa
+    // orden no se puede producir nunca: para fabricar la primera hace
+    // falta tenerla. Sólo cubre la autorreferencia directa, no ciclos
+    // entre recetas (A usa B, B usa A).
+    if (dto.lines.some((l) => l.inputArticleVariantId === dto.outputArticleVariantId)) {
+      throw new BadRequestException('Una receta no puede usar su propio producto como insumo');
+    }
+    if ((dto.byproducts ?? []).some((b) => b.outputArticleVariantId === dto.outputArticleVariantId)) {
+      throw new BadRequestException('Un subproducto no puede ser el mismo producto que fabrica la receta');
+    }
+
     // La suma de costSharePercent de todos los subproductos más el
     // remanente implícito del producto principal debe dar 100% - acá sólo
     // se valida que los subproductos por sí solos no superen ese techo (el

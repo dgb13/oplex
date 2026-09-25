@@ -198,6 +198,31 @@ describe('ProductionOrderService.retryReservation', () => {
     expect(order.isShortOnMaterials).toBe(true);
   });
 
+  it('tops up correctly when the same insumo appears in more than one recipe line', async () => {
+    // Receta: 2 huevos + 2 huevos por unidad, orden de 4 -> 8 + 8 = 16.
+    // confirm() había reservado 8 (línea 1) + 4 (línea 2) = 12. Antes el
+    // total reservado (12) se restaba contra CADA línea (8) y las dos
+    // daban cubiertas - quedaba short=false con 12 de 16 reservados.
+    const db = makeShortOrderDb([
+      { inputArticleVariantId: 'variant-huevo', quantityReserved: new Prisma.Decimal(8), warehouseId: 'warehouse-1' },
+      { inputArticleVariantId: 'variant-huevo', quantityReserved: new Prisma.Decimal(4), warehouseId: 'warehouse-1' },
+    ]);
+    const service = makeService({
+      db,
+      bomLines: [
+        { inputArticleVariantId: 'variant-huevo', quantity: 2 },
+        { inputArticleVariantId: 'variant-huevo', quantity: 2 },
+      ],
+      disponible: { 'variant-huevo': 10 },
+    });
+
+    const order = await runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-1'));
+
+    expect(db.stockReservation.create).toHaveBeenCalledTimes(1);
+    expect((db.stockReservation.create as jest.Mock).mock.calls[0][0].data.quantityReserved.toString()).toBe('4');
+    expect(order.isShortOnMaterials).toBe(false);
+  });
+
   it('rejects retrying an order that is not PLANNED+isShortOnMaterials', async () => {
     const db = makeDb({
       productionOrder: { findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'PLANNED' })) },

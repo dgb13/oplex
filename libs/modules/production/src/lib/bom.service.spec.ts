@@ -120,6 +120,37 @@ describe('BomService.create', () => {
       ),
     ).rejects.toThrow('no puede superar 100');
   });
+
+  it('rejects a recipe that uses its own output as an input', async () => {
+    const db = makeDb();
+    const service = new BomService();
+
+    await expect(
+      runAsTenant(db, () =>
+        service.create({
+          outputArticleVariantId: 'variant-output',
+          name: 'Autorreferencia',
+          lines: [{ inputArticleVariantId: 'variant-output', quantity: 1 }],
+        }),
+      ),
+    ).rejects.toThrow('propio producto como insumo');
+  });
+
+  it('rejects a byproduct that is the recipe output itself', async () => {
+    const db = makeDb();
+    const service = new BomService();
+
+    await expect(
+      runAsTenant(db, () =>
+        service.create({
+          outputArticleVariantId: 'variant-output',
+          name: 'Subproducto = producto',
+          lines: [{ inputArticleVariantId: 'variant-insumo', quantity: 1 }],
+          byproducts: [{ outputArticleVariantId: 'variant-output', quantity: 1 }],
+        }),
+      ),
+    ).rejects.toThrow('mismo producto');
+  });
 });
 
 describe('BomService.getActiveBomOrThrow', () => {
