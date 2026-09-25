@@ -18,6 +18,8 @@ export interface CreatedArticleVariantRef {
   articleName: string;
   sku: string;
   unitPrice: number;
+  isManufactured: boolean;
+  measurementType: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
 }
 
 interface Props {
@@ -429,6 +431,8 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           articleName: name.trim(),
           sku: variant.sku,
           unitPrice: Number(variant.unitPrice),
+          isManufactured,
+          measurementType,
         };
       }
 
@@ -499,6 +503,8 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
         articleName: name.trim(),
         sku: first.sku,
         unitPrice: Number(first.price),
+        isManufactured,
+        measurementType,
       };
     },
     onSuccess: (created) => {

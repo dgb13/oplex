@@ -64,6 +64,10 @@ interface ArticlePickerProps {
   // (`(o) => o.isManufactured`). undefined = sin filtrar, comportamiento de
   // siempre en el resto de los formularios.
   filter?: (option: ArticlePickerOption) => boolean;
+  // false oculta el "+ nuevo artículo" genérico - Recetas lo apaga en
+  // "Producto a fabricar" porque tiene su propio alta ("Nuevo producto
+  // fabricable"), pensada para un producto con receta.
+  allowCreate?: boolean;
 }
 
 /** Selector de artículo/variante compartido, con búsqueda por nombre/SKU e
@@ -84,6 +88,7 @@ export default function ArticlePicker({
   disabled,
   className,
   filter,
+  allowCreate = true,
 }: ArticlePickerProps) {
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
@@ -157,11 +162,8 @@ export default function ArticlePicker({
       // taxDefinition en el backend (resolveArticleTax/resolveLineTax).
       taxRate: 0,
       taxKind: 'GRAVADO',
-      // El alta rápida no pasa por el checkbox "Se fabrica" del modal
-      // completo - si el que abrió este picker filtraba por isManufactured,
-      // el refetch que ArticleFormModal ya dispara corrige esto en cuanto
-      // vuelva a abrirse el dropdown, no hace falta adivinarlo acá.
-      isManufactured: false,
+      isManufactured: created.isManufactured,
+      measurementType: created.measurementType,
     });
     setCreatingArticle(false);
   }
@@ -185,14 +187,16 @@ export default function ArticlePicker({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={isEmpty ? emptyPlaceholder : (placeholder ?? 'Buscar artículo o SKU...')}
             />
-            <button
-              type="button"
-              onClick={() => setCreatingArticle(true)}
-              title="Nuevo artículo"
-              className="absolute inset-y-0 right-7 flex items-center px-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            {allowCreate && (
+              <button
+                type="button"
+                onClick={() => setCreatingArticle(true)}
+                title="Nuevo artículo"
+                className="absolute inset-y-0 right-7 flex items-center px-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
             <ComboboxButton className="absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
               <ChevronDown className="h-4 w-4" />
             </ComboboxButton>

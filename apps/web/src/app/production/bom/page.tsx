@@ -2,6 +2,7 @@
 
 import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
 import InsumoThumb from '@/components/InsumoThumb';
+import NewManufacturedProductModal from './NewManufacturedProductModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -210,6 +211,12 @@ export default function BomPage() {
   const [name, setName] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [error, setError] = useState('');
+  // Alta de producto desde acá (paso 1) - al volver, la receta de abajo es
+  // el paso 2: se muestra el aviso "Paso 2 de 2" y el nombre de la receta
+  // arranca con el del producto, hasta que se guarda o se elige otro.
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [newProduct, setNewProduct] = useState<{ id: string; name: string; byKilo: boolean } | null>(null);
+  const recipeCardRef = useRef<HTMLDivElement>(null);
 
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
@@ -243,10 +250,10 @@ export default function BomPage() {
         })),
       );
     } else if (bomQuery.isError) {
-      setName('');
+      setName(newProduct?.id === outputArticleVariantId ? newProduct.name : '');
       setLines([emptyLine()]);
     }
-  }, [bomQuery.data, bomQuery.isError]);
+  }, [bomQuery.data, bomQuery.isError, newProduct, outputArticleVariantId]);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -265,6 +272,7 @@ export default function BomPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['production-bom', outputArticleVariantId] });
       setError('');
+      setNewProduct(null);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       const message = err.response?.data?.message ?? 'No se pudo guardar la receta';
@@ -316,27 +324,53 @@ export default function BomPage() {
         <ProductionPlanGateBanner planName={gate.planName} />
       ) : (
         <>
-          <Card className="max-w-lg">
-            <CardContent className="flex items-center gap-3">
-              <ThumbOrIcon imageUrl={outputOption?.imageUrl} icon={Package} />
-              <div className="flex-1">
-                <label className="text-sm text-muted-foreground">Producto a fabricar</label>
-                <ArticlePicker
-                  value={outputArticleVariantId}
-                  onChange={(id, option) => {
-                    setOutputArticleVariantId(id);
-                    setOutputOption(option);
-                  }}
-                  placeholder="Buscar producto..."
-                  className="mt-1"
-                  filter={(o) => o.isManufactured}
-                />
+          <Card className="max-w-2xl">
+            <CardContent className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <ThumbOrIcon imageUrl={outputOption?.imageUrl} icon={Package} />
+                <div className="min-w-[220px] flex-1">
+                  <label className="text-sm text-muted-foreground">Producto a fabricar</label>
+                  <ArticlePicker
+                    value={outputArticleVariantId}
+                    onChange={(id, option) => {
+                      setOutputArticleVariantId(id);
+                      setOutputOption(option);
+                      setNewProduct(null);
+                    }}
+                    placeholder="Buscar producto..."
+                    className="mt-1"
+                    filter={(o) => o.isManufactured}
+                    allowCreate={false}
+                  />
+                </div>
+                <Button type="button" variant="secondary" className="self-end" onClick={() => setCreatingProduct(true)}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Nuevo producto fabricable
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Sólo aparecen los productos que se fabrican. Los insumos se crean como artículos comunes, desde cada
+                línea de la receta.
+              </p>
             </CardContent>
           </Card>
 
           {outputArticleVariantId && (
-            <Card>
+            <Card ref={recipeCardRef}>
+              {newProduct?.id === outputArticleVariantId && (
+                <div className="mx-4 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] text-primary-foreground">
+                    2
+                  </span>
+                  <span>
+                    <span className="font-medium">Paso 2 de 2 - lista de materiales.</span>{' '}
+                    <span className="text-muted-foreground">
+                      &quot;{newProduct.name}&quot; ya está creado. Cargá los insumos que lleva cada{' '}
+                      {newProduct.byKilo ? 'kilo' : 'unidad'} y guardá la receta.
+                    </span>
+                  </span>
+                </div>
+              )}
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   {bomQuery.data ? (
@@ -477,6 +511,20 @@ export default function BomPage() {
 
           {bomQuery.data && <BomAttachmentsCard bomId={bomQuery.data.id} version={bomQuery.data.version} />}
         </>
+      )}
+
+      {creatingProduct && (
+        <NewManufacturedProductModal
+          onClose={() => setCreatingProduct(false)}
+          onCreated={(option, byKilo) => {
+            setCreatingProduct(false);
+            setNewProduct({ id: option.id, name: option.articleName, byKilo });
+            setOutputArticleVariantId(option.id);
+            setOutputOption(option);
+            // La tarjeta de la receta recién aparece en el próximo render.
+            requestAnimationFrame(() => recipeCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }}
+        />
       )}
     </div>
   );

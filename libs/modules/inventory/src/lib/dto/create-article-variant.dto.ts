@@ -1,4 +1,4 @@
-import { IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class CreateArticleVariantDto {
   @IsUUID()
@@ -20,8 +20,12 @@ export class CreateArticleVariantDto {
   @IsString()
   brand?: string;
 
+  // 0 = todavía sin precio de venta: un producto fabricado se crea desde
+  // Recetas antes de saber cuánto cuesta (el costo sale de la receta) y el
+  // precio se carga después. El alta de artículo común sigue exigiendo > 0
+  // en su propio formulario.
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   unitPrice!: number;
 
   // Costo inicial opcional, sólo para sembrar el primer registro de

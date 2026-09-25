@@ -172,6 +172,12 @@ export default function NewInvoiceModal({ onClose }: Props) {
       setError('Cada línea necesita un artículo y una cantidad mayor a cero');
       return;
     }
+    // Un producto fabricado se puede crear sin precio (queda en $0, ver
+    // NewManufacturedProductModal) - no dejar facturarlo así por descuido.
+    if (lines.some((l) => !((l.unitPrice ?? 0) > 0))) {
+      setError('Hay líneas sin precio - cargá el precio unitario en cada línea marcada');
+      return;
+    }
     mutation.mutate();
   }
 
@@ -304,7 +310,8 @@ export default function NewInvoiceModal({ onClose }: Props) {
                   : 'El precio unitario de cada línea es neto (sin IVA) - se le suma el IVA de su alícuota.'}
               </p>
               {lines.map((line, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={index} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
                   <ArticlePicker
                     className="flex-1"
                     value={line.articleVariantId}
@@ -341,6 +348,12 @@ export default function NewInvoiceModal({ onClose }: Props) {
                       ✕
                     </button>
                   )}
+                </div>
+                {line.articleVariantId && !((line.unitPrice ?? 0) > 0) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Este artículo no tiene precio de venta - cargá el precio unitario en esta línea.
+                  </p>
+                )}
                 </div>
               ))}
               <button

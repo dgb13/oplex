@@ -208,7 +208,11 @@ function PosSellScreen() {
               <button
                 key={product.id}
                 onClick={() => addProduct(product)}
-                disabled={product.totalStock <= 0}
+                // Sin precio (producto fabricado creado desde Recetas sin
+                // precio todavía) no se puede vender desde la caja - acá el
+                // precio no se edita, se carga en Inventario.
+                disabled={product.totalStock <= 0 || !(product.unitPrice > 0)}
+                title={!(product.unitPrice > 0) ? 'Sin precio de venta - cargalo en Inventario' : undefined}
                 className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:border-indigo-300 hover:shadow-md disabled:opacity-40 pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-dark:hover:border-indigo-500 pos-contrast:border-slate-700 pos-contrast:bg-black pos-contrast:hover:border-amber-400 pos-emerald:border-emerald-100 pos-emerald:bg-white pos-emerald:hover:border-emerald-300"
               >
                 <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100 pos-dark:bg-slate-800 pos-contrast:bg-slate-900 pos-emerald:bg-emerald-50">
@@ -227,9 +231,15 @@ function PosSellScreen() {
                     </span>
                   )}
                 </p>
-                <p className="text-sm font-semibold text-indigo-700 pos-dark:text-indigo-400 pos-contrast:text-amber-400 pos-emerald:text-emerald-700">
-                  ${product.unitPrice.toFixed(2)}
-                </p>
+                {product.unitPrice > 0 ? (
+                  <p className="text-sm font-semibold text-indigo-700 pos-dark:text-indigo-400 pos-contrast:text-amber-400 pos-emerald:text-emerald-700">
+                    ${product.unitPrice.toFixed(2)}
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-amber-700 pos-dark:text-amber-400 pos-contrast:text-amber-400 pos-emerald:text-amber-700">
+                    Sin precio
+                  </p>
+                )}
               </button>
             ))}
             {!articlesQuery.isLoading && filtered.length === 0 && (

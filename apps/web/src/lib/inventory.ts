@@ -91,7 +91,9 @@ export function stockUnitLabel(article: Article): string {
     case 'CONTINUOUS':
       return article.baseUnit ?? '';
     default:
-      return 'un.';
+      // Discreto vendido por kilo (p. ej. un producto fabricado "se vende
+      // por kilo" en Recetas) - se cuenta en kg, no en unidades.
+      return article.unitOfMeasure === 'KG' ? 'kg' : 'un.';
   }
 }
 
