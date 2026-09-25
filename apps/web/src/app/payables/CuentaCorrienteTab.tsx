@@ -24,6 +24,11 @@ export default function CuentaCorrienteTab() {
       : suppliers.filter(
           (s) => s.name.toLowerCase().includes(normalizedSearch) || (s.taxId ?? '').includes(normalizedSearch),
         );
+  // El proveedor elegido sigue en la lista aunque la búsqueda lo filtre -
+  // si no, el selector volvía a "Elegir proveedor..." mientras abajo se
+  // seguía mostrando su cuenta corriente.
+  const selected = suppliers.find((s) => s.id === supplierId);
+  const visible = selected && !filtered.includes(selected) ? [selected, ...filtered] : filtered;
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +50,7 @@ export default function CuentaCorrienteTab() {
             value={supplierId}
             onChange={setSupplierId}
             placeholder="Elegir proveedor..."
-            options={filtered.map((s) => ({ value: s.id, label: `${s.name}${s.taxId ? ` (${s.taxId})` : ''}` }))}
+            options={visible.map((s) =>({ value: s.id, label: `${s.name}${s.taxId ? ` (${s.taxId})` : ''}` }))}
           />
         </label>
       </div>

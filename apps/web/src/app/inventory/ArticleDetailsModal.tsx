@@ -63,6 +63,12 @@ export default function ArticleDetailsModal({
   const unitLockQuery = useQuery({
     queryKey: ['article-unit-of-measure-lock', article.id],
     queryFn: () => inventoryApi.getUnitOfMeasureLock(article.id),
+    // Siempre fresco al abrir el modal, sin caché: con el staleTime global
+    // (30s), agregar el artículo al carrito o registrarle un movimiento y
+    // reabrir el modal enseguida mostraba la unidad habilitada con el dato
+    // viejo (el backend igual lo rechazaba, pero con un error inesperado).
+    staleTime: 0,
+    gcTime: 0,
   });
   const unitLockReasons = unitLockQuery.data?.reasons ?? [];
   const unitLocked = unitLockQuery.isPending || unitLockReasons.length > 0;

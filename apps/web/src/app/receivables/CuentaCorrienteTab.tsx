@@ -24,6 +24,11 @@ export default function CuentaCorrienteTab() {
       : customers.filter(
           (c) => c.name.toLowerCase().includes(normalizedSearch) || (c.taxId ?? '').includes(normalizedSearch),
         );
+  // El cliente elegido sigue en la lista aunque la búsqueda lo filtre - si
+  // no, el selector volvía a "Elegir cliente..." mientras abajo se seguía
+  // mostrando su cuenta corriente.
+  const selected = customers.find((c) => c.id === customerId);
+  const visible = selected && !filtered.includes(selected) ? [selected, ...filtered] : filtered;
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +50,7 @@ export default function CuentaCorrienteTab() {
             value={customerId}
             onChange={setCustomerId}
             placeholder="Elegir cliente..."
-            options={filtered.map((c) => ({ value: c.id, label: `${c.name}${c.taxId ? ` (${c.taxId})` : ''}` }))}
+            options={visible.map((c) =>({ value: c.id, label: `${c.name}${c.taxId ? ` (${c.taxId})` : ''}` }))}
           />
         </label>
       </div>
