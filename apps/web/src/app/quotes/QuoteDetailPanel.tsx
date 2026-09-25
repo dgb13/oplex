@@ -111,7 +111,10 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
               </Info>
               <Info label="Fecha">{new Date(data.createdAt).toLocaleDateString('es-AR')}</Info>
               {data.validUntil && (
-                <Info label="Válida hasta">{new Date(data.validUntil).toLocaleDateString('es-AR')}</Info>
+                <Info label="Válida hasta">
+                  {/* Fecha "de día" guardada a medianoche UTC - en hora local (UTC-3) se veía un día antes. */}
+                  {new Date(data.validUntil).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
+                </Info>
               )}
               {data.sentAt && (
                 <Info label="Enviada">

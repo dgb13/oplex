@@ -31,6 +31,9 @@ interface PdfSourceQuote {
 }
 
 const dateFormatter = new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' });
+// validUntil es una fecha "de día" guardada a medianoche UTC - formateada en
+// la zona del server (UTC-3) salía un día antes en el PDF.
+const dayOnlyFormatter = new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeZone: 'UTC' });
 
 const ZERO_BUCKET = { vat21: 0, vat10_5: 0, vat27: 0, vatOther: 0 };
 
@@ -104,7 +107,7 @@ export function buildQuotePdfData(
   return {
     number: quote.number,
     issueDate: dateFormatter.format(quote.createdAt),
-    validUntil: quote.validUntil ? dateFormatter.format(quote.validUntil) : null,
+    validUntil: quote.validUntil ? dayOnlyFormatter.format(quote.validUntil) : null,
     tenantName: tenant.name,
     tenantTaxId: tenant.taxId,
     customerName: quote.customer.name,

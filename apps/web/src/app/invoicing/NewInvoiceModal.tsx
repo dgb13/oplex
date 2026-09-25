@@ -1,104 +1,88 @@
 'use client';
 
-import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
-import { Button } from '@/components/ui/button';
-import Select from '@/components/ui/Select';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
-import ToggleSwitch from '@/components/ToggleSwitch';
-import VatLineSummary from '@/components/VatLineSummary';
-import VatRateSelect, { type VatKind } from '@/components/VatRateSelect';
+import CustomerPicker from '@/components/sales/CustomerPicker';
+import { computeSalesTotals, type SalesLine } from '@/components/sales/salesDocument';
+import SalesDocumentSheet, { LinkButton, SectionLabel, Segmented } from '@/components/sales/SalesDocumentSheet';
+import SalesLinesEditor, { Kbd } from '@/components/sales/SalesLinesEditor';
+import SalesTotalsPanel from '@/components/sales/SalesTotalsPanel';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
-import { invoicingApi, type CreateSaleLineInput, type InvoiceTaxLineInput } from '@/lib/invoicing';
+import { invoicingApi, type InvoiceTaxLineInput } from '@/lib/invoicing';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Props {
   onClose: () => void;
 }
 
-const inputClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
-
 const DOCUMENT_LETTERS = ['A', 'B', 'C', 'M'] as const;
+type Letter = (typeof DOCUMENT_LETTERS)[number];
 
 export default function NewInvoiceModal({ onClose }: Props) {
   const queryClient = useQueryClient();
 
-  const customersQuery = useQuery({
-    queryKey: ['companies', 'CUSTOMER'],
-    queryFn: () => companiesApi.list('CUSTOMER'),
-  });
-  const branchesQuery = useQuery({
-    queryKey: ['companies', 'BRANCH'],
-    queryFn: () => companiesApi.list('BRANCH'),
-  });
-  const warehousesQuery = useQuery({
-    queryKey: ['inventory-warehouses'],
-    queryFn: inventoryApi.listWarehouses,
-  });
-  const currenciesQuery = useQuery({
-    queryKey: ['invoicing-currencies'],
-    queryFn: invoicingApi.listCurrencies,
-  });
+  const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
+  const branchesQuery = useQuery({ queryKey: ['companies', 'BRANCH'], queryFn: () => companiesApi.list('BRANCH') });
+  const warehousesQuery = useQuery({ queryKey: ['inventory-warehouses'], queryFn: inventoryApi.listWarehouses });
+  const currenciesQuery = useQuery({ queryKey: ['invoicing-currencies'], queryFn: invoicingApi.listCurrencies });
   // Same query key as Preferencias, so this reads the cached value there
   // instead of firing its own request most of the time.
-  const tenantSettingsQuery = useQuery({
-    queryKey: ['tenant-settings'],
-    queryFn: tenantSettingsApi.get,
-  });
+  const tenantSettingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
 
   const customers = customersQuery.data ?? [];
   const branches = branchesQuery.data ?? [];
   const warehouses = warehousesQuery.data ?? [];
   const currencies = currenciesQuery.data ?? [];
 
+  // Cliente vacío a propósito (ver CustomerPicker); sucursal y depósito sí
+  // arrancan en el primero - suele haber uno solo de cada uno.
   const [customerId, setCustomerId] = useState('');
   const [branchId, setBranchId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
-  const [documentLetter, setDocumentLetter] = useState<(typeof DOCUMENT_LETTERS)[number]>('B');
+  const [documentLetter, setDocumentLetter] = useState<Letter>('B');
   const [currencyId, setCurrencyId] = useState('');
   const [exchangeRateOverride, setExchangeRateOverride] = useState('');
   const [pricesIncludeTax, setPricesIncludeTax] = useState(false);
-  const [lines, setLines] = useState<CreateSaleLineInput[]>([
-    { articleVariantId: '', quantity: 1, unitPrice: 0, taxKind: 'GRAVADO', taxRate: 0 },
-  ]);
+  const [lines, setLines] = useState<SalesLine[]>([]);
   const [otherTaxLines, setOtherTaxLines] = useState<InvoiceTaxLineInput[]>([]);
+  const [showOtherTaxes, setShowOtherTaxes] = useState(false);
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
+  const addArticleRef = useRef<HTMLInputElement>(null);
 
   const ready = !customersQuery.isLoading && !branchesQuery.isLoading && !warehousesQuery.isLoading;
 
-  // Fill selects with their first option once data arrives, since a plain
-  // <select> with no matching value shows blank instead of a placeholder.
-  const firstCustomer = customers[0];
   const firstBranch = branches[0];
   const firstWarehouse = warehouses[0];
-  const firstCurrency = currencies[0];
-  if (ready && !customerId && firstCustomer) setCustomerId(firstCustomer.id);
+  const defaultCurrency = currencies.find((c) => c.isBase) ?? currencies[0];
   if (ready && !branchId && firstBranch) setBranchId(firstBranch.id);
   if (ready && !warehouseId && firstWarehouse) setWarehouseId(firstWarehouse.id);
-  if (ready && !currencyId && firstCurrency) setCurrencyId(firstCurrency.id);
+  if (!currencyId && defaultCurrency) setCurrencyId(defaultCurrency.id);
 
-  // Letra de comprobante derivada de la condición IVA propia (Preferencias)
-  // + la del cliente elegido (ver documentLetter.ts) - se re-sugiere cada
-  // vez que cambia el cliente, sin pisar una corrección manual del usuario
-  // mientras el cliente sigue siendo el mismo.
   const selectedCustomer = customers.find((c) => c.id === customerId);
   const selectedCurrency = currencies.find((c) => c.id === currencyId);
   // Limpia un override tipeado para OTRA moneda al cambiar de moneda - sólo
   // depende de currencyId (no de latestRate) para no pisar una corrección
   // manual del usuario si la cotización se actualiza de fondo (sync BNA)
-  // mientras el modal sigue abierto en la misma moneda.
+  // mientras el formulario sigue abierto en la misma moneda.
   useEffect(() => {
     setExchangeRateOverride('');
   }, [currencyId]);
+
+  // Letra de comprobante derivada de la condición IVA propia (Preferencias)
+  // + la del cliente elegido (ver documentLetter.ts) - se re-sugiere cada
+  // vez que cambia el cliente, sin pisar una corrección manual del usuario
+  // mientras el cliente sigue siendo el mismo.
   const letterSuggestion = suggestDocumentLetter(
     tenantSettingsQuery.data?.ownTaxCondition ?? null,
     selectedCustomer?.taxId ?? null,
@@ -107,6 +91,9 @@ export default function NewInvoiceModal({ onClose }: Props) {
   useEffect(() => {
     if (letterSuggestion.letter) setDocumentLetter(letterSuggestion.letter);
   }, [customerId, letterSuggestion.letter]);
+
+  const validOtherTaxLines = otherTaxLines.filter((l) => l.concept.trim() && l.amount > 0);
+  const totals = computeSalesTotals(lines, pricesIncludeTax, validOtherTaxLines);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -121,8 +108,14 @@ export default function NewInvoiceModal({ onClose }: Props) {
             ? Number(exchangeRateOverride)
             : undefined,
         pricesIncludeTax,
-        lines,
-        otherTaxLines: otherTaxLines.filter((l) => l.concept.trim() && l.amount > 0),
+        lines: lines.map((l) => ({
+          articleVariantId: l.articleVariantId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxKind: l.taxKind,
+          taxRate: l.taxRate,
+        })),
+        otherTaxLines: validOtherTaxLines,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -134,268 +127,193 @@ export default function NewInvoiceModal({ onClose }: Props) {
     },
   });
 
-  function updateLine(index: number, patch: Partial<CreateSaleLineInput>) {
-    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-  }
+  // undefined mientras carga (aún no sabemos) se trata como "no
+  // configurado" - más seguro bloquear el submit un instante de más que
+  // dejarlo habilitado y que el POST falle recién en el backend.
+  const afipConfigured = tenantSettingsQuery.data?.afipConfigured ?? false;
+  // Clientes/sucursales se pueden crear desde acá mismo; lo único sin
+  // atajo inline es el depósito.
+  const missingWarehouse = ready && warehouses.length === 0;
 
-  function addLine() {
-    setLines((prev) => [
-      ...prev,
-      { articleVariantId: '', quantity: 1, unitPrice: 0, taxKind: 'GRAVADO', taxRate: 0 },
-    ]);
-  }
-
-  // Al elegir un artículo, arrastra su precio y alícuota de catálogo a la
-  // línea - el usuario los puede editar después (override), no se vuelven
-  // a pisar si vuelve a tocar la misma línea sin cambiar de artículo.
-  function selectArticle(index: number, variantId: string, option: ArticlePickerOption | null) {
-    updateLine(index, {
-      articleVariantId: variantId,
-      unitPrice: option?.unitPrice ?? 0,
-      taxKind: option?.taxKind ?? 'GRAVADO',
-      taxRate: option?.taxRate ?? 0,
-    });
-  }
-
-  function removeLine(index: number) {
-    setLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSubmit() {
     setError('');
-    if (!customerId || !branchId || !warehouseId || !currencyId) {
-      setError('Completá todos los campos');
+    if (!customerId) {
+      setError('Elegí a quién le facturás.');
       return;
     }
-    if (lines.some((l) => !l.articleVariantId || l.quantity <= 0)) {
-      setError('Cada línea necesita un artículo y una cantidad mayor a cero');
+    if (!branchId || !warehouseId || !currencyId) {
+      setError('Completá sucursal, depósito y moneda.');
+      return;
+    }
+    if (lines.length === 0) {
+      setError('Agregá al menos un artículo.');
+      addArticleRef.current?.focus();
+      return;
+    }
+    if (lines.some((l) => !(l.quantity > 0))) {
+      setError('Cada artículo necesita una cantidad mayor a cero.');
       return;
     }
     // Un producto fabricado se puede crear sin precio (queda en $0, ver
     // NewManufacturedProductModal) - no dejar facturarlo así por descuido.
-    if (lines.some((l) => !((l.unitPrice ?? 0) > 0))) {
-      setError('Hay líneas sin precio - cargá el precio unitario en cada línea marcada');
+    if (lines.some((l) => !(l.unitPrice > 0))) {
+      setError('Hay líneas sin precio: cargalo en la línea marcada.');
+      return;
+    }
+    if (!afipConfigured) {
+      setError('Configurá el certificado ARCA en Preferencias antes de emitir.');
       return;
     }
     mutation.mutate();
   }
 
-  // Clientes/sucursales ahora se pueden crear sin salir de este modal (ver
-  // "+ nuevo cliente"/"+ nueva sucursal" arriba), así que sólo bloquea la
-  // falta de depósito, que no tiene un atajo inline todavía.
-  const missingData = ready && warehouses.length === 0;
-  // undefined mientras carga (aún no sabemos) se trata como "no
-  // configurado" - más seguro bloquear el submit un instante de más que
-  // dejarlo habilitado y que el POST falle recién en el backend.
-  const afipConfigured = tenantSettingsQuery.data?.afipConfigured ?? false;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl border bg-card p-6 text-card-foreground shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Nueva factura</h2>
-          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
-            ✕
-          </button>
-        </div>
-
-        {!ready ? (
-          <div className="py-10 text-center text-muted-foreground">Cargando...</div>
-        ) : missingData ? (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
-            Hace falta al menos un depósito antes de poder facturar (cliente y sucursal se pueden
-            crear desde este mismo formulario).
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-              <Field
-                label="Cliente"
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setCreatingCustomer(true)}
-                    className="text-xs text-primary hover:text-primary"
-                  >
-                    + nuevo cliente
-                  </button>
-                }
-              >
-                <Select
+    <>
+      <SalesDocumentSheet
+        title="Nueva factura"
+        badge={
+          <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            Factura {documentLetter}
+          </span>
+        }
+        onClose={onClose}
+        onSubmit={handleSubmit}
+        main={
+          !ready ? (
+            <p className="py-10 text-center text-muted-foreground">Cargando...</p>
+          ) : missingWarehouse ? (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              Hace falta al menos un depósito antes de poder facturar (cliente y sucursal se pueden crear desde este mismo
+              formulario).
+            </p>
+          ) : (
+            <>
+              <section>
+                <SectionLabel action={<LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>}>
+                  Cliente
+                </SectionLabel>
+                <CustomerPicker
+                  customers={customers}
                   value={customerId}
                   onChange={setCustomerId}
-                  options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                  autoFocus
+                  onPicked={() => addArticleRef.current?.focus()}
                 />
-              </Field>
-              <Field
-                label="Sucursal / PV"
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setCreatingBranch(true)}
-                    className="text-xs text-primary hover:text-primary"
-                  >
-                    + nueva sucursal
-                  </button>
-                }
+              </section>
+
+              <SalesLinesEditor
+                lines={lines}
+                onChange={setLines}
+                pricesIncludeTax={pricesIncludeTax}
+                onPricesIncludeTaxChange={setPricesIncludeTax}
+                currencyCode={selectedCurrency?.code}
+                addInputRef={addArticleRef}
+              />
+
+              {showOtherTaxes || otherTaxLines.length > 0 ? (
+                <section className="rounded-xl border p-4">
+                  <InvoiceTaxLinesEditor lines={otherTaxLines} onChange={setOtherTaxLines} />
+                </section>
+              ) : (
+                <div>
+                  <LinkButton onClick={() => setShowOtherTaxes(true)}>+ Agregar percepciones / otros tributos</LinkButton>
+                </div>
+              )}
+            </>
+          )
+        }
+        side={
+          <>
+            <section>
+              <SectionLabel>Comprobante</SectionLabel>
+              <Segmented
+                value={documentLetter}
+                onChange={setDocumentLetter}
+                disabled={letterSuggestion.locked}
+                options={DOCUMENT_LETTERS.map((l) => ({ value: l, label: l }))}
+              />
+              <p
+                className={`mt-1.5 text-xs ${letterSuggestion.locked ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
               >
-                <Select
-                  value={branchId}
-                  onChange={setBranchId}
-                  options={branches.map((b) => ({
-                    value: b.id,
-                    label: `${b.name} (${b.pointOfSaleNumber ?? 'sin PV'})`,
-                  }))}
-                />
-              </Field>
-              <Field label="Depósito">
-                <Select
-                  value={warehouseId}
-                  onChange={setWarehouseId}
-                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-                />
-              </Field>
-              <Field label="Tipo de comprobante">
-                <Select
-                  value={documentLetter}
-                  onChange={(v) => setDocumentLetter(v as typeof documentLetter)}
-                  disabled={letterSuggestion.locked}
-                  options={DOCUMENT_LETTERS.map((letter) => ({ value: letter, label: `Factura ${letter}` }))}
-                />
-                <p
-                  className={`mt-1 text-xs ${letterSuggestion.locked ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
-                >
-                  {letterSuggestion.reason}
-                </p>
-              </Field>
-              <Field label="Moneda">
-                <Select
-                  value={currencyId}
-                  onChange={setCurrencyId}
-                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
-                />
-                {selectedCurrency && !selectedCurrency.isBase && (
-                  <input
+                {letterSuggestion.reason}
+              </p>
+            </section>
+
+            <section>
+              <SectionLabel action={<LinkButton onClick={() => setCreatingBranch(true)}>+ Nueva</LinkButton>}>
+                Sucursal / Punto de venta
+              </SectionLabel>
+              <Select
+                value={branchId}
+                onChange={setBranchId}
+                placeholder="Elegir sucursal..."
+                options={branches.map((b) => ({ value: b.id, label: `${b.name} (PV ${b.pointOfSaleNumber ?? 'sin número'})` }))}
+              />
+            </section>
+
+            <section>
+              <SectionLabel>Depósito</SectionLabel>
+              <Select
+                value={warehouseId}
+                onChange={setWarehouseId}
+                placeholder="Elegir depósito..."
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">De acá sale el stock de lo que facturás.</p>
+            </section>
+
+            <section>
+              <SectionLabel>Moneda</SectionLabel>
+              <Segmented
+                value={currencyId}
+                onChange={setCurrencyId}
+                options={currencies.map((c) => ({ value: c.id, label: c.code === 'ARS' ? 'ARS $' : c.code }))}
+              />
+              {selectedCurrency && !selectedCurrency.isBase && (
+                <div className="mt-2 flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Cotización de este comprobante</label>
+                  <Input
                     type="number"
                     step="any"
                     min={0}
-                    title="Cotización de este comprobante"
                     placeholder={
                       selectedCurrency.latestRate ? `Vigente: ${selectedCurrency.latestRate}` : 'Sin cotización cargada'
                     }
                     value={exchangeRateOverride}
                     onChange={(e) => setExchangeRateOverride(e.target.value)}
-                    className={`${inputClass} mt-1 w-full`}
                   />
-                )}
-              </Field>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-muted-foreground">Líneas</label>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <ToggleSwitch
-                    checked={pricesIncludeTax}
-                    onChange={setPricesIncludeTax}
-                    label="Precios con IVA incluido"
-                  />
-                  <span>Precios con IVA incluido</span>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {pricesIncludeTax
-                  ? 'El precio unitario de cada línea es el precio final (con IVA) - se desglosa a neto solo.'
-                  : 'El precio unitario de cada línea es neto (sin IVA) - se le suma el IVA de su alícuota.'}
-              </p>
-              {lines.map((line, index) => (
-                <div key={index} className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <ArticlePicker
-                    className="flex-1"
-                    value={line.articleVariantId}
-                    onChange={(variantId, option) => selectArticle(index, variantId, option)}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    step="any"
-                    title="Cantidad"
-                    className={`${inputClass} w-20`}
-                    value={line.quantity}
-                    onChange={(e) => updateLine(index, { quantity: Number(e.target.value) })}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    title="Precio unitario"
-                    className={`${inputClass} w-28 text-right`}
-                    value={line.unitPrice ?? 0}
-                    onChange={(e) => updateLine(index, { unitPrice: Number(e.target.value) })}
-                  />
-                  <VatRateSelect
-                    value={{ taxKind: (line.taxKind ?? 'GRAVADO') as VatKind, taxRate: line.taxRate ?? 0 }}
-                    onChange={(v) => updateLine(index, { taxKind: v.taxKind, taxRate: v.taxRate })}
-                  />
-                  {lines.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeLine(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                {line.articleVariantId && !((line.unitPrice ?? 0) > 0) && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Este artículo no tiene precio de venta - cargá el precio unitario en esta línea.
-                  </p>
-                )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={addLine}
-                className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed py-2.5 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/5"
-              >
-                + Agregar línea
-              </button>
-              <VatLineSummary lines={lines} pricesIncludeTax={pricesIncludeTax} otherTaxLines={otherTaxLines} />
-            </div>
+              )}
+            </section>
 
-            <InvoiceTaxLinesEditor lines={otherTaxLines} onChange={setOtherTaxLines} />
-
-            {!afipConfigured && (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Todavía no configuraste el certificado ARCA de esta empresa - la factura no va a
-                poder pedir CAE hasta que lo cargues en{' '}
-                <Link href="/preferences" className="font-medium underline">
-                  Preferencias → Certificado ARCA
-                </Link>
-                .
-              </p>
-            )}
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <div className="mt-2 flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancelar
-              </Button>
+            <div className="mt-auto flex flex-col gap-3">
+              <SalesTotalsPanel totals={totals} currencyCode={selectedCurrency?.code} />
+              {!afipConfigured && (
+                <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}
+                  <Link href="/preferences" className="font-medium underline">
+                    Preferencias → Certificado ARCA
+                  </Link>
+                  .
+                </p>
+              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <Button
                 type="submit"
-                disabled={mutation.isPending || !afipConfigured}
+                size="lg"
+                className="w-full"
+                disabled={mutation.isPending || !ready || missingWarehouse || !afipConfigured}
                 title={!afipConfigured ? 'Configurá el certificado ARCA en Preferencias primero' : undefined}
               >
                 {mutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                <Kbd>Ctrl</Kbd> + <Kbd>Enter</Kbd> para emitir
+              </p>
             </div>
-          </form>
-        )}
-      </div>
+          </>
+        }
+      />
 
       {creatingCustomer && (
         <CompanyFormModal
@@ -411,26 +329,6 @@ export default function NewInvoiceModal({ onClose }: Props) {
           onSaved={(c) => setBranchId(c.id)}
         />
       )}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  action,
-  children,
-}: {
-  label: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <label className="text-sm text-muted-foreground">{label}</label>
-        {action}
-      </div>
-      {children}
-    </div>
+    </>
   );
 }

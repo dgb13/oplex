@@ -1,84 +1,87 @@
 'use client';
 
-import ArticlePicker from '@/components/ArticlePicker';
 import CompanyFormModal from '@/components/CompanyFormModal';
-import ToggleSwitch from '@/components/ToggleSwitch';
+import CustomerPicker from '@/components/sales/CustomerPicker';
+import { computeSalesTotals, newLineKey, type SalesLine } from '@/components/sales/salesDocument';
+import SalesDocumentSheet, { LinkButton, SectionLabel, Segmented } from '@/components/sales/SalesDocumentSheet';
+import SalesLinesEditor, { Kbd } from '@/components/sales/SalesLinesEditor';
+import SalesTotalsPanel from '@/components/sales/SalesTotalsPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import Select from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/textarea';
-import VatLineSummary from '@/components/VatLineSummary';
-import VatRateSelect, { type VatKind } from '@/components/VatRateSelect';
 import { companiesApi } from '@/lib/companies';
-import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi } from '@/lib/invoicing';
-import { quotesApi, type QuoteDetail, type QuoteLineInput } from '@/lib/quotes';
+import { quotePreferencesApi, quotesApi, type QuoteDetail } from '@/lib/quotes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface Props {
   quote?: QuoteDetail;
   onClose: () => void;
 }
 
+const VALIDITY_PRESETS = [7, 15, 30] as const;
+const DEFAULT_VALIDITY_DAYS = 15;
+
+/** Hoy + `days` como "2026-10-10" (día local, para el input type=date). */
+function datePlusDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function QuoteFormModal({ quote, onClose }: Props) {
   const queryClient = useQueryClient();
   const isEdit = Boolean(quote);
 
-  const customersQuery = useQuery({
-    queryKey: ['companies', 'CUSTOMER'],
-    queryFn: () => companiesApi.list('CUSTOMER'),
-  });
-  const currenciesQuery = useQuery({
-    queryKey: ['invoicing-currencies'],
-    queryFn: invoicingApi.listCurrencies,
-  });
-  const articlesQuery = useQuery({
-    queryKey: ['inventory-articles'],
-    queryFn: () => inventoryApi.listArticles(),
+  const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
+  const currenciesQuery = useQuery({ queryKey: ['invoicing-currencies'], queryFn: invoicingApi.listCurrencies });
+  const preferencesQuery = useQuery({
+    queryKey: ['quote-preferences'],
+    queryFn: quotePreferencesApi.get,
+    enabled: !isEdit,
   });
 
   const customers = customersQuery.data ?? [];
   const currencies = currenciesQuery.data ?? [];
 
+  // Cliente vacío en una cotización nueva - se elige a propósito, nunca "el
+  // primero de la lista" (ver CustomerPicker).
   const [customerId, setCustomerId] = useState(quote?.customer.id ?? '');
   const [currencyId, setCurrencyId] = useState(quote?.currency.id ?? '');
-  const [validUntil, setValidUntil] = useState(quote?.validUntil ? quote.validUntil.slice(0, 10) : '');
+  const [validUntil, setValidUntil] = useState(
+    quote ? (quote.validUntil?.slice(0, 10) ?? '') : datePlusDays(DEFAULT_VALIDITY_DAYS),
+  );
   const [notes, setNotes] = useState(quote?.notes ?? '');
   const [pricesIncludeTax, setPricesIncludeTax] = useState(false);
-  const [lines, setLines] = useState<QuoteLineInput[]>(
-    quote?.lines.map((l) => ({
-      articleVariantId: '',
-      quantity: Number(l.quantity),
-      unitPrice: Number(l.unitPrice),
-      notes: l.notes ?? undefined,
-      taxKind: l.taxKind ?? 'GRAVADO',
-      taxRate: l.taxRate ? Number(l.taxRate) : 0,
-    })) ?? [{ articleVariantId: '', quantity: 1, unitPrice: 0, taxKind: 'GRAVADO', taxRate: 0 }],
+  const [lines, setLines] = useState<SalesLine[]>(
+    () =>
+      quote?.lines.map((l) => ({
+        key: newLineKey(),
+        articleVariantId: l.articleVariantId,
+        quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice),
+        notes: l.notes ?? undefined,
+        taxKind: l.taxKind ?? 'GRAVADO',
+        taxRate: l.taxRate ? Number(l.taxRate) : 0,
+      })) ?? [],
   );
-  const [linesResolved, setLinesResolved] = useState(!isEdit);
-  if (!linesResolved && quote && (articlesQuery.data?.length ?? 0) > 0) {
-    const bySku = new Map((articlesQuery.data ?? []).flatMap((a) => a.variants.map((v) => [v.sku, v.id])));
-    setLines((prev) =>
-      prev.map((line, i) => {
-        const original = quote.lines[i];
-        return original && !line.articleVariantId
-          ? { ...line, articleVariantId: bySku.get(original.articleVariant.sku) ?? '' }
-          : line;
-      }),
-    );
-    setLinesResolved(true);
-  }
-
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const addArticleRef = useRef<HTMLInputElement>(null);
 
-  const ready = !customersQuery.isLoading && !currenciesQuery.isLoading;
-  const firstCustomer = customers[0];
-  const firstCurrency = currencies[0];
-  if (ready && !customerId && firstCustomer) setCustomerId(firstCustomer.id);
-  if (ready && !currencyId && firstCurrency) setCurrencyId(firstCurrency.id);
+  // Moneda base por defecto (ARS), no la primera que devuelva la API.
+  const defaultCurrency = currencies.find((c) => c.isBase) ?? currencies[0];
+  if (!currencyId && defaultCurrency) setCurrencyId(defaultCurrency.id);
+  const currencyCode = currencies.find((c) => c.id === currencyId)?.code;
+
+  const totals = computeSalesTotals(lines, pricesIncludeTax);
+  const nextNumber = preferencesQuery.data
+    ? `${preferencesQuery.data.quotePrefix}-${String(preferencesQuery.data.quoteNextNumber).padStart(6, '0')}`
+    : null;
+  const activePreset = VALIDITY_PRESETS.find((d) => validUntil === datePlusDays(d));
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -86,14 +89,22 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
         customerId,
         currencyId,
         validUntil: validUntil || undefined,
-        notes: notes || undefined,
+        notes: notes.trim() || undefined,
         pricesIncludeTax,
-        lines,
+        lines: lines.map((l) => ({
+          articleVariantId: l.articleVariantId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          notes: l.notes?.trim() || undefined,
+          taxKind: l.taxKind,
+          taxRate: l.taxRate,
+        })),
       };
       return quote ? quotesApi.update(quote.id, dto) : quotesApi.create(dto);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      void queryClient.invalidateQueries({ queryKey: ['quote-preferences'] });
       onClose();
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
@@ -102,185 +113,128 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
     },
   });
 
-  function updateLine(index: number, patch: Partial<QuoteLineInput>) {
-    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-  }
-
-  function addLine() {
-    setLines((prev) => [
-      ...prev,
-      { articleVariantId: '', quantity: 1, unitPrice: 0, taxKind: 'GRAVADO', taxRate: 0 },
-    ]);
-  }
-
-  function removeLine(index: number) {
-    setLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSubmit() {
     setError('');
-    if (!customerId || !currencyId) {
-      setError('Completá cliente y moneda');
+    if (!customerId) {
+      setError('Elegí a quién le cotizás.');
       return;
     }
-    if (lines.some((l) => !l.articleVariantId || l.quantity <= 0)) {
-      setError('Cada línea necesita un artículo y una cantidad mayor a cero');
+    if (!currencyId) {
+      setError('Elegí la moneda.');
+      return;
+    }
+    if (lines.length === 0) {
+      setError('Agregá al menos un artículo.');
+      addArticleRef.current?.focus();
+      return;
+    }
+    if (lines.some((l) => !(l.quantity > 0))) {
+      setError('Cada artículo necesita una cantidad mayor a cero.');
       return;
     }
     // Un producto fabricado se puede crear sin precio (queda en $0, ver
     // NewManufacturedProductModal) - no dejar cotizarlo así por descuido.
-    if (lines.some((l) => !(Number(l.unitPrice) > 0))) {
-      setError('Hay líneas sin precio - cargá el precio unitario en cada línea marcada');
+    if (lines.some((l) => !(l.unitPrice > 0))) {
+      setError('Hay líneas sin precio: cargalo en la línea marcada.');
       return;
     }
     mutation.mutate();
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            {isEdit ? `Editar cotización ${quote?.number}` : 'Nueva cotización'}
-          </h2>
-          <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
-            ✕
-          </button>
-        </div>
+  const loading = customersQuery.isLoading || currenciesQuery.isLoading;
 
-        {!ready ? (
-          <div className="py-10 text-center text-muted-foreground">Cargando...</div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Field
-                label="Cliente"
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setCreatingCustomer(true)}
-                    className="text-xs text-primary hover:text-primary/80"
-                  >
-                    + nuevo cliente
-                  </button>
-                }
-              >
-                <Select
+  return (
+    <>
+      <SalesDocumentSheet
+        title={isEdit ? 'Editar cotización' : 'Nueva cotización'}
+        badge={
+          (isEdit ? quote?.number : nextNumber) && (
+            <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">
+              {isEdit ? quote?.number : nextNumber}
+            </span>
+          )
+        }
+        onClose={onClose}
+        onSubmit={handleSubmit}
+        main={
+          loading ? (
+            <p className="py-10 text-center text-muted-foreground">Cargando...</p>
+          ) : (
+            <>
+              <section>
+                <SectionLabel action={<LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>}>
+                  Cliente
+                </SectionLabel>
+                <CustomerPicker
+                  customers={customers}
                   value={customerId}
                   onChange={setCustomerId}
-                  options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                  autoFocus={!isEdit}
+                  onPicked={() => addArticleRef.current?.focus()}
                 />
-              </Field>
-              <Field label="Moneda">
-                <Select
-                  value={currencyId}
-                  onChange={setCurrencyId}
-                  options={currencies.map((c) => ({ value: c.id, label: c.code }))}
-                />
-              </Field>
-              <Field label="Válida hasta">
-                <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
-              </Field>
-            </div>
+              </section>
 
-            <Field label="Notas">
-              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </Field>
+              <SalesLinesEditor
+                lines={lines}
+                onChange={setLines}
+                pricesIncludeTax={pricesIncludeTax}
+                onPricesIncludeTaxChange={setPricesIncludeTax}
+                currencyCode={currencyCode}
+                allowNotes
+                addInputRef={addArticleRef}
+              />
+            </>
+          )
+        }
+        side={
+          <>
+            <section>
+              <SectionLabel>Moneda</SectionLabel>
+              <Segmented
+                value={currencyId}
+                onChange={setCurrencyId}
+                options={currencies.map((c) => ({ value: c.id, label: c.code === 'ARS' ? 'ARS $' : c.code }))}
+              />
+            </section>
 
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-muted-foreground">Líneas</label>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <ToggleSwitch
-                      checked={pricesIncludeTax}
-                      onChange={setPricesIncludeTax}
-                      label="Precios con IVA incluido"
-                    />
-                    <span>Precios con IVA incluido</span>
-                  </div>
-                  <button type="button" onClick={addLine} className="text-xs text-primary hover:text-primary/80">
-                    + agregar línea
-                  </button>
-                </div>
+            <section>
+              <SectionLabel>Válida hasta</SectionLabel>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {VALIDITY_PRESETS.map((days) => (
+                  <ValidityChip key={days} active={activePreset === days} onClick={() => setValidUntil(datePlusDays(days))}>
+                    {days} días
+                  </ValidityChip>
+                ))}
+                <ValidityChip active={!validUntil} onClick={() => setValidUntil('')}>
+                  Sin vencimiento
+                </ValidityChip>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {pricesIncludeTax
-                  ? 'El precio unitario de cada línea es el precio final (con IVA) - se desglosa a neto solo.'
-                  : 'El precio unitario de cada línea es neto (sin IVA) - se le suma el IVA de su alícuota.'}
-              </p>
-              {lines.map((line, index) => (
-                <div key={index} className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <ArticlePicker
-                    className="flex-1"
-                    value={line.articleVariantId}
-                    onChange={(variantId, option) =>
-                      updateLine(index, {
-                        articleVariantId: variantId,
-                        unitPrice: option ? option.unitPrice : line.unitPrice,
-                        taxKind: option?.taxKind ?? line.taxKind,
-                        taxRate: option?.taxRate ?? line.taxRate,
-                      })
-                    }
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    step="any"
-                    className="w-20"
-                    value={line.quantity}
-                    onChange={(e) => updateLine(index, { quantity: Number(e.target.value) })}
-                    title="Cantidad"
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    step="any"
-                    className="w-28"
-                    placeholder="Precio"
-                    value={line.unitPrice}
-                    onChange={(e) => updateLine(index, { unitPrice: Number(e.target.value) })}
-                    title="Precio unitario"
-                  />
-                  <VatRateSelect
-                    value={{ taxKind: (line.taxKind ?? 'GRAVADO') as VatKind, taxRate: line.taxRate ?? 0 }}
-                    onChange={(v) => updateLine(index, { taxKind: v.taxKind, taxRate: v.taxRate })}
-                  />
-                  {lines.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeLine(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                {line.articleVariantId && !(Number(line.unitPrice) > 0) && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Este artículo no tiene precio de venta - cargá el precio unitario en esta línea.
-                  </p>
-                )}
-                </div>
-              ))}
-              <VatLineSummary lines={lines} pricesIncludeTax={pricesIncludeTax} />
-            </div>
+              <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+            </section>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <section>
+              <SectionLabel>Notas para el cliente</SectionLabel>
+              <Textarea
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Condiciones de pago, plazo de entrega, lo que quieras que figure en el PDF"
+              />
+            </section>
 
-            <div className="mt-2 flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={mutation.isPending}>
+            <div className="mt-auto flex flex-col gap-3">
+              <SalesTotalsPanel totals={totals} currencyCode={currencyCode} />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending || loading}>
                 {mutation.isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear cotización'}
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                <Kbd>Ctrl</Kbd> + <Kbd>Enter</Kbd> para {isEdit ? 'guardar' : 'crear'}
+              </p>
             </div>
-          </form>
-        )}
-      </div>
+          </>
+        }
+      />
 
       {creatingCustomer && (
         <CompanyFormModal
@@ -289,18 +243,21 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
           onSaved={(c) => setCustomerId(c.id)}
         />
       )}
-    </div>
+    </>
   );
 }
 
-function Field({ label, action, children }: { label: string; action?: React.ReactNode; children: React.ReactNode }) {
+function ValidityChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <label className="text-sm text-muted-foreground">{label}</label>
-        {action}
-      </div>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-xs transition ${
+        active ? 'border-primary bg-primary/10 text-primary' : 'bg-card text-muted-foreground hover:text-foreground'
+      }`}
+    >
       {children}
-    </div>
+    </button>
   );
 }

@@ -127,7 +127,10 @@ export default function QuoteRequestDetailPanel({ quoteRequestId, onClose, onEdi
               </Info>
               <Info label="Fecha">{new Date(data.createdAt).toLocaleDateString('es-AR')}</Info>
               {data.validUntil && (
-                <Info label="Válido hasta">{new Date(data.validUntil).toLocaleDateString('es-AR')}</Info>
+                <Info label="Válido hasta">
+                  {/* Fecha "de día" guardada a medianoche UTC - en hora local (UTC-3) se veía un día antes. */}
+                  {new Date(data.validUntil).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
+                </Info>
               )}
               {data.transportMode && <Info label="Transporte">{data.transportMode.name}</Info>}
               {data.paymentTerm && <Info label="Forma de pago">{data.paymentTerm.name}</Info>}
