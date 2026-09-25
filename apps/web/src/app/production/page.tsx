@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Factory, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import CreatedBy from './CreatedBy';
 import { ProductionPlanGateBanner, useProductionGate } from './ProductionPlanGate';
 import { PRODUCTION_STATUS_COLORS, PRODUCTION_STATUS_LABELS } from './status';
 
@@ -220,6 +221,7 @@ function ProductionDashboardBody({
                     <th className="py-2 pr-3 font-medium">Estado</th>
                     <th className="py-2 pr-3 font-medium">Inicio</th>
                     <th className="py-2 pr-3 font-medium">Creada</th>
+                    <th className="py-2 pr-3 font-medium">Creó</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -253,6 +255,9 @@ function ProductionDashboardBody({
                         </td>
                         <td className="py-2 pr-3 text-muted-foreground">
                           {new Date(order.createdAt).toLocaleDateString('es-AR')}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <CreatedBy user={order.createdBy} />
                         </td>
                       </tr>
                     );

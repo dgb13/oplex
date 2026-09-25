@@ -18,6 +18,7 @@ import type { AxiosError } from 'axios';
 import { ChevronRight, Package, Ruler } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
+import CreatedBy from '../CreatedBy';
 import { ProductionPlanGateBanner, useProductionGate } from '../ProductionPlanGate';
 
 const MONEY_FORMAT = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -363,7 +364,9 @@ function OrdersTable({
                 </td>
                 <td className="py-2 pr-3 text-right tabular-nums">{cost !== null ? MONEY_FORMAT.format(cost) : '—'}</td>
                 <td className="py-2 pr-3 text-muted-foreground">{order.bomVersion ? `v${order.bomVersion}` : '—'}</td>
-                <td className="py-2 pr-3 text-muted-foreground">{order.createdBy?.name ?? order.createdBy?.email ?? '—'}</td>
+                <td className="py-2 pr-3 text-muted-foreground">
+                  <CreatedBy user={order.createdBy} size={20} />
+                </td>
                 <td className="py-2 text-right">
                   <Button size="sm" variant="outline" onClick={() => onRepeat(order)}>
                     Repetir

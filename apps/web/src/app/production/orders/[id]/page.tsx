@@ -16,6 +16,7 @@ import { FileArchive, FileText, Package, Ruler, ShoppingCart } from 'lucide-reac
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
+import CreatedBy from '../../CreatedBy';
 import { PRODUCTION_STATUS_COLORS, PRODUCTION_STATUS_LABELS } from '../../status';
 
 // DRAFT/PLANNED/IN_PROGRESS todavía pueden llegar a necesitar estos
@@ -307,6 +308,12 @@ export default function ProductionOrderDetailPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Creada</p>
                   <p className="font-medium">{new Date(order.createdAt).toLocaleString('es-AR')}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Creada por</p>
+                  <p className="font-medium">
+                    <CreatedBy user={order.createdBy} />
+                  </p>
                 </div>
                 {order.status === 'DRAFT' || order.status === 'PLANNED' ? (
                   <div>

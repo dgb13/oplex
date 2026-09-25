@@ -1359,3 +1359,7 @@ Probado en Chrome: creado "QA Dulce de leche casero (prueba)" por kilo y sin pre
 **Fix preexistente**: "Válida hasta" (fecha de día guardada a medianoche UTC) se mostraba un día antes en el detalle de la cotización, en el PDF y en el detalle del Pedido de Cotización de Compras - ahora se formatea con `timeZone: 'UTC'`.
 
 Probado en Chrome: cotización PRE-000004 creada de punta a punta con teclado (Cliente Demo SA, 2 mesas con detalle "Incluye armado y entrega en CABA" + 9 ruedas, $716.500, queda como borrador en la base local), edición carga las líneas y el detalle; Nueva factura con `2*mesa`, doble escaneo, artículo sin precio bloqueado (no se emitió: falta certificado ARCA). tsc/lint web limpios, tests de quotes verdes.
+
+## Sesión 2026-09-25 (cont. 3, PC_CORRALITOS) — Quién creó cada orden de producción
+
+El backend ya devolvía `createdBy` (id/nombre/email/avatar) en el listado, detalle e historial de órdenes; ahora se muestra con el componente nuevo `production/CreatedBy.tsx` (reusa `UserAvatar`: foto, avatar preset o iniciales; "—" si la orden no tiene autor): columna "Creó" en el Tablero de Producción, "Creada por" en el detalle de la orden, y avatar en la columna "Creó" del Historial. Verificado en Chrome (de paso, confirmado "Producidas hoy" = 0 tras el fix de día local). tsc/lint web limpios.
