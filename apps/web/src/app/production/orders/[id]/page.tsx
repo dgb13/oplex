@@ -1,16 +1,18 @@
 'use client';
 
 import BulkQuoteRequestModal, { type GroupedPedido } from '@/app/purchases/BulkQuoteRequestModal';
+import InsumoThumb from '@/components/InsumoThumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi, resolveUploadUrl } from '@/lib/inventory';
 import { invoicingApi } from '@/lib/invoicing';
-import { productionApi, type ReservationStatus } from '@/lib/production';
+import { dateInputToIso, isoToDateInput, productionApi, type ReservationStatus } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { FileArchive, FileText, Package, ShoppingCart } from 'lucide-react';
+import { FileArchive, FileText, Package, Ruler, ShoppingCart } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
@@ -219,6 +221,23 @@ export default function ProductionOrderDetailPage() {
   const retryReservationMutation = useAction(() => productionApi.retryReservation(id, confirmWarehouseId));
   const completeMutation = useAction(() => productionApi.completeOrder(id));
   const cancelMutation = useAction(() => productionApi.cancelOrder(id));
+  const startMutation = useAction(() => productionApi.startOrder(id));
+  // Reprogramar: el input arranca en la fecha guardada y "Guardar" aparece
+  // sólo si el usuario la cambió.
+  const [scheduleDraft, setScheduleDraft] = useState<string | null>(null);
+  const savedSchedule = orderQuery.data?.scheduledStartAt ? isoToDateInput(orderQuery.data.scheduledStartAt) : '';
+  const scheduleValue = scheduleDraft ?? savedSchedule;
+  const scheduleMutation = useMutation({
+    mutationFn: () => productionApi.scheduleOrder(id, scheduleValue ? dateInputToIso(scheduleValue) : null),
+    onSuccess: () => {
+      setScheduleDraft(null);
+      invalidate();
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const message = err.response?.data?.message ?? 'No se pudo reprogramar la orden';
+      setError(Array.isArray(message) ? message.join(', ') : message);
+    },
+  });
 
   // Si ya hay algo reservado, todas las reservas de esta orden comparten
   // depósito a la fuerza (ver retryReservation en el backend) - precarga
@@ -264,7 +283,7 @@ export default function ProductionOrderDetailPage() {
                   <Badge className={PRODUCTION_STATUS_COLORS[order.status]}>
                     {PRODUCTION_STATUS_LABELS[order.status]}
                   </Badge>
-                  {order.status === 'PLANNED' && order.isShortOnMaterials && (
+                  {(order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && order.isShortOnMaterials && (
                     <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                       Esperando insumos
                     </Badge>
@@ -289,6 +308,37 @@ export default function ProductionOrderDetailPage() {
                   <p className="text-xs text-muted-foreground">Creada</p>
                   <p className="font-medium">{new Date(order.createdAt).toLocaleString('es-AR')}</p>
                 </div>
+                {order.status === 'DRAFT' || order.status === 'PLANNED' ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Inicio programado</p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        className="h-8 w-auto"
+                        value={scheduleValue}
+                        onChange={(e) => setScheduleDraft(e.target.value)}
+                      />
+                      {scheduleValue !== savedSchedule && (
+                        <Button size="sm" onClick={() => scheduleMutation.mutate()} disabled={scheduleMutation.isPending}>
+                          {scheduleMutation.isPending ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  order.scheduledStartAt && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Inicio programado</p>
+                      <p className="font-medium">{new Date(order.scheduledStartAt).toLocaleDateString('es-AR')}</p>
+                    </div>
+                  )
+                )}
+                {order.startedAt && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Iniciada</p>
+                    <p className="font-medium">{new Date(order.startedAt).toLocaleString('es-AR')}</p>
+                  </div>
+                )}
                 {order.finishedAt && (
                   <div>
                     <p className="text-xs text-muted-foreground">Completada</p>
@@ -350,7 +400,7 @@ export default function ProductionOrderDetailPage() {
                 </div>
               )}
 
-              {order.status === 'PLANNED' && order.isShortOnMaterials && (
+              {(order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && order.isShortOnMaterials && (
                 <div className="flex flex-wrap items-end gap-3 border-t pt-4">
                   {existingReservationWarehouseId ? (
                     <p className="text-sm text-muted-foreground">
@@ -376,9 +426,18 @@ export default function ProductionOrderDetailPage() {
                 </div>
               )}
 
-              {order.status === 'PLANNED' && (
-                <div className="flex gap-3 border-t pt-4">
-                  <Button onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
+              {(order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && (
+                <div className="flex flex-wrap gap-3 border-t pt-4">
+                  {order.status === 'PLANNED' && (
+                    <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
+                      {startMutation.isPending ? 'Iniciando...' : 'Iniciar producción'}
+                    </Button>
+                  )}
+                  <Button
+                    variant={order.status === 'PLANNED' ? 'outline' : 'default'}
+                    onClick={() => completeMutation.mutate()}
+                    disabled={completeMutation.isPending}
+                  >
                     {completeMutation.isPending ? 'Completando...' : 'Completar orden'}
                   </Button>
                   <Button
@@ -412,22 +471,29 @@ export default function ProductionOrderDetailPage() {
                   const colorClass =
                     row.falta <= 0 ? 'bg-green-500' : row.reservado > 0 ? 'bg-amber-500' : 'bg-red-500';
                   return (
-                    <div key={row.articleVariantId} className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-medium">{insumo?.articleName ?? row.articleVariantId}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                          {QUANTITY_FORMAT.format(row.reservado)} / {formatQuantity(row.requerido, insumo?.stockUnit)}
-                        </span>
+                    <div key={row.articleVariantId} className="flex items-start gap-3">
+                      <InsumoThumb
+                        imageUrl={insumo?.imageUrl}
+                        name={insumo?.articleName}
+                        icon={insumo?.stockUnit === 'mm' ? Ruler : Package}
+                      />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="truncate font-medium">{insumo?.articleName ?? row.articleVariantId}</span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">
+                            {QUANTITY_FORMAT.format(row.reservado)} / {formatQuantity(row.requerido, insumo?.stockUnit)}
+                          </span>
+                        </div>
+                        <ProgressBar pct={row.pct} colorClass={colorClass} />
+                        {row.falta > 0 && (
+                          <p
+                            className={`text-xs ${row.reservado > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
+                          >
+                            Faltan {formatQuantity(row.falta, insumo?.stockUnit)}
+                            {insumo?.preferredSupplierName ? ` — proveedor preferido: ${insumo.preferredSupplierName}` : ' — sin proveedor preferido'}
+                          </p>
+                        )}
                       </div>
-                      <ProgressBar pct={row.pct} colorClass={colorClass} />
-                      {row.falta > 0 && (
-                        <p
-                          className={`text-xs ${row.reservado > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
-                        >
-                          Faltan {formatQuantity(row.falta, insumo?.stockUnit)}
-                          {insumo?.preferredSupplierName ? ` — proveedor preferido: ${insumo.preferredSupplierName}` : ' — sin proveedor preferido'}
-                        </p>
-                      )}
                     </div>
                   );
                 })}
@@ -470,7 +536,10 @@ export default function ProductionOrderDetailPage() {
                 <SimpleTable
                   rows={order.reservations}
                   columns={[
-                    { header: 'Insumo', render: (r) => lookup[r.inputArticleVariantId]?.articleName ?? r.inputArticleVariantId },
+                    {
+                      header: 'Insumo',
+                      render: (r) => <InsumoCell insumo={lookup[r.inputArticleVariantId]} fallback={r.inputArticleVariantId} />,
+                    },
                     { header: 'Depósito', render: (r) => warehouseLookup[r.warehouseId] ?? r.warehouseId },
                     {
                       header: 'Cantidad',
@@ -492,7 +561,10 @@ export default function ProductionOrderDetailPage() {
                 <SimpleTable
                   rows={order.consumptions}
                   columns={[
-                    { header: 'Insumo', render: (r) => lookup[r.inputArticleVariantId]?.articleName ?? r.inputArticleVariantId },
+                    {
+                      header: 'Insumo',
+                      render: (r) => <InsumoCell insumo={lookup[r.inputArticleVariantId]} fallback={r.inputArticleVariantId} />,
+                    },
                     {
                       header: 'Cantidad',
                       render: (r) => formatQuantity(r.quantityConsumed, lookup[r.inputArticleVariantId]?.stockUnit),
@@ -569,6 +641,27 @@ function SimpleTable<T>({ rows, columns }: { rows: T[]; columns: { header: strin
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Celda "Insumo" de las tablas de reservas/consumo - miniatura + nombre. */
+function InsumoCell({
+  insumo,
+  fallback,
+}: {
+  insumo: { articleName: string; imageUrl?: string | null; stockUnit?: string } | undefined;
+  fallback: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <InsumoThumb
+        size="sm"
+        imageUrl={insumo?.imageUrl}
+        name={insumo?.articleName}
+        icon={insumo?.stockUnit === 'mm' ? Ruler : Package}
+      />
+      <span>{insumo?.articleName ?? fallback}</span>
     </div>
   );
 }

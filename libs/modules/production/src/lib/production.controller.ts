@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
 import { Roles } from '@plexo/auth';
@@ -8,6 +8,7 @@ import { BomService } from './bom.service.js';
 import { ConfirmProductionOrderDto } from './dto/confirm-production-order.dto.js';
 import { CreateBomDto } from './dto/create-bom.dto.js';
 import { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
+import { ScheduleProductionOrderDto } from './dto/schedule-production-order.dto.js';
 import { ProductionOrderService } from './production-order.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
 import { StockPieceService } from './stock-piece.service.js';
@@ -107,6 +108,12 @@ export class ProductionController {
     return this.orderService.list();
   }
 
+  @Get('orders/history')
+  async listOrderHistory() {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.orderService.listHistory();
+  }
+
   @Get('orders/:id')
   async getOrder(@Param('id', ParseUUIDPipe) id: string) {
     await this.subscriptionService.assertCanUseProduction();
@@ -125,6 +132,20 @@ export class ProductionController {
   async retryReservation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ConfirmProductionOrderDto) {
     await this.subscriptionService.assertCanUseProduction();
     return this.orderService.retryReservation(id, dto.warehouseId);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Patch('orders/:id/schedule')
+  async scheduleOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ScheduleProductionOrderDto) {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.orderService.schedule(id, dto.scheduledStartAt);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Post('orders/:id/start')
+  async startOrder(@Param('id', ParseUUIDPipe) id: string) {
+    await this.subscriptionService.assertCanUseProduction();
+    return this.orderService.start(id);
   }
 
   @Roles('OWNER', 'ADMIN', 'INVENTORY')

@@ -1,14 +1,16 @@
 'use client';
 
 import ArticlePicker from '@/components/ArticlePicker';
+import InsumoThumb from '@/components/InsumoThumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
-import { productionApi } from '@/lib/production';
+import { dateInputToIso, isoToDateInput, productionApi } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { Package, Ruler } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
@@ -23,6 +25,9 @@ export default function NewProductionOrderPage() {
   const [outputArticleVariantId, setOutputArticleVariantId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [quantity, setQuantity] = useState('1');
+  // Hoy por defecto - se puede programar para más adelante (la semana que
+  // viene); los insumos se reservan igual al crear la orden.
+  const [scheduledStart, setScheduledStart] = useState(() => isoToDateInput(new Date().toISOString()));
   const [error, setError] = useState('');
 
   const warehousesQuery = useQuery({
@@ -49,6 +54,7 @@ export default function NewProductionOrderPage() {
       const order = await productionApi.createOrder({
         outputArticleVariantId,
         quantity: Number(quantity),
+        scheduledStartAt: scheduledStart ? dateInputToIso(scheduledStart) : undefined,
       });
       return productionApi.confirmOrder(order.id, warehouseId);
     },
@@ -133,6 +139,12 @@ export default function NewProductionOrderPage() {
                     onChange={(e) => setQuantity(e.target.value)}
                   />
                 </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-muted-foreground">Inicio programado</label>
+                  <Input type="date" value={scheduledStart} onChange={(e) => setScheduledStart(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Los insumos se reservan al crear la orden.</p>
+                </div>
               </div>
 
               {outputArticleVariantId && warehouseId && (
@@ -180,7 +192,10 @@ function ProducibilityPreview({
   isLoading: boolean;
   noRecipe: boolean;
   data: import('@/lib/production').ProducibleResult | undefined;
-  lookup: Record<string, { articleName: string; variantLabel: string | null; sku: string; stockUnit: string }>;
+  lookup: Record<
+    string,
+    { articleName: string; variantLabel: string | null; sku: string; stockUnit: string; imageUrl?: string | null }
+  >;
   desiredQuantity: number;
 }) {
   if (isLoading) {
@@ -216,21 +231,29 @@ function ProducibilityPreview({
           const percent = requeridoTotal > 0 ? Math.min(100, (disponible / requeridoTotal) * 100) : 100;
           const isBottleneck = data.bottleneck?.id === entry.line.id;
           return (
-            <div key={entry.line.id} className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className={isBottleneck ? 'font-medium text-amber-700 dark:text-amber-400' : ''}>
-                  {article ? article.articleName : entry.line.inputArticleVariantId}
-                </span>
-                <span className="text-muted-foreground tabular-nums">
-                  {QUANTITY_FORMAT.format(disponible)}
-                  {article?.stockUnit ? ` ${article.stockUnit}` : ''} disponibles
-                </span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : isBottleneck ? 'bg-amber-500' : 'bg-primary'}`}
-                  style={{ width: `${percent}%` }}
-                />
+            <div key={entry.line.id} className="flex items-center gap-3">
+              <InsumoThumb
+                size="sm"
+                imageUrl={article?.imageUrl}
+                name={article?.articleName}
+                icon={article?.stockUnit === 'mm' ? Ruler : Package}
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className={`truncate ${isBottleneck ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
+                    {article ? article.articleName : entry.line.inputArticleVariantId}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    {QUANTITY_FORMAT.format(disponible)}
+                    {article?.stockUnit ? ` ${article.stockUnit}` : ''} disponibles
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : isBottleneck ? 'bg-amber-500' : 'bg-primary'}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
               </div>
             </div>
           );

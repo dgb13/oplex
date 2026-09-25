@@ -151,10 +151,13 @@ function ProductionDashboardBody({
   revealed: boolean;
 }) {
   const enCurso = orders?.filter((o) => o.status === 'PLANNED' || o.status === 'IN_PROGRESS').length ?? 0;
-  const esperandoInsumos = orders?.filter((o) => o.status === 'PLANNED' && o.isShortOnMaterials).length ?? 0;
-  const today = new Date().toISOString().slice(0, 10);
+  const esperandoInsumos = orders?.filter((o) => (o.status === 'PLANNED' || o.status === 'IN_PROGRESS') && o.isShortOnMaterials).length ?? 0;
+  // Día LOCAL, no el de UTC: comparando los ISO recortados, una orden
+  // completada a las 23:00 de ayer (02:00 UTC de hoy) contaba como de hoy.
+  const today = new Date().toDateString();
   const producidasHoy =
-    orders?.filter((o) => o.status === 'DONE' && o.finishedAt?.slice(0, 10) === today).length ?? 0;
+    orders?.filter((o) => o.status === 'DONE' && o.finishedAt && new Date(o.finishedAt).toDateString() === today)
+      .length ?? 0;
 
   return (
     <>
@@ -215,6 +218,7 @@ function ProductionDashboardBody({
                     <th className="py-2 pr-3 font-medium">Producto</th>
                     <th className="py-2 pr-3 font-medium">Cantidad</th>
                     <th className="py-2 pr-3 font-medium">Estado</th>
+                    <th className="py-2 pr-3 font-medium">Inicio</th>
                     <th className="py-2 pr-3 font-medium">Creada</th>
                   </tr>
                 </thead>
@@ -237,12 +241,15 @@ function ProductionDashboardBody({
                             <Badge className={PRODUCTION_STATUS_COLORS[order.status]}>
                               {PRODUCTION_STATUS_LABELS[order.status]}
                             </Badge>
-                            {order.status === 'PLANNED' && order.isShortOnMaterials && (
+                            {(order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && order.isShortOnMaterials && (
                               <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                                 Esperando insumos
                               </Badge>
                             )}
                           </div>
+                        </td>
+                        <td className="py-2 pr-3 tabular-nums">
+                          <OrderStartCell order={order} />
                         </td>
                         <td className="py-2 pr-3 text-muted-foreground">
                           {new Date(order.createdAt).toLocaleDateString('es-AR')}
@@ -257,5 +264,26 @@ function ProductionDashboardBody({
         </CardContent>
       </Card>
     </>
+  );
+}
+
+/** Columna "Inicio" del Tablero: el inicio real si ya arrancó, si no el
+ * programado ("Programada" en gris, "Atrasada" en ámbar si la fecha ya
+ * pasó y todavía no se inició). */
+function OrderStartCell({ order }: { order: import('@/lib/production').ProductionOrder }) {
+  if (order.startedAt) {
+    return <span>{new Date(order.startedAt).toLocaleDateString('es-AR')}</span>;
+  }
+  if (!order.scheduledStartAt || (order.status !== 'DRAFT' && order.status !== 'PLANNED')) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const scheduled = new Date(order.scheduledStartAt);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const late = scheduled < startOfToday;
+  return (
+    <span className={late ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
+      {scheduled.toLocaleDateString('es-AR')} {late ? '(atrasada)' : '(programada)'}
+    </span>
   );
 }

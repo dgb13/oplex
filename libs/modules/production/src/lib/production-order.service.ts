@@ -15,6 +15,11 @@ import { ProductionNumberingService } from './production-numbering.service.js';
 import { ProductionPlanningService } from './production-planning.service.js';
 import type { CreateProductionOrderDto } from './dto/create-production-order.dto.js';
 
+// Quién generó la orden - varios usuarios trabajan sobre el mismo panel de
+// Producción, cada orden muestra su autor (avatar + nombre). Mismo select
+// que createdBy en Compras/Cotizaciones, más avatarUrl para el avatar.
+const CREATED_BY_SELECT = { select: { id: true, name: true, email: true, avatarUrl: true } } as const;
+
 /**
  * Ciclo de vida de la orden de producción (ver
  * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5) - escribe sus
@@ -58,7 +63,46 @@ export class ProductionOrderService {
         bomVersion: bom.version,
         quantity: dto.quantity,
         status: 'DRAFT',
+        scheduledStartAt: dto.scheduledStartAt ? new Date(dto.scheduledStartAt) : null,
       },
+    });
+  }
+
+  /** Reprogramar la fecha de inicio - sólo mientras la orden no arrancó
+   * (DRAFT/PLANNED). No toca las reservas: se reserva al confirmar, no en
+   * la fecha programada. */
+  async schedule(orderId: string, scheduledStartAt: string | null | undefined): Promise<ProductionOrder> {
+    const db = getTenantDb();
+    const order = await db.productionOrder.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Orden de producción no encontrada');
+    }
+    if (order.status !== 'DRAFT' && order.status !== 'PLANNED') {
+      throw new BadRequestException('Sólo se puede reprogramar una orden que todavía no empezó');
+    }
+    return db.productionOrder.update({
+      where: { id: order.id },
+      data: { scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : null },
+    });
+  }
+
+  /** PLANNED → IN_PROGRESS: registra el inicio REAL (startedAt), que es lo
+   * que después permite medir cuánto tardó la fabricación en sí (inicio →
+   * fin) aparte de la espera previa (creada → inicio). Se puede iniciar
+   * aunque falten insumos - completar sigue exigiendo que no falte nada. */
+  async start(orderId: string): Promise<ProductionOrder> {
+    const db = getTenantDb();
+    await db.$queryRaw`SELECT id FROM production_orders WHERE id = ${orderId} FOR UPDATE`;
+    const order = await db.productionOrder.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Orden de producción no encontrada');
+    }
+    if (order.status !== 'PLANNED') {
+      throw new BadRequestException('Sólo se puede iniciar una orden planificada');
+    }
+    return db.productionOrder.update({
+      where: { id: order.id },
+      data: { status: 'IN_PROGRESS', startedAt: new Date() },
     });
   }
 
@@ -115,9 +159,9 @@ export class ProductionOrderService {
     if (!order) {
       throw new NotFoundException('Orden de producción no encontrada');
     }
-    if (order.status !== 'PLANNED' || !order.isShortOnMaterials) {
+    if ((order.status !== 'PLANNED' && order.status !== 'IN_PROGRESS') || !order.isShortOnMaterials) {
       throw new BadRequestException(
-        'Sólo se puede reintentar la reserva de una orden planificada con insumos faltantes',
+        'Sólo se puede reintentar la reserva de una orden planificada o en curso con insumos faltantes',
       );
     }
     if (!order.bomId) {
@@ -271,9 +315,11 @@ export class ProductionOrderService {
   /**
    * Primer paso de completar una orden (ver
    * ProductionService.completeOrder, apps/api): lockea la orden y valida
-   * que se pueda completar - PLANNED y sin faltante. Una orden
-   * `isShortOnMaterials` se queda "en cola" hasta que se confirme de
+   * que se pueda completar - PLANNED o IN_PROGRESS y sin faltante. Una
+   * orden `isShortOnMaterials` se queda "en cola" hasta que se confirme de
    * nuevo con el faltante ya cubierto (no hay completar parcial en v1).
+   * Completar sin haber pasado por "Iniciar" sigue permitido (startedAt
+   * queda null: el Historial muestra la fabricación como desconocida).
    */
   async assertCompletable(orderId: string): Promise<ProductionOrder> {
     const db = getTenantDb();
@@ -282,8 +328,8 @@ export class ProductionOrderService {
     if (!order) {
       throw new NotFoundException('Orden de producción no encontrada');
     }
-    if (order.status !== 'PLANNED') {
-      throw new BadRequestException('Sólo se puede completar una orden planificada');
+    if (order.status !== 'PLANNED' && order.status !== 'IN_PROGRESS') {
+      throw new BadRequestException('Sólo se puede completar una orden planificada o en curso');
     }
     if (order.isShortOnMaterials) {
       throw new BadRequestException(
@@ -381,6 +427,7 @@ export class ProductionOrderService {
         consumptions: true,
         outputs: true,
         bom: { include: { lines: true } },
+        createdBy: CREATED_BY_SELECT,
       },
     });
     if (!order) {
@@ -392,31 +439,51 @@ export class ProductionOrderService {
     // reservados.
     const warehouseId = order.reservations.find((r) => r.status === 'ACTIVE')?.warehouseId;
     const unfittableCuts =
-      order.status === 'PLANNED' && warehouseId && order.bom
+      (order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && warehouseId && order.bom
         ? await this.planningService.findUnfittableCuts(order.bom.lines, order.quantity, warehouseId)
         : [];
     return { ...order, unfittableCuts };
   }
 
-  list(status?: ProductionOrder['status']): Promise<ProductionOrder[]> {
+  list(status?: ProductionOrder['status']) {
     return getTenantDb().productionOrder.findMany({
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
+      include: { createdBy: CREATED_BY_SELECT },
     });
   }
 
-  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). El plan
-   * habla de "inicio / entrega estimada / entrega final" pero el modelo no
-   * tiene ninguna fecha PLANIFICADA (una orden en DRAFT/PLANNED no tiene
-   * startedAt todavía) - se proyectan las dos fechas reales que sí existen
-   * (startedAt/finishedAt), nunca una estimación inventada. Una orden con
-   * ambas fechas dentro del rango aporta 2 entries (inicio y entrega), con
-   * ids distintos para no colisionar en el merge. */
+  /** Órdenes completadas, para Producción → Historial (agrupadas por
+   * producto en el frontend). `outputs` trae el costo real de lo
+   * producido y `reservations` el depósito que usó (para que "Repetir"
+   * proponga el mismo). */
+  listHistory() {
+    return getTenantDb().productionOrder.findMany({
+      where: { status: 'DONE' },
+      orderBy: { finishedAt: 'desc' },
+      include: {
+        createdBy: CREATED_BY_SELECT,
+        outputs: true,
+        reservations: { select: { warehouseId: true }, take: 1 },
+      },
+    });
+  }
+
+  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). Proyecta
+   * el inicio programado (scheduledStartAt) de las órdenes que todavía no
+   * arrancaron, y las fechas reales (startedAt/finishedAt) de las demás -
+   * nunca una estimación inventada. Una orden con varias fechas dentro del
+   * rango aporta una entry por fecha, con ids distintos para no colisionar
+   * en el merge. */
   async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
     const orders = await getTenantDb().productionOrder.findMany({
       where: {
         status: { not: 'CANCELLED' },
-        OR: [{ startedAt: { gte: from, lte: to } }, { finishedAt: { gte: from, lte: to } }],
+        OR: [
+          { startedAt: { gte: from, lte: to } },
+          { finishedAt: { gte: from, lte: to } },
+          { status: { in: ['DRAFT', 'PLANNED'] }, scheduledStartAt: { gte: from, lte: to } },
+        ],
       },
       include: { outputArticleVariant: { include: { article: true } } },
     });
@@ -424,6 +491,24 @@ export class ProductionOrderService {
     const entries: CalendarEntry[] = [];
     for (const order of orders) {
       const articleName = order.outputArticleVariant.article.name;
+      if (
+        (order.status === 'DRAFT' || order.status === 'PLANNED') &&
+        order.scheduledStartAt &&
+        order.scheduledStartAt >= from &&
+        order.scheduledStartAt <= to
+      ) {
+        entries.push({
+          id: `${order.id}-scheduled`,
+          source: 'prod',
+          title: articleName,
+          date: order.scheduledStartAt.toISOString(),
+          amount: null,
+          flow: null,
+          ref: `Inicio programado (${order.number})`,
+          editable: false,
+          link: { module: 'production-order', id: order.id },
+        });
+      }
       if (order.startedAt && order.startedAt >= from && order.startedAt <= to) {
         entries.push({
           id: `${order.id}-start`,

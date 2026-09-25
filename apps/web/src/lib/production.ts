@@ -93,9 +93,35 @@ export interface ProductionOrder {
   status: ProductionStatus;
   isShortOnMaterials: boolean;
   createdAt: string;
+  // Inicio PROGRAMADO (lo elige el usuario, reprogramable hasta iniciar) vs.
+  // startedAt, el inicio REAL (botón "Iniciar producción").
+  scheduledStartAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   cancelledAt: string | null;
+  createdBy?: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
+}
+
+// Orden completada tal como la devuelve GET /production/orders/history -
+// Producción → Historial.
+export interface ProductionHistoryOrder extends ProductionOrder {
+  outputs: ProductionOutput[];
+  reservations: { warehouseId: string }[];
+}
+
+/** "2026-09-29" (input type=date, día local) → ISO al mediodía local, así
+ * el día no se corre al guardarse en UTC (Argentina es UTC-3: medianoche
+ * local de un día ya es el día siguiente en UTC, y medianoche UTC se ve
+ * como el día anterior acá). */
+export function dateInputToIso(value: string): string {
+  return new Date(`${value}T12:00:00`).toISOString();
+}
+
+/** ISO → "2026-09-29" en el día local, para precargar un input type=date. */
+export function isoToDateInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export interface StockReservation {
@@ -186,8 +212,12 @@ export const productionApi = {
   // sólo PLANNED/DONE/etc. filtran el array acá.
   listOrders: () => api.get<ProductionOrder[]>('/production/orders').then((r) => r.data),
   getOrder: (id: string) => api.get<ProductionOrderDetail>(`/production/orders/${id}`).then((r) => r.data),
-  createOrder: (dto: { outputArticleVariantId: string; quantity: number }) =>
+  listOrderHistory: () => api.get<ProductionHistoryOrder[]>('/production/orders/history').then((r) => r.data),
+  createOrder: (dto: { outputArticleVariantId: string; quantity: number; scheduledStartAt?: string }) =>
     api.post<ProductionOrder>('/production/orders', dto).then((r) => r.data),
+  scheduleOrder: (id: string, scheduledStartAt: string | null) =>
+    api.patch<ProductionOrder>(`/production/orders/${id}/schedule`, { scheduledStartAt }).then((r) => r.data),
+  startOrder: (id: string) => api.post<ProductionOrder>(`/production/orders/${id}/start`).then((r) => r.data),
   confirmOrder: (id: string, warehouseId: string) =>
     api.post<ProductionOrder>(`/production/orders/${id}/confirm`, { warehouseId }).then((r) => r.data),
   retryReservation: (id: string, warehouseId: string) =>

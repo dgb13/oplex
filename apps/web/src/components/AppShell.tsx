@@ -110,6 +110,7 @@ const PRODUCTION_NAV_GROUP: NavGroup = {
   items: [
     { href: '/production', label: 'Tablero' },
     { href: '/production/bom', label: 'Recetas' },
+    { href: '/production/history', label: 'Historial' },
     { href: '/production/pieces', label: 'Piezas y recortes' },
     { href: '/production/settings', label: 'Configuración' },
   ],

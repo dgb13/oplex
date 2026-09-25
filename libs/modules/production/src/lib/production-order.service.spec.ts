@@ -93,6 +93,79 @@ describe('ProductionOrderService.create', () => {
   });
 });
 
+describe('ProductionOrderService.create (scheduled start)', () => {
+  it('stores the scheduled start date when given, null otherwise', async () => {
+    const db = makeDb();
+    const service = makeService({ db });
+
+    const scheduled = await runAsTenant(db, () =>
+      service.create({ outputArticleVariantId: 'variant-prepizza', quantity: 2, scheduledStartAt: '2026-09-29T15:00:00.000Z' }),
+    );
+    const unscheduled = await runAsTenant(db, () => service.create({ outputArticleVariantId: 'variant-prepizza', quantity: 2 }));
+
+    expect(scheduled.scheduledStartAt).toEqual(new Date('2026-09-29T15:00:00.000Z'));
+    expect(unscheduled.scheduledStartAt).toBeNull();
+  });
+});
+
+describe('ProductionOrderService.schedule', () => {
+  it('reschedules a PLANNED order', async () => {
+    const db = makeDb({
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'PLANNED' })),
+        update: jest.fn((args) => Promise.resolve({ ...makeOrder(), ...args.data })),
+      },
+    });
+    const service = makeService({ db });
+
+    const order = await runAsTenant(db, () => service.schedule('order-1', '2026-10-05T15:00:00.000Z'));
+
+    expect(order.scheduledStartAt).toEqual(new Date('2026-10-05T15:00:00.000Z'));
+  });
+
+  it('rejects rescheduling an order that already started', async () => {
+    const db = makeDb({ productionOrder: { findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'IN_PROGRESS' })) } });
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.schedule('order-1', null))).rejects.toThrow('todavía no empezó');
+  });
+});
+
+describe('ProductionOrderService.start', () => {
+  it('moves a PLANNED order to IN_PROGRESS and records the real start', async () => {
+    const db = makeDb({
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'PLANNED' })),
+        update: jest.fn((args) => Promise.resolve({ ...makeOrder(), ...args.data })),
+      },
+    });
+    const service = makeService({ db });
+
+    const order = await runAsTenant(db, () => service.start('order-1'));
+
+    expect(order.status).toBe('IN_PROGRESS');
+    expect(order.startedAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects starting an order that is not PLANNED', async () => {
+    const db = makeDb({ productionOrder: { findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'DRAFT' })) } });
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.start('order-1'))).rejects.toThrow('Sólo se puede iniciar');
+  });
+});
+
+describe('ProductionOrderService.assertCompletable', () => {
+  it('accepts an IN_PROGRESS order without missing materials', async () => {
+    const db = makeDb({ productionOrder: { findUnique: jest.fn().mockResolvedValue(makeOrder({ status: 'IN_PROGRESS' })) } });
+    const service = makeService({ db });
+
+    await expect(runAsTenant(db, () => service.assertCompletable('order-1'))).resolves.toMatchObject({
+      status: 'IN_PROGRESS',
+    });
+  });
+});
+
 describe('ProductionOrderService.confirm', () => {
   it('reserves the full requirement and clears isShortOnMaterials when there is enough disponible', async () => {
     const db = makeDb();
@@ -246,7 +319,7 @@ describe('ProductionOrderService.retryReservation', () => {
     const service = makeService({ db });
 
     await expect(runAsTenant(db, () => service.retryReservation('order-1', 'warehouse-1'))).rejects.toThrow(
-      'planificada con insumos faltantes',
+      'con insumos faltantes',
     );
   });
 
@@ -306,6 +379,7 @@ describe('ProductionOrderService.getById', () => {
         consumptions: true,
         outputs: true,
         bom: { include: { lines: true } },
+        createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     });
   });
@@ -387,7 +461,35 @@ describe('ProductionOrderService.getCalendarEntries', () => {
     ]);
   });
 
-  it('queries only non-CANCELLED orders with a start or finish date in range', async () => {
+  it('emits the scheduled start of an order that has not started yet', async () => {
+    const order = orderWithDates({ status: 'PLANNED', number: 'OP-000021', scheduledStartAt: new Date('2026-09-29T15:00:00.000Z') });
+    const findMany = jest.fn().mockResolvedValue([order]);
+    const db = makeDb({ productionOrder: { findMany } });
+    const service = makeService({ db });
+
+    const entries = await runAsTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(entries).toEqual([
+      expect.objectContaining({ id: 'order-1-scheduled', date: '2026-09-29T15:00:00.000Z', ref: 'Inicio programado (OP-000021)' }),
+    ]);
+  });
+
+  it('ignores the scheduled start once the order already started', async () => {
+    const order = orderWithDates({
+      status: 'IN_PROGRESS',
+      scheduledStartAt: new Date('2026-09-10T15:00:00.000Z'),
+      startedAt: new Date('2026-09-12T10:00:00.000Z'),
+    });
+    const findMany = jest.fn().mockResolvedValue([order]);
+    const db = makeDb({ productionOrder: { findMany } });
+    const service = makeService({ db });
+
+    const entries = await runAsTenant(db, () => service.getCalendarEntries(FROM, TO));
+
+    expect(entries.map((e) => e.id)).toEqual(['order-1-start']);
+  });
+
+  it('queries only non-CANCELLED orders with a start, finish or pending scheduled date in range', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const db = makeDb({ productionOrder: { findMany } });
     const service = makeService({ db });
@@ -397,7 +499,11 @@ describe('ProductionOrderService.getCalendarEntries', () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         status: { not: 'CANCELLED' },
-        OR: [{ startedAt: { gte: FROM, lte: TO } }, { finishedAt: { gte: FROM, lte: TO } }],
+        OR: [
+          { startedAt: { gte: FROM, lte: TO } },
+          { finishedAt: { gte: FROM, lte: TO } },
+          { status: { in: ['DRAFT', 'PLANNED'] }, scheduledStartAt: { gte: FROM, lte: TO } },
+        ],
       },
       include: { outputArticleVariant: { include: { article: true } } },
     });

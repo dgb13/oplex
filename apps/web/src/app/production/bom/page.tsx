@@ -1,6 +1,7 @@
 'use client';
 
 import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
+import InsumoThumb from '@/components/InsumoThumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -376,7 +377,12 @@ export default function BomPage() {
                           key={i}
                           className="flex flex-wrap items-start gap-3 rounded-xl border bg-muted/20 p-3 transition hover:bg-muted/40"
                         >
-                          <ThumbOrIcon imageUrl={undefined} icon={isPiece ? Ruler : Package} />
+                          <InsumoThumb
+                            size="lg"
+                            imageUrl={line.inputArticleVariantId ? article?.imageUrl : null}
+                            name={article?.articleName}
+                            icon={isPiece ? Ruler : Package}
+                          />
                           <div className="min-w-[220px] flex-1">
                             <ArticlePicker
                               value={line.inputArticleVariantId}

@@ -1568,6 +1568,7 @@ model ProductionOrder {
   // automático - regla explícita del diseño §7).
   isShortOnMaterials     Boolean                 @default(false)
   createdAt              DateTime                @default(now())
+  scheduledStartAt       DateTime?
   startedAt              DateTime?
   finishedAt             DateTime?
   cancelledAt             DateTime?
