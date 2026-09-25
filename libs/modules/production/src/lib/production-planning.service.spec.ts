@@ -99,4 +99,61 @@ describe('ProductionPlanningService.computeProducible', () => {
 
     expect(result.maxProducible.toString()).toBe('4');
   });
+
+  it('adds up every line of the same insumo instead of dividing each one against the whole stock', async () => {
+    // 100 disponibles; la receta usa el mismo insumo en 2 líneas de 30.
+    // Antes: cada línea 100/30 = 3 -> máximo 3. Real: 100/60 = 1.
+    const db = makeDb();
+    const bomService = {
+      getActiveBomOrThrow: jest.fn().mockResolvedValue({
+        id: 'bom-1',
+        lines: [
+          { inputArticleVariantId: 'variant-huevo', quantity: new Prisma.Decimal(30), expectedWastePercent: new Prisma.Decimal(0) },
+          { inputArticleVariantId: 'variant-huevo', quantity: new Prisma.Decimal(30), expectedWastePercent: new Prisma.Decimal(0) },
+        ],
+      }),
+    };
+    const service = new ProductionPlanningService(bomService as unknown as BomService, {} as StockPieceService);
+
+    const result = await runAsTenant(db, () => service.computeProducible('variant-tortilla', 'warehouse-1'));
+
+    expect(result.maxProducible.toString()).toBe('1');
+  });
+
+  it('caps a 1D insumo by what actually fits in its pieces, not just by total mm', async () => {
+    // 1600 mm en dos recortes de 800 y un corte de 1200 por unidad: por mm
+    // daría 1, pero ninguna pieza lo admite entero -> 0.
+    const db = makeDb({
+      articleVariant: { findUnique: jest.fn().mockResolvedValue({ article: { measurementType: 'LINEAL_1D' } }) },
+    });
+    const bomService = {
+      getActiveBomOrThrow: jest.fn().mockResolvedValue({
+        id: 'bom-1',
+        lines: [
+          {
+            inputArticleVariantId: 'variant-tubo',
+            quantity: new Prisma.Decimal(1200),
+            length: new Prisma.Decimal(1200),
+            cutsCount: 1,
+            expectedWastePercent: new Prisma.Decimal(0),
+          },
+        ],
+      }),
+    };
+    const stockPieceService = {
+      getAvailableLength: jest.fn().mockResolvedValue(new Prisma.Decimal(1600)),
+      listAvailablePieces: jest.fn().mockResolvedValue([
+        { id: 'p1', currentLength: new Prisma.Decimal(800) },
+        { id: 'p2', currentLength: new Prisma.Decimal(800) },
+      ]),
+    };
+    const service = new ProductionPlanningService(
+      bomService as unknown as BomService,
+      stockPieceService as unknown as StockPieceService,
+    );
+
+    const result = await runAsTenant(db, () => service.computeProducible('variant-travesano', 'warehouse-1'));
+
+    expect(result.maxProducible.toString()).toBe('0');
+  });
 });

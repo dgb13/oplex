@@ -96,67 +96,169 @@ describe('ProductionService.completeOrder', () => {
     expect(journalCall.outputsCost.toString()).toBe('2000');
   });
 
-  it('cuts across two stock pieces for a 1D input when a single piece does not cover the whole reservation', async () => {
-    const order = makeOrder();
-    const reservation = makeReservation({ inputArticleVariantId: 'variant-cable', quantityReserved: new Prisma.Decimal(900) });
-    const db = {
-      articleVariant: {
-        findUniqueOrThrow: jest
-          .fn()
-          .mockResolvedValue({ article: { measurementType: 'LINEAL_1D', minUsableLength: new Prisma.Decimal(100) } }),
-      },
-    };
-    const pieceA = { id: 'piece-a', currentLength: new Prisma.Decimal(600), unitCost: new Prisma.Decimal(3) };
-    const pieceB = { id: 'piece-b', currentLength: new Prisma.Decimal(500), unitCost: new Prisma.Decimal(4) };
-    const orderService = {
-      assertCompletable: jest.fn().mockResolvedValue(order),
-      getActiveReservations: jest.fn().mockResolvedValue([reservation]),
-      recordConsumption: jest.fn().mockResolvedValue({}),
-      recordOutput: jest.fn().mockResolvedValue({}),
-      finishOrder: jest.fn().mockResolvedValue({ ...order, status: 'DONE' }),
-    };
-    const bomService = { getById: jest.fn().mockResolvedValue({ id: 'bom-1', byproducts: [] }) };
-    // No single AVAILABLE piece has >= 900mm (findBestFitPiece returns
-    // null both times) - primero se agota pieceA entera (600), después
-    // queda 300 y pieceB sí alcanza para eso.
-    const stockPieceService = {
-      findBestFitPiece: jest
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(pieceB),
-      findLargestPiece: jest.fn().mockResolvedValueOnce(pieceA),
-      cutPiece: jest
-        .fn()
-        .mockResolvedValueOnce({ consumedFrom: { ...pieceA, status: 'DEPLETED' }, offcut: null })
-        .mockResolvedValueOnce({ consumedFrom: { ...pieceB, status: 'DEPLETED' }, offcut: null }),
-    };
-    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: null }) };
-    const accountingService = makeAccountingService();
+  describe('1D (barras): cada corte sale entero de una sola pieza', () => {
+    type Piece = { id: string; currentLength: Prisma.Decimal; unitCost: Prisma.Decimal };
 
-    const service = new ProductionService(
-      orderService as unknown as ProductionOrderService,
-      stockPieceService as unknown as StockPieceService,
-      bomService as unknown as BomService,
-      inventoryService as unknown as InventoryService,
-      accountingService as unknown as AccountingService,
-    );
+    function setup(input: {
+      lines: { length: number; cutsCount: number }[];
+      pieces: Piece[];
+      minUsableLength: number;
+      orderQuantity?: number;
+    }) {
+      const order = makeOrder({ quantity: new Prisma.Decimal(input.orderQuantity ?? 1) });
+      const reservations = input.lines.map((l, i) =>
+        makeReservation({
+          id: `reservation-${i + 1}`,
+          inputArticleVariantId: 'variant-tubo',
+          quantityReserved: new Prisma.Decimal(l.length * l.cutsCount),
+        }),
+      );
+      const db = {
+        articleVariant: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            article: { name: 'Tubo', measurementType: 'LINEAL_1D', minUsableLength: new Prisma.Decimal(input.minUsableLength) },
+          }),
+        },
+      };
+      const orderService = {
+        assertCompletable: jest.fn().mockResolvedValue(order),
+        getActiveReservations: jest.fn().mockResolvedValue(reservations),
+        recordConsumption: jest.fn().mockResolvedValue({}),
+        markReservationsConsumed: jest.fn().mockResolvedValue(undefined),
+        recordOutput: jest.fn().mockResolvedValue({}),
+        finishOrder: jest.fn().mockResolvedValue({ ...order, status: 'DONE' }),
+      };
+      const bomService = {
+        getById: jest.fn().mockResolvedValue({
+          id: 'bom-1',
+          byproducts: [],
+          lines: input.lines.map((l) => ({
+            inputArticleVariantId: 'variant-tubo',
+            quantity: new Prisma.Decimal(l.length * l.cutsCount),
+            length: new Prisma.Decimal(l.length),
+            cutsCount: l.cutsCount,
+          })),
+        }),
+      };
+      const byId = new Map(input.pieces.map((p) => [p.id, p]));
+      const stockPieceService = {
+        listAvailablePieces: jest.fn().mockResolvedValue(input.pieces),
+        // Mismo contrato que el real: el remanente es AVAILABLE si llega al
+        // largo mínimo útil, SCRAP si no.
+        cutPiece: jest.fn(({ pieceId, lengthToCut }: { pieceId: string; lengthToCut: Prisma.Decimal }) => {
+          const piece = byId.get(pieceId) as Piece;
+          const remainder = piece.currentLength.sub(lengthToCut);
+          const offcut = remainder.gt(0)
+            ? {
+                id: `offcut-of-${pieceId}`,
+                currentLength: remainder,
+                status: remainder.gte(input.minUsableLength) ? 'AVAILABLE' : 'SCRAP',
+              }
+            : null;
+          return Promise.resolve({ consumedFrom: piece, offcut });
+        }),
+      };
+      const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: null }) };
+      const service = new ProductionService(
+        orderService as unknown as ProductionOrderService,
+        stockPieceService as unknown as StockPieceService,
+        bomService as unknown as BomService,
+        inventoryService as unknown as InventoryService,
+        makeAccountingService() as unknown as AccountingService,
+      );
+      return { db, service, orderService, stockPieceService, inventoryService };
+    }
 
-    await runAsTenant(db, () => service.completeOrder('order-1'));
+    const piece = (id: string, length: number, unitCost = 3): Piece => ({
+      id,
+      currentLength: new Prisma.Decimal(length),
+      unitCost: new Prisma.Decimal(unitCost),
+    });
 
-    expect(stockPieceService.cutPiece).toHaveBeenCalledTimes(2);
-    expect(stockPieceService.cutPiece).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ pieceId: 'piece-a', lengthToCut: expect.objectContaining({ toString: expect.any(Function) }) }),
-    );
-    expect((stockPieceService.cutPiece as jest.Mock).mock.calls[0][0].lengthToCut.toString()).toBe('600');
-    expect((stockPieceService.cutPiece as jest.Mock).mock.calls[1][0].lengthToCut.toString()).toBe('300');
-    expect(orderService.recordConsumption).toHaveBeenCalledTimes(2);
-    // Espeja StockLedger una sola vez, por el total reservado (900), no
-    // una vez por pieza cortada.
-    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'PRODUCTION_OUT', articleVariantId: 'variant-cable', quantity: 900 }),
-    );
+    it('2 cortes de 1200 con barras de 2000: usa las 2 barras y deja 2 recortes de 800 (nunca 2000 + 400)', async () => {
+      const { db, service, orderService, stockPieceService, inventoryService } = setup({
+        lines: [{ length: 1200, cutsCount: 2 }],
+        pieces: [piece('barra-1', 2000), piece('barra-2', 2000)],
+        minUsableLength: 300,
+      });
+
+      await runAsTenant(db, () => service.completeOrder('order-1'));
+
+      const cuts = (stockPieceService.cutPiece as jest.Mock).mock.calls.map((c) => [c[0].pieceId, c[0].lengthToCut.toString()]);
+      expect(cuts).toEqual([
+        ['barra-1', '1200'],
+        ['barra-2', '1200'],
+      ]);
+      const consumed = (orderService.recordConsumption as jest.Mock).mock.calls.map((c) => c[0].quantityConsumed.toString());
+      expect(consumed).toEqual(['1200', '1200']);
+      // Los recortes de 800 quedan AVAILABLE: el stock baja sólo por lo cortado.
+      expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'PRODUCTION_OUT', articleVariantId: 'variant-tubo', quantity: 2400 }),
+      );
+      const totalCost = (orderService.recordConsumption as jest.Mock).mock.calls.reduce(
+        (sum, c) => sum.add(c[0].cost),
+        new Prisma.Decimal(0),
+      );
+      expect(totalCost.toString()).toBe('7200'); // 2400mm * $3/mm
+    });
+
+    it('rechaza completar si un corte no entra entero en ninguna pieza, aunque la suma de mm alcance', async () => {
+      const { db, service, stockPieceService, inventoryService } = setup({
+        lines: [{ length: 1200, cutsCount: 1 }],
+        pieces: [piece('recorte-1', 1000), piece('recorte-2', 1000)],
+        minUsableLength: 300,
+      });
+
+      await expect(runAsTenant(db, () => service.completeOrder('order-1'))).rejects.toThrow('al menos 1200 mm');
+      expect(stockPieceService.cutPiece).not.toHaveBeenCalled();
+      expect(inventoryService.recordMovement).not.toHaveBeenCalled();
+    });
+
+    it('reusa el sobrante de una barra para cortes de otra línea, y la merma real baja stock y suma costo', async () => {
+      // Líneas 1200 y 520 del mismo tubo (dos reservas). Best-fit de mayor
+      // a menor: 1200 -> barra de 2000 (sobran 800), 520 -> ese sobrante
+      // de 800 (no la barra de 6000). Quedan 280 < 300 de mínimo útil = merma.
+      const { db, service, orderService, stockPieceService, inventoryService } = setup({
+        lines: [
+          { length: 1200, cutsCount: 1 },
+          { length: 520, cutsCount: 1 },
+        ],
+        pieces: [piece('barra-corta', 2000, 2), piece('barra-larga', 6000, 2)],
+        minUsableLength: 300,
+      });
+
+      await runAsTenant(db, () => service.completeOrder('order-1'));
+
+      expect(stockPieceService.cutPiece).toHaveBeenCalledTimes(1);
+      const call = (stockPieceService.cutPiece as jest.Mock).mock.calls[0][0];
+      expect(call.pieceId).toBe('barra-corta');
+      expect(call.lengthToCut.toString()).toBe('1720');
+      // Stock: 1720 cortados + 280 de merma = la barra entera.
+      expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'PRODUCTION_OUT', quantity: 2000 }),
+      );
+      const consumptions = (orderService.recordConsumption as jest.Mock).mock.calls.map((c) => c[0]);
+      expect(consumptions.map((c) => c.quantityConsumed.toString())).toEqual(['1200', '520']);
+      expect(consumptions[1].wasteAmount.toString()).toBe('280');
+      expect(consumptions.reduce((s, c) => s.add(c.cost), new Prisma.Decimal(0)).toString()).toBe('4000'); // 2000mm * $2
+      expect(orderService.markReservationsConsumed).toHaveBeenCalledWith(['reservation-1', 'reservation-2']);
+    });
+
+    it('multiplica los cortes por la cantidad de la orden', async () => {
+      const { db, service, stockPieceService } = setup({
+        lines: [{ length: 720, cutsCount: 4 }],
+        pieces: [piece('barra-1', 6000)],
+        minUsableLength: 100,
+        orderQuantity: 2,
+      });
+
+      await runAsTenant(db, () => service.completeOrder('order-1'));
+
+      // 8 patas de 720 = 5760 de una sola barra de 6000.
+      expect((stockPieceService.cutPiece as jest.Mock).mock.calls[0][0].lengthToCut.toString()).toBe('5760');
+    });
   });
+
 
   it('splits output cost between declared byproducts and the primary product', async () => {
     const order = makeOrder({ quantity: new Prisma.Decimal(1) });

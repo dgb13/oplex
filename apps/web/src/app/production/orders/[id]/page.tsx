@@ -431,6 +431,25 @@ export default function ProductionOrderDetailPage() {
                     </div>
                   );
                 })}
+                {order.unfittableCuts.length > 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    <p className="font-medium">Faltan piezas donde hacer los cortes</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {order.unfittableCuts.map((c) => (
+                        <li key={`${c.inputArticleVariantId}-${c.cutLength}`}>
+                          {lookup[c.inputArticleVariantId]?.articleName ?? c.inputArticleVariantId}: {c.count} corte
+                          {c.count !== 1 ? 's' : ''} de {QUANTITY_FORMAT.format(Number(c.cutLength))} mm no{' '}
+                          {c.count !== 1 ? 'entran' : 'entra'} entero{c.count !== 1 ? 's' : ''} en ninguna barra o recorte
+                          disponible
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1">
+                      Los milímetros totales pueden alcanzar, pero cada corte tiene que salir de una sola pieza. Cuando
+                      entren barras nuevas, tocá &quot;Reintentar reserva&quot;.
+                    </p>
+                  </div>
+                )}
                 {missingWithoutSupplier > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {missingWithoutSupplier} insumo{missingWithoutSupplier !== 1 ? 's' : ''} faltante

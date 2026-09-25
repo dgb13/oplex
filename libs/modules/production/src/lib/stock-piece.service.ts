@@ -7,7 +7,7 @@ export interface CutResult {
   // pieza exacto (remainder = 0). Puede tener status SCRAP si el remanente
   // quedó por debajo de minUsableLength - igual se crea la fila (no se
   // pierde trazabilidad de la merma), sólo no vuelve a ofrecerse en
-  // findBestFitPiece.
+  // listAvailablePieces.
 }
 
 /**
@@ -94,38 +94,15 @@ export class StockPieceService {
     return toReturn;
   }
 
-  /** La pieza AVAILABLE más chica donde entra el corte pedido - "el
-   * sistema sugiere el recorte óptimo" del diseño (§1). El operario puede
-   * cambiarla manualmente (llamando cutPiece con otro pieceId), esto es
-   * sólo la sugerencia. */
-  findBestFitPiece(input: {
-    articleVariantId: string;
-    warehouseId: string;
-    minLength: number | Prisma.Decimal;
-  }): Promise<StockPiece | null> {
-    return getTenantDb().stockPiece.findFirst({
-      where: {
-        articleVariantId: input.articleVariantId,
-        warehouseId: input.warehouseId,
-        status: 'AVAILABLE',
-        currentLength: { gte: new Prisma.Decimal(input.minLength) },
-      },
+  /** Las piezas AVAILABLE de un artículo en un depósito, de la más chica a
+   * la más larga - ProductionService (apps/api) arma con esto el plan de
+   * corte en memoria (cada corte a la pieza más chica donde entra entero,
+   * "el sistema sugiere el recorte óptimo" del diseño §1) antes de cortar
+   * nada de verdad. */
+  listAvailablePieces(input: { articleVariantId: string; warehouseId: string }): Promise<StockPiece[]> {
+    return getTenantDb().stockPiece.findMany({
+      where: { articleVariantId: input.articleVariantId, warehouseId: input.warehouseId, status: 'AVAILABLE' },
       orderBy: { currentLength: 'asc' },
-    });
-  }
-
-  /** La pieza AVAILABLE más larga - fallback para cuando ningún caño/perfil
-   * individual alcanza para cubrir todo lo que falta consumir de un tirón
-   * (ver ProductionService.completeOrder, apps/api): se agota esa pieza
-   * entera y se sigue con el resto en otra(s) pieza(s). */
-  findLargestPiece(input: { articleVariantId: string; warehouseId: string }): Promise<StockPiece | null> {
-    return getTenantDb().stockPiece.findFirst({
-      where: {
-        articleVariantId: input.articleVariantId,
-        warehouseId: input.warehouseId,
-        status: 'AVAILABLE',
-      },
-      orderBy: { currentLength: 'desc' },
     });
   }
 
@@ -140,7 +117,7 @@ export class StockPieceService {
   }
 
   /** Todas las piezas de un artículo 1D (AVAILABLE/DEPLETED/SCRAP, no sólo
-   * las disponibles como findBestFitPiece/findLargestPiece/
+   * las disponibles como listAvailablePieces/
    * getAvailableLength de arriba) - el historial completo de cortes es el
    * punto de la pantalla "Piezas / recortes" (Fase 6, UI). */
   listByArticleVariant(input: {

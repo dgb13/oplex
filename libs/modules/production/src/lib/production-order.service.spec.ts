@@ -45,6 +45,7 @@ function makeService(input: {
   db: Record<string, unknown>;
   bomLines?: { inputArticleVariantId: string; quantity: number; expectedWastePercent?: number }[];
   disponible?: Record<string, number>;
+  unfittableCuts?: { inputArticleVariantId: string; cutLength: Prisma.Decimal; count: number }[];
 }) {
   const bomService = {
     getActiveBomOrThrow: jest.fn().mockResolvedValue({ id: 'bom-1', version: 1 }),
@@ -61,6 +62,7 @@ function makeService(input: {
     getDisponible: jest.fn(({ articleVariantId }: { articleVariantId: string }) =>
       Promise.resolve(new Prisma.Decimal(input.disponible?.[articleVariantId] ?? 0)),
     ),
+    findUnfittableCuts: jest.fn().mockResolvedValue(input.unfittableCuts ?? []),
   };
   const numbering = { nextNumber: jest.fn().mockResolvedValue('OP-000001') };
   return new ProductionOrderService(
@@ -122,6 +124,20 @@ describe('ProductionOrderService.confirm', () => {
 
     const reservedArg = (db.stockReservation.create as jest.Mock).mock.calls[0][0].data.quantityReserved;
     expect(reservedArg.toString()).toBe('300');
+    expect(order.isShortOnMaterials).toBe(true);
+  });
+
+  it('sets isShortOnMaterials when every mm is reserved but a 1D cut fits in no piece', async () => {
+    const db = makeDb();
+    const service = makeService({
+      db,
+      bomLines: [{ inputArticleVariantId: 'variant-tubo', quantity: 1200 }],
+      disponible: { 'variant-tubo': 1600 },
+      unfittableCuts: [{ inputArticleVariantId: 'variant-tubo', cutLength: new Prisma.Decimal(1200), count: 1 }],
+    });
+
+    const order = await runAsTenant(db, () => service.confirm('order-1', 'warehouse-1'));
+
     expect(order.isShortOnMaterials).toBe(true);
   });
 
@@ -277,7 +293,7 @@ describe('ProductionOrderService.cancel', () => {
 
 describe('ProductionOrderService.getById', () => {
   it('includes reservations/consumptions/outputs/bom.lines', async () => {
-    const findUnique = jest.fn().mockResolvedValue(makeOrder());
+    const findUnique = jest.fn().mockResolvedValue(makeOrder({ reservations: [] }));
     const db = makeDb({ productionOrder: { findUnique } });
     const service = makeService({ db });
 
@@ -292,6 +308,23 @@ describe('ProductionOrderService.getById', () => {
         bom: { include: { lines: true } },
       },
     });
+  });
+
+  it('reports the 1D cuts that fit in no piece for a PLANNED order', async () => {
+    const cut = { inputArticleVariantId: 'variant-tubo', cutLength: new Prisma.Decimal(1200), count: 1 };
+    const findUnique = jest.fn().mockResolvedValue(
+      makeOrder({
+        status: 'PLANNED',
+        reservations: [{ status: 'ACTIVE', warehouseId: 'warehouse-1' }],
+        bom: { lines: [] },
+      }),
+    );
+    const db = makeDb({ productionOrder: { findUnique } });
+    const service = makeService({ db, unfittableCuts: [cut] });
+
+    const order = await runAsTenant(db, () => service.getById('order-1'));
+
+    expect(order.unfittableCuts).toEqual([cut]);
   });
 
   it('throws NotFoundException when the order does not exist', async () => {

@@ -219,6 +219,15 @@ export class ProductionOrderService {
       }
     }
 
+    // 1D: los mm pueden alcanzar y aun así no haber una pieza donde entre
+    // entero algún corte (1600 mm en recortes de 800 para un corte de
+    // 1200) - la orden queda "esperando insumos" desde ya, en vez de
+    // confirmarse y fallar recién al completarla.
+    const unfittable = await this.planningService.findUnfittableCuts(bom.lines, order.quantity, warehouseId);
+    if (unfittable.length > 0) {
+      isShortOnMaterials = true;
+    }
+
     return isShortOnMaterials;
   }
 
@@ -317,6 +326,18 @@ export class ProductionOrderService {
     return consumption;
   }
 
+  /** Pasa a CONSUMED reservas que no tuvieron un recordConsumption propio -
+   * en 1D los cortes se planifican por insumo (no por reserva), así que
+   * las reservas de un insumo usado en varias líneas de la receta se
+   * cierran todas juntas acá. */
+  async markReservationsConsumed(reservationIds: string[]): Promise<void> {
+    if (reservationIds.length === 0) return;
+    await getTenantDb().stockReservation.updateMany({
+      where: { id: { in: reservationIds } },
+      data: { status: 'CONSUMED' },
+    });
+  }
+
   /** Un producto generado (principal o subproducto declarado en la BOM). */
   recordOutput(input: {
     productionOrderId: string;
@@ -365,7 +386,16 @@ export class ProductionOrderService {
     if (!order) {
       throw new NotFoundException('Orden de producción no encontrada');
     }
-    return order;
+    // Cortes 1D que hoy no entran en ninguna pieza - sólo para una orden
+    // planificada (ya tiene depósito, por sus reservas) y todavía sin
+    // completar. Es lo que explica un "Esperando insumos" con todos los mm
+    // reservados.
+    const warehouseId = order.reservations.find((r) => r.status === 'ACTIVE')?.warehouseId;
+    const unfittableCuts =
+      order.status === 'PLANNED' && warehouseId && order.bom
+        ? await this.planningService.findUnfittableCuts(order.bom.lines, order.quantity, warehouseId)
+        : [];
+    return { ...order, unfittableCuts };
   }
 
   list(status?: ProductionOrder['status']): Promise<ProductionOrder[]> {

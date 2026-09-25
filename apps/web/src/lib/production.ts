@@ -136,6 +136,10 @@ export interface ProductionOrderDetail extends ProductionOrder {
   // confirmó contra una receta. Usado para calcular cuánto falta de cada
   // insumo (requerido de bom.lines vs. lo reservado).
   bom: (BomSummary & { lines: BomLine[] }) | null;
+  // Cortes 1D que hoy no entran enteros en ninguna pieza del depósito
+  // (aunque los mm totales alcancen) - sólo se calcula para órdenes
+  // PLANNED. Explica un "Esperando insumos" con todo reservado.
+  unfittableCuts: { inputArticleVariantId: string; cutLength: string; count: number }[];
 }
 
 export interface StockPiece {
