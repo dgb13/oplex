@@ -68,6 +68,10 @@ export interface TenantSettingsView {
   // screen that needs to show/edit it today - see updateTenantInfo. Not a
   // TenantSettings column; it lives on Tenant, joined in on every read.
   tenantTaxId: string | null;
+  // Tenant.name = razón social del emisor (comprobantes, CSR). Sólo viene
+  // cargado en getSettings/updateTenantInfo; el resto de las respuestas lo
+  // deja en null (la pantalla siempre vuelve a pedir getSettings).
+  tenantName: string | null;
 }
 
 export interface DomainRegistrationResult {
@@ -100,13 +104,13 @@ export class TenantSettingsService {
         const alias = inspectAfipCertificate(this.encryption.decrypt(row.afipCertEncrypted)).alias;
         if (alias) {
           const updated = await db.tenantSettings.update({ where: { tenantId }, data: { afipCertAlias: alias } });
-          return this.toView(updated, tenant.taxId);
+          return this.toView(updated, tenant.taxId, tenant.name);
         }
       } catch {
         // Si no se puede leer, se muestra sin nombre.
       }
     }
-    return this.toView(row, tenant.taxId);
+    return this.toView(row, tenant.taxId, tenant.name);
   }
 
   private async getTenantTaxId(): Promise<string | null> {
@@ -114,18 +118,28 @@ export class TenantSettingsService {
     return tenant.taxId;
   }
 
-  /** The tenant's own CUIT - lives on Tenant, not TenantSettings, but this
-   * is the only screen that edits it, so it's exposed through this service
-   * rather than adding a whole separate module for one field. */
+  /** CUIT y razón social de la propia empresa - viven en Tenant, no en
+   * TenantSettings, pero ésta es la única pantalla que los edita, así que
+   * se exponen por acá en vez de sumar un módulo aparte. */
   async updateTenantInfo(dto: UpdateTenantInfoDto): Promise<TenantSettingsView> {
     const tenantId = getTenantId();
     const db = getTenantDb();
-    await db.tenant.update({ where: { id: tenantId }, data: { taxId: dto.taxId } });
+    const tenant = await db.tenant.update({
+      where: { id: tenantId },
+      data: {
+        ...(dto.taxId !== undefined ? { taxId: dto.taxId } : {}),
+        ...(dto.legalName !== undefined ? { name: dto.legalName.trim() } : {}),
+      },
+    });
     const row = await db.tenantSettings.findUnique({ where: { tenantId } });
-    return this.toView(row, dto.taxId);
+    return this.toView(row, tenant.taxId, tenant.name);
   }
 
-  private toView(row: TenantSettings | null, tenantTaxId: string | null): TenantSettingsView {
+  private toView(
+    row: TenantSettings | null,
+    tenantTaxId: string | null,
+    tenantName: string | null = null,
+  ): TenantSettingsView {
     return {
       arReminderIntervalDays: row?.arReminderIntervalDays ?? null,
       emailSenderMode: row?.emailSenderMode ?? 'SHARED',
@@ -158,6 +172,7 @@ export class TenantSettingsService {
       activityStartDate: row?.activityStartDate ?? null,
       defaultMarkupPercent: row?.defaultMarkupPercent?.toNumber() ?? null,
       tenantTaxId,
+      tenantName,
     };
   }
 

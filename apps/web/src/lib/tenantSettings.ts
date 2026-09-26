@@ -36,6 +36,8 @@ export interface TenantSettings {
   activityStartDate: string | null;
   defaultMarkupPercent: number | null;
   tenantTaxId: string | null;
+  // Razón social (Tenant.name) - emisor en los comprobantes.
+  tenantName: string | null;
 }
 
 export interface ReminderStatus {
@@ -86,8 +88,8 @@ export const tenantSettingsApi = {
 };
 
 export const tenantInfoApi = {
-  update: (taxId: string) =>
-    api.patch<TenantSettings>('/tenant-settings/tenant-info', { taxId }).then((r) => r.data),
+  update: (dto: { taxId?: string; legalName?: string }) =>
+    api.patch<TenantSettings>('/tenant-settings/tenant-info', dto).then((r) => r.data),
 };
 
 export type AfipFileKind = 'CERTIFICATE' | 'CSR' | 'PRIVATE_KEY' | 'UNKNOWN';

@@ -72,6 +72,7 @@ describe('TenantSettingsService.getSettings', () => {
       activityStartDate: null,
       defaultMarkupPercent: null,
       tenantTaxId: null,
+      tenantName: null,
     });
   });
 
@@ -130,6 +131,7 @@ describe('TenantSettingsService.getSettings', () => {
       activityStartDate: null,
       defaultMarkupPercent: null,
       tenantTaxId: '20-11111111-2',
+      tenantName: null,
     });
   });
 
@@ -156,7 +158,7 @@ describe('TenantSettingsService.getSettings', () => {
 
 describe('TenantSettingsService.updateTenantInfo', () => {
   it('updates Tenant.taxId and returns it in the view', async () => {
-    const update = jest.fn().mockResolvedValue({});
+    const update = jest.fn().mockResolvedValue({ taxId: '30-71659554-9', name: 'Demo Tenant' });
     const db = withTenant(
       {
         tenant: { update },
@@ -173,6 +175,17 @@ describe('TenantSettingsService.updateTenantInfo', () => {
       data: { taxId: '30-71659554-9' },
     });
     expect(result.tenantTaxId).toBe('30-71659554-9');
+  });
+
+  it('updates the legal name (Tenant.name) without touching the CUIT', async () => {
+    const update = jest.fn().mockResolvedValue({ taxId: '20-27040394-9', name: 'BELVEDERE DARIO GERMAN' });
+    const db = withTenant({ tenant: { update }, tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const service = new TenantSettingsService(null, noopEncryption);
+
+    const result = await runInTenant(db, () => service.updateTenantInfo({ legalName: '  BELVEDERE DARIO GERMAN ' }));
+
+    expect(update).toHaveBeenCalledWith({ where: { id: 'tenant-1' }, data: { name: 'BELVEDERE DARIO GERMAN' } });
+    expect(result.tenantName).toBe('BELVEDERE DARIO GERMAN');
   });
 });
 

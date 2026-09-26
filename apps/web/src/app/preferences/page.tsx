@@ -84,8 +84,10 @@ export default function PreferencesPage() {
     queryFn: tenantSettingsApi.get,
   });
 
+  // Mismo ancho para todas las tarjetas: el de "Conexión con ARCA", la más
+  // ancha (pasos + pantallas de ejemplo).
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-[980px] flex-col gap-6">
       <h1 className="text-xl font-semibold">Preferencias</h1>
       {isLoading || !settings ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
@@ -93,12 +95,7 @@ export default function PreferencesPage() {
         <>
           <EmailSettingsCard settings={settings} />
           <CurrencySettings />
-          {/* Más ancha que el resto de Preferencias (max-w-3xl): el asistente
-              tiene columnas de pasos + pantallas de ejemplo que en 768px
-              quedaban apretadas (ver mockup "Conexión con ARCA"). */}
-          <div className="w-full xl:w-[980px]">
-            <ArcaConnectionCard settings={settings} />
-          </div>
+          <ArcaConnectionCard settings={settings} />
           <MercadoPagoCard />
           <InvoicePdfCard settings={settings} />
           <WithholdingAgentCard settings={settings} />

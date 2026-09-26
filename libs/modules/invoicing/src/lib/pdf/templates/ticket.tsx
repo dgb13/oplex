@@ -9,7 +9,13 @@ import type { InvoicePdfData } from '../pdf-data.js';
 const TICKET_WIDTH_PT = 227;
 
 function ticketHeight(data: InvoicePdfData): number {
-  const issuerRows = [data.issuerTaxId, data.issuerTaxConditionLabel, data.issuerFiscalAddress].filter(Boolean).length;
+  const issuerRows = [
+    data.issuerTaxId,
+    data.issuerTaxConditionLabel,
+    data.issuerFiscalAddress,
+    data.issuerGrossIncomeNumber,
+    data.issuerActivityStartDate,
+  ].filter(Boolean).length;
   const totalsRows =
     [data.subtotalWithoutVat, data.netTaxed, data.netExempt, data.netUntaxed].filter(Boolean).length +
     data.taxBuckets.length;
@@ -39,6 +45,10 @@ export function TicketTemplate({ data }: { data: InvoicePdfData }) {
         {data.issuerTaxId && <Text style={styles.center}>CUIT {data.issuerTaxId}</Text>}
         {data.issuerTaxConditionLabel && <Text style={styles.center}>{data.issuerTaxConditionLabel}</Text>}
         {data.issuerFiscalAddress && <Text style={styles.center}>{data.issuerFiscalAddress}</Text>}
+        {data.issuerGrossIncomeNumber && <Text style={styles.center}>IIBB: {data.issuerGrossIncomeNumber}</Text>}
+        {data.issuerActivityStartDate && (
+          <Text style={styles.center}>Inicio de actividades: {data.issuerActivityStartDate}</Text>
+        )}
 
         <View style={styles.divider} />
 

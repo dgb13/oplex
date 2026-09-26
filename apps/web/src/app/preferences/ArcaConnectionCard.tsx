@@ -306,12 +306,16 @@ function Step({
 
 function CompanyStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () => void }) {
   const [taxId, setTaxId] = useState(settings.tenantTaxId ?? '');
+  const [legalName, setLegalName] = useState(settings.tenantName ?? '');
   const [condition, setCondition] = useState<TenantTaxCondition | ''>(settings.ownTaxCondition ?? '');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: async () => {
-      if (taxId.trim() && taxId !== settings.tenantTaxId) await tenantInfoApi.update(taxId);
+      const info: { taxId?: string; legalName?: string } = {};
+      if (taxId.trim() && taxId !== settings.tenantTaxId) info.taxId = taxId;
+      if (legalName.trim() && legalName.trim() !== settings.tenantName) info.legalName = legalName.trim();
+      if (info.taxId || info.legalName) await tenantInfoApi.update(info);
       if (condition && condition !== settings.ownTaxCondition) {
         await tenantSettingsApi.update({ ownTaxCondition: condition });
       }
@@ -327,6 +331,17 @@ function CompanyStep({ settings, onSaved }: { settings: TenantSettings; onSaved:
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-[12.5px] text-muted-foreground">
+          Razón social (sale como emisor en las facturas)
+          <Input
+            value={legalName}
+            onChange={(e) => {
+              setLegalName(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="Como figura en ARCA"
+          />
+        </label>
         <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
           CUIT de la empresa
           <Input

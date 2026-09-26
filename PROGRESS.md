@@ -1387,3 +1387,11 @@ Con la autorización a `wsfe` creada, "Probar conexión" dio verde y se emitiero
 **Fixes que hizo falta hacer para que ARCA aceptara**: (1) `CondicionIVAReceptorId` (RG 5616, error 10246) - códigos consultados a ARCA con FEParamGetCondicionIvaReceptor (1 RI, 4 Exento, 5 Consumidor Final, 6 Monotributo, 7 No Categorizado, 13 Monotributista Social, 15 No Alcanzado...), mapeados desde Company.taxCondition; sin CUIT = 5; con CUIT y sin condición se rechaza con un mensaje claro en vez de adivinar. Facturas y notas de crédito. (2) orden de los elementos de FECAEDetRequest según el WSDL oficial (ImpTrib antes de ImpIVA, FchServ* antes de MonId) - un test lo cubre.
 
 **Comprobante de Factura C** (ticket y A4): sin "Neto Gravado"/"IVA 0%" (C no discrimina IVA) - sólo Subtotal y Total; "Consumidor Final" ya no sale duplicado; alto del ticket estimado según contenido (antes fijo 850pt). Tests invoicing 86/86.
+
+## Sesión 2026-09-26 (cont. 2, PC_CORRALITOS) — Datos del emisor, razón social y Preferencias con ancho uniforme
+
+- Cargados los datos fiscales del emisor de Demo Tenant (domicilio, IIBB "Régimen Simplificado Mendoza (Guaymallén)", inicio de actividades 1/8/2015) y la razón social real (BELVEDERE DARIO GERMAN). Ojo: cargar texto con acentos por curl desde Git Bash los rompe - usar escapes \u en el JSON.
+- El ticket ahora imprime también IIBB e inicio de actividades (antes sólo la hoja A4).
+- Razón social editable: campo nuevo en Preferencias → Conexión con ARCA → paso 1 (`PATCH /tenant-settings/tenant-info` acepta `legalName` → Tenant.name; `tenantName` en la vista). Es también el nombre del tenant en toda la app (login, /admin).
+- Todas las tarjetas de Preferencias con el mismo ancho (980px, el de Conexión con ARCA).
+- Investigado "Completar desde ARCA": `ws_sr_constancia_inscripcion` (A5) trae razón social, domicilio fiscal y condición IVA (impuesto 30 = RI; bloque monotributo con categoría), inicio sólo como AAAAMM; IIBB no confirmado. Probado en homologación (autorización creada; el padrón de homo no tiene el CUIT real, sí CUIT de prueba con datos ficticios). **Bug preexistente**: "Buscar en ARCA" de clientes usa `ws_sr_padron_a13`, que no trae condición IVA, y parsea la respuesta con la estructura de A5 - a migrar a la constancia de inscripción.
