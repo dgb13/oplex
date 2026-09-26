@@ -584,6 +584,25 @@ model TenantSettings {
   // "vence en N días" en Preferencias sin descifrar el certificado en cada
   // carga de pantalla.
   afipCertExpiresAt DateTime?
+  // Nombre (CN / "nombre simbólico" en WSASS) del certificado cargado, en
+  // claro - para mostrar cuál es y guiar la autorización en ARCA.
+  afipCertAlias     String?
+  // Clave privada generada por Oplex (Preferencias → "Generar clave y
+  // pedido"), cifrada, esperando que el usuario traiga el certificado de
+  // ARCA. Al subirlo sin clave propia se usa ésta y pasa a afipKeyEncrypted.
+  // El CSR es público (va a ARCA) - en claro para re-descargarlo.
+  afipPendingKeyEncrypted String?
+  afipPendingCsr          String?
+  afipPendingAlias        String?
+  // Tickets de acceso de WSAA por servicio ({ wsfe: {token, sign,
+  // expiresAt} }), cifrados. Duran ~12 h y ARCA rechaza pedir otro mientras
+  // uno siga vigente, así que tienen que sobrevivir entre ventas y a un
+  // reinicio de la API. Se borran al cambiar/quitar el certificado.
+  afipWsaaTicketsEncrypted String?
+  // Resultado del último "Probar conexión con ARCA".
+  afipLastCheckAt      DateTime?
+  afipLastCheckOk      Boolean?
+  afipLastCheckMessage String?
 
   // Condición IVA propia del tenant (quien emite), no la del cliente -
   // determina qué letra de comprobante es fiscalmente válida (ver

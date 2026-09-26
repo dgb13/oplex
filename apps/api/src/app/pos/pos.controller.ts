@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
+import { LongRunningTransaction } from '@plexo/database';
 import {
   CashMovementDto,
   CashRegistersService,
@@ -118,6 +119,8 @@ export class PosController {
 
   @Roles(...SALES_ROLES)
   @Post('checkout')
+  // La venta pide CAE a ARCA - ver ARCA_TIMEOUT_MS en SalesController.
+  @LongRunningTransaction(45_000)
   checkout(@Body() dto: CheckoutDto) {
     return this.posService.checkout(dto);
   }

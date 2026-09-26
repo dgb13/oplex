@@ -124,7 +124,7 @@ export default function CreditNoteModal({ invoice, onClose }: Props) {
               Todavía no configuraste el certificado ARCA de esta empresa - la nota de crédito no va
               a poder pedir CAE hasta que lo cargues en{' '}
               <Link href="/preferences" className="font-medium underline">
-                Preferencias → Certificado ARCA
+                Preferencias → Conexión con ARCA
               </Link>
               .
             </p>

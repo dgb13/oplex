@@ -5,6 +5,8 @@ import { BNA_EXCHANGE_RATE, type BnaExchangeRatePort } from './bna-exchange-rate
 import { ConsoleEmailSender } from './console-email-sender.js';
 import type { EmailSender } from './email-sender.port.js';
 import { EMAIL_SENDER } from './email-sender.port.js';
+import { ArcaConnectionController } from './arca-connection.controller.js';
+import { ArcaConnectionService } from './arca-connection.service.js';
 import { ELECTRONIC_INVOICING } from './electronic-invoicing.port.js';
 import { InvoicingController } from './invoicing.controller.js';
 import { InvoicingPreferencesController } from './invoicing-preferences.controller.js';
@@ -38,11 +40,12 @@ function createEmailSender(): EmailSender {
 
 @Module({
   imports: [AfipCredentialsModule, SubscriptionModule],
-  controllers: [InvoicingController, InvoicingPreferencesController],
+  controllers: [InvoicingController, InvoicingPreferencesController, ArcaConnectionController],
   providers: [
     InvoicingService,
     InvoicePdfService,
     InvoicingPreferencesService,
+    ArcaConnectionService,
     { provide: EMAIL_SENDER, useFactory: createEmailSender },
     { provide: ELECTRONIC_INVOICING, useClass: RealElectronicInvoicingService },
     RealBnaExchangeRateService,

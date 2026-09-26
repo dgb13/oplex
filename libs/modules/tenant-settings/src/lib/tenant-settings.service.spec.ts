@@ -59,6 +59,13 @@ describe('TenantSettingsService.getSettings', () => {
       afipEnv: 'HOMOLOGACION',
       afipConfigured: false,
       afipCertExpiresAt: null,
+      afipCertAlias: null,
+      afipHasPendingKey: false,
+      afipPendingCsr: null,
+      afipPendingAlias: null,
+      afipLastCheckAt: null,
+      afipLastCheckOk: null,
+      afipLastCheckMessage: null,
       ownTaxCondition: null,
       fiscalAddress: null,
       grossIncomeNumber: null,
@@ -110,6 +117,13 @@ describe('TenantSettingsService.getSettings', () => {
       afipEnv: 'PRODUCCION',
       afipConfigured: true,
       afipCertExpiresAt: new Date('2027-01-01'),
+      afipCertAlias: null,
+      afipHasPendingKey: false,
+      afipPendingCsr: null,
+      afipPendingAlias: null,
+      afipLastCheckAt: null,
+      afipLastCheckOk: null,
+      afipLastCheckMessage: null,
       ownTaxCondition: 'RESPONSABLE_INSCRIPTO',
       fiscalAddress: null,
       grossIncomeNumber: null,
@@ -495,18 +509,18 @@ describe('TenantSettingsService.uploadAfipCertificate / removeAfipCertificate', 
 
   it('rejects an invalid certificate PEM', async () => {
     const service = new TenantSettingsService(null, realEncryption());
-    const db = withTenant({ tenantSettings: { upsert: jest.fn() } });
+    const db = withTenant({ tenantSettings: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) } });
 
     await expect(
       runInTenant(db, () =>
         service.uploadAfipCertificate({ certPem: 'not a cert', keyPem, env: 'HOMOLOGACION' }),
       ),
-    ).rejects.toThrow(/no es un PEM válido/);
+    ).rejects.toThrow(/no es un certificado/);
   });
 
   it('rejects a key that does not match the certificate', async () => {
     const service = new TenantSettingsService(null, realEncryption());
-    const db = withTenant({ tenantSettings: { upsert: jest.fn() } });
+    const db = withTenant({ tenantSettings: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) } });
 
     await expect(
       runInTenant(db, () =>
@@ -518,7 +532,7 @@ describe('TenantSettingsService.uploadAfipCertificate / removeAfipCertificate', 
   it('encrypts cert/key, extracts the expiry date, and never returns the plaintext', async () => {
     const encryption = realEncryption();
     const upsert = jest.fn().mockImplementation(({ create }) => Promise.resolve(create));
-    const db = withTenant({ tenantSettings: { upsert } });
+    const db = withTenant({ tenantSettings: { upsert, findUnique: jest.fn().mockResolvedValue(null) } });
     const service = new TenantSettingsService(null, encryption);
 
     const result = await runInTenant(db, () =>
@@ -554,8 +568,81 @@ describe('TenantSettingsService.uploadAfipCertificate / removeAfipCertificate', 
     expect(upsert).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-1' },
       create: { tenantId: 'tenant-1' },
-      update: { afipCertEncrypted: null, afipKeyEncrypted: null, afipCertExpiresAt: null },
+      update: {
+        afipCertEncrypted: null,
+        afipKeyEncrypted: null,
+        afipCertExpiresAt: null,
+        afipCertAlias: null,
+        afipWsaaTicketsEncrypted: null,
+        afipLastCheckAt: null,
+        afipLastCheckOk: null,
+        afipLastCheckMessage: null,
+      },
     });
     expect(result.afipConfigured).toBe(false);
+  });
+
+  it('rejects the CSR uploaded by mistake instead of the certificate', async () => {
+    const service = new TenantSettingsService(null, realEncryption());
+    const db = withTenant({ tenantSettings: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) } });
+    const csrPem = '-----BEGIN CERTIFICATE REQUEST-----\nAAAA\n-----END CERTIFICATE REQUEST-----';
+
+    await expect(runInTenant(db, () => service.uploadAfipCertificate({ certPem: csrPem, keyPem }))).rejects.toThrow(
+      /es el pedido \(CSR\), no el certificado/,
+    );
+  });
+
+  it('rejects a production certificate when Homologación was chosen', async () => {
+    const service = new TenantSettingsService(null, realEncryption());
+    const db = withTenant({ tenantSettings: { upsert: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) } });
+
+    // El certificado de prueba lo "emite" un issuer sin "Test" => producción.
+    await expect(
+      runInTenant(db, () => service.uploadAfipCertificate({ certPem, keyPem, env: 'HOMOLOGACION' })),
+    ).rejects.toThrow(/es de PRODUCCIÓN/);
+  });
+
+  it('generates key + CSR, keeps the key pending (encrypted) and uses it when the certificate arrives without a key', async () => {
+    const encryption = realEncryption();
+    let stored: Record<string, unknown> = {};
+    const upsert = jest.fn().mockImplementation(({ update }) => {
+      stored = { ...stored, ...update };
+      return Promise.resolve(stored);
+    });
+    const findUnique = jest.fn().mockImplementation(() => Promise.resolve(stored));
+    const db = withTenant({
+      tenantSettings: { upsert, findUnique },
+      tenant: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ taxId: '20-27040394-9', name: 'Demo Tenant' }),
+      },
+    });
+    const service = new TenantSettingsService(null, encryption);
+
+    const view = await runInTenant(db, () => service.generateAfipCsr('oplexhomo'));
+    expect(view.afipHasPendingKey).toBe(true);
+    expect(view.afipPendingAlias).toBe('oplexhomo');
+    expect(view.afipPendingCsr).toContain('BEGIN CERTIFICATE REQUEST');
+    expect(String(stored['afipPendingKeyEncrypted'])).not.toContain('PRIVATE KEY');
+
+    // "ARCA" emite un certificado para ese pedido (acá, autofirmado con la
+    // clave pendiente, con issuer de homologación).
+    const pendingKeyPem = encryption.decrypt(String(stored['afipPendingKeyEncrypted']));
+    const csr = forge.pki.certificationRequestFromPem(String(view.afipPendingCsr));
+    const issued = forge.pki.createCertificate();
+    issued.publicKey = csr.publicKey as forge.pki.PublicKey;
+    issued.serialNumber = '02';
+    issued.validity.notBefore = new Date('2026-09-26');
+    issued.validity.notAfter = new Date('2028-09-25');
+    issued.setSubject(csr.subject.attributes);
+    issued.setIssuer([{ name: 'commonName', value: 'Computadores Test' }]);
+    issued.sign(forge.pki.privateKeyFromPem(pendingKeyPem) as forge.pki.rsa.PrivateKey, forge.md.sha256.create());
+
+    const result = await runInTenant(db, () =>
+      service.uploadAfipCertificate({ certPem: forge.pki.certificateToPem(issued) }),
+    );
+    expect(result.afipEnv).toBe('HOMOLOGACION');
+    expect(result.afipCertAlias).toBe('oplexhomo');
+    expect(result.afipHasPendingKey).toBe(false);
+    expect(encryption.decrypt(String(stored['afipKeyEncrypted']))).toBe(pendingKeyPem);
   });
 });

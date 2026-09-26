@@ -1,16 +1,28 @@
 import forge from 'node-forge';
 import { XMLParser } from 'fast-xml-parser';
 
+export interface WsaaTicket {
+  token: string;
+  sign: string;
+  expiresAt: Date;
+}
+
+/** Dónde guardar los tickets entre llamadas. WSAA los da por ~12 h y
+ * rechaza pedir otro mientras uno siga vigente
+ * ("coe.alreadyAuthenticated"), así que el cache en memoria de una sola
+ * instancia no alcanza: cada venta crea un cliente nuevo y un reinicio de
+ * la API los pierde. AfipCredentialsService provee uno respaldado en la
+ * base (cifrado). */
+export interface WsaaTicketStore {
+  load(service: string): Promise<WsaaTicket | null>;
+  save(service: string, ticket: WsaaTicket): Promise<void>;
+}
+
 export interface AfipWsaaCredentials {
   certPem: string;
   keyPem: string;
   env: 'homologacion' | 'produccion';
-}
-
-interface WsaaTicket {
-  token: string;
-  sign: string;
-  expiresAt: Date;
+  ticketStore?: WsaaTicketStore;
 }
 
 const WSAA_URL: Record<AfipWsaaCredentials['env'], string> = {
@@ -39,11 +51,18 @@ export class AfipWsaaClient {
   constructor(private readonly credentials: AfipWsaaCredentials) {}
 
   async getTicket(service: string): Promise<WsaaTicket> {
-    const cached = this.ticketCache.get(service);
     // Refreshed 5 minutes before expiry rather than exactly at expiry, so
     // an in-flight request doesn't race the ticket going stale mid-call.
-    if (cached && cached.expiresAt.getTime() - Date.now() > 5 * 60_000) {
+    const fresh = (t: WsaaTicket | null | undefined): t is WsaaTicket =>
+      !!t && t.expiresAt.getTime() - Date.now() > 5 * 60_000;
+    const cached = this.ticketCache.get(service);
+    if (fresh(cached)) {
       return cached;
+    }
+    const stored = await this.credentials.ticketStore?.load(service);
+    if (fresh(stored)) {
+      this.ticketCache.set(service, stored);
+      return stored;
     }
 
     const cms = this.signLoginRequest(service);
@@ -64,7 +83,16 @@ export class AfipWsaaClient {
     });
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(`ARCA WSAA rechazó la solicitud: ${this.describeFault(responseText)}`);
+      const fault = this.describeFault(responseText);
+      if (fault.includes('alreadyAuthenticated')) {
+        // Hay un ticket vigente que no tenemos guardado (pedido antes de
+        // que existiera el ticketStore, o desde otro sistema con el mismo
+        // certificado) - no queda otra que esperar a que venza.
+        throw new Error(
+          `ARCA ya entregó un ticket de acceso vigente para este certificado que Oplex no tiene guardado. Vence solo en unas horas (máximo 12); después de eso se normaliza. Detalle: ${fault}`,
+        );
+      }
+      throw new Error(`ARCA WSAA rechazó la solicitud: ${fault}`);
     }
 
     const envelope = xmlParser.parse(responseText);
@@ -87,6 +115,7 @@ export class AfipWsaaClient {
       expiresAt: new Date(header.expirationTime),
     };
     this.ticketCache.set(service, ticket);
+    await this.credentials.ticketStore?.save(service, ticket);
     return ticket;
   }
 

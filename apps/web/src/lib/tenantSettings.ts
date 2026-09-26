@@ -20,6 +20,16 @@ export interface TenantSettings {
   afipEnv: AfipEnvironment;
   afipConfigured: boolean;
   afipCertExpiresAt: string | null;
+  // Nombre ("nombre simbólico" en WSASS) del certificado cargado.
+  afipCertAlias: string | null;
+  // Clave generada por Oplex esperando el certificado de ARCA.
+  afipHasPendingKey: boolean;
+  afipPendingCsr: string | null;
+  afipPendingAlias: string | null;
+  // Último "Probar conexión con ARCA".
+  afipLastCheckAt: string | null;
+  afipLastCheckOk: boolean | null;
+  afipLastCheckMessage: string | null;
   ownTaxCondition: TenantTaxCondition | null;
   fiscalAddress: string | null;
   grossIncomeNumber: string | null;
@@ -80,9 +90,41 @@ export const tenantInfoApi = {
     api.patch<TenantSettings>('/tenant-settings/tenant-info', { taxId }).then((r) => r.data),
 };
 
+export type AfipFileKind = 'CERTIFICATE' | 'CSR' | 'PRIVATE_KEY' | 'UNKNOWN';
+
+export interface AfipFileInspection {
+  kind: AfipFileKind;
+  certificate: {
+    alias: string | null;
+    cuit: string | null;
+    issuer: string | null;
+    env: AfipEnvironment;
+    expiresAt: string;
+    cuitMatches: boolean | null;
+    matchesPendingKey: boolean | null;
+  } | null;
+}
+
+export interface ArcaCheckResult {
+  ok: boolean;
+  problem: 'NOT_CONFIGURED' | 'NOT_AUTHORIZED' | 'CERTIFICATE' | 'NETWORK' | 'OTHER' | null;
+  message: string;
+  pointOfSale: number | null;
+  documentLetter: string | null;
+  lastNumber: number | null;
+  checkedAt: string;
+}
+
 export const afipCertificateApi = {
-  upload: (dto: { certPem: string; keyPem: string; env: AfipEnvironment }) =>
+  // keyPem opcional: sin ella se usa la clave que generó Oplex (paso 2).
+  // env opcional: se deduce del certificado.
+  upload: (dto: { certPem: string; keyPem?: string; env?: AfipEnvironment }) =>
     api.post<TenantSettings>('/tenant-settings/afip-certificate', dto).then((r) => r.data),
+  generateCsr: (alias?: string) =>
+    api.post<TenantSettings>('/tenant-settings/afip-certificate/generate-csr', { alias }).then((r) => r.data),
+  inspect: (text: string) =>
+    api.post<AfipFileInspection>('/tenant-settings/afip-certificate/inspect', { text }).then((r) => r.data),
+  check: () => api.post<ArcaCheckResult>('/invoicing/arca/check').then((r) => r.data),
   remove: () =>
     api.delete<TenantSettings>('/tenant-settings/afip-certificate').then((r) => r.data),
 };

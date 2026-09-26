@@ -5,24 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
-import { formatCuitInput } from '@/lib/cuit';
 import { INVOICE_PDF_FORMATS, invoicingPreferencesApi, type InvoicePdfFormat } from '@/lib/invoicing';
 import { inventoryApi, type AutoReplenishmentResult } from '@/lib/inventory';
 import {
-  afipCertificateApi,
   emailDomainApi,
-  tenantInfoApi,
   tenantSettingsApi,
-  type AfipEnvironment,
   type DomainRecord,
   type EmailSenderMode,
   type ReminderTone,
   type TenantSettings,
-  type TenantTaxCondition,
 } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import ArcaConnectionCard from './ArcaConnectionCard';
 import CurrencySettings from './CurrencySettings';
 import MercadoPagoCard from './MercadoPagoCard';
 
@@ -97,7 +93,12 @@ export default function PreferencesPage() {
         <>
           <EmailSettingsCard settings={settings} />
           <CurrencySettings />
-          <AfipCertificateCard settings={settings} />
+          {/* Más ancha que el resto de Preferencias (max-w-3xl): el asistente
+              tiene columnas de pasos + pantallas de ejemplo que en 768px
+              quedaban apretadas (ver mockup "Conexión con ARCA"). */}
+          <div className="w-full xl:w-[980px]">
+            <ArcaConnectionCard settings={settings} />
+          </div>
           <MercadoPagoCard />
           <InvoicePdfCard settings={settings} />
           <WithholdingAgentCard settings={settings} />
@@ -196,352 +197,6 @@ function ActivityLogCard() {
  * disco) - el certificado/clave viajan como PEM en el body del POST y se
  * cifran recién en el backend (ver TenantSettingsService.
  * uploadAfipCertificate). Nunca tocan almacenamiento propio. */
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('No se pudo leer el archivo'));
-    reader.readAsText(file);
-  });
-}
-
-function daysUntil(iso: string): number {
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.ceil(ms / (1000 * 60 * 60 * 24));
-}
-
-/** Certificado/clave ARCA (ex AFIP) del tenant - reemplaza lo que antes eran
- * variables de entorno del proceso (un solo CUIT para toda la instancia,
- * ver companies.module.ts). Se pegan/suben como archivos .crt/.key, viajan
- * como texto y el backend los cifra (AES-256-GCM) antes de guardarlos; acá
- * nunca se ve ni se guarda el contenido descifrado más que en memoria
- * mientras se arma el POST. */
-function AfipCertificateCard({ settings }: { settings: TenantSettings }) {
-  const queryClient = useQueryClient();
-  const [env, setEnv] = useState<AfipEnvironment>(settings.afipEnv);
-  const [certPem, setCertPem] = useState('');
-  const [keyPem, setKeyPem] = useState('');
-  const [certFileName, setCertFileName] = useState('');
-  const [keyFileName, setKeyFileName] = useState('');
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [taxId, setTaxId] = useState(settings.tenantTaxId ?? '');
-  const [taxIdMessage, setTaxIdMessage] = useState('');
-  const [taxIdError, setTaxIdError] = useState('');
-  const [ownTaxCondition, setOwnTaxCondition] = useState<TenantTaxCondition | ''>(
-    settings.ownTaxCondition ?? '',
-  );
-  const [ownTaxConditionMessage, setOwnTaxConditionMessage] = useState('');
-
-  function invalidateSettings() {
-    void queryClient.invalidateQueries({ queryKey: ['tenant-settings'] });
-  }
-
-  const taxIdMutation = useMutation({
-    mutationFn: () => tenantInfoApi.update(taxId),
-    onSuccess: () => {
-      setTaxIdError('');
-      setTaxIdMessage('Guardado');
-      invalidateSettings();
-    },
-    onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      setTaxIdMessage('');
-      setTaxIdError(errorMessage(err, 'No se pudo guardar el CUIT'));
-    },
-  });
-
-  const ownTaxConditionMutation = useMutation({
-    mutationFn: (value: TenantTaxCondition) => tenantSettingsApi.update({ ownTaxCondition: value }),
-    onSuccess: () => {
-      setOwnTaxConditionMessage('Guardado');
-      invalidateSettings();
-    },
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: () => afipCertificateApi.upload({ certPem, keyPem, env }),
-    onSuccess: () => {
-      setError('');
-      setMessage('Certificado guardado');
-      setCertPem('');
-      setKeyPem('');
-      setCertFileName('');
-      setKeyFileName('');
-      invalidateSettings();
-    },
-    onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      setMessage('');
-      setError(errorMessage(err, 'No se pudo guardar el certificado'));
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: () => afipCertificateApi.remove(),
-    onSuccess: () => {
-      setError('');
-      setMessage('Certificado eliminado');
-      invalidateSettings();
-    },
-    onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      setError(errorMessage(err, 'No se pudo eliminar el certificado'));
-    },
-  });
-
-  async function handleCertFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCertPem(await readFileAsText(file));
-    setCertFileName(file.name);
-  }
-
-  async function handleKeyFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setKeyPem(await readFileAsText(file));
-    setKeyFileName(file.name);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-    uploadMutation.mutate();
-  }
-
-  const expiresInDays = settings.afipCertExpiresAt ? daysUntil(settings.afipCertExpiresAt) : null;
-
-  return (
-    <Card>
-      <CardContent>
-        <h2 className="mb-1 text-sm font-medium text-muted-foreground">
-          Certificado ARCA (facturación electrónica)
-        </h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Certificado digital (.crt) y clave privada (.key) propios de esta empresa, autorizados para
-          WSFE en el Administrador de Relaciones de Clave Fiscal de ARCA. El Punto de Venta se define
-          por sucursal (ver &quot;Sucursales&quot; en el menú principal).
-        </p>
-
-        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            CUIT de la empresa
-            <Input
-              type="text"
-              value={taxId}
-              onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
-              placeholder="30-71659554-9"
-              className="w-40"
-            />
-          </label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setTaxIdMessage('');
-              taxIdMutation.mutate();
-            }}
-            disabled={!taxId.trim() || taxIdMutation.isPending}
-          >
-            {taxIdMutation.isPending ? 'Guardando...' : 'Guardar CUIT'}
-          </Button>
-          {taxIdError && <p className="text-xs text-destructive">{taxIdError}</p>}
-          {taxIdMessage && <p className="text-xs text-green-600 dark:text-green-400">{taxIdMessage}</p>}
-          {!settings.tenantTaxId && (
-            <p className="w-full text-xs text-amber-600 dark:text-amber-400">
-              El certificado ARCA se registra a nombre de este CUIT - sin él, el certificado no queda
-              realmente configurado aunque lo hayas subido.
-            </p>
-          )}
-        </div>
-
-        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            Condición IVA propia
-            <Select
-              value={ownTaxCondition}
-              onChange={(value) => setOwnTaxCondition(value as TenantTaxCondition)}
-              placeholder="Sin configurar"
-              className="w-56"
-              options={[
-                { value: 'RESPONSABLE_INSCRIPTO', label: 'Responsable Inscripto' },
-                { value: 'MONOTRIBUTO', label: 'Monotributo' },
-                { value: 'EXENTO', label: 'Exento' },
-              ]}
-            />
-          </label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setOwnTaxConditionMessage('');
-              if (ownTaxCondition) ownTaxConditionMutation.mutate(ownTaxCondition);
-            }}
-            disabled={!ownTaxCondition || ownTaxConditionMutation.isPending}
-          >
-            {ownTaxConditionMutation.isPending ? 'Guardando...' : 'Guardar condición IVA'}
-          </Button>
-          {ownTaxConditionMessage && (
-            <p className="text-xs text-green-600 dark:text-green-400">{ownTaxConditionMessage}</p>
-          )}
-          <p className="w-full text-xs text-muted-foreground">
-            Determina qué letra de comprobante corresponde emitir (A/B/C) - Nueva factura la sugiere o
-            la fuerza automáticamente en base a esto y a la condición IVA del cliente.
-          </p>
-        </div>
-
-        <details className="mb-4 rounded-lg border p-4 text-xs text-muted-foreground">
-          <summary className="cursor-pointer text-sm font-medium text-foreground">
-            ¿Cómo consigo el certificado ARCA? (guía paso a paso)
-          </summary>
-          <div className="mt-3 flex flex-col gap-4">
-            <div>
-              <p className="mb-1 font-medium text-foreground">
-                1. Generá la clave privada y el pedido de certificado (CSR)
-              </p>
-              <p className="mb-2">
-                Con OpenSSL, en cualquier terminal (reemplazá el CUIT y el nombre):
-              </p>
-              <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-[11px]">
-{`openssl req -new -newkey rsa:2048 -nodes \\
-  -keyout empresa.key -out empresa.csr \\
-  -subj "/C=AR/O=Nombre Empresa/CN=empresa/serialNumber=CUIT 20XXXXXXXXX"`}
-              </pre>
-              <p className="mt-1">
-                Esto genera dos archivos: <span className="font-mono">empresa.key</span> (clave
-                privada - nunca se sube a ARCA, sólo acá) y{' '}
-                <span className="font-mono">empresa.csr</span> (pedido de certificado, ese sí va a
-                ARCA).
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 font-medium text-foreground">
-                2. Para probar primero (Homologación - recomendado)
-              </p>
-              <ol className="ml-4 list-decimal">
-                <li>Entrá a ARCA con Clave Fiscal → &quot;Administrador de Relaciones de Clave Fiscal&quot;.</li>
-                <li>
-                  Buscá el servicio &quot;WSASS&quot; (Administración de Certificados Digitales),
-                  sección de testing/homologación.
-                </li>
-                <li>
-                  Subí el <span className="font-mono">.csr</span> del paso 1 y descargá el{' '}
-                  <span className="font-mono">.crt</span> (se emite al toque, sin trámite adicional).
-                </li>
-                <li>Asociá ese certificado al web service &quot;wsfe&quot; para tu CUIT.</li>
-                <li>
-                  Subí acá abajo el <span className="font-mono">.crt</span> descargado y el{' '}
-                  <span className="font-mono">.key</span> del paso 1, ambiente
-                  &quot;Homologación&quot;.
-                </li>
-              </ol>
-            </div>
-            <div>
-              <p className="mb-1 font-medium text-foreground">
-                3. Para facturar de verdad (Producción)
-              </p>
-              <ol className="ml-4 list-decimal">
-                <li>
-                  En &quot;Administrador de Relaciones de Clave Fiscal&quot; → &quot;Nueva
-                  Relación&quot; → servicio &quot;wsfe&quot; (Facturación Electrónica), representado
-                  tu propio CUIT.
-                </li>
-                <li>
-                  En esa relación, adjuntá el certificado de producción (mismo{' '}
-                  <span className="font-mono">.csr</span>, o generá uno nuevo con el comando de
-                  arriba).
-                </li>
-                <li>
-                  Subí acá el <span className="font-mono">.crt</span> de producción y su{' '}
-                  <span className="font-mono">.key</span>, ambiente &quot;Producción&quot;.
-                </li>
-              </ol>
-            </div>
-            <p className="italic text-muted-foreground">
-              Homologación y Producción son certificados y trámites separados - no sirve el mismo
-              certificado para los dos ambientes.
-            </p>
-          </div>
-        </details>
-
-        {settings.afipConfigured ? (
-          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border p-4">
-            <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-              Certificado cargado
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Ambiente: {settings.afipEnv === 'PRODUCCION' ? 'Producción' : 'Homologación'}
-            </span>
-            {settings.afipCertExpiresAt && (
-              <span className="text-xs text-muted-foreground">
-                Vence el {new Date(settings.afipCertExpiresAt).toLocaleDateString('es-AR')}
-                {expiresInDays !== null && expiresInDays <= 30 && (
-                  <span className="ml-1 font-medium text-amber-600 dark:text-amber-400">
-                    ({expiresInDays <= 0 ? 'vencido' : `en ${expiresInDays} días`})
-                  </span>
-                )}
-              </span>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => removeMutation.mutate()}
-              disabled={removeMutation.isPending}
-            >
-              {removeMutation.isPending ? 'Quitando...' : 'Quitar certificado'}
-            </Button>
-          </div>
-        ) : (
-          <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-            Todavía no hay un certificado cargado - la emisión de comprobantes con CAE real no va a
-            funcionar hasta que subas uno.
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setEnv('HOMOLOGACION')}
-              className={pillClass(env === 'HOMOLOGACION')}
-            >
-              Homologación (sandbox)
-            </button>
-            <button
-              type="button"
-              onClick={() => setEnv('PRODUCCION')}
-              className={pillClass(env === 'PRODUCCION')}
-            >
-              Producción
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Certificado (.crt / .pem)
-              <input type="file" accept=".crt,.pem,.cer" onChange={handleCertFile} className="text-xs" />
-              {certFileName && <span className="text-muted-foreground">{certFileName}</span>}
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Clave privada (.key)
-              <input type="file" accept=".key,.pem" onChange={handleKeyFile} className="text-xs" />
-              {keyFileName && <span className="text-muted-foreground">{keyFileName}</span>}
-            </label>
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
-          <Button type="submit" className="self-start" disabled={!certPem || !keyPem || uploadMutation.isPending}>
-            {uploadMutation.isPending ? 'Guardando...' : 'Guardar certificado'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
 /** El fisco (ARCA/ARBA/etc.) es quien otorga el carácter de agente de
  * retención, no es algo que se active solo - por eso estos 3 flags son un
  * checkbox explícito, no un default en true. Gatillan si puede
@@ -654,7 +309,7 @@ function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
         <h2 className="mb-1 text-sm font-medium text-muted-foreground">Datos fiscales para la Factura</h2>
         <p className="mb-4 text-xs text-muted-foreground">
           Domicilio, Ingresos Brutos e inicio de actividades del emisor - se imprimen en el PDF de
-          Facturación (CUIT y razón social ya se cargan arriba, en Certificado ARCA).
+          Facturación (CUIT y razón social ya se cargan arriba, en Conexión con ARCA).
         </p>
         <div className="grid grid-cols-2 gap-4">
           <label className="col-span-2 flex flex-col gap-1">

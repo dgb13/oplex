@@ -64,6 +64,7 @@ describe('AfipCredentialsService.getCurrent', () => {
       keyPem: '-----BEGIN PRIVATE KEY-----',
       cuitRepresentada: '30-71659554-9',
       env: 'produccion',
+      ticketStore: expect.objectContaining({ load: expect.any(Function), save: expect.any(Function) }),
     });
     expect(db.tenantSettings.findUnique).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1' } });
     expect(db.tenant.findUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 'tenant-1' } });

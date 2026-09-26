@@ -292,7 +292,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}
                   <Link href="/preferences" className="font-medium underline">
-                    Preferencias → Certificado ARCA
+                    Preferencias → Conexión con ARCA
                   </Link>
                   .
                 </p>

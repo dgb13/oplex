@@ -9,7 +9,13 @@ import type {
 } from '@plexo/database';
 import { EncryptionService } from '@plexo/encryption';
 import type { DomainRecords } from 'resend';
-import { parseAndValidateAfipCertificate } from './afip-certificate.js';
+import {
+  detectAfipFileKind,
+  generateAfipKeyAndCsr,
+  inspectAfipCertificate,
+  parseAndValidateAfipCertificate,
+  type AfipFileKind,
+} from './afip-certificate.js';
 import type { UpdateTenantInfoDto } from './dto/update-tenant-info.dto.js';
 import type { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto.js';
 import type { UploadAfipCertificateDto } from './dto/upload-afip-certificate.dto.js';
@@ -32,6 +38,17 @@ export interface TenantSettingsView {
   // so the frontend can show "certificado cargado" vs. an upload prompt.
   afipConfigured: boolean;
   afipCertExpiresAt: Date | null;
+  // Nombre ("nombre simbólico" en WSASS) del certificado cargado.
+  afipCertAlias: string | null;
+  // Clave generada por Oplex esperando el certificado de ARCA: el CSR (es
+  // público) y su nombre, para volver a descargarlo/copiarlo.
+  afipHasPendingKey: boolean;
+  afipPendingCsr: string | null;
+  afipPendingAlias: string | null;
+  // Resultado del último "Probar conexión con ARCA" (ver ArcaConnectionService).
+  afipLastCheckAt: Date | null;
+  afipLastCheckOk: boolean | null;
+  afipLastCheckMessage: string | null;
   // Condición IVA propia del tenant - null hasta que el usuario la
   // configure a mano en Preferencias. Alimenta resolveDocumentLetter en el
   // frontend (letra A/B/C sugerida/forzada al emitir factura).
@@ -76,6 +93,19 @@ export class TenantSettingsService {
       db.tenantSettings.findUnique({ where: { tenantId } }),
       db.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
     ]);
+    // Certificados subidos antes de que existiera afipCertAlias: se completa
+    // una vez leyéndolo del propio certificado (el nombre no es secreto).
+    if (row?.afipCertEncrypted && !row.afipCertAlias) {
+      try {
+        const alias = inspectAfipCertificate(this.encryption.decrypt(row.afipCertEncrypted)).alias;
+        if (alias) {
+          const updated = await db.tenantSettings.update({ where: { tenantId }, data: { afipCertAlias: alias } });
+          return this.toView(updated, tenant.taxId);
+        }
+      } catch {
+        // Si no se puede leer, se muestra sin nombre.
+      }
+    }
     return this.toView(row, tenant.taxId);
   }
 
@@ -115,6 +145,13 @@ export class TenantSettingsService {
       // CUIT half of it.
       afipConfigured: Boolean(row?.afipCertEncrypted && row?.afipKeyEncrypted && tenantTaxId),
       afipCertExpiresAt: row?.afipCertExpiresAt ?? null,
+      afipCertAlias: row?.afipCertAlias ?? null,
+      afipHasPendingKey: Boolean(row?.afipPendingKeyEncrypted),
+      afipPendingCsr: row?.afipPendingCsr ?? null,
+      afipPendingAlias: row?.afipPendingAlias ?? null,
+      afipLastCheckAt: row?.afipLastCheckAt ?? null,
+      afipLastCheckOk: row?.afipLastCheckOk ?? null,
+      afipLastCheckMessage: row?.afipLastCheckMessage ?? null,
       ownTaxCondition: row?.ownTaxCondition ?? null,
       fiscalAddress: row?.fiscalAddress ?? null,
       grossIncomeNumber: row?.grossIncomeNumber ?? null,
@@ -228,33 +265,80 @@ export class TenantSettingsService {
    * there before, if anything (re-uploading is how a tenant rotates an
    * expiring certificate). */
   async uploadAfipCertificate(dto: UploadAfipCertificateDto): Promise<TenantSettingsView> {
-    let expiresAt: Date;
-    try {
-      ({ expiresAt } = parseAndValidateAfipCertificate(dto.certPem, dto.keyPem));
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
+    const tenantId = getTenantId();
+    const db = getTenantDb();
+    const [existing, tenantTaxId] = await Promise.all([
+      db.tenantSettings.findUnique({ where: { tenantId } }),
+      this.getTenantTaxId(),
+    ]);
+
+    const certKind = detectAfipFileKind(dto.certPem);
+    if (certKind === 'CSR') {
+      throw new BadRequestException(
+        'Ese archivo es el pedido (CSR), no el certificado. El certificado es lo que te devuelve ARCA después de pegar el pedido en WSASS.',
+      );
+    }
+    if (certKind !== 'CERTIFICATE') {
+      throw new BadRequestException('Ese archivo no es un certificado. Buscá el que te dio ARCA (empieza con "-----BEGIN CERTIFICATE-----").');
     }
 
-    const tenantId = getTenantId();
-    const afipCertEncrypted = this.encryption.encrypt(dto.certPem);
-    const afipKeyEncrypted = this.encryption.encrypt(dto.keyPem);
-    const row = await getTenantDb().tenantSettings.upsert({
+    // Clave: la que se sube, o la que generó Oplex y está esperando.
+    const usingPendingKey = !dto.keyPem;
+    const pendingKeyEncrypted = existing?.afipPendingKeyEncrypted;
+    let keyPem: string;
+    if (dto.keyPem) {
+      keyPem = dto.keyPem;
+    } else if (pendingKeyEncrypted) {
+      keyPem = this.encryption.decrypt(pendingKeyEncrypted);
+    } else {
+      throw new BadRequestException('Falta la clave privada: subila, o generala con Oplex en el paso 2.');
+    }
+
+    let info: ReturnType<typeof inspectAfipCertificate>;
+    try {
+      parseAndValidateAfipCertificate(dto.certPem, keyPem);
+      info = inspectAfipCertificate(dto.certPem);
+    } catch (error) {
+      const message = (error as Error).message;
+      throw new BadRequestException(
+        usingPendingKey && message.includes('no corresponde')
+          ? 'Este certificado no se generó con el pedido que creó Oplex. Usá el pedido del paso 2 en WSASS, o subí también tu propia clave privada.'
+          : message,
+      );
+    }
+    if (dto.env && dto.env !== info.env) {
+      throw new BadRequestException(
+        info.env === 'PRODUCCION'
+          ? 'Este certificado es de PRODUCCIÓN (facturas reales) y elegiste Homologación.'
+          : 'Este certificado es de HOMOLOGACIÓN (pruebas) y elegiste Producción.',
+      );
+    }
+    const ownCuit = tenantTaxId?.replace(/\D/g, '') ?? null;
+    if (ownCuit && info.cuit && info.cuit !== ownCuit) {
+      throw new BadRequestException(
+        `El certificado es del CUIT ${info.cuit} y la empresa tiene cargado ${ownCuit}. ARCA rechazaría las facturas.`,
+      );
+    }
+
+    const data = {
+      afipEnv: info.env,
+      afipCertEncrypted: this.encryption.encrypt(dto.certPem),
+      afipKeyEncrypted: this.encryption.encrypt(keyPem),
+      afipCertExpiresAt: info.expiresAt,
+      afipCertAlias: info.alias,
+      // Certificado nuevo: los tickets de WSAA y el último chequeo eran del anterior.
+      afipWsaaTicketsEncrypted: null,
+      afipLastCheckAt: null,
+      afipLastCheckOk: null,
+      afipLastCheckMessage: null,
+      ...(usingPendingKey ? { afipPendingKeyEncrypted: null, afipPendingCsr: null, afipPendingAlias: null } : {}),
+    };
+    const row = await db.tenantSettings.upsert({
       where: { tenantId },
-      create: {
-        tenantId,
-        afipEnv: dto.env,
-        afipCertEncrypted,
-        afipKeyEncrypted,
-        afipCertExpiresAt: expiresAt,
-      },
-      update: {
-        afipEnv: dto.env,
-        afipCertEncrypted,
-        afipKeyEncrypted,
-        afipCertExpiresAt: expiresAt,
-      },
+      create: { tenantId, ...data },
+      update: data,
     });
-    return this.toView(row, await this.getTenantTaxId());
+    return this.toView(row, tenantTaxId);
   }
 
   async removeAfipCertificate(): Promise<TenantSettingsView> {
@@ -262,9 +346,95 @@ export class TenantSettingsService {
     const row = await getTenantDb().tenantSettings.upsert({
       where: { tenantId },
       create: { tenantId },
-      update: { afipCertEncrypted: null, afipKeyEncrypted: null, afipCertExpiresAt: null },
+      update: {
+        afipCertEncrypted: null,
+        afipKeyEncrypted: null,
+        afipCertExpiresAt: null,
+        afipCertAlias: null,
+        afipWsaaTicketsEncrypted: null,
+        afipLastCheckAt: null,
+        afipLastCheckOk: null,
+        afipLastCheckMessage: null,
+      },
     });
     return this.toView(row, await this.getTenantTaxId());
+  }
+
+  /** "Generar clave y pedido" (paso 2): la clave privada queda cifrada en
+   * Oplex y nunca sale; el CSR (público) se devuelve para llevar a WSASS.
+   * No toca el certificado ya cargado - la clave nueva queda "pendiente"
+   * hasta que se suba el certificado que ARCA emita para este pedido. */
+  async generateAfipCsr(alias: string | undefined): Promise<TenantSettingsView> {
+    const tenantId = getTenantId();
+    const db = getTenantDb();
+    const tenant = await db.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    if (!tenant.taxId) {
+      throw new BadRequestException('Cargá primero el CUIT de la empresa (paso 1).');
+    }
+    const finalAlias = alias?.trim() || 'oplex';
+    const { keyPem, csrPem } = generateAfipKeyAndCsr({
+      cuit: tenant.taxId,
+      organization: tenant.name,
+      alias: finalAlias,
+    });
+    const data = {
+      afipPendingKeyEncrypted: this.encryption.encrypt(keyPem),
+      afipPendingCsr: csrPem,
+      afipPendingAlias: finalAlias,
+    };
+    const row = await db.tenantSettings.upsert({
+      where: { tenantId },
+      create: { tenantId, ...data },
+      update: data,
+    });
+    return this.toView(row, tenant.taxId);
+  }
+
+  /** Qué es un archivo y, si es un certificado, qué dice (titular,
+   * ambiente, vencimiento) - para mostrarlo ANTES de guardar. */
+  async inspectAfipFile(text: string): Promise<{
+    kind: AfipFileKind;
+    certificate: {
+      alias: string | null;
+      cuit: string | null;
+      issuer: string | null;
+      env: 'HOMOLOGACION' | 'PRODUCCION';
+      expiresAt: Date;
+      cuitMatches: boolean | null;
+      matchesPendingKey: boolean | null;
+    } | null;
+  }> {
+    const kind = detectAfipFileKind(text);
+    if (kind !== 'CERTIFICATE') return { kind, certificate: null };
+    let info: ReturnType<typeof inspectAfipCertificate>;
+    try {
+      info = inspectAfipCertificate(text);
+    } catch {
+      return { kind: 'UNKNOWN', certificate: null };
+    }
+    const tenantId = getTenantId();
+    const [settings, tenantTaxId] = await Promise.all([
+      getTenantDb().tenantSettings.findUnique({ where: { tenantId }, select: { afipPendingKeyEncrypted: true } }),
+      this.getTenantTaxId(),
+    ]);
+    const ownCuit = tenantTaxId?.replace(/\D/g, '') ?? null;
+    let matchesPendingKey: boolean | null = null;
+    if (settings?.afipPendingKeyEncrypted) {
+      try {
+        parseAndValidateAfipCertificate(text, this.encryption.decrypt(settings.afipPendingKeyEncrypted));
+        matchesPendingKey = true;
+      } catch {
+        matchesPendingKey = false;
+      }
+    }
+    return {
+      kind,
+      certificate: {
+        ...info,
+        cuitMatches: ownCuit && info.cuit ? ownCuit === info.cuit : null,
+        matchesPendingKey,
+      },
+    };
   }
 
   private async persistDomain(

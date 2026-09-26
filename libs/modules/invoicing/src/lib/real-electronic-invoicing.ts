@@ -20,7 +20,7 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
     const credentials = await this.afipCredentials.getCurrent();
     if (!credentials) {
       throw new BadRequestException(
-        'Esta empresa todavía no configuró su certificado ARCA (Preferencias → Certificado ARCA)',
+        'Esta empresa todavía no configuró su certificado ARCA (Preferencias → Conexión con ARCA)',
       );
     }
     const client = new AfipWsfeClient(credentials);

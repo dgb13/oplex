@@ -4,6 +4,8 @@ import { AuditEntity } from '@plexo/database';
 import { RegisterDomainDto } from './dto/register-domain.dto.js';
 import { UpdateTenantInfoDto } from './dto/update-tenant-info.dto.js';
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto.js';
+import { GenerateAfipCsrDto } from './dto/generate-afip-csr.dto.js';
+import { InspectAfipFileDto } from './dto/inspect-afip-file.dto.js';
 import { UploadAfipCertificateDto } from './dto/upload-afip-certificate.dto.js';
 import { TenantSettingsService } from './tenant-settings.service.js';
 
@@ -52,6 +54,20 @@ export class TenantSettingsController {
   @Post('afip-certificate')
   uploadAfipCertificate(@Body() dto: UploadAfipCertificateDto) {
     return this.tenantSettingsService.uploadAfipCertificate(dto);
+  }
+
+  @AuditEntity('tenantSettings', { idParam: null })
+  @Roles(...WRITE_ROLES)
+  @Post('afip-certificate/generate-csr')
+  generateAfipCsr(@Body() dto: GenerateAfipCsrDto) {
+    return this.tenantSettingsService.generateAfipCsr(dto.alias);
+  }
+
+  // Sólo lee el archivo que se va a subir (no guarda nada).
+  @Roles(...WRITE_ROLES)
+  @Post('afip-certificate/inspect')
+  inspectAfipFile(@Body() dto: InspectAfipFileDto) {
+    return this.tenantSettingsService.inspectAfipFile(dto.text);
   }
 
   @AuditEntity('tenantSettings', { idParam: null })

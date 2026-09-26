@@ -274,6 +274,60 @@ export class AfipWsfeClient {
     };
   }
 
+  /** FECompUltimoAutorizado: número del último comprobante autorizado de un
+   * tipo en un punto de venta. No emite nada - lo usa "Probar conexión con
+   * ARCA" (Preferencias) para confirmar certificado + autorización a wsfe
+   * sin generar un comprobante fiscal. */
+  async lastAuthorizedNumber(pointOfSale: number, cbteTipo: number): Promise<number> {
+    const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
+    const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECompUltimoAutorizado>
+      <ar:Auth>
+        <ar:Token>${ticket.token}</ar:Token>
+        <ar:Sign>${ticket.sign}</ar:Sign>
+        <ar:Cuit>${this.credentials.cuitRepresentada.replace(/\D/g, '')}</ar:Cuit>
+      </ar:Auth>
+      <ar:PtoVta>${pointOfSale}</ar:PtoVta>
+      <ar:CbteTipo>${cbteTipo}</ar:CbteTipo>
+    </ar:FECompUltimoAutorizado>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    let responseText: string;
+    try {
+      const response = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
+        },
+        body: soapBody,
+      });
+      responseText = await response.text();
+    } catch (err) {
+      throw new Error(`No se pudo conectar con ARCA WSFE: ${(err as Error).message}`);
+    }
+
+    const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);
+    if (faultMatch) {
+      throw new Error(`ARCA WSFE rechazó la solicitud: ${faultMatch[1]}`);
+    }
+    const parsed = xmlParser.parse(responseText);
+    const result = parsed?.Envelope?.Body?.FECompUltimoAutorizadoResponse?.FECompUltimoAutorizadoResult;
+    const errores = this.toArray(result?.Errors?.Err) as WsfeError[];
+    if (errores.length > 0) {
+      throw new Error(`ARCA WSFE: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join('; ')}`);
+    }
+    const nro = Number(result?.CbteNro);
+    if (!Number.isFinite(nro)) {
+      throw new Error(`Respuesta de ARCA WSFE sin número de comprobante: ${responseText.slice(0, 300)}`);
+    }
+    return nro;
+  }
+
   private toArray<T>(value: T | T[] | undefined): T[] {
     if (!value) return [];
     return Array.isArray(value) ? value : [value];
