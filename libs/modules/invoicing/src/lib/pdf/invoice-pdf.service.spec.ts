@@ -34,6 +34,7 @@ describe('InvoicePdfService', () => {
       lines: [
         { description: 'Agua mineral 500ml', sku: 'AGUA-500', quantity: '10', unitPrice: '100,00', lineTotal: '1210,00' },
       ],
+      subtotalWithoutVat: null,
       netTaxed: '1000,00',
       netExempt: null,
       netUntaxed: null,

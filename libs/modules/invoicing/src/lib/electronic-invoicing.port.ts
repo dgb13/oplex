@@ -59,6 +59,12 @@ export interface ElectronicInvoiceRequest {
   /** null = Consumidor Final (AFIP DocTipo 99/DocNro 0) - this app only
    * models Company.taxId as a CUIT, so anything else maps to DocTipo 80. */
   customerTaxId: string | null;
+  /** Company.taxCondition del cliente (texto del padrón, p. ej.
+   * "Responsable Inscripto") - se mapea a CondicionIVAReceptorId (RG 5616).
+   * Irrelevante sin CUIT (va Consumidor Final). */
+  customerTaxCondition: string | null;
+  /** Sólo para el mensaje de error si falta la condición IVA. */
+  customerName?: string;
   /** Currency.code (e.g. "ARS"/"USD"), mapped to AFIP's own MonId vocabulary
    * in afip-wsfe-client.ts - not the same table as ISO 4217. */
   currencyCode: string;

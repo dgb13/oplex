@@ -89,10 +89,12 @@ export function ArcaTemplate({ data, pageSize }: { data: InvoicePdfData; pageSiz
           <View style={styles.partyBox}>
             <Text style={styles.partyTitle}>Cliente</Text>
             <Text>{data.customerName}</Text>
-            <Text>
-              {data.customerTaxIdLabel}
-              {data.customerTaxId ? ` ${data.customerTaxId}` : ''}
-            </Text>
+            {data.customerTaxIdLabel && (
+              <Text>
+                {data.customerTaxIdLabel}
+                {data.customerTaxId ? ` ${data.customerTaxId}` : ''}
+              </Text>
+            )}
             {data.customerTaxConditionLabel && <Text>{data.customerTaxConditionLabel}</Text>}
             {data.customerFiscalAddress && <Text>{data.customerFiscalAddress}</Text>}
           </View>
@@ -118,6 +120,12 @@ export function ArcaTemplate({ data, pageSize }: { data: InvoicePdfData; pageSiz
         </View>
 
         <View style={styles.totalsSection}>
+          {data.subtotalWithoutVat && (
+            <View style={styles.totalsRow}>
+              <Text>Subtotal</Text>
+              <Text>{data.subtotalWithoutVat}</Text>
+            </View>
+          )}
           {data.netTaxed && (
             <View style={styles.totalsRow}>
               <Text>Importe Neto Gravado</Text>

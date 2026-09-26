@@ -1193,6 +1193,7 @@ describe('InvoicingService.createCreditNote', () => {
     const invoice = {
       id: 'invoice-1',
       afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
       balanceDue: new Prisma.Decimal(121),
       lines: [invoiceLine],
     };
@@ -1214,6 +1215,7 @@ describe('InvoicingService.createCreditNote', () => {
     const invoice = {
       id: 'invoice-1',
       afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
       balanceDue: new Prisma.Decimal(121),
       lines: [invoiceLine],
     };
@@ -1241,6 +1243,7 @@ describe('InvoicingService.createCreditNote', () => {
     const invoice = {
       id: 'invoice-1',
       afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
       number: '00000042',
       pointOfSale: '0001',
       documentLetter: 'B',
@@ -1305,6 +1308,7 @@ describe('InvoicingService.createCreditNote', () => {
     const invoice = {
       id: 'invoice-1',
       afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
       number: '00000042',
       pointOfSale: '0001',
       documentLetter: 'B',
@@ -1341,6 +1345,7 @@ describe('InvoicingService.createCreditNote', () => {
     const invoice = {
       id: 'invoice-1',
       afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
       balanceDue: new Prisma.Decimal(10),
       lines: [invoiceLine],
     };

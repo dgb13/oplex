@@ -1,6 +1,6 @@
 import { Prisma } from '@plexo/database';
 import forge from 'node-forge';
-import { AfipWsfeClient } from './afip-wsfe-client.js';
+import { AfipWsfeClient, resolveCondicionIvaReceptor } from './afip-wsfe-client.js';
 import type { ElectronicInvoiceRequest } from './electronic-invoicing.port.js';
 
 function escapeXml(xml: string): string {
@@ -110,6 +110,8 @@ describe('AfipWsfeClient.requestCae', () => {
       issueDate: new Date('2026-06-15T12:00:00Z'),
       dueDate: null,
       customerTaxId: '20111111112',
+      customerTaxCondition: 'Responsable Inscripto',
+      customerName: 'Cliente Test SA',
       currencyCode: 'ARS',
       exchangeRate: new Prisma.Decimal(1),
       netAmount: new Prisma.Decimal(100),
@@ -264,6 +266,45 @@ describe('AfipWsfeClient.requestCae', () => {
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
     expect(wsfeBody).toContain('<ar:DocTipo>99</ar:DocTipo>');
     expect(wsfeBody).toContain('<ar:DocNro>0</ar:DocNro>');
+  });
+
+  it('sends CondicionIVAReceptorId (RG 5616): 5 for Consumidor Final, mapped from the customer condition otherwise', async () => {
+    for (const [overrides, expected] of [
+      [{ customerTaxId: null, customerTaxCondition: null }, 5],
+      [{ customerTaxCondition: 'IVA Responsable Inscripto' }, 1],
+      [{ customerTaxCondition: 'Responsable Monotributo' }, 6],
+      [{ customerTaxCondition: 'IVA Sujeto Exento' }, 4],
+    ] as const) {
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+      await new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' }).requestCae(
+        baseInvoice(overrides),
+      );
+      const wsfeBody = fetchMock.mock.calls[1][1].body as string;
+      expect(wsfeBody).toContain(`<ar:CondicionIVAReceptorId>${expected}</ar:CondicionIVAReceptorId>`);
+    }
+  });
+
+  it('refuses to guess the receptor condition for a CUIT customer without one', () => {
+    expect(() => resolveCondicionIvaReceptor('20111111112', null, 'Acme SA')).toThrow(/condición frente al IVA del cliente "Acme SA"/);
+  });
+
+  it('follows the WSDL element order (ImpTrib before ImpIVA, service dates before MonId, CondicionIVAReceptorId after MonCotiz)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await client.requestCae(baseInvoice({ concept: 'SERVICIOS' }));
+
+    const body = fetchMock.mock.calls[1][1].body as string;
+    const at = (tag: string) => body.indexOf(`<ar:${tag}>`);
+    expect(at('ImpTrib')).toBeLessThan(at('ImpIVA'));
+    expect(at('FchVtoPago')).toBeLessThan(at('MonId'));
+    expect(at('MonCotiz')).toBeLessThan(at('CondicionIVAReceptorId'));
+    expect(at('CondicionIVAReceptorId')).toBeLessThan(body.indexOf('<Iva>'));
   });
 
   it('omits the Iva breakdown for Factura C (Monotributo)', async () => {

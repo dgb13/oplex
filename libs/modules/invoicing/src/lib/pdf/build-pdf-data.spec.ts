@@ -92,6 +92,26 @@ describe('buildInvoicePdfData', () => {
     );
     expect(consumidorFinal.customerTaxIdLabel).toBe('Consumidor Final');
     expect(consumidorFinal.customerTaxId).toBeNull();
+
+    // El cliente genérico de Caja ya se llama "Consumidor Final": no repetirlo.
+    const generic = await buildInvoicePdfData(
+      makeInvoice({ customerTaxId: null, customerName: 'Consumidor Final' }),
+      CUSTOMER,
+      TENANT,
+      null,
+    );
+    expect(generic.customerTaxIdLabel).toBeNull();
+  });
+
+  it('Factura C does not discriminate VAT: only a subtotal, no Neto Gravado / IVA rows', async () => {
+    const factC = await buildInvoicePdfData(makeInvoice({ documentLetter: 'C' }), CUSTOMER, TENANT, null);
+    expect(factC.taxBuckets).toEqual([]);
+    expect(factC.netTaxed).toBeNull();
+    expect(factC.subtotalWithoutVat).toBe('100,00');
+
+    const factB = await buildInvoicePdfData(makeInvoice(), CUSTOMER, TENANT, null);
+    expect(factB.subtotalWithoutVat).toBeNull();
+    expect(factB.taxBuckets.length).toBeGreaterThan(0);
   });
 
   it('maps ownTaxCondition and the fiscal fields from TenantSettings, or leaves them null without it', async () => {

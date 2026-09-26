@@ -499,6 +499,8 @@ export class InvoicingService {
       issueDate: created.issueDate,
       dueDate: created.dueDate,
       customerTaxId: created.customerTaxId,
+      customerTaxCondition: customer.taxCondition,
+      customerName: customer.name,
       currencyCode: currency.code,
       exchangeRate: created.exchangeRate,
       netAmount: taxedNetAmount,
@@ -563,7 +565,9 @@ export class InvoicingService {
 
     const invoice = await db.invoice.findUnique({
       where: { id: dto.invoiceId },
-      include: { lines: true },
+      // Condición IVA actual del cliente, para CondicionIVAReceptorId de la
+      // nota de crédito (la factura no guarda un snapshot de ese dato).
+      include: { lines: true, customer: { select: { taxCondition: true } } },
     });
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
@@ -683,6 +687,8 @@ export class InvoicingService {
       // AfipWsfeClient falls back to issueDate for FchVtoPago when null.
       dueDate: null,
       customerTaxId: invoice.customerTaxId,
+      customerTaxCondition: invoice.customer.taxCondition,
+      customerName: invoice.customerName,
       currencyCode: currency.code,
       exchangeRate: created.exchangeRate,
       netAmount: subtotal.sub(exemptAmount).sub(nonTaxedAmount),

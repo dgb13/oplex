@@ -73,6 +73,35 @@ export function resolveDocTipoNro(customerTaxId: string | null): { docTipo: numb
   return { docTipo: 80, docNro: digits }; // CUIT
 }
 
+/** CondicionIVAReceptorId (RG 5616, obligatorio en FECAESolicitar) - ids
+ * tal cual los devuelve FEParamGetCondicionIvaReceptor en homologación
+ * (consultado el 2026-09-26): 1 RI, 4 Exento, 5 Consumidor Final,
+ * 6 Monotributo, 7 No Categorizado, 13 Monotributista Social,
+ * 15 IVA No Alcanzado. Sin CUIT = Consumidor Final (igual que DocTipo 99).
+ * Con CUIT y sin condición conocida no se adivina: asumir mal informa un
+ * dato fiscal equivocado, así que se pide cargarla. Exportado para tests. */
+export function resolveCondicionIvaReceptor(
+  customerTaxId: string | null,
+  customerTaxCondition: string | null | undefined,
+  customerName?: string,
+): number {
+  if (!customerTaxId) return 5;
+  const c = (customerTaxCondition ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  if (c.includes('responsable inscripto')) return 1;
+  if (c.includes('monotributista social') || c.includes('monotributo social')) return 13;
+  if (c.includes('monotribut')) return 6;
+  if (c.includes('exent')) return 4;
+  if (c.includes('no alcanzado')) return 15;
+  if (c.includes('consumidor final')) return 5;
+  if (c.includes('no categorizado')) return 7;
+  throw new Error(
+    `Falta la condición frente al IVA del cliente${customerName ? ` "${customerName}"` : ''}: ARCA la exige para facturar a un CUIT. Completala en su ficha (Empresas → "Buscar en ARCA").`,
+  );
+}
+
 function resolveIvaId(rate: Prisma.Decimal): number {
   const key = rate.toFixed(1);
   const id = IVA_ALICUOTA_ID[key];
@@ -138,6 +167,11 @@ export class AfipWsfeClient {
     const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
     const cbteTipo = CBTE_TIPO[invoice.kind][invoice.documentLetter];
     const { docTipo, docNro } = resolveDocTipoNro(invoice.customerTaxId);
+    const condicionIvaReceptor = resolveCondicionIvaReceptor(
+      invoice.customerTaxId,
+      invoice.customerTaxCondition,
+      invoice.customerName,
+    );
     const monId = resolveMonId(invoice.currencyCode);
     const cbteNro = Number.parseInt(invoice.number, 10);
     // Monotributo (C) never carries an IVA breakdown - there is no IVA on
@@ -206,11 +240,12 @@ export class AfipWsfeClient {
             <ar:ImpTotConc>${formatImporte(invoice.nonTaxedAmount)}</ar:ImpTotConc>
             <ar:ImpNeto>${formatImporte(invoice.netAmount)}</ar:ImpNeto>
             <ar:ImpOpEx>${formatImporte(invoice.exemptAmount)}</ar:ImpOpEx>
-            <ar:ImpIVA>${formatImporte(invoice.taxAmount)}</ar:ImpIVA>
             <ar:ImpTrib>${impTrib.toFixed(2)}</ar:ImpTrib>
+            <ar:ImpIVA>${formatImporte(invoice.taxAmount)}</ar:ImpIVA>
+            ${servicioXml}
             <ar:MonId>${monId}</ar:MonId>
             <ar:MonCotiz>${invoice.exchangeRate.toFixed(6)}</ar:MonCotiz>
-            ${servicioXml}
+            <ar:CondicionIVAReceptorId>${condicionIvaReceptor}</ar:CondicionIVAReceptorId>
             ${cbtesAsocXml}
             ${tributosXml}
             ${ivaXml}

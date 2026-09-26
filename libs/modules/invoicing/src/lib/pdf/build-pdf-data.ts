@@ -120,7 +120,11 @@ export async function buildInvoicePdfData(
     serviceDueDate: invoice.concept !== 'PRODUCTOS' && invoice.dueDate ? formatFecha(invoice.dueDate) : null,
 
     customerName: invoice.customerName,
-    customerTaxIdLabel: invoice.customerTaxId ? 'CUIT' : 'Consumidor Final',
+    customerTaxIdLabel: invoice.customerTaxId
+      ? 'CUIT'
+      : invoice.customerName.trim().toLowerCase() === 'consumidor final'
+        ? null
+        : 'Consumidor Final',
     customerTaxId: invoice.customerTaxId,
     customerTaxConditionLabel: customer.taxCondition,
     customerFiscalAddress: customer.fiscalAddress,
@@ -140,10 +144,13 @@ export async function buildInvoicePdfData(
       };
     }),
 
-    netTaxed: formatMoneyOrNull(netTaxed),
-    netExempt: formatMoneyOrNull(netExempt),
-    netUntaxed: formatMoneyOrNull(netUntaxed),
-    taxBuckets: buckets,
+    // Factura C no discrimina IVA (emisor Monotributo/Exento): ni "Neto
+    // Gravado" ni "IVA 0%" - sólo subtotal y total.
+    subtotalWithoutVat: invoice.documentLetter === 'C' ? formatMoney(netTaxed + netExempt + netUntaxed) : null,
+    netTaxed: invoice.documentLetter === 'C' ? null : formatMoneyOrNull(netTaxed),
+    netExempt: invoice.documentLetter === 'C' ? null : formatMoneyOrNull(netExempt),
+    netUntaxed: invoice.documentLetter === 'C' ? null : formatMoneyOrNull(netUntaxed),
+    taxBuckets: invoice.documentLetter === 'C' ? [] : buckets,
     taxTotal: formatMoney(invoice.taxTotal.toNumber()),
     total: formatMoney(invoice.total.toNumber()),
 

@@ -39,7 +39,9 @@ export interface InvoicePdfData {
 
   // Receptor.
   customerName: string;
-  customerTaxIdLabel: string;
+  // null = no mostrar la línea (Consumidor Final cuyo nombre ya es
+  // "Consumidor Final" - antes salía repetido).
+  customerTaxIdLabel: string | null;
   customerTaxId: string | null;
   customerTaxConditionLabel: string | null;
   customerFiscalAddress: string | null;
@@ -50,6 +52,10 @@ export interface InvoicePdfData {
 
   lines: InvoicePdfLine[];
 
+  // Factura C (Monotributo/Exento): no discrimina IVA - netTaxed/
+  // netExempt/netUntaxed/taxBuckets vienen vacíos y se muestra sólo este
+  // subtotal (suma de las líneas). null en A/B/M.
+  subtotalWithoutVat: string | null;
   // null = el importe es cero, la fila no se muestra en el PDF.
   netTaxed: string | null;
   netExempt: string | null;
