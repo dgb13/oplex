@@ -11,7 +11,8 @@ const MARK_VIEWBOX = '229 229 573 378';
 // no se corten en el borde.
 const LOOP_VIEWBOX = '215 215 601 406';
 const RECOMMENDED_PLAN = 'SILVER';
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+// Número de contacto comercial (formato wa.me: país + 9 + área + número).
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5492616590127';
 
 const ars = new Intl.NumberFormat('es-AR');
 
@@ -963,7 +964,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
       {WHATSAPP_NUMBER && (
         <a
           className="wa"
-          href={`https://wa.me/${WHATSAPP_NUMBER}`}
+          href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola, quiero saber más sobre Oplex')}`}
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Escribinos por WhatsApp"
