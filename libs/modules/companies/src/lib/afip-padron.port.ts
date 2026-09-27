@@ -10,13 +10,17 @@ export interface AfipPadronData {
    * change over time. Not persisted anywhere, only shown to the user. */
   taxCondition: string | null;
   fiscalAddress: string | null;
+  /** Condición frente al IVA ya interpretada (null = no se pudo deducir). */
+  ivaCondition?: 'RESPONSABLE_INSCRIPTO' | 'MONOTRIBUTO' | 'EXENTO' | null;
+  mainActivity?: string | null;
+  /** 'AAAA-MM' - ARCA informa sólo mes y año. */
+  activityStartMonth?: string | null;
 }
 
 /**
- * ws_sr_padron_a13 - AFIP's public-persona lookup by CUIT. Needs the
- * current tenant's AFIP certificate (same one uploaded in Preferencias for
- * WSFE, see RealAfipPadronService/AfipCredentialsService) - lookup() throws
- * AfipNotConfiguredError when this tenant hasn't uploaded one yet.
+ * Padrón de ARCA por CUIT (constancia de inscripción). Usa el certificado
+ * de Oplex (ArcaPadronService), no el del tenant - lookup() tira
+ * AfipNotConfiguredError si Oplex todavía no cargó el suyo en Admin.
  */
 export interface AfipPadronPort {
   /** null when AFIP has no record for this CUIT. */

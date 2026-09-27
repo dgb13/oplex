@@ -3,3 +3,4 @@ export * from './lib/ai-invoice-extraction.service.js';
 export * from './lib/ai-invoice-extraction.types.js';
 export * from './lib/anthropic-client.token.js';
 export * from './lib/qr-decode.util.js';
+export * from './lib/constancia-extraction.service.js';

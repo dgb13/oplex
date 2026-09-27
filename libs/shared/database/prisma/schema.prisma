@@ -393,9 +393,39 @@ model PlatformSettings {
   // Ver AssistantConversationService.assertNotRateLimited.
   assistantRateLimitWindowMinutes Int @default(5)
   assistantRateLimitMaxMessages   Int @default(20)
+  // Padrón de ARCA con el certificado de OPLEX (no de cada tenant): lo usa
+  // "autocompletar por CUIT" en toda la plataforma (datos de la empresa,
+  // alta de clientes) - un tenant nuevo todavía no tiene certificado justo
+  // cuando carga sus datos. Servicio ws_sr_constancia_inscripcion (A5).
+  // Cert/clave/tickets cifrados; el resto en claro (no es secreto).
+  arcaPadronEnv               AfipEnvironment @default(HOMOLOGACION)
+  arcaPadronCertEncrypted     String?
+  arcaPadronKeyEncrypted      String?
+  arcaPadronCertAlias         String?
+  arcaPadronCuit              String?
+  arcaPadronCertExpiresAt     DateTime?
+  arcaPadronTicketsEncrypted  String?
+  arcaPadronLastCheckAt       DateTime?
+  arcaPadronLastCheckOk       Boolean?
+  arcaPadronLastCheckMessage  String?
+  // Consultas reales a ARCA en el mes (las que salen de la caché no cuentan).
+  arcaPadronQueriesMonth      String?
+  arcaPadronQueriesCount      Int @default(0)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+// Caché de consultas al padrón de ARCA por CUIT - global (sin tenantId/RLS,
+// como PlatformSettings: los datos públicos de un CUIT son los mismos para
+// todos los tenants). Evita repetir la consulta a ARCA por 30 días.
+model ArcaPadronCache {
+  cuit      String   @id
+  env       AfipEnvironment
+  data      Json
+  fetchedAt DateTime @default(now())
+
+  @@map("arca_padron_cache")
 }
 
 enum PriceIndexSource {
@@ -584,6 +614,10 @@ model TenantSettings {
   // "vence en N días" en Preferencias sin descifrar el certificado en cada
   // carga de pantalla.
   afipCertExpiresAt DateTime?
+  // Tipo de inscripción en Ingresos Brutos (Régimen Simplificado, Número
+  // local, Convenio Multilateral, Exento, No inscripto) - el texto que sale
+  // en la factura es grossIncomeNumber.
+  grossIncomeType   String?
   // Nombre (CN / "nombre simbólico" en WSASS) del certificado cargado, en
   // claro - para mostrar cuál es y guiar la autorización en ARCA.
   afipCertAlias     String?

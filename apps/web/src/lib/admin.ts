@@ -331,3 +331,35 @@ export const adminPriceIndexSyncApi = {
   upsertPeriod: (period: string, variationPct: number) =>
     api.post<PriceIndexEntry>('/admin/price-index-sync/periods', { period, variationPct }).then((r) => r.data),
 };
+
+// Padrón de ARCA con el certificado de Oplex - ver ArcaPadronService (API).
+export interface ArcaPadronStatus {
+  configured: boolean;
+  env: 'HOMOLOGACION' | 'PRODUCCION';
+  certAlias: string | null;
+  cuit: string | null;
+  certExpiresAt: string | null;
+  ticketExpiresAt: string | null;
+  lastCheckAt: string | null;
+  lastCheckOk: boolean | null;
+  lastCheckMessage: string | null;
+  queriesThisMonth: number;
+}
+
+export interface ArcaPadronTestResult {
+  ok: boolean;
+  message: string;
+  ms: number;
+  person: {
+    name: string;
+    taxConditionLabel: string | null;
+    fiscalAddress: string | null;
+  } | null;
+}
+
+export const adminArcaPadronApi = {
+  getStatus: () => api.get<ArcaPadronStatus>('/admin/arca-padron').then((r) => r.data),
+  test: (cuit: string) => api.post<ArcaPadronTestResult>('/admin/arca-padron/test', { cuit }).then((r) => r.data),
+  uploadCertificate: (certPem: string, keyPem: string) =>
+    api.post<ArcaPadronStatus>('/admin/arca-padron/certificate', { certPem, keyPem }).then((r) => r.data),
+};

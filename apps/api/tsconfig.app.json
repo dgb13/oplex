@@ -37,9 +37,6 @@
       "path": "../../libs/shared/auth-email/tsconfig.lib.json"
     },
     {
-      "path": "../../libs/modules/pos/tsconfig.lib.json"
-    },
-    {
       "path": "../../libs/modules/reports-purchases/tsconfig.lib.json"
     },
     {
@@ -52,13 +49,19 @@
       "path": "../../libs/modules/ai-invoice-scan/tsconfig.lib.json"
     },
     {
+      "path": "../../libs/modules/pos/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/modules/calendar/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/shared/types/tsconfig.lib.json"
     },
     {
       "path": "../../libs/shared/subscriptions/tsconfig.lib.json"
     },
     {
-      "path": "../../libs/shared/types/tsconfig.lib.json"
+      "path": "../../libs/shared/afip-credentials/tsconfig.lib.json"
     },
     {
       "path": "../../libs/modules/treasury/tsconfig.lib.json"

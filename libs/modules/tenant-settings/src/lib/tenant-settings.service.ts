@@ -58,6 +58,7 @@ export interface TenantSettingsView {
   // Preferencias, el PDF simplemente omite la línea si no están.
   fiscalAddress: string | null;
   grossIncomeNumber: string | null;
+  grossIncomeType: string | null;
   activityStartDate: Date | null;
   // Sugerencia genérica de % de remarca - ver el comentario del campo en
   // el schema. Usado por Inventario para pre-completar el precio de venta
@@ -169,6 +170,7 @@ export class TenantSettingsService {
       ownTaxCondition: row?.ownTaxCondition ?? null,
       fiscalAddress: row?.fiscalAddress ?? null,
       grossIncomeNumber: row?.grossIncomeNumber ?? null,
+      grossIncomeType: row?.grossIncomeType ?? null,
       activityStartDate: row?.activityStartDate ?? null,
       defaultMarkupPercent: row?.defaultMarkupPercent?.toNumber() ?? null,
       tenantTaxId,
@@ -196,6 +198,7 @@ export class TenantSettingsService {
         ownTaxCondition: dto.ownTaxCondition ?? null,
         fiscalAddress: dto.fiscalAddress ?? null,
         grossIncomeNumber: dto.grossIncomeNumber ?? null,
+        grossIncomeType: dto.grossIncomeType ?? null,
         activityStartDate: dto.activityStartDate ? new Date(dto.activityStartDate) : null,
         defaultMarkupPercent: dto.defaultMarkupPercent ?? null,
       },
@@ -212,6 +215,7 @@ export class TenantSettingsService {
         ownTaxCondition: dto.ownTaxCondition,
         fiscalAddress: dto.fiscalAddress,
         grossIncomeNumber: dto.grossIncomeNumber,
+        grossIncomeType: dto.grossIncomeType,
         activityStartDate: dto.activityStartDate === undefined ? undefined : dto.activityStartDate ? new Date(dto.activityStartDate) : null,
         defaultMarkupPercent: dto.defaultMarkupPercent,
       },

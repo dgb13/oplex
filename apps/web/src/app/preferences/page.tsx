@@ -97,7 +97,7 @@ export default function PreferencesPage() {
           <CurrencySettings />
           <ArcaConnectionCard settings={settings} />
           <MercadoPagoCard />
-          <InvoicePdfCard settings={settings} />
+          <InvoicePdfCard />
           <WithholdingAgentCard settings={settings} />
           <InventoryPricingCard settings={settings} />
           <ReplenishmentCard />
@@ -262,37 +262,15 @@ function WithholdingAgentCard({ settings }: { settings: TenantSettings }) {
   );
 }
 
-/** Datos fiscales del emisor que van en el PDF de Facturación (ver
- * @plexo/invoicing/pdf) - CUIT/razón social ya se cargan en otro lado
- * (tenantInfoApi/Tenant.name), acá sólo lo que faltaba. El formato de
- * papel por defecto es una preferencia del USUARIO (User.invoicePdfFormat,
- * no TenantSettings) - mismo criterio que purchaseDocumentPdfStyle - por
- * eso usa su propia mutation/query en vez de tenantSettingsApi. */
-function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
+/** Formato de papel por defecto del PDF de Facturación - preferencia del
+ * USUARIO (User.invoicePdfFormat, no TenantSettings), mismo criterio que
+ * purchaseDocumentPdfStyle. Los datos fiscales del emisor (domicilio, IIBB,
+ * inicio de actividades) se cargan en Conexión con ARCA → paso 1. */
+function InvoicePdfCard() {
   const queryClient = useQueryClient();
-  const [fiscalAddress, setFiscalAddress] = useState(settings.fiscalAddress ?? '');
-  const [grossIncomeNumber, setGrossIncomeNumber] = useState(settings.grossIncomeNumber ?? '');
-  const [activityStartDate, setActivityStartDate] = useState(
-    settings.activityStartDate ? settings.activityStartDate.slice(0, 10) : '',
-  );
-  const [message, setMessage] = useState('');
-
   const { data: preferences } = useQuery({
     queryKey: ['invoicing-preferences'],
     queryFn: invoicingPreferencesApi.get,
-  });
-
-  const saveFiscalDataMutation = useMutation({
-    mutationFn: () =>
-      tenantSettingsApi.update({
-        fiscalAddress: fiscalAddress.trim() === '' ? null : fiscalAddress.trim(),
-        grossIncomeNumber: grossIncomeNumber.trim() === '' ? null : grossIncomeNumber.trim(),
-        activityStartDate: activityStartDate === '' ? null : activityStartDate,
-      }),
-    onSuccess: () => {
-      setMessage('Guardado');
-      void queryClient.invalidateQueries({ queryKey: ['tenant-settings'] });
-    },
   });
 
   const formatMutation = useMutation({
@@ -303,46 +281,12 @@ function InvoicePdfCard({ settings }: { settings: TenantSettings }) {
   return (
     <Card>
       <CardContent>
-        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Datos fiscales para la Factura</h2>
+        <h2 className="mb-1 text-sm font-medium text-muted-foreground">PDF de la Factura</h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Domicilio, Ingresos Brutos e inicio de actividades del emisor - se imprimen en el PDF de
-          Facturación (CUIT y razón social ya se cargan arriba, en Conexión con ARCA).
+          Domicilio, Ingresos Brutos e inicio de actividades se cargan en Conexión con ARCA → Datos de la empresa.
         </p>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="col-span-2 flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Domicilio fiscal</span>
-            <Input
-              value={fiscalAddress}
-              onChange={(e) => setFiscalAddress(e.target.value)}
-              placeholder="Av. Siempre Viva 123, CABA"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Ingresos Brutos</span>
-            <Input value={grossIncomeNumber} onChange={(e) => setGrossIncomeNumber(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Inicio de actividades</span>
-            <Input type="date" value={activityStartDate} onChange={(e) => setActivityStartDate(e.target.value)} />
-          </label>
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              setMessage('');
-              saveFiscalDataMutation.mutate();
-            }}
-            disabled={saveFiscalDataMutation.isPending}
-          >
-            {saveFiscalDataMutation.isPending ? 'Guardando...' : 'Guardar'}
-          </Button>
-          {message && <p className="text-xs text-green-600 dark:text-green-400">{message}</p>}
-        </div>
-
         {preferences && (
-          <div className="mt-6 flex items-center gap-3 border-t pt-4">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">Formato de PDF por defecto</span>
             <Select
               value={preferences.invoicePdfFormat}

@@ -27,6 +27,7 @@ import { TaxesModule } from '@plexo/taxes';
 import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { AdminModule } from './admin/admin.module.js';
 import { AiInvoiceScanModule } from './ai-invoice-scan/ai-invoice-scan.module.js';
+import { ArcaPadronModule } from './arca-padron/arca-padron.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
 import { AppController } from './app.controller';
@@ -97,6 +98,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     UsersModule,
     MembershipsModule,
     AiInvoiceScanModule,
+    ArcaPadronModule,
     AssistantModule,
     WhatsAppModule,
     WhatsAppWebhookModule,

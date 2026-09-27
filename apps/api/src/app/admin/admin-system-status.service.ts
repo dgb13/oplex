@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Injectable, Logger } from '@nestjs/common';
+import { ArcaPadronService } from '@plexo/afip-credentials';
 import { PrismaService, getTenantDb, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 
@@ -127,6 +128,7 @@ export class AdminSystemStatusService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly arcaPadron: ArcaPadronService,
   ) {}
 
   async getStatus(): Promise<SystemStatusItem[]> {
@@ -154,6 +156,7 @@ export class AdminSystemStatusService {
         'APPLE_KEY_ID',
         'APPLE_PRIVATE_KEY',
       ]),
+      await this.checkArcaPadron(),
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
       // API key propia del asistente de IA conversacional, separada de
       // ANTHROPIC_API_KEY (Carga de Comprobantes IA) - ver
@@ -286,6 +289,19 @@ export class AdminSystemStatusService {
       );
       return { valid: false, detail: 'No se pudo contactar a Meta - revisá la conexión del servidor.' };
     }
+  }
+
+  /** Certificado de Oplex para el padrón de ARCA - vive en PlatformSettings
+   * (se sube desde Admin), no en una env var. El detalle y "Probar consulta"
+   * van por AdminArcaPadronController. */
+  private async checkArcaPadron(): Promise<SystemStatusItem> {
+    const status = await this.arcaPadron.getStatus();
+    return {
+      key: 'arcaPadron',
+      label: 'ARCA · Padrón de contribuyentes',
+      configured: status.configured,
+      detail: status.configured ? undefined : 'Falta cargar el certificado de Oplex',
+    };
   }
 
   private checkGroup(key: string, label: string, vars: string[]): SystemStatusItem {

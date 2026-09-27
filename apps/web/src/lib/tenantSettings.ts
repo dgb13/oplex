@@ -4,6 +4,7 @@ export type EmailSenderMode = 'SHARED' | 'CUSTOM_DOMAIN';
 export type ReminderTone = 'FRIENDLY' | 'NEUTRAL' | 'FIRM';
 export type AfipEnvironment = 'HOMOLOGACION' | 'PRODUCCION';
 export type TenantTaxCondition = 'RESPONSABLE_INSCRIPTO' | 'MONOTRIBUTO' | 'EXENTO';
+export type GrossIncomeType = 'SIMPLIFICADO' | 'LOCAL' | 'CONVENIO_MULTILATERAL' | 'EXENTO' | 'NO_INSCRIPTO';
 
 export interface TenantSettings {
   arReminderIntervalDays: number | null;
@@ -33,6 +34,7 @@ export interface TenantSettings {
   ownTaxCondition: TenantTaxCondition | null;
   fiscalAddress: string | null;
   grossIncomeNumber: string | null;
+  grossIncomeType: GrossIncomeType | null;
   activityStartDate: string | null;
   defaultMarkupPercent: number | null;
   tenantTaxId: string | null;
@@ -81,6 +83,7 @@ export const tenantSettingsApi = {
       ownTaxCondition: TenantTaxCondition | null;
       fiscalAddress: string | null;
       grossIncomeNumber: string | null;
+      grossIncomeType: GrossIncomeType | null;
       activityStartDate: string | null;
       defaultMarkupPercent: number | null;
     }>,
@@ -142,4 +145,24 @@ export const remindersApi = {
   getStatus: () => api.get<ReminderStatus>('/receivables/reminders/status').then((r) => r.data),
   runNow: () => api.post<ReminderSweepResult>('/receivables/reminders/run-now').then((r) => r.data),
   reset: () => api.post<{ reset: number }>('/receivables/reminders/reset').then((r) => r.data),
+};
+
+/** Lectura con IA de la Constancia de Inscripción (no se guarda el archivo). */
+export interface ConstanciaReading {
+  isConstancia: boolean;
+  cuit: string | null;
+  name: string | null;
+  ivaCondition: TenantTaxCondition | null;
+  fiscalAddress: string | null;
+  activityStartDate: string | null;
+  grossIncomeType: GrossIncomeType | null;
+  grossIncomeDetail: string | null;
+}
+
+export const constanciaApi = {
+  read: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<ConstanciaReading>('/arca/constancia/read', formData).then((r) => r.data);
+  },
 };

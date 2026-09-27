@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -94,6 +95,11 @@ export class UpdateTenantSettingsDto {
   @IsString()
   @MaxLength(50)
   grossIncomeNumber?: string | null;
+
+  // Situación en Ingresos Brutos (provincial, ARCA no la informa).
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsIn(['SIMPLIFICADO', 'LOCAL', 'CONVENIO_MULTILATERAL', 'EXENTO', 'NO_INSCRIPTO'])
+  grossIncomeType?: string | null;
 
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsDateString()

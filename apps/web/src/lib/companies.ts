@@ -122,6 +122,11 @@ export interface AfipPadronData {
   name: string;
   taxCondition: string | null;
   fiscalAddress: string | null;
+  /** Condición IVA ya interpretada por el backend (null = no se pudo deducir). */
+  ivaCondition?: 'RESPONSABLE_INSCRIPTO' | 'MONOTRIBUTO' | 'EXENTO' | null;
+  mainActivity?: string | null;
+  /** 'AAAA-MM' - ARCA informa sólo mes y año. */
+  activityStartMonth?: string | null;
 }
 
 export const companiesApi = {

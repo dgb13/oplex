@@ -5,9 +5,14 @@ import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { companiesApi, type Company, type CompanyIndustry, type CompanyRoleType } from '@/lib/companies';
 import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { lookupError, SourceBadge, ValueBox, type Source } from '@/components/arca/ArcaFields';
+import { suggestDocumentLetter } from '@/lib/documentLetter';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+
+type ArcaFieldKey = 'name' | 'taxCondition' | 'fiscalAddress';
 
 interface Props {
   company?: Company;
@@ -90,7 +95,6 @@ export default function CompanyFormModal({
     company?.roles.map((r) => r.role) ?? ['CUSTOMER'],
   );
   const [error, setError] = useState('');
-  const [afipMessage, setAfipMessage] = useState('');
   const [afipError, setAfipError] = useState('');
   // Set only when the CUIT-collision check (create + lockedRole only)
   // finds an existing company under a different role - offers merging the
@@ -108,21 +112,66 @@ export default function CompanyFormModal({
   // sigue soportado tal cual para no romperlo si algún día se usa.
   const isBranchOnly = lockedRole === 'BRANCH';
 
-  const afipLookup = useMutation({
-    mutationFn: () => companiesApi.lookupAfip(taxId),
-    onSuccess: (data) => {
+  // CUIT primero: al completar los 11 dígitos se consulta el padrón de
+  // ARCA (con el certificado de Oplex) y se completan razón social,
+  // condición IVA y domicilio. Si ARCA no lo encuentra o no responde, los
+  // campos quedan para cargar a mano.
+  const [lookup, setLookup] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [sources, setSources] = useState<Partial<Record<ArcaFieldKey, Source>>>({});
+  const [manual, setManual] = useState<Set<ArcaFieldKey>>(() => new Set());
+  const lastLookup = useRef(normalizeCuit(company?.taxId ?? ''));
+  const { data: ownSettings } = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+
+  async function runLookup(cuit: string) {
+    lastLookup.current = cuit;
+    setLookup('loading');
+    setAfipError('');
+    try {
+      const data = await companiesApi.lookupAfip(cuit);
+      if (lastLookup.current !== cuit) return;
       setName(data.name);
       setTaxCondition(data.taxCondition ?? '');
       setFiscalAddress(data.fiscalAddress ?? '');
+      setSources({
+        name: 'arca',
+        taxCondition: data.taxCondition ? 'arca' : null,
+        fiscalAddress: data.fiscalAddress ? 'arca' : null,
+      });
+      setManual(new Set<ArcaFieldKey>(data.taxCondition ? [] : ['taxCondition']));
+      setLookup('ok');
+    } catch (err) {
+      if (lastLookup.current !== cuit) return;
+      setLookup('error');
+      setAfipError(lookupError(err));
+      setManual(new Set<ArcaFieldKey>(['name', 'taxCondition', 'fiscalAddress']));
+    }
+  }
+
+  function onCuitChange(value: string) {
+    const formatted = formatCuitInput(value);
+    setTaxId(formatted);
+    const digits = normalizeCuit(formatted);
+    if (digits.length === 11) {
+      if (digits !== lastLookup.current) void runLookup(digits);
+    } else {
+      lastLookup.current = '';
+      setLookup('idle');
       setAfipError('');
-      setAfipMessage('Datos encontrados en ARCA');
-    },
-    onError: (err: AxiosError<{ message?: string | string[] }>) => {
-      setAfipMessage('');
-      const message = err.response?.data?.message ?? 'No se pudo consultar ARCA';
-      setAfipError(Array.isArray(message) ? message.join(', ') : message);
-    },
-  });
+    }
+  }
+
+  function editField(key: ArcaFieldKey) {
+    setManual((prev) => new Set(prev).add(key));
+    setSources((prev) => ({ ...prev, [key]: prev[key] ? 'edited' : null }));
+  }
+
+  const ownCondition = ownSettings?.ownTaxCondition ?? null;
+  const letter = suggestDocumentLetter(ownCondition, taxId || null, taxCondition || null);
+  const letterText = letter.letter
+    ? `Factura ${letter.letter}${
+        ownCondition === 'MONOTRIBUTO' ? ' (vos sos Monotributo)' : ownCondition === 'EXENTO' ? ' (vos sos Exento)' : ''
+      }`
+    : '';
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -235,7 +284,7 @@ export default function CompanyFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl rounded-xl border bg-card p-6 shadow-2xl">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">
             {isEdit ? `Editar ${roleLabel ? roleLabel.toLowerCase() : 'empresa'}` : roleLabel ? `Nuevo/a ${roleLabel.toLowerCase()}` : 'Nueva empresa'}
@@ -266,81 +315,123 @@ export default function CompanyFormModal({
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {isBranchOnly ? (
-              <p className="rounded-lg border bg-muted p-3 text-xs text-muted-foreground">
-                El CUIT, la razón social, la condición de IVA y el certificado de esta empresa ya se
-                cargan una sola vez en Preferencias - acá sólo lo que puede variar por sucursal.
-              </p>
-            ) : (
-              <Field label="CUIT / Tax ID">
-                <div className="flex gap-2">
-                  <Input
-                    value={taxId}
-                    onChange={(e) => setTaxId(formatCuitInput(e.target.value))}
-                    placeholder="30-71659554-9"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={() => afipLookup.mutate()}
-                    disabled={afipLookup.isPending || !taxId.trim()}
-                  >
-                    {afipLookup.isPending ? 'Consultando ARCA...' : 'Buscar en ARCA'}
-                  </Button>
+              <>
+                <p className="rounded-lg border bg-muted p-3 text-xs text-muted-foreground">
+                  El CUIT, la razón social, la condición de IVA y el certificado de esta empresa ya se
+                  cargan una sola vez en Preferencias - acá sólo lo que puede variar por sucursal.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Nombre de la sucursal">
+                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sucursal Centro" />
+                  </Field>
+                  <Field label="Email">
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </Field>
                 </div>
-                {afipMessage && <p className="text-xs text-muted-foreground">{afipMessage}</p>}
-                {afipError && (
-                  <p className="text-xs text-destructive">
-                    {afipError} - si el padrón de ARCA no responde, podés completar los datos a mano
-                    acá abajo.
-                  </p>
-                )}
-              </Field>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={isBranchOnly ? 'Nombre de la sucursal' : 'Nombre / Razón Social'}>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={isBranchOnly ? 'Sucursal Centro' : 'Se puede escribir a mano o buscar el CUIT en ARCA'}
-                />
-              </Field>
-              <Field label="Email">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </Field>
-            </div>
-
-            {isBranchOnly ? (
-              <Field label="Domicilio comercial (si es distinto del fiscal)">
-                <Input
-                  value={fiscalAddress}
-                  onChange={(e) => setFiscalAddress(e.target.value)}
-                  placeholder="Av. Corrientes 1234, CABA"
-                />
-              </Field>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Condición de IVA">
+                <Field label="Domicilio comercial (si es distinto del fiscal)">
                   <Input
-                    value={taxCondition}
-                    onChange={(e) => setTaxCondition(e.target.value)}
-                    placeholder="Responsable Inscripto"
+                    value={fiscalAddress}
+                    onChange={(e) => setFiscalAddress(e.target.value)}
+                    placeholder="Av. Corrientes 1234, CABA"
                   />
                 </Field>
-                <Field label="Domicilio fiscal">
-                  <Input value={fiscalAddress} onChange={(e) => setFiscalAddress(e.target.value)} />
-                </Field>
-              </div>
-            )}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Teléfono">
+                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+54 11 4444-5555" />
+                  </Field>
+                  <Field label="Sitio web">
+                    <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." />
+                  </Field>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2 rounded-[14px] border-[1.5px] border-primary bg-primary/10 px-4 py-3.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label htmlFor="company-form-cuit" className="text-sm font-semibold">
+                      CUIT{roleLabel ? ` del ${roleLabel.toLowerCase()}` : ''}
+                    </label>
+                    <Input
+                      id="company-form-cuit"
+                      className="h-auto w-[220px] bg-card px-3 py-2 font-mono text-xl tracking-[.04em] md:text-xl"
+                      value={taxId}
+                      maxLength={13}
+                      onChange={(e) => onCuitChange(e.target.value)}
+                      placeholder="30-71234567-8"
+                      autoFocus={!isEdit}
+                    />
+                    {lookup === 'loading' && <span className="text-[13px] text-muted-foreground">⟳ Consultando ARCA...</span>}
+                    {lookup === 'ok' && <span className="text-[13px] text-emerald-700 dark:text-emerald-400">✓ Encontrado</span>}
+                    {lookup === 'error' && <span className="text-[13px] text-destructive">✕ {afipError}</span>}
+                    {isEdit && lookup === 'idle' && normalizeCuit(taxId).length === 11 && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                        onClick={() => void runLookup(normalizeCuit(taxId))}
+                      >
+                        Actualizar desde ARCA
+                      </button>
+                    )}
+                  </div>
+                  {!isEdit && (
+                    <p className="text-xs text-muted-foreground">
+                      ¿Sin CUIT (consumidor final)?{' '}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => setManual(new Set<ArcaFieldKey>(['name', 'taxCondition', 'fiscalAddress']))}
+                      >
+                        Cargar sólo con nombre
+                      </button>
+                    </p>
+                  )}
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Teléfono">
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+54 11 4444-5555" />
-              </Field>
-              <Field label="Sitio web">
-                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." />
-              </Field>
-            </div>
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-6">
+                  <ArcaField className="sm:col-span-6" label="Razón social" source={sources.name}>
+                    <ValueBox
+                      value={name}
+                      editing={manual.has('name')}
+                      onEdit={() => editField('name')}
+                      onChange={setName}
+                      placeholder="Nombre o razón social"
+                    />
+                  </ArcaField>
+                  <ArcaField className="sm:col-span-3" label="Condición frente al IVA" source={sources.taxCondition}>
+                    <ValueBox
+                      value={taxCondition}
+                      editing={manual.has('taxCondition')}
+                      onEdit={() => editField('taxCondition')}
+                      onChange={setTaxCondition}
+                      placeholder="Responsable Inscripto"
+                      emptyText="—"
+                    />
+                  </ArcaField>
+                  <ArcaField className="sm:col-span-3" label="Factura que le corresponde">
+                    <ValueBox value={letterText} emptyText="—" readOnly />
+                  </ArcaField>
+                  <ArcaField className="sm:col-span-6" label="Domicilio fiscal" source={sources.fiscalAddress}>
+                    <ValueBox
+                      value={fiscalAddress}
+                      editing={manual.has('fiscalAddress')}
+                      onEdit={() => editField('fiscalAddress')}
+                      onChange={setFiscalAddress}
+                      emptyText="—"
+                    />
+                  </ArcaField>
+                  <ArcaField className="sm:col-span-3" label="Email (para enviarle facturas)">
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="opcional" />
+                  </ArcaField>
+                  <ArcaField className="sm:col-span-3" label="Teléfono">
+                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="opcional" />
+                  </ArcaField>
+                </div>
+
+                <Field label="Sitio web">
+                  <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." />
+                </Field>
+              </>
+            )}
 
             {!isBranchOnly && (
               <div className="grid grid-cols-2 gap-4">
@@ -471,6 +562,27 @@ export default function CompanyFormModal({
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+function ArcaField({
+  label,
+  source,
+  className,
+  children,
+}: {
+  label: string;
+  source?: Source;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`flex flex-col gap-[5px] ${className ?? ''}`}>
+      <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
+        {label} <SourceBadge source={source} />
+      </span>
+      {children}
     </div>
   );
 }

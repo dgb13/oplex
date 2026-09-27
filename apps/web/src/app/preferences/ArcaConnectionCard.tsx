@@ -3,12 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import Select from '@/components/ui/Select';
-import { formatCuitInput } from '@/lib/cuit';
 import {
   afipCertificateApi,
-  tenantInfoApi,
-  tenantSettingsApi,
   type AfipFileInspection,
   type ArcaCheckResult,
   type TenantSettings,
@@ -18,6 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Check, ChevronRight, Copy, Download, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { CompanyDataStep } from './CompanyDataStep';
 
 type StepKey = 1 | 2 | 3 | 4;
 
@@ -191,9 +188,9 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
           open={open.has(1)}
           onToggle={() => toggle(1)}
           title="Datos de la empresa"
-          subtitle="CUIT y condición frente al IVA"
+          subtitle="lo que sale como emisor en tus facturas"
         >
-          <CompanyStep settings={settings} onSaved={invalidate} />
+          <CompanyDataStep settings={settings} onSaved={invalidate} />
         </Step>
 
         <Step
@@ -301,85 +298,6 @@ function Step({
       </button>
       {open && <div className="col-start-2 mt-3 flex flex-col gap-3.5">{children}</div>}
     </section>
-  );
-}
-
-function CompanyStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () => void }) {
-  const [taxId, setTaxId] = useState(settings.tenantTaxId ?? '');
-  const [legalName, setLegalName] = useState(settings.tenantName ?? '');
-  const [condition, setCondition] = useState<TenantTaxCondition | ''>(settings.ownTaxCondition ?? '');
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const info: { taxId?: string; legalName?: string } = {};
-      if (taxId.trim() && taxId !== settings.tenantTaxId) info.taxId = taxId;
-      if (legalName.trim() && legalName.trim() !== settings.tenantName) info.legalName = legalName.trim();
-      if (info.taxId || info.legalName) await tenantInfoApi.update(info);
-      if (condition && condition !== settings.ownTaxCondition) {
-        await tenantSettingsApi.update({ ownTaxCondition: condition });
-      }
-    },
-    onSuccess: () => {
-      setError('');
-      setSaved(true);
-      onSaved();
-    },
-    onError: (err) => setError(errorMessage(err, 'No se pudo guardar')),
-  });
-
-  return (
-    <>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-[12.5px] text-muted-foreground">
-          Razón social (sale como emisor en las facturas)
-          <Input
-            value={legalName}
-            onChange={(e) => {
-              setLegalName(e.target.value);
-              setSaved(false);
-            }}
-            placeholder="Como figura en ARCA"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
-          CUIT de la empresa
-          <Input
-            className="w-48 font-mono"
-            value={taxId}
-            onChange={(e) => {
-              setTaxId(formatCuitInput(e.target.value));
-              setSaved(false);
-            }}
-            placeholder="20-12345678-9"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
-          Condición frente al IVA
-          <Select
-            className="w-56"
-            value={condition}
-            onChange={(v) => {
-              setCondition(v as TenantTaxCondition);
-              setSaved(false);
-            }}
-            placeholder="Elegir..."
-            options={(Object.keys(TAX_CONDITION_LABELS) as TenantTaxCondition[]).map((value) => ({
-              value,
-              label: TAX_CONDITION_LABELS[value],
-            }))}
-          />
-        </label>
-        <Button type="button" variant="outline" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-          {mutation.isPending ? 'Guardando...' : 'Guardar'}
-        </Button>
-        {saved && <span className="text-[12.5px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Guardado</span>}
-      </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <p className="text-xs text-muted-foreground">
-        Monotributo emite siempre Factura C. Responsable Inscripto emite A o B según el cliente.
-      </p>
-    </>
   );
 }
 

@@ -18,8 +18,8 @@ import { StubAfipPadronService } from './stub-afip-padron.js';
     StubAfipPadronService,
     // AFIP_PADRON_STUB=true pisa el padrón real por el mock determinístico
     // (ver StubAfipPadronService) - sólo para desarrollo local, nunca seteado
-    // en producción. Default (sin la env var) sigue siendo el real de
-    // siempre, cert por tenant vía AfipCredentialsService.
+    // en producción. Default (sin la env var): el padrón real con el
+    // certificado de Oplex (ArcaPadronService).
     {
       provide: AFIP_PADRON,
       useFactory: (real: RealAfipPadronService, stub: StubAfipPadronService): AfipPadronPort =>

@@ -1,47 +1,50 @@
-import type { AfipCredentialsService } from '@plexo/afip-credentials';
+import { ArcaPadronNotConfiguredError, ArcaPadronNotFoundError, type ArcaPadronService } from '@plexo/afip-credentials';
 import { AfipLookupError, AfipNotConfiguredError } from './afip-padron.port.js';
 import { RealAfipPadronService } from './real-afip-padron.js';
 
+function serviceWith(lookup: jest.Mock) {
+  return new RealAfipPadronService({ lookup } as unknown as ArcaPadronService);
+}
+
 describe('RealAfipPadronService.lookup', () => {
-  it('throws AfipNotConfiguredError when the tenant has no AFIP certificate configured', async () => {
-    const afipCredentials = { getCurrent: jest.fn().mockResolvedValue(null) } as unknown as AfipCredentialsService;
-    const service = new RealAfipPadronService(afipCredentials);
-
-    await expect(service.lookup('20111111112')).rejects.toThrow(AfipNotConfiguredError);
-  });
-
-  it('resolves credentials from the current tenant on every call, not once at construction', async () => {
-    const getCurrent = jest
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        certPem: 'not a real cert',
-        keyPem: 'not a real key',
-        cuitRepresentada: '20111111112',
-        env: 'homologacion',
-      });
-    const afipCredentials = { getCurrent } as unknown as AfipCredentialsService;
-    const service = new RealAfipPadronService(afipCredentials);
-
-    await expect(service.lookup('20111111112')).rejects.toThrow(AfipNotConfiguredError);
-    // Second call, same instance, different tenant credentials this time -
-    // must re-resolve, not reuse whatever the constructor saw (there is no
-    // constructor-time credential resolution anymore).
-    await expect(service.lookup('20111111112')).rejects.toThrow(AfipLookupError);
-    expect(getCurrent).toHaveBeenCalledTimes(2);
-  });
-
-  it('wraps a WSAA/AFIP-side failure as AfipLookupError, not a raw error', async () => {
-    const afipCredentials = {
-      getCurrent: jest.fn().mockResolvedValue({
-        certPem: 'not a real cert',
-        keyPem: 'not a real key',
-        cuitRepresentada: '20111111112',
-        env: 'homologacion',
+  it('maps the platform padrón result to AfipPadronData', async () => {
+    const service = serviceWith(
+      jest.fn().mockResolvedValue({
+        cuit: '20201797064',
+        personType: 'FISICA',
+        name: 'PEREZ JUAN',
+        ivaCondition: 'MONOTRIBUTO',
+        taxConditionLabel: 'Monotributo (D)',
+        fiscalAddress: 'CALLE 1, CIUDAD (1000), BUENOS AIRES',
+        mainActivity: 'SERVICIOS',
+        activityStartMonth: '2015-08',
+        fromCache: false,
       }),
-    } as unknown as AfipCredentialsService;
-    const service = new RealAfipPadronService(afipCredentials);
+    );
+    await expect(service.lookup('20201797064')).resolves.toEqual({
+      cuit: '20201797064',
+      personType: 'FISICA',
+      name: 'PEREZ JUAN',
+      taxCondition: 'Monotributo (D)',
+      ivaCondition: 'MONOTRIBUTO',
+      fiscalAddress: 'CALLE 1, CIUDAD (1000), BUENOS AIRES',
+      mainActivity: 'SERVICIOS',
+      activityStartMonth: '2015-08',
+    });
+  });
 
-    await expect(service.lookup('20111111112')).rejects.toThrow(AfipLookupError);
+  it('throws AfipNotConfiguredError when Oplex has no padrón certificate', async () => {
+    const service = serviceWith(jest.fn().mockRejectedValue(new ArcaPadronNotConfiguredError()));
+    await expect(service.lookup('20201797064')).rejects.toBeInstanceOf(AfipNotConfiguredError);
+  });
+
+  it('returns null when ARCA has no record for the CUIT', async () => {
+    const service = serviceWith(jest.fn().mockRejectedValue(new ArcaPadronNotFoundError('20201797064')));
+    await expect(service.lookup('20201797064')).resolves.toBeNull();
+  });
+
+  it('wraps any other failure as AfipLookupError', async () => {
+    const service = serviceWith(jest.fn().mockRejectedValue(new Error('WSAA down')));
+    await expect(service.lookup('20201797064')).rejects.toBeInstanceOf(AfipLookupError);
   });
 });

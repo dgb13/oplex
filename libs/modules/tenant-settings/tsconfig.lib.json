@@ -11,6 +11,9 @@
   "include": ["src/**/*.ts"],
   "references": [
     {
+      "path": "../../shared/afip-credentials/tsconfig.lib.json"
+    },
+    {
       "path": "../../shared/encryption/tsconfig.lib.json"
     },
     {
