@@ -7,7 +7,7 @@ import '@fastify/multipart';
 
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
-// "Verificar con tu Constancia de Inscripción" (Preferencias → Datos de la
+// "Verificar con tu Constancia de Inscripción" (Contabilidad → Conexión con ARCA → Datos de la
 // empresa). El archivo no se guarda: se lee con IA y se devuelve para que
 // la UI lo compare contra el padrón. No consume el cupo de "Carga con IA"
 // (es parte del alta del emisor, una vez por tenant).

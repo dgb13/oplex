@@ -39,6 +39,9 @@ import { useEffect, useRef, useState } from 'react';
 interface NavLink {
   href: string;
   label: string;
+  // Sin roles = visible para todos. Con roles, sólo se muestra a esos (la
+  // API igual valida - esto es para no mostrar pantallas que no pueden usar).
+  roles?: string[];
 }
 
 interface NavLeaf extends NavLink {
@@ -91,6 +94,7 @@ const NAV_ENTRIES: NavEntry[] = [
       { href: '/taxes', label: 'Impuestos' },
       { href: '/treasury', label: 'Cartera de Cheques' },
       { href: '/reports', label: 'Reportes' },
+      { href: '/accounting/arca', label: 'Conexión con ARCA', roles: ['OWNER', 'ADMIN'] },
     ],
   },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
@@ -174,13 +178,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     queryFn: subscriptionsApi.getCurrent,
   });
   const comprasIndex = NAV_ENTRIES.findIndex((e) => e.kind === 'group' && e.label === 'Compras');
-  const navEntries = subscription?.plan.productionModuleEnabled
+  const planEntries = subscription?.plan.productionModuleEnabled
     ? [
         ...NAV_ENTRIES.slice(0, comprasIndex + 1),
         PRODUCTION_NAV_GROUP,
         ...NAV_ENTRIES.slice(comprasIndex + 1),
       ]
     : NAV_ENTRIES;
+  const navEntries = planEntries.map((entry) =>
+    entry.kind === 'group'
+      ? { ...entry, items: entry.items.filter((item) => !item.roles || (profile && item.roles.includes(profile.role))) }
+      : entry,
+  );
 
   useEffect(() => {
     if (profile?.mustChangePassword && pathname !== '/profile') {

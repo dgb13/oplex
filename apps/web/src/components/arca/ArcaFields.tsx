@@ -5,7 +5,7 @@ import type { AxiosError } from 'axios';
 import { useRef } from 'react';
 
 // Piezas comunes de los formularios que se autocompletan con el padrón de
-// ARCA (Preferencias → Datos de la empresa, alta de cliente/proveedor).
+// ARCA (Contabilidad → Conexión con ARCA → Datos de la empresa, alta de cliente/proveedor).
 
 /** De dónde salió cada dato - es lo que muestran los badges. */
 export type Source = 'arca' | 'edited' | 'constancia' | 'arcaMonth' | null;

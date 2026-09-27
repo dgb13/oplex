@@ -15,7 +15,7 @@ export interface ArcaConnectionCheckResult {
 }
 
 /**
- * "Probar conexión con ARCA" (Preferencias): pide a WSFE el último
+ * "Probar conexión con ARCA" (Contabilidad → Conexión con ARCA): pide a WSFE el último
  * comprobante autorizado del punto de venta de la primera sucursal, con la
  * letra que corresponde a la condición IVA de la empresa - confirma
  * certificado, autorización a wsfe y CUIT sin emitir ningún comprobante.

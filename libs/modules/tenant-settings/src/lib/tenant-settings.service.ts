@@ -390,7 +390,7 @@ export class TenantSettingsService {
     if (!tenant.taxId) {
       throw new BadRequestException('Cargá primero el CUIT de la empresa (paso 1).');
     }
-    const finalAlias = alias?.trim() || 'oplex';
+    const finalAlias = alias?.trim() || 'miempresa';
     const { keyPem, csrPem } = generateAfipKeyAndCsr({
       cuit: tenant.taxId,
       organization: tenant.name,

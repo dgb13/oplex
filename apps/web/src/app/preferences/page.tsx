@@ -18,7 +18,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
-import ArcaConnectionCard from './ArcaConnectionCard';
 import CurrencySettings from './CurrencySettings';
 import MercadoPagoCard from './MercadoPagoCard';
 
@@ -84,8 +83,8 @@ export default function PreferencesPage() {
     queryFn: tenantSettingsApi.get,
   });
 
-  // Mismo ancho para todas las tarjetas: el de "Conexión con ARCA", la más
-  // ancha (pasos + pantallas de ejemplo).
+  // Mismo ancho para todas las tarjetas (el de "Conexión con ARCA", que ahora
+  // vive en Contabilidad → /accounting/arca).
   return (
     <div className="flex max-w-[980px] flex-col gap-6">
       <h1 className="text-xl font-semibold">Preferencias</h1>
@@ -95,7 +94,6 @@ export default function PreferencesPage() {
         <>
           <EmailSettingsCard settings={settings} />
           <CurrencySettings />
-          <ArcaConnectionCard settings={settings} />
           <MercadoPagoCard />
           <InvoicePdfCard />
           <WithholdingAgentCard settings={settings} />

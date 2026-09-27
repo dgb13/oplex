@@ -61,7 +61,7 @@ function downloadText(text: string, filename: string) {
 }
 
 /**
- * Preferencias → "Conexión con ARCA": todo lo necesario para emitir con CAE
+ * Contabilidad → "Conexión con ARCA": todo lo necesario para emitir con CAE
  * como un asistente de 4 pasos con un resumen de estado arriba (ver el
  * mockup aprobado el 2026-09-26). Reemplaza la tarjeta "Certificado ARCA"
  * vieja (inputs de archivo nativos casi invisibles, guía escondida en un
@@ -93,7 +93,7 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
     setTimeout(() => step32Ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
 
-  const alias = settings.afipPendingAlias ?? settings.afipCertAlias ?? 'oplexhomo';
+  const alias = settings.afipPendingAlias ?? settings.afipCertAlias ?? suggestedAlias(settings);
   const isProd = settings.afipEnv === 'PRODUCCION';
 
   return (
@@ -301,9 +301,22 @@ function Step({
   );
 }
 
+// Nombre simbólico sugerido para WSASS, a partir del nombre de la empresa
+// del tenant (sólo letras y números, como exige el campo) + "homo" en
+// homologación - p. ej. "Ferretería López" → "ferreterialopezhomo".
+function suggestedAlias(settings: TenantSettings): string {
+  const base =
+    (settings.tenantName ?? '')
+      .normalize('NFD')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toLowerCase()
+      .slice(0, 20) || 'miempresa';
+  return settings.afipEnv === 'PRODUCCION' ? base : `${base}homo`;
+}
+
 function KeyStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () => void }) {
   const [mode, setMode] = useState<'oplex' | 'own'>('oplex');
-  const [alias, setAlias] = useState(settings.afipPendingAlias ?? (settings.afipEnv === 'PRODUCCION' ? 'oplex' : 'oplexhomo'));
+  const [alias, setAlias] = useState(settings.afipPendingAlias ?? suggestedAlias(settings));
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const mutation = useMutation({

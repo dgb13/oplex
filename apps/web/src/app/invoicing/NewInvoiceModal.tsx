@@ -161,7 +161,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
       return;
     }
     if (!afipConfigured) {
-      setError('Configurá el certificado ARCA en Preferencias antes de emitir.');
+      setError('Configurá el certificado ARCA en Contabilidad → Conexión con ARCA antes de emitir.');
       return;
     }
     mutation.mutate();
@@ -291,8 +291,8 @@ export default function NewInvoiceModal({ onClose }: Props) {
               {!afipConfigured && (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}
-                  <Link href="/preferences" className="font-medium underline">
-                    Preferencias → Conexión con ARCA
+                  <Link href="/accounting/arca" className="font-medium underline">
+                    Contabilidad → Conexión con ARCA
                   </Link>
                   .
                 </p>
@@ -303,7 +303,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                 size="lg"
                 className="w-full"
                 disabled={mutation.isPending || !ready || missingWarehouse || !afipConfigured}
-                title={!afipConfigured ? 'Configurá el certificado ARCA en Preferencias primero' : undefined}
+                title={!afipConfigured ? 'Configurá el certificado ARCA en Contabilidad → Conexión con ARCA primero' : undefined}
               >
                 {mutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
               </Button>
