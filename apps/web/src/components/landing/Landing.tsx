@@ -761,7 +761,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
                         ) : (
                           <>
                             <b>$ {ars.format(price)}</b>
-                            <span className="unit">por mes</span>
+                            <span className="unit">por mes, IVA incluido</span>
                           </>
                         )}
                       </div>
@@ -782,7 +782,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             ) : (
               <p className="plans-note">No pudimos cargar los planes en este momento. Probá recargar la página.</p>
             )}
-            <p className="plans-note">Precios en pesos argentinos.</p>
+            <p className="plans-note">Precios finales en pesos argentinos, con IVA incluido.</p>
           </div>
         </section>
 
