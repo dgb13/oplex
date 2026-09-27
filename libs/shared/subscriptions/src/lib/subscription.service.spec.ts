@@ -54,8 +54,8 @@ describe('SubscriptionService.startTrial', () => {
     expect(args.data.planId).toBe('plan-1');
     expect(args.data.status).toBe('TRIALING');
     const daysOut = (args.data.trialEndsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
-    expect(daysOut).toBeGreaterThan(6.9);
-    expect(daysOut).toBeLessThan(7.1);
+    expect(daysOut).toBeGreaterThan(14.9);
+    expect(daysOut).toBeLessThan(15.1);
   });
 });
 

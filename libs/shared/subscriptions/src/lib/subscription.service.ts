@@ -10,7 +10,7 @@ import {
 import type { CreatePlanDto } from './dto/create-plan.dto.js';
 import type { UpdatePlanDto } from './dto/update-plan.dto.js';
 
-const TRIAL_DAYS = 7;
+const TRIAL_DAYS = 15;
 
 // Named explicitly (not left to inference) - a composite TS build can't
 // otherwise name the cross-package Prisma payload type these `include`-ing
