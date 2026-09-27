@@ -225,12 +225,32 @@ function CertificateUpload({ production, onDone }: { production: boolean; onDone
     onSuccess: onDone,
   });
 
-  const pick = (setText: (t: string) => void, setName: (n: string) => void) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setName(file.name);
-    setText(await file.text());
-  };
+  const [pickError, setPickError] = useState('');
+
+  // Sin filtro de extensión (WSASS no fija una: .crt, .pem, .txt o nada) -
+  // el archivo se reconoce por su contenido, como en Conexión con ARCA.
+  const pick =
+    (expected: 'cert' | 'key', setText: (t: string) => void, setName: (n: string) => void) =>
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      const text = await file.text();
+      const kind = /BEGIN CERTIFICATE-----/.test(text) ? 'cert' : /PRIVATE KEY-----/.test(text) ? 'key' : null;
+      if (kind !== expected) {
+        setPickError(
+          kind === 'cert'
+            ? `"${file.name}" es un certificado, no una clave privada.`
+            : kind === 'key'
+              ? `"${file.name}" es una clave privada, no un certificado.`
+              : `"${file.name}" no parece ni un certificado ni una clave privada.`,
+        );
+        return;
+      }
+      setPickError('');
+      setName(file.name);
+      setText(text);
+    };
 
   const fileLabel =
     'flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:border-slate-500';
@@ -240,22 +260,23 @@ function CertificateUpload({ production, onDone }: { production: boolean; onDone
       <p className="text-xs text-slate-400">
         {production
           ? 'Subí el certificado de PRODUCCIÓN de Oplex y su clave privada. En ARCA (producción) tiene que tener autorizado el servicio ws_sr_constancia_inscripcion. El ambiente se detecta solo por el emisor del certificado.'
-          : 'Subí el certificado de Oplex (.crt/.pem) y su clave privada (.key). Tiene que tener autorizado el servicio ws_sr_constancia_inscripcion en WSASS. La clave se guarda cifrada.'}
+          : 'Subí el certificado de Oplex y su clave privada (sirve cualquier nombre o extensión: se reconocen por su contenido). Tiene que tener autorizado el servicio ws_sr_constancia_inscripcion en WSASS. La clave se guarda cifrada.'}
       </p>
       <div className="flex flex-wrap gap-2">
         <label className={fileLabel}>
-          <input type="file" accept=".crt,.pem,.cer" className="hidden" onChange={pick(setCertPem, setCertName)} />
-          {certName ? `✓ ${certName}` : 'Elegir certificado (.crt)'}
+          <input type="file" className="hidden" onChange={pick('cert', setCertPem, setCertName)} />
+          {certName ? `✓ ${certName}` : 'Elegir certificado'}
         </label>
         <label className={fileLabel}>
-          <input type="file" accept=".key,.pem,*" className="hidden" onChange={pick(setKeyPem, setKeyName)} />
-          {keyName ? `✓ ${keyName}` : 'Elegir clave privada (.key)'}
+          <input type="file" className="hidden" onChange={pick('key', setKeyPem, setKeyName)} />
+          {keyName ? `✓ ${keyName}` : 'Elegir clave privada'}
         </label>
         <button type="button" className={btn} disabled={!certPem || !keyPem || mutation.isPending} onClick={() => mutation.mutate()}>
           {mutation.isPending ? 'Guardando...' : 'Guardar certificado'}
         </button>
       </div>
-      {mutation.isError && <p className="text-xs text-red-300">✕ {apiError(mutation.error, 'No se pudo guardar el certificado.')}</p>}
+      {pickError && <p className="text-xs text-red-300">✕ {pickError}</p>}
+      {mutation.isError &&<p className="text-xs text-red-300">✕ {apiError(mutation.error, 'No se pudo guardar el certificado.')}</p>}
     </div>
   );
 }
