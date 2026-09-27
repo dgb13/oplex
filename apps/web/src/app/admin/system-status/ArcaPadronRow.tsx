@@ -35,7 +35,12 @@ export function ArcaPadronRow({ item }: { item: SystemStatusItem }) {
   const queryClient = useQueryClient();
   const { data: status } = useQuery({ queryKey: ['admin-arca-padron'], queryFn: adminArcaPadronApi.getStatus });
   const [open, setOpen] = useState(false);
-  const [testCuit, setTestCuit] = useState('20-20179706-4');
+  // Sin tocar, el CUIT de prueba depende del ambiente: en homologación uno
+  // de prueba de ARCA (datos ficticios - los reales no existen ahí); en
+  // producción el del titular del certificado (los de prueba no existen).
+  const [typedCuit, setTestCuit] = useState<string | null>(null);
+  const testCuit =
+    typedCuit ?? (status?.env === 'PRODUCCION' && status.cuit ? formatCuit(status.cuit) : '20-20179706-4');
   const [result, setResult] = useState<ArcaPadronTestResult | null>(null);
   const [upload, setUpload] = useState<null | 'replace' | 'production'>(null);
 
