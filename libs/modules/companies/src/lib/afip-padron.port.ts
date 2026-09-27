@@ -36,6 +36,16 @@ export class AfipNotConfiguredError extends Error {
   }
 }
 
+// CUIT inexistente en el padrón, con un mensaje para mostrar tal cual
+// (p. ej. la aclaración de homologación). Un lookup que devuelve null
+// sigue siendo "no encontrado" con el mensaje genérico.
+export class AfipNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AfipNotFoundError';
+  }
+}
+
 export class AfipLookupError extends Error {
   constructor(
     message: string,

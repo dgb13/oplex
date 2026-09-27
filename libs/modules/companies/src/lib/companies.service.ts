@@ -10,6 +10,7 @@ import { SubscriptionService } from '@plexo/subscriptions';
 import {
   AFIP_PADRON,
   AfipLookupError,
+  AfipNotFoundError,
   AfipNotConfiguredError,
   type AfipPadronData,
   type AfipPadronPort,
@@ -234,6 +235,9 @@ export class CompaniesService {
         throw new BadRequestException(
           'La consulta a ARCA no está configurada en este servidor',
         );
+      }
+      if (err instanceof AfipNotFoundError) {
+        throw new NotFoundException(err.message);
       }
       if (err instanceof AfipLookupError) {
         throw new BadGatewayException(err.message);

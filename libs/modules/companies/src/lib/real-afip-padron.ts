@@ -7,6 +7,7 @@ import {
 import {
   AfipLookupError,
   AfipNotConfiguredError,
+  AfipNotFoundError,
   type AfipPadronData,
   type AfipPadronPort,
 } from './afip-padron.port.js';
@@ -36,7 +37,10 @@ export class RealAfipPadronService implements AfipPadronPort {
       };
     } catch (err) {
       if (err instanceof ArcaPadronNotConfiguredError) throw new AfipNotConfiguredError();
-      if (err instanceof ArcaPadronNotFoundError) return null;
+      if (err instanceof ArcaPadronNotFoundError) {
+        if (err.env === 'HOMOLOGACION') throw new AfipNotFoundError(err.message);
+        return null;
+      }
       throw new AfipLookupError((err as Error).message, err);
     }
   }

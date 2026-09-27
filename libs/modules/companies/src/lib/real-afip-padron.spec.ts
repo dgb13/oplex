@@ -1,5 +1,5 @@
 import { ArcaPadronNotConfiguredError, ArcaPadronNotFoundError, type ArcaPadronService } from '@plexo/afip-credentials';
-import { AfipLookupError, AfipNotConfiguredError } from './afip-padron.port.js';
+import { AfipLookupError, AfipNotConfiguredError, AfipNotFoundError } from './afip-padron.port.js';
 import { RealAfipPadronService } from './real-afip-padron.js';
 
 function serviceWith(lookup: jest.Mock) {
@@ -41,6 +41,12 @@ describe('RealAfipPadronService.lookup', () => {
   it('returns null when ARCA has no record for the CUIT', async () => {
     const service = serviceWith(jest.fn().mockRejectedValue(new ArcaPadronNotFoundError('20201797064')));
     await expect(service.lookup('20201797064')).resolves.toBeNull();
+  });
+
+  it('explains homologación when the CUIT is missing from the test padrón', async () => {
+    const service = serviceWith(jest.fn().mockRejectedValue(new ArcaPadronNotFoundError('20270403949', 'HOMOLOGACION')));
+    await expect(service.lookup('20270403949')).rejects.toThrow(/homologación/);
+    await expect(service.lookup('20270403949')).rejects.toBeInstanceOf(AfipNotFoundError);
   });
 
   it('wraps any other failure as AfipLookupError', async () => {

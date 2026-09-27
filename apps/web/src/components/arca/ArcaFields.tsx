@@ -12,7 +12,12 @@ export type Source = 'arca' | 'edited' | 'constancia' | 'arcaMonth' | null;
 
 export function lookupError(err: unknown): string {
   const response = (err as AxiosError<{ message?: string }>)?.response;
-  if (response?.status === 404) return 'ARCA no encontró ese CUIT. Revisalo o cargá los datos a mano.';
+  if (response?.status === 404) {
+    // En homologación la API explica que ese padrón no tiene CUITs reales.
+    return /homologación/i.test(response.data?.message ?? '')
+      ? (response.data?.message as string)
+      : 'ARCA no encontró ese CUIT. Revisalo o cargá los datos a mano.';
+  }
   if (response?.status === 400 && /configurada/i.test(response.data?.message ?? '')) {
     return 'La consulta automática a ARCA todavía no está disponible. Cargá los datos a mano.';
   }

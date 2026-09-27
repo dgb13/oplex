@@ -42,8 +42,18 @@ export class ArcaPadronNotConfiguredError extends Error {
   }
 }
 export class ArcaPadronNotFoundError extends Error {
-  constructor(cuit: string) {
-    super(`ARCA no encontró el CUIT ${cuit} en el padrón.`);
+  constructor(
+    cuit: string,
+    readonly env: AfipEnvironment = 'PRODUCCION',
+  ) {
+    // El padrón de homologación sólo tiene CUITs de prueba con datos
+    // ficticios - un CUIT real "no existe" ahí, y sin aclararlo parece que
+    // el CUIT está mal.
+    super(
+      env === 'HOMOLOGACION'
+        ? `ARCA no encontró el CUIT ${cuit}: la consulta está en homologación (pruebas) y ese padrón no tiene CUITs reales. Probá con un CUIT de prueba (p. ej. 20-20179706-4) o cargá los datos a mano.`
+        : `ARCA no encontró el CUIT ${cuit} en el padrón.`,
+    );
   }
 }
 
@@ -239,7 +249,7 @@ export class ArcaPadronService {
 
     const fault = text.match(/<faultstring>(.*?)<\/faultstring>/);
     if (fault) {
-      if (/no existe persona/i.test(fault[1])) throw new ArcaPadronNotFoundError(cuit);
+      if (/no existe persona/i.test(fault[1])) throw new ArcaPadronNotFoundError(cuit, settings.arcaPadronEnv);
       throw new Error(`El padrón de ARCA rechazó la consulta: ${fault[1]}`);
     }
     const parsed = xmlParser.parse(text);
@@ -247,7 +257,7 @@ export class ArcaPadronService {
     if (!personaReturn?.datosGenerales) {
       const errorConstancia = personaReturn?.errorConstancia?.error;
       if (errorConstancia) throw new Error(`ARCA: ${toArray(errorConstancia).join('; ')}`);
-      throw new ArcaPadronNotFoundError(cuit);
+      throw new ArcaPadronNotFoundError(cuit, settings.arcaPadronEnv);
     }
     const person = mapConstancia(cuit, personaReturn);
     await this.prisma.arcaPadronCache.upsert({
