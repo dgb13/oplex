@@ -161,3 +161,17 @@ export const companiesApi = {
     api.get<AfipPadronData>(`/companies/afip/${encodeURIComponent(cuit)}`).then((r) => r.data),
   removePerson: (id: string) => api.delete(`/companies/people/${id}`).then(() => undefined),
 };
+
+// Quién crea y edita cada tipo de empresa - COPIA de COMPANY_ROLE_EDITORS
+// (libs/modules/companies/src/lib/company-permissions.ts): si cambia allá,
+// cambia acá. El servidor es el que manda; esto es para no mostrar
+// opciones que va a rechazar.
+export const COMPANY_ROLE_EDITORS: Record<CompanyRoleType, readonly string[]> = {
+  CUSTOMER: ['OWNER', 'ADMIN', 'SALES'],
+  SUPPLIER: ['OWNER', 'ADMIN', 'PURCHASES', 'INVENTORY'],
+  BRANCH: ['OWNER', 'ADMIN', 'SALES'],
+};
+
+export function canManageCompanyRole(userRole: string | undefined, companyRole: CompanyRoleType): boolean {
+  return !!userRole && COMPANY_ROLE_EDITORS[companyRole].includes(userRole);
+}

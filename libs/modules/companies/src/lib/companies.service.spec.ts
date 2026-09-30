@@ -1,11 +1,26 @@
-import { BadGatewayException, BadRequestException, NotFoundException } from '@nestjs/common';
-import { tenantContextStorage } from '@plexo/database';
+import { BadGatewayException, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Prisma, tenantContextStorage, type UserRole } from '@plexo/database';
 import type { SubscriptionService } from '@plexo/subscriptions';
 import { AfipLookupError, AfipNotConfiguredError, type AfipPadronPort } from './afip-padron.port.js';
 import { CompaniesService } from './companies.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: db as never }, fn);
+}
+
+function runAs<T>(role: UserRole, db: Record<string, unknown>, fn: () => T): T {
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role, tx: db as never }, fn);
+}
+
+/** Empresa existente tal como la lee updateCompany (con sus tipos). */
+function existingCompany(roles: string[] = ['CUSTOMER'], overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'company-1',
+    active: true,
+    creditLimit: new Prisma.Decimal(0),
+    roles: roles.map((role) => ({ role })),
+    ...overrides,
+  };
 }
 
 const stubAfipPadron: AfipPadronPort = { lookup: jest.fn() };
@@ -147,7 +162,7 @@ describe('CompaniesService.updateCompany', () => {
   it('replaces the full role set (delete + recreate) when roles is provided', async () => {
     const db = {
       company: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+        findUnique: jest.fn().mockResolvedValue(existingCompany()),
         update: jest.fn().mockResolvedValue({ id: 'company-1', roles: [{ role: 'BRANCH' }] }),
       },
       companyRole: {
@@ -168,7 +183,7 @@ describe('CompaniesService.updateCompany', () => {
   it('leaves roles untouched when the dto does not mention them', async () => {
     const db = {
       company: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+        findUnique: jest.fn().mockResolvedValue(existingCompany()),
         update: jest.fn().mockResolvedValue({ id: 'company-1', roles: [] }),
       },
       companyRole: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -185,7 +200,7 @@ describe('CompaniesService.updateCompany', () => {
     const update = jest.fn().mockResolvedValue({ id: 'company-1', active: false });
     const db = {
       company: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+        findUnique: jest.fn().mockResolvedValue(existingCompany()),
         update,
       },
     };
@@ -202,7 +217,7 @@ describe('CompaniesService.updateCompany', () => {
     const update = jest.fn().mockResolvedValue({ id: 'company-1' });
     const db = {
       company: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+        findUnique: jest.fn().mockResolvedValue(existingCompany()),
         update,
       },
     };
@@ -383,7 +398,7 @@ describe('CompaniesService.deletePerson', () => {
     const deletePerson = jest.fn().mockResolvedValue({ id: 'person-1' });
     const db = {
       person: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'person-1' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'person-1', company: { roles: [{ role: 'CUSTOMER' }] } }),
         delete: deletePerson,
       },
     };
@@ -392,5 +407,95 @@ describe('CompaniesService.deletePerson', () => {
     await runInTenant(db, () => service.deletePerson('person-1'));
 
     expect(deletePerson).toHaveBeenCalledWith({ where: { id: 'person-1' } });
+  });
+});
+
+describe('Permisos por tipo de empresa', () => {
+  const service = () => new CompaniesService(stubAfipPadron, stubSubscriptionService);
+  const dbFor = (company = existingCompany()) => ({
+    company: {
+      create: jest.fn((args) => Promise.resolve({ id: 'new', ...args.data })),
+      findUnique: jest.fn().mockResolvedValue(company),
+      update: jest.fn().mockResolvedValue(company),
+    },
+    companyRole: { deleteMany: jest.fn(), createMany: jest.fn() },
+  });
+
+  it('Compras da de alta un proveedor, pero no un cliente', async () => {
+    const db = dbFor();
+    await runAs('PURCHASES', db, () => service().createCompany({ name: 'Maderera', roles: ['SUPPLIER'] }));
+    expect(db.company.create).toHaveBeenCalled();
+
+    await expect(
+      runAs('PURCHASES', dbFor(), () => service().createCompany({ name: 'Cliente X', roles: ['CUSTOMER'] })),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('Inventario puede dar de alta proveedores (Carga con IA)', async () => {
+    const db = dbFor();
+    await runAs('INVENTORY', db, () => service().createCompany({ name: 'Molinos', roles: ['SUPPLIER'] }));
+    expect(db.company.create).toHaveBeenCalled();
+  });
+
+  it('Ventas no puede editar un proveedor', async () => {
+    await expect(
+      runAs('SALES', dbFor(existingCompany(['SUPPLIER'])), () => service().updateCompany('company-1', { email: 'a@b.com' })),
+    ).rejects.toThrow('Tu rol no puede editar proveedores.');
+  });
+
+  it('Compras edita los datos generales de una empresa que es cliente y proveedor', async () => {
+    const db = dbFor(existingCompany(['CUSTOMER', 'SUPPLIER']));
+    await runAs('PURCHASES', db, () => service().updateCompany('company-1', { email: 'compras@proveedor.com' }));
+    expect(db.company.update).toHaveBeenCalled();
+  });
+
+  it('pero no le cambia el límite de crédito (dato de cliente)', async () => {
+    await expect(
+      runAs('PURCHASES', dbFor(existingCompany(['CUSTOMER', 'SUPPLIER'])), () =>
+        service().updateCompany('company-1', { creditLimit: 50000 }),
+      ),
+    ).rejects.toThrow('cambiar el límite de crédito de clientes');
+  });
+
+  it('mandar el mismo límite de crédito sin cambiarlo no cuenta como cambio', async () => {
+    const db = dbFor(existingCompany(['CUSTOMER', 'SUPPLIER'], { creditLimit: new Prisma.Decimal(50000) }));
+    await runAs('PURCHASES', db, () => service().updateCompany('company-1', { name: 'Nuevo nombre', creditLimit: 50000 }));
+    expect(db.company.update).toHaveBeenCalled();
+  });
+
+  it('Compras no puede convertir un proveedor en cliente, ni desactivar una empresa que también es cliente', async () => {
+    await expect(
+      runAs('PURCHASES', dbFor(existingCompany(['SUPPLIER'])), () =>
+        service().updateCompany('company-1', { roles: ['SUPPLIER', 'CUSTOMER'] }),
+      ),
+    ).rejects.toThrow('Tu rol no puede agregar ni quitar clientes.');
+    await expect(
+      runAs('PURCHASES', dbFor(existingCompany(['CUSTOMER', 'SUPPLIER'])), () =>
+        service().updateCompany('company-1', { active: false }),
+      ),
+    ).rejects.toThrow('Tu rol no puede desactivar clientes.');
+  });
+
+  it('Compras puede sumar como proveedor a una empresa que ya era cliente (fusión por CUIT)', async () => {
+    const db = dbFor(existingCompany(['CUSTOMER']));
+    await runAs('PURCHASES', db, () => service().updateCompany('company-1', { roles: ['CUSTOMER', 'SUPPLIER'] }));
+    expect(db.companyRole.createMany).toHaveBeenCalled();
+  });
+
+  it('Ventas sigue manejando sucursales', async () => {
+    const db = dbFor();
+    await runAs('SALES', db, () => service().createCompany({ name: 'Sucursal Centro', roles: ['BRANCH'], pointOfSaleNumber: 2 }));
+    expect(db.company.create).toHaveBeenCalled();
+  });
+
+  it('un contador (sin permiso de escritura en Empresas) no carga contactos de un proveedor', async () => {
+    const db = {
+      company: { findUnique: jest.fn().mockResolvedValue({ id: 'company-1', roles: [{ role: 'SUPPLIER' }] }) },
+      person: { create: jest.fn() },
+    };
+    await expect(
+      runAs('ACCOUNTANT', db, () => service().createPerson({ companyId: 'company-1', firstName: 'Ana' })),
+    ).rejects.toThrow(ForbiddenException);
+    expect(db.person.create).not.toHaveBeenCalled();
   });
 });

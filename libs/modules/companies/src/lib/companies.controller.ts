@@ -18,13 +18,17 @@ import { Roles } from '@plexo/auth';
 import { AuditEntity } from '@plexo/database';
 import type { CompanyRoleType } from '@plexo/database';
 import { CompaniesService } from './companies.service.js';
+import { COMPANY_WRITE_ROLES } from './company-permissions.js';
 import { CreateCompanyDto } from './dto/create-company.dto.js';
 import { CreatePersonDto } from './dto/create-person.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { UpdatePersonDto } from './dto/update-person.dto.js';
 import { PersonAvatarService } from './person-avatar.service.js';
 
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES', 'PURCHASES'] as const;
+// Todos los que pueden escribir ALGÚN tipo de empresa; la regla por tipo
+// (clientes Ventas, proveedores Compras/Inventario...) la aplica
+// CompaniesService - ver company-permissions.ts.
+const WRITE_ROLES = COMPANY_WRITE_ROLES;
 
 @Controller('companies')
 export class CompaniesController {

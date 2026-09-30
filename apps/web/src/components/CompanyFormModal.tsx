@@ -11,6 +11,7 @@ import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
+import { useCompanyPermissions } from './useCompanyPermissions';
 
 type ArcaFieldKey = 'name' | 'taxCondition' | 'fiscalAddress';
 
@@ -102,6 +103,7 @@ export default function CompanyFormModal({
   const [mergeCandidate, setMergeCandidate] = useState<Company | null>(null);
 
   const effectiveRoles = lockedRole ? [lockedRole] : roles;
+  const perms = useCompanyPermissions();
   // A sucursal is the tenant's OWN location, not a separate legal entity -
   // su CUIT/razón social/condición de IVA/rubro/IIBB ya se cargan UNA vez
   // en Preferencias (Tenant.taxId, ownTaxCondition, certificado, "Datos
@@ -474,11 +476,13 @@ export default function CompanyFormModal({
               {effectiveRoles.includes('CUSTOMER') && (
                 <div className="col-span-1">
                   <Field label="Límite de crédito">
+                    {/* Dato de cliente: sólo lo cambia quien maneja clientes. */}
                     <Input
                       type="number"
                       step="any"
                       value={creditLimit}
                       onChange={(e) => setCreditLimit(e.target.value)}
+                      disabled={!perms.can('CUSTOMER')}
                     />
                   </Field>
                 </div>
@@ -489,11 +493,15 @@ export default function CompanyFormModal({
               <Field label="Roles">
                 <div className="flex flex-col gap-2 rounded-lg border bg-muted p-3">
                   {ROLE_OPTIONS.map((opt) => (
-                    <label key={opt.value} className="flex items-center gap-2 text-sm">
+                    <label
+                      key={opt.value}
+                      className={`flex items-center gap-2 text-sm ${perms.can(opt.value) ? '' : 'text-muted-foreground'}`}
+                    >
                       <input
                         type="checkbox"
                         checked={roles.includes(opt.value)}
                         onChange={() => toggleRole(opt.value)}
+                        disabled={!perms.can(opt.value)}
                       />
                       {opt.label}
                     </label>

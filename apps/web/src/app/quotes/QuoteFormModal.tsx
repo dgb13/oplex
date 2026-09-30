@@ -15,6 +15,7 @@ import { quotePreferencesApi, quotesApi, type QuoteDetail } from '@/lib/quotes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
+import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 
 interface Props {
   quote?: QuoteDetail;
@@ -33,6 +34,7 @@ function datePlusDays(days: number): string {
 }
 
 export default function QuoteFormModal({ quote, onClose }: Props) {
+  const perms = useCompanyPermissions();
   const queryClient = useQueryClient();
   const isEdit = Boolean(quote);
 
@@ -162,7 +164,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
           ) : (
             <>
               <section>
-                <SectionLabel action={<LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>}>
+                <SectionLabel action={perms.can('CUSTOMER') ? <LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton> : undefined}>
                   Cliente
                 </SectionLabel>
                 <CustomerPicker

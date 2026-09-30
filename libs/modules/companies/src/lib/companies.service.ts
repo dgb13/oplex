@@ -15,6 +15,7 @@ import {
   type AfipPadronData,
   type AfipPadronPort,
 } from './afip-padron.port.js';
+import { assertCanManageAll, assertCanManageAny, assertCanManagePersonCompany } from './company-permissions.js';
 import { isValidCuit } from './cuit.js';
 import type { CreateCompanyDto } from './dto/create-company.dto.js';
 import type { CreatePersonDto } from './dto/create-person.dto.js';
@@ -41,6 +42,9 @@ export class CompaniesService {
   ) {}
 
   async createCompany(dto: CreateCompanyDto): Promise<CompanyWithRoles> {
+    // Clientes los da de alta Ventas, proveedores Compras/Inventario, etc.
+    // (ver COMPANY_ROLE_EDITORS) - hay que poder manejar cada tipo pedido.
+    assertCanManageAll(dto.roles, 'dar de alta');
     // Sólo un alta con rol CUSTOMER cuenta contra el cupo de clientes del
     // plan - una empresa que es sólo SUPPLIER/BRANCH no es "un cliente".
     if (dto.roles.includes('CUSTOMER')) {
@@ -121,10 +125,11 @@ export class CompaniesService {
   async updateCompany(id: string, dto: UpdateCompanyDto): Promise<CompanyWithRoles> {
     const db = getTenantDb();
     const tenantId = getTenantId();
-    const existing = await db.company.findUnique({ where: { id } });
+    const existing = await db.company.findUnique({ where: { id }, include: { roles: true } });
     if (!existing) {
       throw new NotFoundException('Company not found');
     }
+    this.assertCanUpdate(existing, dto);
 
     if (dto.roles) {
       await db.companyRole.deleteMany({ where: { companyId: id } });
@@ -157,6 +162,35 @@ export class CompaniesService {
     });
   }
 
+  /**
+   * Permisos por tipo de empresa (ver company-permissions.ts):
+   * - datos generales: alcanza con manejar alguno de sus tipos (una empresa
+   *   que es cliente y proveedor la puede editar Ventas o Compras);
+   * - agregar o quitar un tipo: hay que poder manejar ese tipo;
+   * - límite de crédito: es un dato de cliente, sólo quien maneja clientes;
+   * - activar/desactivar: afecta todas sus listas, hay que manejar todos.
+   */
+  private assertCanUpdate(existing: CompanyWithRoles, dto: UpdateCompanyDto): void {
+    const current = existing.roles.map((r) => r.role);
+    // "Alguno de sus tipos" cuenta también el que se le está agregando: así
+    // Compras puede sumar como proveedor a una empresa que ya era cliente
+    // (la fusión por CUIT de CompanyFormModal) sin poder quitarle "cliente".
+    assertCanManageAny([...new Set([...current, ...(dto.roles ?? [])])]);
+    if (dto.roles) {
+      const changed = [
+        ...dto.roles.filter((r) => !current.includes(r)),
+        ...current.filter((r) => !dto.roles?.includes(r)),
+      ];
+      assertCanManageAll(changed, 'agregar ni quitar');
+    }
+    if (dto.creditLimit !== undefined && !existing.creditLimit.equals(dto.creditLimit)) {
+      assertCanManageAll(['CUSTOMER'], 'cambiar el límite de crédito de');
+    }
+    if (dto.active !== undefined && dto.active !== existing.active) {
+      assertCanManageAll(current, dto.active ? 'reactivar' : 'desactivar');
+    }
+  }
+
   /** Only a CUSTOMER or SUPPLIER company gets contact people - a BRANCH
    * is the tenant's own location, not an external party with a contact. */
   async createPerson(dto: CreatePersonDto): Promise<Person> {
@@ -177,6 +211,7 @@ export class CompaniesService {
         'Only customer or supplier companies can have contact people',
       );
     }
+    assertCanManageAny(company.roles.map((r) => r.role));
 
     return db.person.create({
       data: {
@@ -205,6 +240,7 @@ export class CompaniesService {
     if (!existing) {
       throw new NotFoundException('Person not found');
     }
+    await assertCanManagePersonCompany(id);
     return getTenantDb().person.update({ where: { id }, data: { ...dto } });
   }
 
@@ -217,6 +253,7 @@ export class CompaniesService {
     if (!existing) {
       throw new NotFoundException('Person not found');
     }
+    await assertCanManagePersonCompany(id);
     await db.person.delete({ where: { id } });
   }
 

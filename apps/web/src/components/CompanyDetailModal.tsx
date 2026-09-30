@@ -12,6 +12,7 @@ import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import { ROLE_LABELS } from './CompanyFormModal';
 import PersonAvatarModal from './PersonAvatarModal';
+import { useCompanyPermissions } from './useCompanyPermissions';
 
 interface Props {
   company: Company;
@@ -50,6 +51,7 @@ const INDUSTRY_LABELS: Record<string, string> = {
 
 export default function CompanyDetailModal({ company, onClose, onEdit, readOnly }: Props) {
   const queryClient = useQueryClient();
+  const perms = useCompanyPermissions();
   const canHaveContacts = company.roles.some(
     (r) => r.role === 'CUSTOMER' || r.role === 'SUPPLIER',
   );
@@ -140,7 +142,7 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
           {!isActive && (
             <Badge className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300">Inactiva</Badge>
           )}
-          {readOnly && !editingRoles && (
+          {readOnly && !editingRoles && perms.canAny(ROLE_OPTIONS.map((o) => o.value)) && (
             <button
               onClick={() => {
                 setRolesDraft(currentRoles);
@@ -156,11 +158,16 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
         {editingRoles && (
           <div className="mb-4 flex flex-col gap-2 rounded-lg border bg-muted p-3">
             {ROLE_OPTIONS.map((opt) => (
-              <label key={opt.value} className="flex items-center gap-2 text-sm">
+              <label
+                key={opt.value}
+                className={`flex items-center gap-2 text-sm ${perms.can(opt.value) ? '' : 'text-muted-foreground'}`}
+                title={perms.can(opt.value) ? undefined : 'Tu rol no maneja este tipo de empresa'}
+              >
                 <input
                   type="checkbox"
                   checked={rolesDraft.includes(opt.value)}
                   onChange={() => toggleRoleDraft(opt.value)}
+                  disabled={!perms.can(opt.value)}
                 />
                 {opt.label}
               </label>
@@ -271,6 +278,9 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
               Editar empresa
             </Button>
 
+            {/* Desactivarla la saca de todas sus listas: sólo quien maneja
+                todos sus tipos (ej. no Compras si además es cliente). */}
+            {perms.canAll(currentRoles) && (
             <button
               onClick={() => toggleActiveMutation.mutate()}
               disabled={toggleActiveMutation.isPending}
@@ -286,6 +296,7 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
                   ? 'Desactivar empresa'
                   : 'Activar empresa'}
             </button>
+            )}
           </div>
         )}
         {activeError && <p className="mb-4 text-xs text-destructive">{activeError}</p>}

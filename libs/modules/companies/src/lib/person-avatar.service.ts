@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getTenantDb } from '@plexo/database';
 import type { Person } from '@plexo/database';
+import { assertCanManagePersonCompany } from './company-permissions.js';
 
 const ALLOWED_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -41,6 +42,7 @@ export class PersonAvatarService {
     if (!person) {
       throw new NotFoundException('Person not found');
     }
+    await assertCanManagePersonCompany(personId);
 
     const filename = `${randomUUID()}.${extension}`;
     await writeFile(join(this.uploadsDir, filename), buffer);
@@ -62,6 +64,7 @@ export class PersonAvatarService {
     if (!person) {
       throw new NotFoundException('Person not found');
     }
+    await assertCanManagePersonCompany(personId);
 
     const updated = await db.person.update({ where: { id: personId }, data: { avatarUrl: null } });
     if (person.avatarUrl?.startsWith('/uploads/people/')) {

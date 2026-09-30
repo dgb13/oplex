@@ -6,3 +6,4 @@ export * from './lib/dto/create-company.dto.js';
 export * from './lib/dto/update-company.dto.js';
 export * from './lib/dto/create-person.dto.js';
 export * from './lib/dto/update-person.dto.js';
+export * from './lib/company-permissions.js';

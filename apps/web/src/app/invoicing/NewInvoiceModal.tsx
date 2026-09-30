@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 
 interface Props {
   onClose: () => void;
@@ -28,6 +29,7 @@ const DOCUMENT_LETTERS = ['A', 'B', 'C', 'M'] as const;
 type Letter = (typeof DOCUMENT_LETTERS)[number];
 
 export default function NewInvoiceModal({ onClose }: Props) {
+  const perms = useCompanyPermissions();
   const queryClient = useQueryClient();
 
   const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
@@ -189,7 +191,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
           ) : (
             <>
               <section>
-                <SectionLabel action={<LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>}>
+                <SectionLabel action={perms.can('CUSTOMER') ? <LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton> : undefined}>
                   Cliente
                 </SectionLabel>
                 <CustomerPicker
@@ -240,7 +242,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
             </section>
 
             <section>
-              <SectionLabel action={<LinkButton onClick={() => setCreatingBranch(true)}>+ Nueva</LinkButton>}>
+              <SectionLabel action={perms.can('BRANCH') ? <LinkButton onClick={() => setCreatingBranch(true)}>+ Nueva</LinkButton> : undefined}>
                 Sucursal / Punto de venta
               </SectionLabel>
               <Select

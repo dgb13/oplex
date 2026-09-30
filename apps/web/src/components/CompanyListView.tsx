@@ -10,6 +10,7 @@ import { useState } from 'react';
 import AddContactsModal from './AddContactsModal';
 import CompanyDetailModal from './CompanyDetailModal';
 import CompanyFormModal, { ROLE_LABELS } from './CompanyFormModal';
+import { useCompanyPermissions } from './useCompanyPermissions';
 
 const ROLE_FILTERS: { value: CompanyRoleType | ''; label: string }[] = [
   { value: '', label: 'Todas' },
@@ -66,6 +67,10 @@ export default function CompanyListView({
   const [addingContactsTo, setAddingContactsTo] = useState<Company | null>(null);
 
   const effectiveRoleFilter = role ?? roleFilter;
+  // Pantalla editable (Clientes/Proveedores/Sucursales) sólo para quien
+  // maneja ese tipo de empresa - ej. Compras ve Clientes en modo lectura.
+  const perms = useCompanyPermissions();
+  const canWrite = editable && (role ? perms.can(role) : true);
 
   const companiesQuery = useQuery({
     queryKey: ['companies', effectiveRoleFilter || 'ALL', showInactive],
@@ -98,7 +103,7 @@ export default function CompanyListView({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         {heading}
-        {editable && <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>}
+        {canWrite && <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -219,10 +224,10 @@ export default function CompanyListView({
         )}
       </div>
 
-      {newOpen && (
+      {newOpen && canWrite && (
         <CompanyFormModal
           onClose={() => setNewOpen(false)}
-          lockedRole={editable ? role : undefined}
+          lockedRole={canWrite ? role : undefined}
           onSaved={promptContactsAfterCreate ? (saved) => setAddingContactsTo(saved) : undefined}
         />
       )}
@@ -233,9 +238,9 @@ export default function CompanyListView({
         <CompanyDetailModal
           company={selected}
           onClose={() => setSelected(null)}
-          readOnly={!editable}
+          readOnly={!canWrite}
           onEdit={
-            editable
+            canWrite
               ? () => {
                   setEditing(selected);
                   setSelected(null);
