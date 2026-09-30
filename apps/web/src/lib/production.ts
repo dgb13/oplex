@@ -169,6 +169,10 @@ export interface ProductionOrderDetail extends ProductionOrder {
   // (aunque los mm totales alcancen) - sólo se calcula para órdenes
   // PLANNED. Explica un "Esperando insumos" con todo reservado.
   unfittableCuts: { inputArticleVariantId: string; cutLength: string; count: number }[];
+  // Quién hizo cada paso (null en órdenes de antes de que se registrara).
+  startedBy?: ProductionOrder['createdBy'];
+  finishedBy?: ProductionOrder['createdBy'];
+  cancelledBy?: ProductionOrder['createdBy'];
 }
 
 export interface StockPiece {

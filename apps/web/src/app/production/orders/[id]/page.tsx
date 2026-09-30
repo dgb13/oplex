@@ -1,6 +1,7 @@
 'use client';
 
 import BulkQuoteRequestModal, { type GroupedPedido } from '@/app/purchases/BulkQuoteRequestModal';
+import { CollabPanel } from '@/components/collab/CollabPanel';
 import InsumoThumb from '@/components/InsumoThumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -275,7 +276,8 @@ export default function ProductionOrderDetailPage() {
       {!order ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
-        <>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
@@ -311,9 +313,9 @@ export default function ProductionOrderDetailPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Creada por</p>
-                  <p className="font-medium">
+                  <div className="font-medium">
                     <CreatedBy user={order.createdBy} />
-                  </p>
+                  </div>
                 </div>
                 {order.status === 'DRAFT' || order.status === 'PLANNED' ? (
                   <div>
@@ -341,21 +343,36 @@ export default function ProductionOrderDetailPage() {
                   )
                 )}
                 {order.startedAt && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Iniciada</p>
                     <p className="font-medium">{new Date(order.startedAt).toLocaleString('es-AR')}</p>
+                    {order.startedBy && (
+                      <div className="mt-1 text-xs">
+                        <CreatedBy user={order.startedBy} size={18} />
+                      </div>
+                    )}
                   </div>
                 )}
                 {order.finishedAt && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Completada</p>
                     <p className="font-medium">{new Date(order.finishedAt).toLocaleString('es-AR')}</p>
+                    {order.finishedBy && (
+                      <div className="mt-1 text-xs">
+                        <CreatedBy user={order.finishedBy} size={18} />
+                      </div>
+                    )}
                   </div>
                 )}
                 {order.cancelledAt && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Cancelada</p>
                     <p className="font-medium">{new Date(order.cancelledAt).toLocaleString('es-AR')}</p>
+                    {order.cancelledBy && (
+                      <div className="mt-1 text-xs">
+                        <CreatedBy user={order.cancelledBy} size={18} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -608,7 +625,13 @@ export default function ProductionOrderDetailPage() {
               </CardContent>
             </Card>
           )}
-        </>
+          </div>
+          {/* Comentarios con @menciones y tareas del equipo sobre esta orden
+              (mockup "Oplex en equipo", 2026-09-30). */}
+          <div className="lg:sticky lg:top-4">
+            <CollabPanel entityType="production-order" entityId={order.id} />
+          </div>
+        </div>
       )}
 
       {bulkOpen && (

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
+import { currentActorName, getTenantDb, getTenantId, getUserId, notify, Prisma } from '@plexo/database';
 import type { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto.js';
 import { getReturnedQuantitiesByGoodsReceiptLine } from './supplier-return.service.js';
 
@@ -141,7 +141,7 @@ export class GoodsReceiptService {
       linesToCreate.push({ purchaseOrderLineId: poLine.id, quantity });
     }
 
-    return db.goodsReceipt.create({
+    const receipt = await db.goodsReceipt.create({
       data: {
         tenantId,
         purchaseOrderId: dto.purchaseOrderId,
@@ -154,6 +154,22 @@ export class GoodsReceiptService {
       },
       include: RECEIPT_DETAIL_INCLUDE,
     });
+
+    // Aviso a quien hizo la orden de compra (si la recibió otra persona).
+    if (purchaseOrder.createdByUserId && purchaseOrder.createdByUserId !== receivedByUserId) {
+      const supplier = await db.company.findUnique({ where: { id: purchaseOrder.supplierId }, select: { name: true } });
+      const itemsLabel = `${linesToCreate.length} de ${purchaseOrder.lines.length} ítem${purchaseOrder.lines.length === 1 ? '' : 's'}`;
+      await notify({
+        recipientUserIds: [purchaseOrder.createdByUserId],
+        category: 'PURCHASES',
+        type: 'purchases.goods_received',
+        preference: 'purchases.goods_received',
+        message: `Llegó la mercadería de tu orden de compra **${purchaseOrder.number}** · ${supplier?.name ?? 'Proveedor'} · ${itemsLabel}. **${await currentActorName()}** registró el remito.`,
+        link: '/purchases',
+      });
+    }
+
+    return receipt;
   }
 }
 

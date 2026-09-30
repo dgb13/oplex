@@ -1,4 +1,4 @@
-import { Inject, Logger } from '@nestjs/common';
+import { Inject, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -7,7 +7,14 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
+import {
+  getTenantDb,
+  NOTIFICATION_CREATED,
+  notificationBus,
+  PrismaService,
+  withTenantContext,
+  type NotificationCreatedEvent,
+} from '@plexo/database';
 import type { Server, Socket } from 'socket.io';
 import type {
   InvoiceCreatedEvent,
@@ -31,7 +38,7 @@ interface OnlineUser extends PresenceUser {
 @WebSocketGateway(3001, {
   cors: { origin: ['http://localhost:4200', 'http://localhost:3000'], credentials: true },
 })
-export class DashboardGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class DashboardGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(DashboardGateway.name);
 
@@ -48,6 +55,21 @@ export class DashboardGateway implements OnGatewayConnection, OnGatewayDisconnec
     private readonly prisma: PrismaService,
   ) {}
 
+  // Avisos de la campana: notify() los emite en notificationBus recién
+  // después del commit; acá se empujan sólo a la sala del destinatario
+  // (user:<id>), nunca a toda la empresa.
+  private readonly onNotification = ({ notification }: NotificationCreatedEvent) => {
+    this.server?.to(`user:${notification.recipientUserId}`).emit(NOTIFICATION_CREATED, notification);
+  };
+
+  onModuleInit() {
+    notificationBus.on(NOTIFICATION_CREATED, this.onNotification);
+  }
+
+  onModuleDestroy() {
+    notificationBus.off(NOTIFICATION_CREATED, this.onNotification);
+  }
+
   async handleConnection(client: Socket) {
     const token = client.handshake.auth['token'] as string | undefined;
     if (!token) {
@@ -59,6 +81,7 @@ export class DashboardGateway implements OnGatewayConnection, OnGatewayDisconnec
       client.data['tenantId'] = payload.tenantId;
       client.data['userId'] = payload.sub;
       void client.join(`tenant:${payload.tenantId}`);
+      void client.join(`user:${payload.sub}`);
       this.logger.log(`Client connected to tenant room ${payload.tenantId}`);
 
       await this.trackPresence(client, payload.tenantId, payload.sub);

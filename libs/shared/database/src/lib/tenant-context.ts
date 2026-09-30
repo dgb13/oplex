@@ -7,6 +7,8 @@ export interface TenantStore {
   userId?: string;
   role?: UserRole;
   tx: Prisma.TransactionClient;
+  // Callbacks a correr recién cuando la transacción confirma (ver onCommit).
+  afterCommit?: (() => void)[];
 }
 
 /**
@@ -74,6 +76,22 @@ export function getTenantDb(): Prisma.TransactionClient {
  * reason it's threaded through here at all, business code should keep
  * using getTenantId(), not this.
  */
+/**
+ * Corre `fn` recién cuando la transacción del request actual confirma - y
+ * nunca si hace rollback. Para efectos hacia afuera que no deben pasar por
+ * algo que al final no se guardó (ej. empujar un aviso por el WebSocket:
+ * "María terminó tu orden" no puede llegar si completar la orden falló
+ * después). Sin contexto de tenant activo, corre en el momento.
+ */
+export function onCommit(fn: () => void): void {
+  const store = tenantContextStorage.getStore();
+  if (!store?.afterCommit) {
+    fn();
+    return;
+  }
+  store.afterCommit.push(fn);
+}
+
 export async function withTenantContext<T>(
   prisma: PrismaClient,
   tenantId: string,
@@ -87,14 +105,25 @@ export async function withTenantContext<T>(
   // algo se cuelga, en vez de retener conexiones del pool más tiempo.
   timeoutMs?: number,
 ): Promise<T> {
-  return prisma.$transaction(
+  const afterCommit: (() => void)[] = [];
+  const result = await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       if (userId) {
         await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
       }
-      return tenantContextStorage.run({ tenantId, userId, role, tx }, fn);
+      return tenantContextStorage.run({ tenantId, userId, role, tx, afterCommit }, fn);
     },
     timeoutMs === undefined ? undefined : { timeout: timeoutMs },
   );
+  // Ya confirmó: un callback que falla no debe convertir en error un
+  // request que sí se guardó.
+  for (const cb of afterCommit) {
+    try {
+      cb();
+    } catch {
+      // ignorado a propósito
+    }
+  }
+  return result;
 }

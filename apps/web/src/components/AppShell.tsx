@@ -4,6 +4,8 @@ import { initials, profileApi } from '@/lib/profile';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
 import AmbientBackground from './AmbientBackground';
 import AssistantWidget from './AssistantWidget';
+import { NotificationBell } from './notifications/NotificationBell';
+import { Toaster } from 'sonner';
 import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
 import MembershipSessionBanner from './MembershipSessionBanner';
@@ -39,9 +41,13 @@ import { useEffect, useRef, useState } from 'react';
 interface NavLink {
   href: string;
   label: string;
-  // Sin roles = visible para todos. Con roles, sólo se muestra a esos (la
-  // API igual valida - esto es para no mostrar pantallas que no pueden usar).
+  // Quién ve el item en el menú (la API valida igual - esto es para no
+  // mostrar pantallas que el rol no puede usar). Sin roles ni module =
+  // visible para todos; Dueño y Administrador ven siempre todo. Espeja los
+  // @Roles de cada controller y los permisos por módulo (UserModuleAccess)
+  // de Contabilidad/Impuestos/Reportes, que vienen en el token.
   roles?: string[];
+  module?: string[];
 }
 
 interface NavLeaf extends NavLink {
@@ -63,16 +69,16 @@ const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/resumen', label: 'Resumen', icon: BarChart3 },
   { kind: 'link', href: '/agenda', label: 'Agenda', icon: CalendarDays },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
-  { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket },
+  { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket, roles: ['SALES'] },
   {
     kind: 'group',
     label: 'Ventas',
     icon: ShoppingCart,
     items: [
-      { href: '/invoicing', label: 'Facturación' },
-      { href: '/quotes', label: 'Cotizaciones' },
-      { href: '/receivables', label: 'Cuentas a Cobrar' },
-      { href: '/clients', label: 'Clientes' },
+      { href: '/invoicing', label: 'Facturación', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
+      { href: '/quotes', label: 'Cotizaciones', roles: ['SALES', 'VIEWER'] },
+      { href: '/receivables', label: 'Cuentas a Cobrar', roles: ['SALES', 'ACCOUNTANT'] },
+      { href: '/clients', label: 'Clientes', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
     ],
   },
   {
@@ -80,9 +86,9 @@ const NAV_ENTRIES: NavEntry[] = [
     label: 'Compras',
     icon: ShoppingBag,
     items: [
-      { href: '/purchases', label: 'Compras' },
-      { href: '/payables', label: 'Cuentas a Pagar' },
-      { href: '/suppliers', label: 'Proveedores' },
+      { href: '/purchases', label: 'Compras', roles: ['INVENTORY', 'PURCHASES', 'ACCOUNTANT', 'VIEWER'] },
+      { href: '/payables', label: 'Cuentas a Pagar', roles: ['INVENTORY', 'PURCHASES', 'ACCOUNTANT'] },
+      { href: '/suppliers', label: 'Proveedores', roles: ['INVENTORY', 'PURCHASES', 'ACCOUNTANT', 'VIEWER'] },
     ],
   },
   {
@@ -90,17 +96,36 @@ const NAV_ENTRIES: NavEntry[] = [
     label: 'Contabilidad',
     icon: Calculator,
     items: [
-      { href: '/accounting', label: 'Contabilidad' },
-      { href: '/taxes', label: 'Impuestos' },
-      { href: '/treasury', label: 'Cartera de Cheques' },
-      { href: '/reports', label: 'Reportes' },
-      { href: '/accounting/arca', label: 'Conexión con ARCA', roles: ['OWNER', 'ADMIN'] },
+      { href: '/accounting', label: 'Contabilidad', module: ['accounting'] },
+      { href: '/taxes', label: 'Impuestos', module: ['taxes'] },
+      { href: '/treasury', label: 'Cartera de Cheques', roles: ['ACCOUNTANT', 'SALES', 'INVENTORY'] },
+      {
+        href: '/reports',
+        label: 'Reportes',
+        module: ['reports-sales', 'reports-purchases', 'reports-pnl', 'reports-financial'],
+      },
+      { href: '/accounting/arca', label: 'Conexión con ARCA', roles: [] },
     ],
   },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
-  { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store },
-  { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase },
+  { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store, roles: ['SALES'] },
+  { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase, roles: ['ACCOUNTANT'] },
 ];
+
+interface ModuleGrant {
+  module: string;
+  canRead: boolean;
+}
+
+function canSee(item: NavLink, role: string | undefined, grants: ModuleGrant[]): boolean {
+  if (!item.roles && !item.module) return true;
+  // Hasta que carga el perfil, lo restringido no se muestra (evita que
+  // aparezca y desaparezca un item que el rol no puede usar).
+  if (!role) return false;
+  if (role === 'OWNER' || role === 'ADMIN') return true;
+  if (item.roles?.includes(role)) return true;
+  return (item.module ?? []).some((m) => grants.some((g) => g.module === m && g.canRead));
+}
 
 // Insertado condicionalmente en el render (ver AppShell más abajo) según
 // subscription.plan.productionModuleEnabled - no vive en NAV_ENTRIES, un
@@ -112,11 +137,11 @@ const PRODUCTION_NAV_GROUP: NavGroup = {
   label: 'Producción',
   icon: Factory,
   items: [
-    { href: '/production', label: 'Tablero' },
-    { href: '/production/bom', label: 'Recetas' },
-    { href: '/production/history', label: 'Historial' },
-    { href: '/production/pieces', label: 'Piezas y recortes' },
-    { href: '/production/settings', label: 'Configuración' },
+    { href: '/production', label: 'Tablero', roles: ['INVENTORY', 'VIEWER'] },
+    { href: '/production/bom', label: 'Recetas', roles: ['INVENTORY', 'VIEWER'] },
+    { href: '/production/history', label: 'Historial', roles: ['INVENTORY', 'VIEWER'] },
+    { href: '/production/pieces', label: 'Piezas y recortes', roles: ['INVENTORY', 'VIEWER'] },
+    { href: '/production/settings', label: 'Configuración', roles: ['INVENTORY'] },
   ],
 };
 
@@ -129,16 +154,20 @@ interface PresenceUser {
 /** Decodes the JWT payload client-side just to read `sub` - no signature
  * check needed here, the token's validity is the API's problem; this is
  * only used to filter "myself" out of the online-colleagues list. */
-function currentUserId(): string | null {
+function tokenClaims(): { sub?: string; moduleAccess?: ModuleGrant[] } | null {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   if (!token) return null;
   try {
     const payload = token.split('.')[1];
     if (!payload) return null;
-    return (JSON.parse(atob(payload)) as { sub?: string }).sub ?? null;
+    return JSON.parse(atob(payload)) as { sub?: string; moduleAccess?: ModuleGrant[] };
   } catch {
     return null;
   }
+}
+
+function currentUserId(): string | null {
+  return tokenClaims()?.sub ?? null;
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -185,11 +214,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         ...NAV_ENTRIES.slice(comprasIndex + 1),
       ]
     : NAV_ENTRIES;
-  const navEntries = planEntries.map((entry) =>
-    entry.kind === 'group'
-      ? { ...entry, items: entry.items.filter((item) => !item.roles || (profile && item.roles.includes(profile.role))) }
-      : entry,
-  );
+  // Leído en un effect (no en el render): localStorage no existe en el
+  // render del servidor - mismo cuidado que el bug de hidratación de arriba.
+  const [grants, setGrants] = useState<ModuleGrant[]>([]);
+  useEffect(() => {
+    setGrants(tokenClaims()?.moduleAccess ?? []);
+  }, []);
+  const navEntries = planEntries.flatMap((entry): NavEntry[] => {
+    if (entry.kind === 'link') {
+      return canSee(entry, profile?.role, grants) ? [entry] : [];
+    }
+    const items = entry.items.filter((item) => canSee(item, profile?.role, grants));
+    return items.length > 0 ? [{ ...entry, items }] : [];
+  });
 
   useEffect(() => {
     if (profile?.mustChangePassword && pathname !== '/profile') {
@@ -316,6 +353,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
               </button>
+              <NotificationBell />
               <CartButton />
               <UserMenu />
             </div>
@@ -328,6 +366,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AssistantWidget />
+      {/* Globitos de avisos en vivo (NotificationBell) - abajo a la
+          izquierda: abajo a la derecha está el Asistente. */}
+      <Toaster position="bottom-left" theme={theme === 'dark' ? 'dark' : 'light'} closeButton />
     </div>
   );
 }

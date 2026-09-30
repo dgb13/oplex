@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  currentActorName,
   getTenantDb,
   getTenantId,
   getUserId,
+  notify,
   Prisma,
   type ProductionConsumption,
   type ProductionOrder,
@@ -100,10 +102,12 @@ export class ProductionOrderService {
     if (order.status !== 'PLANNED') {
       throw new BadRequestException('Sólo se puede iniciar una orden planificada');
     }
-    return db.productionOrder.update({
+    const updated = await db.productionOrder.update({
       where: { id: order.id },
-      data: { status: 'IN_PROGRESS', startedAt: new Date() },
+      data: { status: 'IN_PROGRESS', startedAt: new Date(), startedByUserId: getUserId() },
     });
+    await this.notifyCreator(updated, 'production.started', (who, label) => `**${who}** inició tu orden ${label}`);
+    return updated;
   }
 
   /**
@@ -133,10 +137,18 @@ export class ProductionOrderService {
     const bom = await this.bomService.getById(order.bomId);
     const isShortOnMaterials = await this.reserveAgainstBom(order, bom, warehouseId, []);
 
-    return db.productionOrder.update({
+    const updated = await db.productionOrder.update({
       where: { id: order.id },
       data: { status: 'PLANNED', isShortOnMaterials },
     });
+    if (isShortOnMaterials) {
+      await this.notifyCreator(
+        updated,
+        'production.short_materials',
+        (who, label) => `Faltan insumos para tu orden ${label}. **${who}** la confirmó y quedó esperando insumos.`,
+      );
+    }
+    return updated;
   }
 
   /**
@@ -298,10 +310,12 @@ export class ProductionOrderService {
       data: { status: 'RELEASED' },
     });
 
-    return db.productionOrder.update({
+    const updated = await db.productionOrder.update({
       where: { id: order.id },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
+      data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledByUserId: getUserId() },
     });
+    await this.notifyCreator(updated, 'production.cancelled', (who, label) => `**${who}** canceló tu orden ${label}`);
+    return updated;
   }
 
   /** Reservas ACTIVE de una orden - lo que ProductionService.completeOrder
@@ -404,10 +418,41 @@ export class ProductionOrderService {
     });
   }
 
-  finishOrder(orderId: string): Promise<ProductionOrder> {
-    return getTenantDb().productionOrder.update({
+  async finishOrder(orderId: string): Promise<ProductionOrder> {
+    const updated = await getTenantDb().productionOrder.update({
       where: { id: orderId },
-      data: { status: 'DONE', finishedAt: new Date() },
+      data: { status: 'DONE', finishedAt: new Date(), finishedByUserId: getUserId() },
+    });
+    await this.notifyCreator(
+      updated,
+      'production.finished',
+      (who, label) => `**${who}** terminó tu orden ${label}. Ingresó al stock.`,
+    );
+    return updated;
+  }
+
+  /** Aviso al que creó la orden - nunca a sí mismo (ver notify()). */
+  private async notifyCreator(
+    order: ProductionOrder,
+    type: 'production.started' | 'production.finished' | 'production.cancelled' | 'production.short_materials',
+    build: (who: string, label: string) => string,
+  ): Promise<void> {
+    if (!order.createdByUserId || order.createdByUserId === getUserId()) {
+      return;
+    }
+    const variant = await getTenantDb().articleVariant.findUnique({
+      where: { id: order.outputArticleVariantId },
+      select: { article: { select: { name: true } } },
+    });
+    const quantity = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(Number(order.quantity));
+    const label = `**${order.number}** · ${variant?.article.name ?? 'Producto'} × ${quantity}`;
+    await notify({
+      recipientUserIds: [order.createdByUserId],
+      category: 'PRODUCTION',
+      type,
+      preference: type === 'production.short_materials' ? 'production.short_materials' : 'production.status',
+      message: build(await currentActorName(), label),
+      link: `/production/orders/${order.id}`,
     });
   }
 
@@ -442,7 +487,24 @@ export class ProductionOrderService {
       (order.status === 'PLANNED' || order.status === 'IN_PROGRESS') && warehouseId && order.bom
         ? await this.planningService.findUnfittableCuts(order.bom.lines, order.quantity, warehouseId)
         : [];
-    return { ...order, unfittableCuts };
+
+    // Quién hizo cada paso (sin relation en el modelo - ver schema): una
+    // sola consulta para los tres.
+    const actorIds = [order.startedByUserId, order.finishedByUserId, order.cancelledByUserId].filter(
+      (id): id is string => !!id,
+    );
+    const actors = actorIds.length
+      ? await getTenantDb().user.findMany({ where: { id: { in: actorIds } }, ...CREATED_BY_SELECT })
+      : [];
+    const actor = (id: string | null) => (id ? (actors.find((u) => u.id === id) ?? null) : null);
+
+    return {
+      ...order,
+      unfittableCuts,
+      startedBy: actor(order.startedByUserId),
+      finishedBy: actor(order.finishedByUserId),
+      cancelledBy: actor(order.cancelledByUserId),
+    };
   }
 
   list(status?: ProductionOrder['status']) {

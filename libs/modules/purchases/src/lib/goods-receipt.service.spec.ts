@@ -48,6 +48,44 @@ function makeExistingReceiptLine(purchaseOrderLineId: string, quantity: number) 
 }
 
 describe('GoodsReceiptService.create', () => {
+  it('avisa a quien creó la orden de compra cuando la recibe otra persona', async () => {
+    const notificationCreate = jest.fn((args) => Promise.resolve({ id: 'n-1', ...args.data }));
+    const db = makeDb({
+      purchaseOrder: {
+        findUnique: jest.fn().mockResolvedValue({
+          ...makeSentOrder([{ id: 'line-1', quantity: 200 }, { id: 'line-2', quantity: 5 }]),
+          number: 'OC-000118',
+          supplierId: 'supplier-1',
+          createdByUserId: 'buyer-1',
+        }),
+      },
+      company: { findUnique: jest.fn().mockResolvedValue({ name: 'Maderera del Sur' }) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ name: 'Juan Pérez', email: 'juan@x.com' }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'buyer-1', mutedNotificationTypes: [] }]),
+      },
+      notification: { create: notificationCreate },
+    });
+
+    await runAsUser(db, () =>
+      new GoodsReceiptService().create({
+        purchaseOrderId: 'po-1',
+        warehouseId: 'warehouse-1',
+        lines: [{ purchaseOrderLineId: 'line-1', quantity: 200 }],
+      }),
+    );
+
+    expect(notificationCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipientUserId: 'buyer-1',
+        actorUserId: 'user-1',
+        category: 'PURCHASES',
+        type: 'purchases.goods_received',
+        message: expect.stringContaining('**OC-000118** · Maderera del Sur · 1 de 2 ítems. **Juan Pérez** registró el remito.'),
+      }),
+    });
+  });
+
   it('creates a receipt for the full ordered quantity against a SENT order', async () => {
     const db = makeDb();
     const service = new GoodsReceiptService();

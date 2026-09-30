@@ -7,6 +7,7 @@ export * from './lib/long-running-transaction.decorator.js';
 export * from './lib/audit-diff.js';
 export * from './lib/database.module.js';
 export * from './lib/account-balance.js';
+export * from './lib/notifications.js';
 
 // Prisma namespace as a real value (not type-only): Prisma.Decimal, Prisma.sql
 // etc. are legitimate runtime utilities business code needs. PrismaClient
@@ -98,5 +99,7 @@ export type {
   ProductionConsumption,
   ProductionOutput,
   CalendarEvent,
+  Notification,
+  DocumentComment,
 } from './generated/client.js';
 export * from './generated/enums.js';

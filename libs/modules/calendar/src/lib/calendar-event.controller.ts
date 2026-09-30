@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CalendarEventService } from './calendar-event.service.js';
 import { CreateCalendarEventDto } from './dto/create-calendar-event.dto.js';
 import { UpdateCalendarEventDto } from './dto/update-calendar-event.dto.js';
@@ -10,6 +10,20 @@ export class CalendarEventController {
   @Get()
   list() {
     return this.calendarEventService.list();
+  }
+
+  // Antes de ':id' a propósito - si no, "tasks" se tomaría como un id.
+  @Get('tasks/mine')
+  myTasks() {
+    return this.calendarEventService.myOpenTasks();
+  }
+
+  @Get('tasks')
+  tasksFor(@Query('linkType') linkType?: string, @Query('linkId') linkId?: string) {
+    if (!linkType || !linkId) {
+      throw new BadRequestException('Faltan linkType y linkId');
+    }
+    return this.calendarEventService.tasksFor(linkType, linkId);
   }
 
   @Post()

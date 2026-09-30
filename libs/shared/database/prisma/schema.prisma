@@ -736,6 +736,10 @@ model User {
   // - el gate de verificación sólo aplica a cuentas nuevas del signup público,
   // nunca a las ya creadas por seed/admin backoffice.
   emailVerifiedAt          DateTime?
+  // Claves de preferencia de avisos que este usuario silenció (ver
+  // NOTIFICATION_PREFERENCES en notifications.ts) - vacío = recibe todo.
+  // Las menciones y tareas asignadas no se pueden silenciar.
+  mutedNotificationTypes   String[]   @default([])
 
   moduleAccess               UserModuleAccess[]
   issuedInvoices             Invoice[]
@@ -1625,6 +1629,13 @@ model ProductionOrder {
   startedAt              DateTime?
   finishedAt             DateTime?
   cancelledAt             DateTime?
+  // Quién hizo cada paso (bare userId, sin relation - mismo criterio que
+  // CalendarEvent.assignedTo): lo necesitan el historial de la orden y los
+  // avisos al creador ("María terminó tu orden"). Null en las órdenes de
+  // antes de que existieran estos campos.
+  startedByUserId        String?
+  finishedByUserId       String?
+  cancelledByUserId      String?
   reservations           StockReservation[]
   consumptions           ProductionConsumption[]
   outputs                ProductionOutput[]
@@ -3792,9 +3803,67 @@ model CalendarEvent {
   // (Fase 2), sin filtro todavía en GET /calendar.
   assignedTo String?
 
+  // Tareas del equipo (kind TASK con assignedTo): quién la asignó y quién la
+  // completó - para avisarle al que la asignó cuando se completa, y para
+  // "Mis tareas" en la campana. Bare userIds, mismo criterio que assignedTo.
+  createdByUserId   String?
+  completedAt       DateTime?
+  completedByUserId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId, startsAt])
+  @@index([tenantId, assignedTo, status])
   @@map("calendar_events")
+}
+
+enum NotificationCategory {
+  PRODUCTION
+  PURCHASES
+  STOCK
+  MENTION
+  TASK
+}
+
+// Aviso para UN usuario (la campana). Se crea con notify() (ver
+// libs/shared/database/src/lib/notifications.ts) dentro de la transacción
+// del request y se empuja en vivo por el WebSocket recién cuando esa
+// transacción confirma. `message` ya viene armado, con **negritas** en
+// markdown mínimo que el front renderiza. Se borran a los 90 días.
+model Notification {
+  id              String               @id @default(uuid())
+  tenantId        String
+  recipientUserId String
+  actorUserId     String?
+  category        NotificationCategory
+  // Clave estable del evento (ej. "production.finished") - también es lo
+  // que se compara contra User.mutedNotificationTypes vía su preferencia.
+  type            String
+  message         String
+  quote           String?
+  // Ruta del front a la que lleva el aviso (ej. /production/orders/<id>).
+  link            String?
+  readAt          DateTime?
+  createdAt       DateTime             @default(now())
+
+  @@index([tenantId, recipientUserId, createdAt])
+  @@map("notifications")
+}
+
+// Comentario sobre cualquier documento (entityType + entityId, sin FK real -
+// mismo criterio que CalendarEvent.linkType/linkId). Las @menciones se
+// resuelven al crear y quedan en mentionedUserIds para no re-parsear.
+model DocumentComment {
+  id               String   @id @default(uuid())
+  tenantId         String
+  entityType       String
+  entityId         String
+  authorUserId     String
+  body             String
+  mentionedUserIds String[] @default([])
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId, createdAt])
+  @@map("document_comments")
 }

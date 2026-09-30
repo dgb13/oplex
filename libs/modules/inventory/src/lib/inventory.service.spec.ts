@@ -11,7 +11,7 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
 }
 
 function makeEventEmitter(): EventEmitter2 {
-  return { emit: jest.fn() } as unknown as EventEmitter2;
+  return { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) } as unknown as EventEmitter2;
 }
 
 // Every outbound movement (delta < 0, type !== ADJUSTMENT) now sums ACTIVE

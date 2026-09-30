@@ -364,6 +364,51 @@ describe('ProductionOrderService.cancel', () => {
   });
 });
 
+describe('ProductionOrderService - avisos al creador', () => {
+  function makeNotifyingDb(createdByUserId: string) {
+    const order = makeOrder({ status: 'IN_PROGRESS', number: 'OP-000042', createdByUserId });
+    return makeDb({
+      productionOrder: {
+        findUnique: jest.fn().mockResolvedValue(order),
+        update: jest.fn((args) => Promise.resolve({ ...order, ...args.data })),
+      },
+      articleVariant: { findUnique: jest.fn().mockResolvedValue({ article: { name: 'Mesa ratona roble' } }) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ name: 'María López', email: 'maria@x.com' }),
+        findMany: jest.fn().mockResolvedValue([{ id: createdByUserId, mutedNotificationTypes: [] }]),
+      },
+      notification: { create: jest.fn((args) => Promise.resolve({ id: 'n-1', ...args.data })) },
+    });
+  }
+
+  it('al terminar la orden de otro, le avisa al creador y registra quién la terminó', async () => {
+    const db = makeNotifyingDb('creator-1');
+    const service = makeService({ db });
+
+    const order = await runAsTenant(db, () => service.finishOrder('order-1'));
+
+    expect(order.finishedByUserId).toBe('user-1');
+    expect((db as { notification: { create: jest.Mock } }).notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recipientUserId: 'creator-1',
+        category: 'PRODUCTION',
+        type: 'production.finished',
+        message: '**María López** terminó tu orden **OP-000042** · Mesa ratona roble × 4. Ingresó al stock.',
+        link: '/production/orders/order-1',
+      }),
+    });
+  });
+
+  it('no se avisa a sí mismo cuando el creador termina su propia orden', async () => {
+    const db = makeNotifyingDb('user-1');
+    const service = makeService({ db });
+
+    await runAsTenant(db, () => service.finishOrder('order-1'));
+
+    expect((db as { notification: { create: jest.Mock } }).notification.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProductionOrderService.getById', () => {
   it('includes reservations/consumptions/outputs/bom.lines', async () => {
     const findUnique = jest.fn().mockResolvedValue(makeOrder({ reservations: [] }));

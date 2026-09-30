@@ -812,6 +812,21 @@ export class InventoryService {
       newQuantity: (ledger?.quantity ?? new Prisma.Decimal(0)).toString(),
     });
 
+    // Awaited (emitAsync), no fire-and-forget: quien escucha (el aviso de
+    // "quedó bajo el mínimo", apps/api) consulta la base con esta misma
+    // transacción, que tiene que seguir abierta. Este módulo no sabe nada
+    // de avisos - sólo cuenta que el stock bajó.
+    if (delta < 0) {
+      const newQuantity = ledger?.quantity ?? new Prisma.Decimal(0);
+      await this.eventEmitter.emitAsync('stock.decreased', {
+        tenantId,
+        warehouseId: dto.warehouseId,
+        articleVariantId: dto.articleVariantId,
+        previousQuantity: newQuantity.sub(delta).toString(),
+        newQuantity: newQuantity.toString(),
+      });
+    }
+
     return movement;
   }
 
