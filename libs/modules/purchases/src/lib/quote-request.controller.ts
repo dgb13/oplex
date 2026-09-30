@@ -18,7 +18,7 @@ import { SelectQuoteRequestWinnerDto } from './dto/select-quote-request-winner.d
 import { UpdateQuoteRequestDto } from './dto/update-quote-request.dto.js';
 import { QuoteRequestService } from './quote-request.service.js';
 
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/quote-requests')
 export class QuoteRequestController {

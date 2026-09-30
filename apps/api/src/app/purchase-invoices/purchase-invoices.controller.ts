@@ -14,7 +14,7 @@ import { PurchaseInvoicesService } from './purchase-invoices.service.js';
 // Same write-access roles as the rest of Compras (purchase-order.controller.ts,
 // goods-receipts.controller.ts) - registering a Factura de Compra or a
 // payment against it is an inventory/finance-affecting write.
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/purchase-invoices')
 export class PurchaseInvoicesController {

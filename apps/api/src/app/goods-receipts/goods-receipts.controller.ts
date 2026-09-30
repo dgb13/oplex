@@ -8,7 +8,7 @@ import { GoodsReceiptsService } from './goods-receipts.service.js';
 // Same write-access roles as the rest of Compras/Inventario
 // (purchase-order.controller.ts, inventory.controller.ts) - receiving
 // goods is an inventory-affecting write.
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/goods-receipts')
 export class GoodsReceiptsController {

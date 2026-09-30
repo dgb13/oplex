@@ -16,10 +16,10 @@ import { InventoryCartService } from './inventory-cart.service.js';
 import { CartPdfService } from './pdf/cart-pdf.service.js';
 
 // Broader than Inventario's own WRITE_ROLES (['OWNER','ADMIN','INVENTORY'])
-// - the cart feeds both a Compras checkout (INVENTORY territory) and a
-// Ventas checkout (SALES territory), so SALES needs to be able to build and
-// use a list too, not just view one.
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'SALES'] as const;
+// - the cart feeds both a Compras checkout (INVENTORY/PURCHASES territory)
+// and a Ventas checkout (SALES territory), so SALES and PURCHASES need to be
+// able to build and use a list too, not just view one.
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'SALES', 'PURCHASES'] as const;
 
 @Controller('inventory/cart')
 export class InventoryCartController {

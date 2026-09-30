@@ -6,7 +6,7 @@ import { PurchaseCreditNotesService } from './purchase-credit-notes.service.js';
 
 // Same write-access roles as the rest of Compras/Cuentas a Pagar
 // (purchase-invoices.controller.ts).
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/purchase-credit-notes')
 export class PurchaseCreditNotesController {

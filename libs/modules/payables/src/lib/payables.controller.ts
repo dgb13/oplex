@@ -8,7 +8,7 @@ import { SupplierStatementPdfService } from './statement/supplier-statement-pdf.
 // Same read-access terna as the rest of Compras (INVENTORY, not SALES -
 // see purchase-order.controller.ts's own WRITE_ROLES) plus ACCOUNTANT,
 // same criterion as ReceivablesController's READ_ROLES.
-const READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'INVENTORY'] as const;
+const READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'INVENTORY', 'PURCHASES'] as const;
 
 function parseStatementOptions(query: StatementQueryDto, pendingOnly?: string): GetSupplierStatementOptions {
   return {

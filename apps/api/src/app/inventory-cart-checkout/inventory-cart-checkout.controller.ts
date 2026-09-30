@@ -14,7 +14,7 @@ export class InventoryCartCheckoutController {
   // activity-log point of view is "N new quote requests exist", same
   // entityType the manual Compras flow already logs under.
   @AuditEntity('quoteRequest', { idParam: null })
-  @Roles('OWNER', 'ADMIN', 'INVENTORY')
+  @Roles('OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES')
   @Post('purchase-requests')
   checkoutPurchaseRequests(@Body() dto: CheckoutPurchaseRequestsDto) {
     return this.checkoutService.checkoutPurchaseRequests(dto);

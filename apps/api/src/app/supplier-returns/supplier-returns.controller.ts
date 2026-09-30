@@ -4,7 +4,7 @@ import { CreateSupplierReturnDto } from '@plexo/purchases';
 import { SupplierReturnsService } from './supplier-returns.service.js';
 
 // Same write-access roles as the rest of Compras/Inventario.
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/supplier-returns')
 export class SupplierReturnsController {

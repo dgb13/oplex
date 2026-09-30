@@ -24,7 +24,7 @@ import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { UpdatePersonDto } from './dto/update-person.dto.js';
 import { PersonAvatarService } from './person-avatar.service.js';
 
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES', 'PURCHASES'] as const;
 
 @Controller('companies')
 export class CompaniesController {

@@ -4,7 +4,7 @@ import { CreateCatalogItemDto } from './dto/create-catalog-item.dto.js';
 import { UpdateCatalogItemDto } from './dto/update-catalog-item.dto.js';
 import { PurchaseCatalogsService } from './purchase-catalogs.service.js';
 
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/catalogs')
 export class PurchaseCatalogsController {

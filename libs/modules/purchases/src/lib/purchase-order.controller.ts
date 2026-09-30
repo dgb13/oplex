@@ -19,7 +19,7 @@ import { SendPurchaseOrderEmailDto } from './dto/send-purchase-order-email.dto.j
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto.js';
 import { PurchaseOrderService } from './purchase-order.service.js';
 
-const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
+const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY', 'PURCHASES'] as const;
 
 @Controller('purchases/purchase-orders')
 export class PurchaseOrderController {
