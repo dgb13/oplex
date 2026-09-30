@@ -15,6 +15,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { UserAvatarService } from './user-avatar.service.js';
 import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { SignupService } from './signup.service.js';
+import { requestMeta } from '../legal/legal.controller.js';
 
 @Controller('auth')
 export class AuthController {
@@ -32,8 +33,8 @@ export class AuthController {
 
   @Public()
   @Post('signup')
-  signup(@Body() dto: SignupDto) {
-    return this.signupService.signup(dto);
+  signup(@Body() dto: SignupDto, @Req() req: FastifyRequest) {
+    return this.signupService.signup(dto, requestMeta(req));
   }
 
   @Public()

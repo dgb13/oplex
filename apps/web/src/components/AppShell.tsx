@@ -5,6 +5,7 @@ import { PlexoLogo } from '@/components/ui/PlexoLogo';
 import AmbientBackground from './AmbientBackground';
 import AssistantWidget from './AssistantWidget';
 import { NotificationBell } from './notifications/NotificationBell';
+import { TermsGate } from './legal/TermsGate';
 import { Toaster } from 'sonner';
 import CartButton from './CartButton';
 import ImpersonationBanner from './ImpersonationBanner';
@@ -366,6 +367,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AssistantWidget />
+      {/* Contrato de uso: bloquea hasta aceptar la versión vigente. */}
+      <TermsGate />
       {/* Globitos de avisos en vivo (NotificationBell) - abajo a la
           izquierda: abajo a la derecha está el Asistente. */}
       <Toaster position="bottom-left" theme={theme === 'dark' ? 'dark' : 'light'} closeButton />

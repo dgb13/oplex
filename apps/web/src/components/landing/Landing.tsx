@@ -989,6 +989,12 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             <a href="#planes">Planes</a>
             <a href="#comparativa">Comparativa</a>
             <a href="#faq">Preguntas</a>
+            <Link href="/legal/terminos">Términos y Condiciones</Link>
+            <Link href="/legal/privacidad">Privacidad</Link>
+            {/* Res. 424/2020: visible desde la página de inicio. */}
+            <Link href="/arrepentimiento" className="withdrawal">
+              Botón de arrepentimiento
+            </Link>
           </div>
           <span>ERP en la nube para pymes argentinas</span>
         </div>

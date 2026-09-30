@@ -740,6 +740,11 @@ model User {
   // NOTIFICATION_PREFERENCES en notifications.ts) - vacío = recibe todo.
   // Las menciones y tareas asignadas no se pueden silenciar.
   mutedNotificationTypes   String[]   @default([])
+  // Última versión de los Términos/Política aceptada (ver LEGAL_TERMS_VERSION
+  // en @plexo/types) - si no coincide con la vigente, la app pide aceptar de
+  // nuevo. El historial completo, como prueba, está en LegalAcceptance.
+  acceptedTermsVersion     String?
+  acceptedTermsAt          DateTime?
 
   moduleAccess               UserModuleAccess[]
   issuedInvoices             Invoice[]
@@ -3816,6 +3821,47 @@ model CalendarEvent {
   @@index([tenantId, startsAt])
   @@index([tenantId, assignedTo, status])
   @@map("calendar_events")
+}
+
+// Prueba de aceptación de los Términos y Condiciones, la Política de
+// Privacidad y el Acuerdo de Tratamiento de Datos: quién, cuándo, qué
+// versión, desde dónde. Sólo se inserta (nunca se edita ni se borra).
+model LegalAcceptance {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     String
+  version    String
+  acceptedAt DateTime @default(now())
+  ip         String?
+  userAgent  String?
+
+  @@index([tenantId, userId])
+  @@map("legal_acceptances")
+}
+
+enum LegalRequestType {
+  WITHDRAWAL   // "Botón de arrepentimiento" (Res. 424/2020, sitio público)
+  CANCELLATION // Baja de la suscripción desde la app (Ley 24.240 art. 10 ter)
+}
+
+// Pedidos de arrepentimiento o de baja. Global (sin RLS): el de
+// arrepentimiento llega desde una página pública, sin sesión. `code` es el
+// número de trámite que se le muestra y envía a quien lo pide.
+model LegalRequest {
+  id        String           @id @default(uuid())
+  type      LegalRequestType
+  code      String           @unique
+  tenantId  String?
+  userId    String?
+  name      String
+  email     String
+  taxId     String?
+  message   String?
+  ip        String?
+  createdAt DateTime         @default(now())
+
+  @@index([createdAt])
+  @@map("legal_requests")
 }
 
 enum NotificationCategory {

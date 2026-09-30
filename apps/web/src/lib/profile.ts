@@ -10,6 +10,9 @@ export interface UserProfile {
   showOnlinePresence: boolean;
   mustChangePassword: boolean;
   createdAt: string;
+  // Contrato de uso: TermsGate pide aceptar cuando no coinciden.
+  acceptedTermsVersion: string | null;
+  currentTermsVersion: string;
 }
 
 export interface UpdateProfileInput {

@@ -4,7 +4,7 @@ import { ActivityLogService, type MyActivityEntry } from '@plexo/activity-log';
 import { isPlatformAdminEmail } from '@plexo/auth';
 import { AUTH_EMAIL_SENDER, type AuthEmailSender } from '@plexo/auth-email';
 import { getTenantDb, PrismaService, withTenantContext, type User } from '@plexo/database';
-import type { AuthenticatedUser, ModuleAccessClaim } from '@plexo/types';
+import { LEGAL_TERMS_VERSION, type AuthenticatedUser, type ModuleAccessClaim } from '@plexo/types';
 import * as bcrypt from 'bcryptjs';
 import type { SignOptions } from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
@@ -33,6 +33,9 @@ export interface UserProfile {
   mustChangePassword: boolean;
   isPlatformAdmin: boolean;
   createdAt: Date;
+  // Contrato de uso: la app pide aceptar cuando no coinciden.
+  acceptedTermsVersion: string | null;
+  currentTermsVersion: string;
 }
 
 /** Thrown by login() when the account exists and the password is correct
@@ -399,5 +402,7 @@ function toProfile(user: User): UserProfile {
     mustChangePassword: user.mustChangePassword,
     isPlatformAdmin: isPlatformAdminEmail(user.email),
     createdAt: user.createdAt,
+    acceptedTermsVersion: user.acceptedTermsVersion,
+    currentTermsVersion: LEGAL_TERMS_VERSION,
   };
 }

@@ -2,6 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import type { AuthEmailSender } from '@plexo/auth-email';
 import type { PrismaService } from '@plexo/database';
 import { createHash } from 'node:crypto';
+import type { LegalService } from '../legal/legal.service.js';
 import type { AuthService } from './auth.service.js';
 import { SignupService } from './signup.service.js';
 import type { ProvisionedTenant, TenantProvisioningService } from './tenant-provisioning.service.js';
@@ -28,6 +29,12 @@ function makeAuthEmailSender() {
   } as unknown as AuthEmailSender;
 }
 
+function makeLegalService() {
+  return {
+    acceptCurrentTerms: jest.fn().mockResolvedValue({ version: '1.0', acceptedAt: new Date() }),
+  } as unknown as LegalService;
+}
+
 describe('SignupService.signup', () => {
   it('provisions the tenant unverified and sends a 6-digit code', async () => {
     const fakeTx = {
@@ -36,13 +43,21 @@ describe('SignupService.signup', () => {
     const prisma = makePrisma(fakeTx);
     const tenantProvisioningService = makeTenantProvisioningService({ tenantId: 'tenant-1', userId: 'user-1' });
     const authEmailSender = makeAuthEmailSender();
-    const service = new SignupService(prisma, tenantProvisioningService, makeAuthService(), authEmailSender);
+    const legalService = makeLegalService();
+    const service = new SignupService(prisma, tenantProvisioningService, makeAuthService(), authEmailSender, legalService);
 
-    const result = await service.signup({
-      tenantName: 'Nueva Empresa',
-      email: 'nueva@demo.com',
-      password: 'password123',
-    });
+    const result = await service.signup(
+      {
+        tenantName: 'Nueva Empresa',
+        email: 'nueva@demo.com',
+        password: 'password123',
+        acceptTerms: true,
+      },
+      { ip: '1.2.3.4', userAgent: 'test' },
+    );
+
+    // Prueba de aceptación del contrato registrada para el dueño nuevo.
+    expect(legalService.acceptCurrentTerms).toHaveBeenCalledWith({ ip: '1.2.3.4', userAgent: 'test' }, 'user-1');
 
     expect(tenantProvisioningService.provision).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,6 +104,7 @@ describe('SignupService.verifyEmail', () => {
       {} as unknown as TenantProvisioningService,
       authService,
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     const result = await service.verifyEmail(dto);
@@ -114,6 +130,7 @@ describe('SignupService.verifyEmail', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     await expect(service.verifyEmail(dto)).rejects.toThrow(UnauthorizedException);
@@ -135,6 +152,7 @@ describe('SignupService.verifyEmail', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     await expect(service.verifyEmail(dto)).rejects.toThrow(UnauthorizedException);
@@ -152,6 +170,7 @@ describe('SignupService.verifyEmail', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     await expect(service.verifyEmail(dto)).rejects.toThrow(UnauthorizedException);
@@ -164,6 +183,7 @@ describe('SignupService.verifyEmail', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     await expect(service.verifyEmail(dto)).rejects.toThrow(UnauthorizedException);
@@ -211,6 +231,7 @@ describe('SignupService.resendCode', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       makeAuthEmailSender(),
+      makeLegalService(),
     );
 
     await expect(service.resendCode(dto)).rejects.toThrow();

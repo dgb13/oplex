@@ -52,6 +52,7 @@ export default function SignupPage() {
         ownerName: data.ownerName,
         email: data.email,
         password: data.password,
+        acceptTerms: data.acceptTerms,
       });
       toast.success('Cuenta creada. Te mandamos un código para verificar tu email.');
       router.push(`/verify-email?tenantId=${tenantId}&email=${encodeURIComponent(email)}`);
@@ -145,7 +146,20 @@ export default function SignupPage() {
               className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
               {...register('acceptTerms')}
             />
-            Acepto los términos y condiciones y la política de privacidad
+            <span>
+              Acepto los{' '}
+              <Link href="/legal/terminos" target="_blank" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                Términos y Condiciones
+              </Link>
+              , la{' '}
+              <Link href="/legal/privacidad" target="_blank" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                Política de Privacidad
+              </Link>{' '}
+              y el{' '}
+              <Link href="/legal/tratamiento-de-datos" target="_blank" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                Acuerdo de Tratamiento de Datos
+              </Link>
+            </span>
           </label>
           {errors.acceptTerms && (
             <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.acceptTerms.message}</p>

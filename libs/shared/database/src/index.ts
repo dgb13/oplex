@@ -100,6 +100,8 @@ export type {
   ProductionOutput,
   CalendarEvent,
   Notification,
+  LegalAcceptance,
+  LegalRequest,
   DocumentComment,
 } from './generated/client.js';
 export * from './generated/enums.js';

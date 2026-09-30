@@ -28,6 +28,14 @@ export interface SendMembershipNoticePayload {
   portalUrl: string;
 }
 
+// Aviso en texto plano (pedidos de arrepentimiento o de baja): uno al
+// titular del servicio y otro, con el número de trámite, a quien lo pidió.
+export interface SendLegalNoticePayload {
+  to: string;
+  subject: string;
+  text: string;
+}
+
 /**
  * Mismo patrón puerto/adaptador que EmailSender de Facturación
  * (libs/modules/invoicing/src/lib/email-sender.port.ts) - SignupService y
@@ -38,6 +46,7 @@ export interface AuthEmailSender {
   sendPasswordResetLink(payload: SendPasswordResetLinkPayload): Promise<void>;
   sendInvitation(payload: SendInvitationPayload): Promise<void>;
   sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void>;
+  sendLegalNotice(payload: SendLegalNoticePayload): Promise<void>;
 }
 
 export const AUTH_EMAIL_SENDER = Symbol('AUTH_EMAIL_SENDER');

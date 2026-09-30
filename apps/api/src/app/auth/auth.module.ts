@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import type { SignOptions } from 'jsonwebtoken';
 import { ActivityLogModule } from '@plexo/activity-log';
 import { AuthEmailModule } from '@plexo/auth-email';
+import { LegalModule } from '../legal/legal.module.js';
 import { SubscriptionModule } from '@plexo/subscriptions';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
@@ -25,6 +26,7 @@ import { UserAvatarService } from './user-avatar.service.js';
     ActivityLogModule,
     SubscriptionModule,
     AuthEmailModule,
+    LegalModule,
     PassportModule,
     JwtModule.registerAsync({
       global: true,

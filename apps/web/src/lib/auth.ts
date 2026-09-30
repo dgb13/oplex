@@ -28,6 +28,8 @@ export interface SignupPayload {
   ownerName?: string;
   email: string;
   password: string;
+  // Casilla obligatoria del contrato de uso (la API registra la aceptación).
+  acceptTerms: boolean;
 }
 
 export async function signup(payload: SignupPayload): Promise<{ tenantId: string; email: string }> {

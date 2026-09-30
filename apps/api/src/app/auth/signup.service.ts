@@ -3,6 +3,7 @@ import { AUTH_EMAIL_SENDER, type AuthEmailSender } from '@plexo/auth-email';
 import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomInt, randomUUID } from 'node:crypto';
+import { LegalService, type RequestMeta } from '../legal/legal.service.js';
 import { AuthService } from './auth.service.js';
 import type { ResendCodeDto } from './dto/resend-code.dto.js';
 import type { SignupDto } from './dto/signup.dto.js';
@@ -38,9 +39,10 @@ export class SignupService {
     private readonly tenantProvisioningService: TenantProvisioningService,
     private readonly authService: AuthService,
     @Inject(AUTH_EMAIL_SENDER) private readonly authEmailSender: AuthEmailSender,
+    private readonly legalService: LegalService,
   ) {}
 
-  async signup(dto: SignupDto): Promise<{ tenantId: string; email: string }> {
+  async signup(dto: SignupDto, meta: RequestMeta = {}): Promise<{ tenantId: string; email: string }> {
     const tenantId = randomUUID();
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
@@ -55,6 +57,10 @@ export class SignupService {
       autoVerifyEmail: false,
       planKey: SIGNUP_DEFAULT_PLAN_KEY,
     });
+
+    // Prueba de que aceptó el contrato al crear la cuenta (quién, cuándo,
+    // qué versión, desde qué IP/navegador).
+    await withTenantContext(this.prisma, tenantId, () => this.legalService.acceptCurrentTerms(meta, userId));
 
     await this.issueAndSendCode(tenantId, userId, dto.email);
 

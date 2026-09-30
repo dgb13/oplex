@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import type {
   AuthEmailSender,
   SendInvitationPayload,
+  SendLegalNoticePayload,
   SendMembershipNoticePayload,
   SendPasswordResetLinkPayload,
   SendVerificationCodePayload,
@@ -23,6 +24,18 @@ export class ResendAuthEmailSender implements AuthEmailSender {
   constructor(apiKey: string, from: string) {
     this.resend = new Resend(apiKey);
     this.from = from;
+  }
+
+  async sendLegalNotice(payload: SendLegalNoticePayload): Promise<void> {
+    const { error } = await this.resend.emails.send({
+      from: this.from,
+      to: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+    });
+    if (error) {
+      this.logger.error(`Failed to email legal notice to ${payload.to}: ${error.message}`);
+    }
   }
 
   async sendVerificationCode(payload: SendVerificationCodePayload): Promise<void> {

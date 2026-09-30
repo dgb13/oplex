@@ -36,6 +36,7 @@ import { AgendaModule } from './agenda/agenda.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BankReconciliationModule } from './bank-reconciliation/bank-reconciliation.module.js';
 import { CollaborationModule } from './collaboration/collaboration.module.js';
+import { LegalModule } from './legal/legal.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module.js';
 import { InventoryCartCheckoutModule } from './inventory-cart-checkout/inventory-cart-checkout.module.js';
@@ -75,6 +76,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     SalesModule,
     DashboardModule,
     CollaborationModule,
+    LegalModule,
     CalendarModule,
     AgendaModule,
     SchedulerModule,
