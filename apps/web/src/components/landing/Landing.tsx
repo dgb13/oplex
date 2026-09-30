@@ -1,25 +1,50 @@
 'use client';
 
-import { MARK_PATH } from '@/components/ui/oplexMark';
+import {
+  BRAND_ORANGE,
+  LOCKUP_MARK_SCALE,
+  LOCKUP_VIEWBOX,
+  MARK_ARC_PATH,
+  MARK_DOT,
+  MARK_VIEWBOX,
+  WORDMARK_PATH,
+  WORDMARK_TRANSLATE,
+} from '@/components/ui/oplexMark';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { COMPARISON, COMPARISON_SOURCES, COMPETITORS, TESTIMONIALS, type PublicPlan } from './data';
 import './landing.css';
 
-const MARK_VIEWBOX = '229 229 573 378';
-// Un poco más de aire que el logo para que el trazo y el brillo del punto
-// no se corten en el borde.
-const LOOP_VIEWBOX = '215 215 601 406';
+// Un poco más de aire que el isotipo (64x64) para que el trazo grueso y el
+// brillo del punto no se corten en el borde.
+const LOOP_VIEWBOX = '-6 -6 76 76';
 const RECOMMENDED_PLAN = 'SILVER';
 // Número de contacto comercial (formato wa.me: país + 9 + área + número).
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5492616590127';
 
 const ars = new Intl.NumberFormat('es-AR');
 
-function Mark({ fill = 'url(#lp-hg)' }: { fill?: string }) {
+/** Isotipo nuevo (arco + punto naranja, BRAND.md) con el degradé de la
+ * landing en el arco - decisión del usuario: forma nueva, colores actuales. */
+function Mark({ stroke = 'url(#lp-hg)' }: { stroke?: string }) {
   return (
     <svg viewBox={MARK_VIEWBOX} aria-hidden="true">
-      <path d={MARK_PATH} fill={fill} fillRule="evenodd" />
+      <path d={MARK_ARC_PATH} fill="none" stroke={stroke} strokeWidth={10} strokeLinecap="round" />
+      <circle cx={MARK_DOT.cx} cy={MARK_DOT.cy} r={MARK_DOT.r} fill={BRAND_ORANGE} />
+    </svg>
+  );
+}
+
+/** Logo horizontal (isotipo + "oplex" en trazos) - el texto toma el color
+ * del contenedor (blanco en esta landing oscura: versión negativo). */
+function Lockup() {
+  return (
+    <svg className="lockup" viewBox={LOCKUP_VIEWBOX} role="img" aria-label="Oplex">
+      <g transform={`scale(${LOCKUP_MARK_SCALE})`}>
+        <path d={MARK_ARC_PATH} fill="none" stroke="url(#lp-hg)" strokeWidth={10} strokeLinecap="round" />
+        <circle cx={MARK_DOT.cx} cy={MARK_DOT.cy} r={MARK_DOT.r} fill={BRAND_ORANGE} />
+      </g>
+      <path transform={`translate(${WORDMARK_TRANSLATE.x} ${WORDMARK_TRANSLATE.y})`} fill="currentColor" d={WORDMARK_PATH} />
     </svg>
   );
 }
@@ -79,7 +104,8 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
     let raf = 0;
     const cleanups: (() => void)[] = [];
 
-    // Hero: el ∞ se dibuja y un punto recorre el circuito.
+    // Hero: el arco del isotipo se dibuja y un punto de luz lo recorre
+    // (cada tramo del arco prende una etapa del circuito).
     const stroke = q<SVGPathElement>('#lp-loop-stroke');
     const dot = q<SVGCircleElement>('#lp-dot');
     const stages = qa<HTMLElement>('.stages .stage');
@@ -326,6 +352,13 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             <stop offset="0" stopColor="#2dd4bf" stopOpacity=".35" />
             <stop offset="1" stopColor="#2dd4bf" stopOpacity="0" />
           </linearGradient>
+          <filter id="lp-glow-sm" x="-300%" y="-300%" width="700%" height="700%">
+            <feGaussianBlur stdDeviation="1.4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           <filter id="lp-glow" x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="6" result="b" />
             <feMerge>
@@ -346,8 +379,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
       <header className="nav gutter">
         <div className="container nav-in">
           <a className="brand" href="#top" aria-label="Oplex, inicio">
-            <Mark />
-            OPLEX
+            <Lockup />
           </a>
           <nav className="nav-links" aria-label="Secciones">
             <a href="#circuito">Cómo funciona</a>
@@ -415,9 +447,10 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
               </div>
               <div className="loop-wrap">
                 <svg viewBox={LOOP_VIEWBOX} aria-hidden="true">
-                  <path id="loopFill" d={MARK_PATH} fillRule="evenodd" />
-                  <path id="lp-loop-stroke" className="loop-stroke" d={MARK_PATH} />
-                  <circle id="lp-dot" className="loop-dot" r="9" cx="-100" cy="-100" />
+                  <path id="loopFill" d={MARK_ARC_PATH} />
+                  <path id="lp-loop-stroke" className="loop-stroke" d={MARK_ARC_PATH} />
+                  <circle className="loop-brand-dot" cx={MARK_DOT.cx} cy={MARK_DOT.cy} r={MARK_DOT.r} />
+                  <circle id="lp-dot" className="loop-dot" r="2.4" cx="-100" cy="-100" />
                 </svg>
               </div>
               <div className="stages">
@@ -489,7 +522,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
                   <div className="chat" id="lp-chat" aria-live="polite">
                     <div className="chat-h">
                       <i>
-                        <Mark fill="#04221c" />
+                        <Mark stroke="#04221c" />
                       </i>
                       <div>
                         <b>Oplex</b>asistente de tu empresa
@@ -926,7 +959,8 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
           <div className="container">
             <div className="final">
               <svg className="bigmark" viewBox={LOOP_VIEWBOX} aria-hidden="true">
-                <path d={MARK_PATH} />
+                <path d={MARK_ARC_PATH} />
+                <circle cx={MARK_DOT.cx} cy={MARK_DOT.cy} r={MARK_DOT.r} fill={BRAND_ORANGE} />
               </svg>
               <h2>
                 Dejá de pasar datos a mano. <span className="grad-text">Empezá hoy.</span>
@@ -947,9 +981,8 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
 
       <footer className="gutter">
         <div className="container foot-in">
-          <a className="brand" href="#top">
-            <Mark />
-            OPLEX
+          <a className="brand" href="#top" aria-label="Oplex, inicio">
+            <Lockup />
           </a>
           <div className="foot-links">
             <a href="#funciones">Funciones</a>

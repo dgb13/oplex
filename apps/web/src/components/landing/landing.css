@@ -45,6 +45,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp .nav-in { display: flex; align-items: center; gap: 24px; height: 64px; }
 .lp .brand { display: flex; align-items: center; gap: 10px; font: 800 19px/1 var(--display); letter-spacing: -.01em; }
 .lp .brand svg { height: 22px; width: auto; }
+.lp .brand svg.lockup { height: 26px; color: var(--text); }
 .lp .nav-links { display: flex; gap: 22px; margin-left: 12px; font-size: 14.5px; color: var(--muted); }
 .lp .nav-links a:hover { color: var(--text); }
 .lp .nav-cta { margin-left: auto; display: flex; gap: 10px; align-items: center; }
@@ -86,9 +87,12 @@ html:has(.lp) { scroll-behavior: smooth; }
 @keyframes lp-pulse { 50% { box-shadow: 0 0 0 6px rgba(74,222,128,0); } 0% { box-shadow: 0 0 0 0 rgba(74,222,128,.55); } }
 .lp .loop-wrap { position: relative; margin: 4px auto 0; width: min(100%, 300px); }
 .lp .loop-wrap svg { width: 100%; height: auto; display: block; overflow: visible; }
-.lp .loop-stroke { fill: none; stroke: url(#lp-hg); stroke-width: 3.2; stroke-linejoin: round; }
-.lp #loopFill { fill: url(#lp-hg); opacity: .12; }
-.lp .loop-dot { fill: #eafff7; filter: url(#lp-glow); }
+.lp .loop-stroke { fill: none; stroke: url(#lp-hg); stroke-width: 10; stroke-linecap: round; }
+.lp #loopFill { fill: none; stroke: url(#lp-hg); stroke-width: 10; stroke-linecap: round; opacity: .12; }
+.lp .loop-dot { fill: #eafff7; filter: url(#lp-glow-sm); }
+.lp .loop-brand-dot { fill: #e8672c; transform-origin: 47.56px 16.44px; animation: lp-dot-pop .5s cubic-bezier(.2,.9,.3,1.4) 2s both, lp-dot-pulse 2.4s ease-in-out 2.6s infinite; }
+@keyframes lp-dot-pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes lp-dot-pulse { 50% { transform: scale(1.18); } }
 .lp .stages { display: grid; gap: 8px; margin-top: 6px; }
 .lp .stage { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.02); transition: border-color .35s, background .35s, transform .35s; }
 .lp .stage .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.04); color: var(--muted); transition: background .35s, color .35s; }
@@ -307,7 +311,7 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp .final h2 { font-size: clamp(34px, 5vw, 62px); font-weight: 800; line-height: 1.02; max-width: 16ch; }
 .lp .final p { color: var(--muted); font-size: 18px; max-width: 52ch; }
 .lp .final .bigmark { width: min(520px, 90%); opacity: .5; margin-bottom: -10px; }
-.lp .final .bigmark path { fill: none; stroke: url(#lp-hg2); stroke-width: 2; stroke-dasharray: 14 10; animation: lp-march 3s linear infinite; }
+.lp .final .bigmark path { fill: none; stroke: url(#lp-hg2); stroke-width: 1.2; stroke-linecap: round; stroke-dasharray: 4 4; animation: lp-march 3s linear infinite; }
 @keyframes lp-march { to { stroke-dashoffset: -96; } }
 .lp footer { margin-top: 80px; border-top: 1px solid var(--line); padding-block: 36px 90px; color: var(--dim); font-size: 13.5px; }
 .lp .foot-in { display: flex; flex-wrap: wrap; gap: 20px 40px; justify-content: space-between; align-items: center; }

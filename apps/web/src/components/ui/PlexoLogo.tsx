@@ -1,48 +1,39 @@
-import { MARK_PATH } from './oplexMark';
+import {
+  BRAND_ORANGE,
+  LOCKUP_MARK_SCALE,
+  LOCKUP_VIEWBOX,
+  MARK_ARC_PATH,
+  MARK_ARC_STROKE_WIDTH,
+  MARK_DOT,
+  MARK_VIEWBOX,
+  WORDMARK_PATH,
+  WORDMARK_TRANSLATE,
+} from './oplexMark';
 
-const MARK_VIEWBOX = '229 229 573 378';
-const MARK_ASPECT_RATIO = 573 / 378;
+const LOCKUP_ASPECT_RATIO = 387.05 / 93;
 
 interface PlexoLogoProps {
-  /** Icon HEIGHT in pixels - width follows the mark's real aspect ratio
-   * (~1.51:1, it's a wide "P+∞" combination mark, not a square glyph) so it
-   * never looks squashed/stretched. The wordmark's font-size scales off
-   * this same number. Default matches the size the auth screens use. */
+  /** Alto en píxeles - el ancho sale de la proporción real del logo (el
+   * horizontal es ~4,2:1, el isotipo solo es cuadrado), nunca se deforma.
+   * BRAND.md: mínimo 24 px de alto el horizontal, 16 px el isotipo. */
   size?: number;
-  /** Icon-only, no "OPLEX" text - for tight spaces (mobile compact header,
-   * anywhere the wordmark would wrap/crowd). */
+  /** Sólo el isotipo (arco + punto), sin "oplex" - para lugares chicos
+   * (riel del menú colapsado, header compacto en celular). */
   iconOnly?: boolean;
-  /** Both the icon and the wordmark share ONE color (via currentColor) -
-   * override this to place the mark on a background its default indigo
-   * doesn't have enough contrast against (e.g. the auth screens' always-
-   * dark decorative panel needs plain white, not indigo-600/dark:indigo-400
-   * which assumes it's sitting on this app's normal light/dark page
-   * background, not a fixed-dark panel). Defaults to this app's standard
-   * brand color, same class already used for the wordmark everywhere else
-   * (see AppShell.tsx). */
+  /** Color del arco y del texto (vía currentColor). El default es el índigo
+   * de la app; sobre un fondo oscuro fijo (barra lateral, panel del login,
+   * backoffice) se pasa blanco - la versión "negativo" de BRAND.md. El
+   * punto es siempre naranja de marca. */
   colorClassName?: string;
   className?: string;
 }
 
 /**
- * The real brand mark - a "P" merging into an infinity symbol (∞) - as
- * given by the user (apps/web/public/logo.png is the reference lockup:
- * this same mark in a teal→green gradient, above the wordmark). The path
- * below is EXACTLY the letterform sub-path the user provided, with the
- * enclosing full-canvas rectangle stripped out: their original SVG was a
- * single compound path (rect + letterform, fill-rule="evenodd") meant as a
- * solid-tile app icon (rect fills solid, letterform punches through as a
- * cutout - see apps/web/src/app/icon.svg, which now uses that full version
- * as the favicon). Isolating just the letterform sub-path and filling IT
- * directly (confirmed by rendering both ways side by side) gives a clean
- * solid glyph on a transparent background instead - the right shape for
- * sitting inline next to the "OPLEX" wordmark in a header, not a favicon
- * tile.
- *
- * Recolored via currentColor (the source path was a fixed navy, matching
- * the wordmark color in logo.png) so it inherits whatever indigo-600/
- * indigo-400 (light/dark) the caller sets - same brand color used
- * everywhere else in this app's UI (see AppShell.tsx).
+ * Logo de Oplex (nuevo sistema de marca, docs/logo/oplex-brand/BRAND.md):
+ * isotipo = arco + punto naranja, logotipo = "oplex" en trazos. Geometría
+ * tal cual los SVG oficiales (ver oplexMark.ts); colores: decisión del
+ * usuario (2026-09-30) de mantener el índigo de la app para el arco y el
+ * texto, con el punto en el naranja de marca.
  */
 export function PlexoLogo({
   size = 28,
@@ -50,22 +41,34 @@ export function PlexoLogo({
   colorClassName = 'text-indigo-600 dark:text-indigo-400',
   className = '',
 }: PlexoLogoProps) {
+  const mark = (
+    <>
+      <path
+        d={MARK_ARC_PATH}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={MARK_ARC_STROKE_WIDTH}
+        strokeLinecap="round"
+      />
+      <circle cx={MARK_DOT.cx} cy={MARK_DOT.cy} r={MARK_DOT.r} fill={BRAND_ORANGE} />
+    </>
+  );
+
   return (
-    <span className={`inline-flex items-center gap-2 ${colorClassName} ${className}`}>
-      <svg
-        height={size}
-        width={size * MARK_ASPECT_RATIO}
-        viewBox={MARK_VIEWBOX}
-        aria-hidden={!iconOnly}
-        role={iconOnly ? 'img' : undefined}
-        aria-label={iconOnly ? 'Oplex' : undefined}
-      >
-        <path d={MARK_PATH} fill="currentColor" fillRule="evenodd" />
-      </svg>
-      {!iconOnly && (
-        <span className="font-bold tracking-tight" style={{ fontSize: size * 0.75 }}>
-          OPLEX
-        </span>
+    <span className={`inline-flex items-center ${colorClassName} ${className}`}>
+      {iconOnly ? (
+        <svg height={size} width={size} viewBox={MARK_VIEWBOX} role="img" aria-label="Oplex">
+          {mark}
+        </svg>
+      ) : (
+        <svg height={size} width={size * LOCKUP_ASPECT_RATIO} viewBox={LOCKUP_VIEWBOX} role="img" aria-label="Oplex">
+          <g transform={`scale(${LOCKUP_MARK_SCALE})`}>{mark}</g>
+          <path
+            transform={`translate(${WORDMARK_TRANSLATE.x} ${WORDMARK_TRANSLATE.y})`}
+            fill="currentColor"
+            d={WORDMARK_PATH}
+          />
+        </svg>
       )}
     </span>
   );
