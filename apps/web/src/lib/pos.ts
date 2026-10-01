@@ -11,6 +11,8 @@ export interface CashRegister {
   financialAccountId: string;
   active: boolean;
   createdAt: string;
+  // Caja dada de alta en Mercado Pago para cobrar con QR (null = sin activar).
+  mpPosId: string | null;
 }
 
 export interface CreateCashRegisterInput {
@@ -135,6 +137,49 @@ export interface CheckoutPaymentInput {
   amount: number;
   method: string;
   check?: ReceiptCheckInput;
+  // Sólo MERCADOPAGO cobrado con el QR de la caja (ver QrChargePanel).
+  paymentIntentId?: string;
+}
+
+// QR de Mercado Pago de una caja (ver MercadoPagoQrService en el backend).
+export interface RegisterQrAddress {
+  streetName: string;
+  streetNumber: string;
+  cityName: string;
+  stateName: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface RegisterQrSetup {
+  active: boolean;
+  qrImageUrl: string | null;
+  qrTemplateUrl: string | null;
+  registerName: string;
+  branchName: string;
+  storeExists: boolean;
+  address: RegisterQrAddress;
+}
+
+export interface ActivateRegisterQrInput {
+  streetName: string;
+  streetNumber: string;
+  cityName: string;
+  stateName: string;
+  latitude: number;
+  longitude: number;
+}
+
+export type QrChargeStatus = 'PENDING' | 'PAID' | 'EXPIRED' | 'CANCELLED' | 'REFUNDED' | 'ERROR';
+
+export interface QrCharge {
+  id: string;
+  status: QrChargeStatus;
+  rejected: boolean;
+  amount: string;
+  qrCodeBase64: string | null;
+  expiresAt: string | null;
+  externalPaymentId: string | null;
 }
 
 export interface CheckoutInput {
@@ -206,4 +251,16 @@ export const posApi = {
     api.post<CashSessionDetail>(`/pos/sessions/${sessionId}/close`, dto).then((r) => r.data),
   checkout: (dto: CheckoutInput) => api.post<Invoice>(`/pos/checkout`, dto).then((r) => r.data),
   getDailyPosition: () => api.get<DailyPosition>('/pos/dashboard').then((r) => r.data),
+  listQrCities: (state: string) =>
+    api.get<string[]>('/pos/mercadopago-qr/cities', { params: { state } }).then((r) => r.data),
+  getRegisterQr: (registerId: string) =>
+    api.get<RegisterQrSetup>(`/pos/registers/${registerId}/mercadopago-qr`).then((r) => r.data),
+  activateRegisterQr: (registerId: string, dto: ActivateRegisterQrInput) =>
+    api.post<RegisterQrSetup>(`/pos/registers/${registerId}/mercadopago-qr/activate`, dto).then((r) => r.data),
+  deactivateRegisterQr: (registerId: string) =>
+    api.post<RegisterQrSetup>(`/pos/registers/${registerId}/mercadopago-qr/deactivate`).then((r) => r.data),
+  createQrCharge: (registerId: string, amount: number) =>
+    api.post<QrCharge>('/pos/qr-charges', { registerId, amount }).then((r) => r.data),
+  getQrCharge: (id: string) => api.get<QrCharge>(`/pos/qr-charges/${id}`).then((r) => r.data),
+  cancelQrCharge: (id: string) => api.post<QrCharge>(`/pos/qr-charges/${id}/cancel`).then((r) => r.data),
 };

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
+import { MercadoPagoQrService } from '@plexo/mercadopago';
 import {
   CashMovementDto,
   CashRegistersService,
@@ -13,6 +14,7 @@ import {
 } from '@plexo/pos';
 import { CheckoutDto } from './dto/checkout.dto.js';
 import { CreateRegisterDto } from './dto/create-register.dto.js';
+import { ActivateRegisterQrDto, CreateQrChargeDto } from './dto/mercadopago-qr.dto.js';
 import { PosService } from './pos.service.js';
 
 const SALES_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
@@ -25,6 +27,7 @@ export class PosController {
     private readonly cashRegistersService: CashRegistersService,
     private readonly cashSessionsService: CashSessionsService,
     private readonly cashSessionExcelService: CashSessionExcelService,
+    private readonly mercadoPagoQrService: MercadoPagoQrService,
   ) {}
 
   @Roles('OWNER', 'ADMIN')
@@ -54,6 +57,63 @@ export class PosController {
   @Get('registers/:id/last-closed-session')
   getLastClosedSession(@Param('id', ParseUUIDPipe) id: string) {
     return this.cashSessionsService.getLastClosedSession(id);
+  }
+
+  // QR de Mercado Pago de la caja: la configuración se ve desde el selector
+  // de cajas del POS (para saber si ofrecer "Generar QR"), pero activarlo o
+  // desactivarlo es de OWNER/ADMIN, igual que crear/editar cajas.
+  @Roles(...SALES_ROLES)
+  @Get('registers/:id/mercadopago-qr')
+  getRegisterQr(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mercadoPagoQrService.getRegisterSetup(id);
+  }
+
+  // Las rutas de acá abajo llaman a Mercado Pago dentro de la transacción
+  // del request (activar hace hasta tres llamadas seguidas).
+  // Ciudades/barrios que Mercado Pago acepta para la provincia elegida en
+  // el formulario de Activar QR.
+  @Roles('OWNER', 'ADMIN')
+  @Get('mercadopago-qr/cities')
+  listQrCities(@Query('state') state: string) {
+    return this.mercadoPagoQrService.listCities(state ?? '');
+  }
+
+  @Roles('OWNER', 'ADMIN')
+  @Post('registers/:id/mercadopago-qr/activate')
+  @LongRunningTransaction(30_000)
+  activateRegisterQr(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ActivateRegisterQrDto) {
+    return this.mercadoPagoQrService.activateRegister(id, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN')
+  @Post('registers/:id/mercadopago-qr/deactivate')
+  @LongRunningTransaction(30_000)
+  deactivateRegisterQr(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mercadoPagoQrService.deactivateRegister(id);
+  }
+
+  // Cobro con QR en el checkout: crear la orden, consultar su estado
+  // mientras la caja espera (también le pregunta a MP, por si el webhook no
+  // llega) y cancelarla.
+  @Roles(...SALES_ROLES)
+  @Post('qr-charges')
+  @LongRunningTransaction(30_000)
+  createQrCharge(@Body() dto: CreateQrChargeDto) {
+    return this.mercadoPagoQrService.createCharge(dto.registerId, dto.amount);
+  }
+
+  @Roles(...SALES_ROLES)
+  @Get('qr-charges/:id')
+  @LongRunningTransaction(30_000)
+  getQrCharge(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mercadoPagoQrService.getCharge(id);
+  }
+
+  @Roles(...SALES_ROLES)
+  @Post('qr-charges/:id/cancel')
+  @LongRunningTransaction(30_000)
+  cancelQrCharge(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mercadoPagoQrService.cancelCharge(id);
   }
 
   // Rutas estáticas de /sessions ANTES de la dinámica /sessions/:id, si no

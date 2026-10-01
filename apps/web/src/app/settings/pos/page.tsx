@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Check, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import RegisterQrModal from './RegisterQrModal';
 
 // Misma extracción que TeamPage/CompanyFormModal - sin esto, un PATCH
 // fallido no deja ningún rastro de qué salió mal.
@@ -66,6 +67,7 @@ export default function PosSettingsPage() {
                 <th className="p-3">Sucursal</th>
                 <th className="p-3">Depósito</th>
                 <th className="p-3">Estado</th>
+                <th className="p-3">QR Mercado Pago</th>
               </tr>
             </thead>
             <tbody>
@@ -87,6 +89,7 @@ function RegisterRow({ register }: { register: CashRegister }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(register.name);
   const [feedback, setFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['pos-registers'] });
@@ -190,6 +193,12 @@ function RegisterRow({ register }: { register: CashRegister }) {
           />
           <span className="text-xs text-muted-foreground">{register.active ? 'Activa' : 'Inactiva'}</span>
         </div>
+      </td>
+      <td className="p-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => setQrOpen(true)}>
+          {register.mpPosId ? 'QR activo' : 'Activar QR'}
+        </Button>
+        {qrOpen && <RegisterQrModal register={register} onClose={() => setQrOpen(false)} />}
       </td>
     </tr>
   );

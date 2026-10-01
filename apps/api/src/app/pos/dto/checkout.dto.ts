@@ -33,6 +33,13 @@ export class CheckoutPaymentDto {
   @ValidateNested()
   @Type(() => ReceiptCheckDto)
   check?: ReceiptCheckDto;
+
+  // Sólo method MERCADOPAGO cobrado con el QR de la caja: el cobro QR ya
+  // acreditado que paga esta fila (ver MercadoPagoQrService.consumeForSale).
+  // Sin esto, MERCADOPAGO sigue siendo una etiqueta como antes.
+  @IsOptional()
+  @IsUUID()
+  paymentIntentId?: string;
 }
 
 export class CheckoutDto {

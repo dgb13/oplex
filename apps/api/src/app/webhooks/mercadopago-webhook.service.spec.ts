@@ -2,7 +2,12 @@ import { createHmac } from 'node:crypto';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ConnectorService } from '@plexo/connectors';
 import { getUserId, Prisma, type PrismaService } from '@plexo/database';
-import type { MercadoPagoConfigService, MercadoPagoConnector, MercadoPagoPaymentClient } from '@plexo/mercadopago';
+import type {
+  MercadoPagoConfigService,
+  MercadoPagoConnector,
+  MercadoPagoPaymentClient,
+  MercadoPagoQrService,
+} from '@plexo/mercadopago';
 import { INVOICE_PAID } from '../dashboard/events.js';
 import type { SalesService } from '../sales/sales.service.js';
 import { MercadoPagoWebhookService, type MercadoPagoWebhookInput } from './mercadopago-webhook.service.js';
@@ -73,6 +78,7 @@ interface Deps {
   paymentClient: jest.Mocked<MercadoPagoPaymentClient>;
   salesService: jest.Mocked<SalesService>;
   eventEmitter: jest.Mocked<EventEmitter2>;
+  qrService: jest.Mocked<MercadoPagoQrService>;
   tx: Record<string, unknown>;
 }
 
@@ -120,6 +126,7 @@ function makeDeps(overrides: {
       recordReceipt: jest.fn().mockResolvedValue({ id: 'receipt-1', amount: new Prisma.Decimal(1810) }),
     } as unknown as jest.Mocked<SalesService>,
     eventEmitter: { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>,
+    qrService: { syncFromWebhook: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<MercadoPagoQrService>,
   };
 }
 
@@ -132,6 +139,7 @@ function makeService(deps: Deps): MercadoPagoWebhookService {
     deps.paymentClient,
     deps.salesService,
     deps.eventEmitter,
+    deps.qrService,
   );
 }
 
@@ -406,5 +414,47 @@ describe('MercadoPagoWebhookService.handleNotification - other terminal cases', 
 
     expect(deps.prisma.webhookEvent.findUnique).not.toHaveBeenCalled();
     expect(deps.connectorService.getConnector).not.toHaveBeenCalled();
+  });
+});
+
+describe('MercadoPagoWebhookService.handleNotification - "Order (Mercado Pago)" (cobro QR en Caja)', () => {
+  function orderInput(orderId: string) {
+    const { signatureHeader, requestId } = sign(orderId);
+    return baseInput({ signatureHeader, requestId, dataId: orderId, type: 'order', tenantIdParam: undefined });
+  }
+
+  it('resolves the tenant from the order id and syncs the QR charge inside that tenant', async () => {
+    const deps = makeDeps();
+    (deps.prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw = jest
+      .fn()
+      .mockResolvedValue([{ tenant_id: 'tenant-1' }]);
+    const service = makeService(deps);
+
+    await service.handleNotification(orderInput('ORD01ABC'));
+
+    expect(deps.qrService.syncFromWebhook).toHaveBeenCalledWith('ORD01ABC');
+    expect(deps.salesService.recordReceipt).not.toHaveBeenCalled();
+    expect(deps.paymentClient.getPayment).not.toHaveBeenCalled();
+  });
+
+  it('acks an order Oplex never created without touching any tenant', async () => {
+    const deps = makeDeps();
+    (deps.prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw = jest.fn().mockResolvedValue([]);
+    const service = makeService(deps);
+
+    await service.handleNotification(orderInput('ORD01UNKNOWN'));
+
+    expect(deps.qrService.syncFromWebhook).not.toHaveBeenCalled();
+    expect(deps.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('still requires a valid signature', async () => {
+    const deps = makeDeps();
+    const service = makeService(deps);
+
+    await expect(
+      service.handleNotification({ ...orderInput('ORD01ABC'), signatureHeader: 'ts=1,v1=deadbeef' }),
+    ).rejects.toThrow('Firma de Mercado Pago inválida');
+    expect(deps.qrService.syncFromWebhook).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,7 @@ import {
   MercadoPagoConfigService,
   MercadoPagoConnector,
   MercadoPagoPaymentClient,
+  MercadoPagoQrService,
   verifyMercadoPagoWebhookSignature,
 } from '@plexo/mercadopago';
 import { INVOICE_PAID, type InvoicePaidEvent } from '../dashboard/events.js';
@@ -53,6 +54,7 @@ export class MercadoPagoWebhookService {
     private readonly paymentClient: MercadoPagoPaymentClient,
     private readonly salesService: SalesService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly qrService: MercadoPagoQrService,
   ) {}
 
   /**
@@ -109,6 +111,16 @@ export class MercadoPagoWebhookService {
           this.logger.warn(`Failed to log invalid webhook signature attempt: ${(err as Error).message}`);
         });
       throw new UnauthorizedException('Firma de Mercado Pago inválida');
+    }
+
+    // "Order (Mercado Pago)": cobro con QR en Caja. Llega sin ?client= (lo
+    // manda la configuración de webhooks de la app, no una notification_url
+    // por orden), así que el tenant sale del id de la orden - sólo MP y el
+    // tenant que la creó lo conocen. Nada de esto toca la contabilidad: la
+    // venta la confirma la Caja con PosService.checkout una vez acreditado.
+    if (input.type === 'order' && input.dataId) {
+      await this.handleQrOrder(input.dataId);
+      return;
     }
 
     // Only "payment" notifications carry anything to reconcile - MP also
@@ -317,5 +329,19 @@ export class MercadoPagoWebhookService {
         status: invoice?.status ?? 'PAID',
       },
     };
+  }
+
+  private async handleQrOrder(orderId: string): Promise<void> {
+    const rows = await this.prisma.$queryRaw<{ tenant_id: string }[]>`
+      SELECT tenant_id FROM find_payment_intent_tenant_by_external_id(${orderId})
+    `;
+    const tenantId = rows[0]?.tenant_id;
+    if (!tenantId) {
+      // An order Oplex never created (or a link payment's merchant order) -
+      // nothing to sync, and retrying won't change that.
+      return;
+    }
+    // syncFromWebhook le pregunta a MP el estado real dentro de la transacción.
+    await withTenantContext(this.prisma, tenantId, () => this.qrService.syncFromWebhook(orderId), undefined, undefined, 30_000);
   }
 }

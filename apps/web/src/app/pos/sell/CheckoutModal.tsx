@@ -4,12 +4,13 @@ import { companiesApi, type AfipPadronData } from '@/lib/companies';
 import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
 import { invoicingApi } from '@/lib/invoicing';
-import { posApi, POS_PAYMENT_METHODS, type CheckoutPaymentInput } from '@/lib/pos';
+import { posApi, POS_PAYMENT_METHODS, type CheckoutPaymentInput, type QrCharge } from '@/lib/pos';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useMemo, useState } from 'react';
 import PosSelect from '../PosSelect';
+import QrChargePanel from './QrChargePanel';
 import type { TicketLine } from './types';
 
 interface Props {
@@ -57,6 +58,16 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
   const currenciesQuery = useQuery({ queryKey: ['invoicing-currencies'], queryFn: invoicingApi.listCurrencies });
   const tenantSettingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const registerQrQuery = useQuery({
+    queryKey: ['pos-register-qr', registerId],
+    queryFn: () => posApi.getRegisterQr(registerId),
+  });
+
+  // Cobro con el QR de Mercado Pago de la caja: sólo si la caja lo tiene
+  // activo. Sin eso, "Mercado Pago" sigue siendo una etiqueta como antes.
+  const [qrStep, setQrStep] = useState(false);
+  const [paidCharge, setPaidCharge] = useState<QrCharge | null>(null);
+  const qrActive = registerQrQuery.data?.active ?? false;
 
   const selectedCustomer = (customersQuery.data ?? []).find((c) => c.id === customerId);
   const baseCurrency = (currenciesQuery.data ?? []).find((c) => c.isBase) ?? currenciesQuery.data?.[0];
@@ -136,11 +147,19 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
     return pagaCon - amount;
   }
 
+  const mpRows = payments.filter((p) => p.method === 'MERCADOPAGO' && Number(p.amount.replace(',', '.')) > 0);
+  const useQr = qrActive && mpRows.length > 0;
+
   const mutation = useMutation({
-    mutationFn: () => {
+    // charge: el cobro QR ya acreditado que paga la fila de Mercado Pago.
+    mutationFn: (charge?: QrCharge) => {
       const paymentsInput: CheckoutPaymentInput[] = payments
         .filter((p) => Number(p.amount) > 0)
-        .map((p) => ({ method: p.method, amount: Number(p.amount.replace(',', '.')) }));
+        .map((p) => ({
+          method: p.method,
+          amount: Number(p.amount.replace(',', '.')),
+          ...(charge && p.method === 'MERCADOPAGO' ? { paymentIntentId: charge.id } : {}),
+        }));
       return posApi.checkout({
         registerId,
         customerId: customerId || undefined,
@@ -198,7 +217,27 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
       setError('Lo que paga el cliente en efectivo es menor al monto de esa fila');
       return;
     }
-    mutation.mutate();
+    if (useQr) {
+      if (mpRows.length > 1) {
+        setError('Para cobrar con QR dejá una sola fila de Mercado Pago');
+        return;
+      }
+      setQrStep(true);
+      return;
+    }
+    mutation.mutate(undefined);
+  }
+
+  function handleQrPaid(charge: QrCharge) {
+    setPaidCharge(charge);
+    mutation.mutate(charge);
+  }
+
+  function handleQrBack(opts?: { changeMethod?: boolean }) {
+    setQrStep(false);
+    if (opts?.changeMethod) {
+      setPayments((prev) => prev.map((p) => (p.method === 'MERCADOPAGO' ? { ...p, method: 'CASH' } : p)));
+    }
   }
 
   if (completedInvoice) {
@@ -208,6 +247,12 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           <p className="mb-1 text-lg font-semibold text-green-700 pos-dark:text-green-400 pos-contrast:text-green-400 pos-emerald:text-green-700">
             Venta confirmada
           </p>
+          {paidCharge && (
+            <p className="mb-2 inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 pos-dark:bg-green-950 pos-dark:text-green-300 pos-contrast:bg-green-950 pos-contrast:text-green-300">
+              Mercado Pago · pago acreditado
+              {paidCharge.externalPaymentId ? ` · operación #${paidCharge.externalPaymentId}` : ''}
+            </p>
+          )}
           <p className="mb-4 text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
             {completedInvoice.documentLetter}-{completedInvoice.number}
           </p>
@@ -225,6 +270,55 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
               Nueva venta
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (qrStep) {
+    const mpAmount = Number(mpRows[0]?.amount.replace(',', '.') ?? 0);
+    const setup = registerQrQuery.data;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-contrast:border-slate-700 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
+          {paidCharge ? (
+            // Pago acreditado: falta confirmar la venta (factura + CAE). Si
+            // eso falla, el cobro queda acreditado y sin usar - se reintenta
+            // con el mismo cobro, nunca se le vuelve a cobrar al cliente.
+            <div className="flex flex-col items-center gap-3 text-center">
+              <p className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 pos-dark:bg-green-950 pos-dark:text-green-300 pos-contrast:bg-green-950 pos-contrast:text-green-300">
+                Mercado Pago · pago acreditado
+              </p>
+              {mutation.isError ? (
+                <>
+                  <p className="text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400">{error}</p>
+                  <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300">
+                    El pago ya está acreditado. Reintentá confirmar la venta: no se le vuelve a cobrar al cliente.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      mutation.mutate(paidCharge);
+                    }}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
+                  >
+                    Reintentar confirmar venta
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-slate-600 pos-dark:text-slate-300 pos-contrast:text-slate-200">Confirmando la venta...</p>
+              )}
+            </div>
+          ) : (
+            <QrChargePanel
+              registerId={registerId}
+              registerLabel={setup ? `${setup.registerName} · ${setup.branchName}` : ''}
+              amount={mpAmount}
+              onPaid={handleQrPaid}
+              onBack={handleQrBack}
+            />
+          )}
         </div>
       </div>
     );
@@ -363,6 +457,13 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           </button>
         </div>
 
+        {useQr && (
+          <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-300 pos-contrast:bg-slate-900 pos-contrast:text-slate-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-600">
+            Al confirmar se muestra un QR por el monto de Mercado Pago. La venta se cierra cuando Mercado Pago avise
+            que el pago se acreditó.
+          </p>
+        )}
+
         {error && (
           <p className="mt-3 text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400 pos-emerald:text-red-600">
             {error}
@@ -381,7 +482,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
             disabled={mutation.isPending || !baseCurrency}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
           >
-            {mutation.isPending ? 'Confirmando...' : 'Confirmar cobro'}
+            {mutation.isPending ? 'Confirmando...' : useQr ? 'Generar QR' : 'Confirmar cobro'}
           </button>
         </div>
       </div>

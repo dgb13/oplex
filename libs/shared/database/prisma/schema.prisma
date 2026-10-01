@@ -1045,6 +1045,9 @@ model Company {
   // Cajas de mostrador cuya sucursal (rol BRANCH) es esta Company - ver
   // model CashRegister.
   cashRegisters        CashRegister[]
+  // Sucursal dada de alta en Mercado Pago para cobrar con QR - ver model
+  // MercadoPagoStore. A lo sumo una por sucursal.
+  mercadoPagoStore     MercadoPagoStore?
 
   @@index([tenantId])
   @@map("companies")
@@ -1745,11 +1748,45 @@ model CashRegister {
   active             Boolean          @default(true)
   createdAt          DateTime         @default(now())
 
+  // Cobro con QR de Mercado Pago (modo híbrido): la "caja" del lado de MP
+  // (POST /v2/pos), colgada de la MercadoPagoStore de la sucursal. Todo null
+  // = QR sin activar en esta caja. mpExternalPosId es lo que va en
+  // config.qr.external_pos_id de cada orden; las URLs son el QR fijo para
+  // imprimir que devuelve MP al crear la caja.
+  mpPosId          String?
+  mpExternalPosId  String?
+  mpQrImageUrl     String?
+  mpQrTemplateUrl  String?
+  mpQrActivatedAt  DateTime?
+
   sessions CashSession[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("cash_registers")
+}
+
+// Sucursal de Mercado Pago (POST /users/{id}/stores) para el cobro con QR.
+// MP la publica en el mapa de su app, por eso pide dirección y coordenadas
+// que Company no tiene (sólo fiscalAddress, una línea). Se crea la primera
+// vez que se activa el QR en una caja de esa sucursal y la reusan las demás.
+model MercadoPagoStore {
+  id           String   @id @default(uuid())
+  tenantId     String
+  branchId     String   @unique
+  branch       Company  @relation(fields: [branchId], references: [id])
+  mpStoreId    String
+  externalId   String
+  streetName   String
+  streetNumber String
+  cityName     String
+  stateName    String
+  latitude     Decimal  @db.Decimal(10, 7)
+  longitude    Decimal  @db.Decimal(10, 7)
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("mercadopago_stores")
 }
 
 // Un "turno" por caja. Sin dueño exclusivo (multi-cajero: cualquier
@@ -3612,7 +3649,10 @@ model PaymentIntent {
   connectorId String
   connector   Connector         @relation(fields: [tenantId, connectorId], references: [tenantId, id])
 
-  documentType String // "INVOICE" | "QUOTE"
+  // "INVOICE" | "QUOTE" | "POS_QR". POS_QR = cobro con QR en Caja: todavía
+  // no hay factura (la venta se confirma recién cuando el pago se acredita),
+  // así que documentId es la caja y la venta queda en consumedByInvoiceId.
+  documentType String
   documentId   String
 
   provider ConnectorProvider @default(MERCADO_PAGO)
@@ -3631,6 +3671,15 @@ model PaymentIntent {
   externalPaymentId String? // payment id de MP
   paidAt            DateTime?
   paymentRaw        Json? // payload crudo del pago, para auditoría
+
+  // Sólo POS_QR: estado crudo de la orden en MP ("created", "processed",
+  // "action_required"...) + el del último intento de pago, para mostrar un
+  // rechazo en la Caja sin esperar a que la orden venza.
+  externalStatus      String?
+  expiresAt           DateTime?
+  // Venta del POS que usó este cobro - un cobro QR acreditado se usa una
+  // sola vez. PAID con esto en null = "cobro QR sin venta".
+  consumedByInvoiceId String?   @unique
 
   // Idempotencia de creación: un UUID fresco por intent, enviado como
   // X-Idempotency-Key a MP - la deduplicación real de "no crear dos

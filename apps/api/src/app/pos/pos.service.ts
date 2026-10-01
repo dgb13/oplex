@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
+import { MercadoPagoQrService } from '@plexo/mercadopago';
 import { CashRegistersService, CashSessionsService } from '@plexo/pos';
 import { ReportsFinancialService } from '@plexo/reports-financial';
 import type { CheckoutDto } from './dto/checkout.dto.js';
@@ -24,6 +25,7 @@ export class PosService {
     private readonly salesService: SalesService,
     private readonly accountingService: AccountingService,
     private readonly reportsFinancialService: ReportsFinancialService,
+    private readonly mercadoPagoQrService: MercadoPagoQrService,
   ) {}
 
   async createRegister(dto: CreateRegisterDto) {
@@ -71,6 +73,21 @@ export class PosService {
     }
 
     for (const payment of dto.payments) {
+      // Cobro con el QR de la caja: la venta recién se confirma con el pago
+      // ya acreditado, y ese cobro paga esta venta y ninguna otra. Si algo
+      // falla después, el throw revierte también esta marca.
+      if (payment.paymentIntentId) {
+        if (payment.method !== 'MERCADOPAGO') {
+          throw new BadRequestException('Un cobro QR sólo puede pagar una fila de Mercado Pago');
+        }
+        await this.mercadoPagoQrService.consumeForSale({
+          intentId: payment.paymentIntentId,
+          registerId: register.id,
+          amount: payment.amount,
+          invoiceId: invoice.id,
+        });
+      }
+
       const isCash = payment.method === 'CASH';
       await this.salesService.recordReceipt({
         invoiceId: invoice.id,

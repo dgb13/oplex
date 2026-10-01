@@ -3,11 +3,13 @@ import { ConnectorRegistry, ConnectorsModule } from '@plexo/connectors';
 import { MercadoPagoConfigService } from './mercadopago-config.service.js';
 import { MercadoPagoConnector } from './mercadopago.connector.js';
 import { MercadoPagoController } from './mercadopago.controller.js';
+import { MercadoPagoInStoreClient } from './mercadopago-instore.client.js';
 import { MercadoPagoOAuthClient } from './mercadopago-oauth.client.js';
 import { MercadoPagoPaymentClient } from './mercadopago-payment.client.js';
 import { MercadoPagoPaymentLinksController } from './mercadopago-payment-links.controller.js';
 import { MercadoPagoPaymentService } from './mercadopago-payment.service.js';
 import { MercadoPagoPreferenceClient } from './mercadopago-preference.client.js';
+import { MercadoPagoQrService } from './mercadopago-qr.service.js';
 import { MercadoPagoStateService } from './mercadopago-state.service.js';
 
 // Not @Global() - same reasoning as ConnectorsModule/AfipCredentialsModule:
@@ -28,8 +30,16 @@ import { MercadoPagoStateService } from './mercadopago-state.service.js';
     MercadoPagoStateService,
     MercadoPagoConnector,
     MercadoPagoPaymentService,
+    MercadoPagoInStoreClient,
+    MercadoPagoQrService,
   ],
-  exports: [MercadoPagoConfigService, MercadoPagoConnector, MercadoPagoPaymentClient, MercadoPagoPaymentService],
+  exports: [
+    MercadoPagoConfigService,
+    MercadoPagoConnector,
+    MercadoPagoPaymentClient,
+    MercadoPagoPaymentService,
+    MercadoPagoQrService,
+  ],
 })
 export class MercadoPagoModule implements OnModuleInit {
   constructor(
