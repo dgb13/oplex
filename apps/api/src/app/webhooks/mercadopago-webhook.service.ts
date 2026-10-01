@@ -8,6 +8,7 @@ import {
   getUserId,
   Prisma,
   PrismaService,
+  withActingUser,
   withTenantContext,
   type ConnectorProvider,
 } from '@plexo/database';
@@ -273,11 +274,25 @@ export class MercadoPagoWebhookService {
       return undefined;
     }
 
-    await this.salesService.recordReceipt({
-      invoiceId: intent.documentId,
-      amount: intent.amount.toNumber(),
-      method: 'MERCADO_PAGO',
-    });
+    // No acting user here (MP calls server-to-server), but the receipt's
+    // JournalEntry needs an author - postJournalEntry throws without one.
+    // Whoever generated the payment link is the natural owner of the
+    // collection; createdByUserId is nullable, so fall back to the tenant's
+    // OWNER rather than leave the payment unreconciled.
+    const authorId =
+      intent.createdByUserId ??
+      (await db.user.findFirst({ where: { role: 'OWNER' }, orderBy: { createdAt: 'asc' }, select: { id: true } }))?.id;
+    if (!authorId) {
+      throw new NotFoundException('No user to author the Mercado Pago receipt journal entry');
+    }
+
+    await withActingUser(authorId, () =>
+      this.salesService.recordReceipt({
+        invoiceId: intent.documentId,
+        amount: intent.amount.toNumber(),
+        method: 'MERCADO_PAGO',
+      }),
+    );
 
     await db.userActivityLog.create({
       data: {

@@ -92,6 +92,18 @@ export function onCommit(fn: () => void): void {
   store.afterCommit.push(fn);
 }
 
+/**
+ * Corre `fn` dentro de la misma transacción del tenant pero a nombre de
+ * `userId` - para procesos sin usuario logueado (ej. el webhook de Mercado
+ * Pago) que igual necesitan un autor: JournalEntry.createdById es
+ * obligatorio. También setea app.user_id para que el audit log lo registre.
+ */
+export async function withActingUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  const store = requireStore();
+  await store.tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+  return tenantContextStorage.run({ ...store, userId }, fn);
+}
+
 export async function withTenantContext<T>(
   prisma: PrismaClient,
   tenantId: string,

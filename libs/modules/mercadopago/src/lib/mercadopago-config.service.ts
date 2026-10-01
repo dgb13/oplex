@@ -56,12 +56,19 @@ export class MercadoPagoConfigService {
    * this server's public URL, not two. `?client=<tenantId>` is how the
    * webhook will identify which tenant's connector to use (see plan
    * section 4.2) since the notification body alone doesn't carry it.
+   *
+   * `source_news=webhooks`: without it MP sends the legacy IPN/Feed format
+   * (`?topic=payment&id=...`, seen live 2026-09-30) whose x-signature does
+   * not validate against the app's webhook secret - every real payment
+   * notification got a 401. With it MP should send only the Webhooks
+   * format (`type`/`data.id`), the one verifyMercadoPagoWebhookSignature
+   * checks.
    */
   webhookNotificationUrl(tenantId: string): string | undefined {
     const base = process.env['OAUTH_CALLBACK_BASE_URL'];
     if (!base) {
       return undefined;
     }
-    return `${base}/webhooks/mercadopago?client=${tenantId}`;
+    return `${base}/webhooks/mercadopago?client=${tenantId}&source_news=webhooks`;
   }
 }

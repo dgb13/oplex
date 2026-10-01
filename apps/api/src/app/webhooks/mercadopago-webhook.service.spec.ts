@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ConnectorService } from '@plexo/connectors';
-import { Prisma, type PrismaService } from '@plexo/database';
+import { getUserId, Prisma, type PrismaService } from '@plexo/database';
 import type { MercadoPagoConfigService, MercadoPagoConnector, MercadoPagoPaymentClient } from '@plexo/mercadopago';
 import { INVOICE_PAID } from '../dashboard/events.js';
 import type { SalesService } from '../sales/sales.service.js';
@@ -48,6 +48,7 @@ function makeIntent(overrides: Record<string, unknown> = {}) {
     documentId: 'invoice-1',
     amount: new Prisma.Decimal(1810),
     currency: 'ARS',
+    createdByUserId: 'user-link-creator',
     ...overrides,
   };
 }
@@ -87,6 +88,7 @@ function makeDeps(overrides: {
       update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...makeIntent(), ...data })),
     },
     userActivityLog: { create: jest.fn().mockResolvedValue({}) },
+    user: { findFirst: jest.fn().mockResolvedValue({ id: 'user-owner' }) },
     invoice: {
       findUnique: jest.fn().mockResolvedValue({ id: 'invoice-1', balanceDue: new Prisma.Decimal(0), status: 'PAID' }),
     },
@@ -199,6 +201,37 @@ describe('MercadoPagoWebhookService.handleNotification - reconciliation happy pa
     expect(deps.prisma.webhookEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ processed: true }) }),
     );
+  });
+
+  it('posts the receipt as the user who generated the payment link (the JournalEntry needs an author, a webhook has none)', async () => {
+    const deps = makeDeps();
+    let actingUser: string | undefined;
+    (deps.salesService.recordReceipt as jest.Mock).mockImplementation(async () => {
+      actingUser = getUserId();
+      return { id: 'receipt-1', amount: new Prisma.Decimal(1810) };
+    });
+    const service = makeService(deps);
+
+    await service.handleNotification(baseInput());
+
+    expect(actingUser).toBe('user-link-creator');
+  });
+
+  it("falls back to the tenant's OWNER as author when the payment link has no createdByUserId", async () => {
+    const deps = makeDeps({ intent: makeIntent({ createdByUserId: null }) });
+    let actingUser: string | undefined;
+    (deps.salesService.recordReceipt as jest.Mock).mockImplementation(async () => {
+      actingUser = getUserId();
+      return { id: 'receipt-1', amount: new Prisma.Decimal(1810) };
+    });
+    const service = makeService(deps);
+
+    await service.handleNotification(baseInput());
+
+    expect((deps.tx.user as { findFirst: jest.Mock }).findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { role: 'OWNER' } }),
+    );
+    expect(actingUser).toBe('user-owner');
   });
 
   it('marks PAID but does NOT call recordReceipt for a QUOTE intent (informational only, per Fase 3)', async () => {
