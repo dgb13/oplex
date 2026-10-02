@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
+import { getTenantDb, getTenantId, getUserId, Prisma, resolveCurrentTaxDefinition } from '@plexo/database';
 import type { PdfStyle, QuoteSendChannel, QuoteStatus, TaxDefinition, TaxLineKind } from '@plexo/database';
 import type { CreateQuoteDto } from './dto/create-quote.dto.js';
 import type { QuoteLineDto } from './dto/quote-line.dto.js';
@@ -150,10 +150,12 @@ export class QuoteService {
         throw new NotFoundException(`Article variant ${line.articleVariantId} not found`);
       }
 
+      // Mismo criterio que InvoicingService.createInvoice: la versión del
+      // impuesto vigente hoy, no la guardada en el artículo.
       const { rate: taxRate, kind: taxKind } =
         line.taxKind !== undefined || line.taxRate !== undefined
           ? this.resolveLineTaxOverride(line.taxKind, line.taxRate)
-          : this.resolveLineTax(variant.article.taxDefinition);
+          : this.resolveLineTax(await resolveCurrentTaxDefinition(db, variant.article.taxDefinition));
 
       const rawUnitPrice = new Prisma.Decimal(line.unitPrice);
       const unitPrice =

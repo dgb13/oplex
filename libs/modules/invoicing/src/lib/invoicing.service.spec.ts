@@ -24,6 +24,10 @@ function withNumberingDefaults(db: Record<string, unknown>): Record<string, unkn
   if (!db.$executeRaw) {
     db.$executeRaw = jest.fn().mockResolvedValue(0);
   }
+  // resolveCurrentTaxDefinition: sin otra versión vigente, usa la del artículo.
+  if (!db.taxDefinition) {
+    db.taxDefinition = { findFirst: jest.fn().mockResolvedValue(null) };
+  }
   if (!db.arcaUnregisteredVoucher) {
     db.arcaUnregisteredVoucher = {};
   }
@@ -1764,6 +1768,27 @@ describe('InvoicingService - numeración con ARCA', () => {
     ]);
   });
 
+  it('factura con la versión vigente del impuesto, no con la que quedó guardada en el artículo', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeNumberingDb(null);
+    const oldVersion = { id: 'iva-old', code: 'IVA21', calculationType: 'PERCENTAGE', rate: new Prisma.Decimal(21.5) };
+    const currentVersion = { id: 'iva-new', code: 'IVA21', calculationType: 'PERCENTAGE', rate: new Prisma.Decimal(21) };
+    db.articleVariant.findUnique = jest.fn().mockResolvedValue({
+      id: 'variant-1',
+      unitPrice: new Prisma.Decimal(100),
+      article: { isService: false, taxDefinition: oldVersion },
+    });
+    const findFirst = jest.fn().mockResolvedValue(currentVersion);
+
+    await runInTenant({ ...db, taxDefinition: { findFirst } }, () =>
+      makeService(electronicInvoicing).createInvoice(baseDto),
+    );
+
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ code: { in: ['IVA21'] } }) }));
+    const line = db.invoice.create.mock.calls[0][0].data.lines.createMany.data[0];
+    expect(line.taxRate.toNumber()).toBe(21);
+    expect(line.lineTotal.toNumber()).toBe(121);
+  });
   it('nunca pisa un número que Oplex ya tiene y ARCA no autorizó', async () => {
     const electronicInvoicing = makeElectronicInvoicing();
     (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(0);

@@ -8,6 +8,7 @@ import {
   notify,
   onCommit,
   Prisma,
+  resolveCurrentTaxDefinition,
   userIdsWithRoles,
   type Article,
   type ArticleVariant,
@@ -348,10 +349,12 @@ export class InvoicingService {
       // "IVA incluido" (más abajo) necesita la alícuota de esta línea para
       // convertir precio final -> neto. Un override de línea no cambia la
       // clasificación fiscal del artículo en el catálogo, sólo esta factura.
+      // Del catálogo, la versión del impuesto vigente hoy - no la que quedó
+      // guardada en el artículo (ver resolveCurrentTaxDefinition).
       const { rate: taxRate, kind: taxKind } =
         line.taxKind !== undefined || line.taxRate !== undefined
           ? this.resolveLineTaxOverride(line.taxKind, line.taxRate)
-          : this.resolveLineTax(variant.article.taxDefinition);
+          : this.resolveLineTax(await resolveCurrentTaxDefinition(db, variant.article.taxDefinition));
       // rawUnitPrice: override de línea tal cual (ya en la moneda del
       // comprobante, no se multiplica por exchangeRate - lo tipeó el
       // usuario pensando en esa moneda) o precio de catálogo convertido.

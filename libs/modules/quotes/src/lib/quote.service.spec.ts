@@ -34,6 +34,7 @@ function makeCreateDb(overrides: Record<string, unknown> = {}) {
     company: { findUnique: jest.fn().mockResolvedValue({ active: true, roles: [{ role: 'CUSTOMER' }] }) },
     currency: { findUnique: jest.fn().mockResolvedValue({ id: 'currency-1', code: 'ARS' }) },
     articleVariant: { findUnique: makeVariantLookup({ 'variant-1': makeVariant() }) },
+    taxDefinition: { findFirst: jest.fn().mockResolvedValue(null) },
     quote: { create: jest.fn((args) => Promise.resolve({ id: 'quote-1', ...args.data })) },
     ...overrides,
   };

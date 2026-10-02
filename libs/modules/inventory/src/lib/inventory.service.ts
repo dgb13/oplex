@@ -7,6 +7,7 @@ import {
   Prisma,
   ProductionStatus,
   ReservationStatus,
+  resolveCurrentTaxDefinitions,
   type Article,
   type Category,
   type MinimumStock,
@@ -362,9 +363,18 @@ export class InventoryService {
       },
       orderBy: { name: 'asc' },
     });
+    // La alícuota que se muestra (y la que usa la Caja para el total) es la
+    // de la versión vigente del impuesto, la misma que va a facturar
+    // InvoicingService - no la versión guardada en el artículo.
+    const currentTaxes = await resolveCurrentTaxDefinitions(
+      getTenantDb(),
+      articles.map((a) => a.taxDefinition),
+    );
 
     return articles.map((article) => {
-      const { rate: taxRate, kind: taxKind } = resolveArticleTax(article.taxDefinition);
+      const { rate: taxRate, kind: taxKind } = resolveArticleTax(
+        article.taxDefinition ? (currentTaxes.get(article.taxDefinition.id) ?? article.taxDefinition) : null,
+      );
       return {
         id: article.id,
         name: article.name,
