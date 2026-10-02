@@ -24,6 +24,13 @@ function withNumberingDefaults(db: Record<string, unknown>): Record<string, unkn
   if (!db.$executeRaw) {
     db.$executeRaw = jest.fn().mockResolvedValue(0);
   }
+  if (!db.arcaUnregisteredVoucher) {
+    db.arcaUnregisteredVoucher = {};
+  }
+  const unregistered = db.arcaUnregisteredVoucher as Record<string, unknown>;
+  if (!unregistered.findFirst) {
+    unregistered.findFirst = jest.fn().mockResolvedValue(null);
+  }
   return db;
 }
 
@@ -49,6 +56,7 @@ function makeElectronicInvoicing(): ElectronicInvoicingPort {
       issueDate: null,
       total: null,
       customerDocNumber: null,
+      detail: null,
     }),
   };
 }
@@ -1673,7 +1681,10 @@ describe('InvoicingService - numeración con ARCA', () => {
         ),
         update: jest.fn().mockResolvedValue({}),
       },
-      arcaUnregisteredVoucher: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      arcaUnregisteredVoucher: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       user: { findMany: jest.fn().mockResolvedValue([{ id: 'owner-1', mutedNotificationTypes: [] }]) },
       notification: { create: jest.fn().mockResolvedValue({ id: 'notification-1' }) },
     };
@@ -1717,6 +1728,7 @@ describe('InvoicingService - numeración con ARCA', () => {
       issueDate: new Date('2026-10-01'),
       total: '16',
       customerDocNumber: '0',
+      detail: null,
     });
     const db = makeNumberingDb('00000002');
 
@@ -1793,5 +1805,184 @@ describe('InvoicingService - numeración con ARCA', () => {
     );
     // El objeto ya devuelto se completa: el controller lo serializa después del commit.
     expect(invoice.afipCae).toBe('CAE-1');
+  });
+});
+
+describe('InvoicingService - comprobantes de ARCA sin registrar', () => {
+  const orphan = {
+    id: 'orphan-1',
+    tenantId: 'tenant-1',
+    kind: 'FACTURA',
+    documentLetter: 'C',
+    pointOfSale: '0001',
+    number: '00000003',
+    cae: '86400939983525',
+    issueDate: new Date('2026-10-01'),
+    total: new Prisma.Decimal(16),
+    customerDocNumber: '0',
+    detectedAt: new Date('2026-10-02T01:26:15Z'),
+    resolvedAt: null,
+    resolvedByUserId: null,
+    resolution: null,
+    resolutionNote: null,
+    cancelledByNumber: null,
+    cancelledByCae: null,
+  };
+  const detail = {
+    concept: 'PRODUCTOS',
+    customerTaxId: null,
+    condicionIvaReceptorId: 5,
+    currencyCode: 'ARS',
+    exchangeRate: new Prisma.Decimal(1),
+    netAmount: new Prisma.Decimal(16),
+    exemptAmount: new Prisma.Decimal(0),
+    nonTaxedAmount: new Prisma.Decimal(0),
+    taxAmount: new Prisma.Decimal(0),
+    total: new Prisma.Decimal(16),
+    taxLines: [],
+    otherTaxes: [],
+  };
+
+  function makeDb(row: Record<string, unknown> | null = orphan) {
+    return {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      arcaUnregisteredVoucher: {
+        findUnique: jest.fn().mockResolvedValue(row),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      creditNote: { findFirst: jest.fn().mockResolvedValue(null) },
+      company: { findMany: jest.fn().mockResolvedValue([]) },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+  }
+
+  function makeService(electronicInvoicing = makeElectronicInvoicing()) {
+    return new InvoicingService(
+      makeEmailSender(),
+      electronicInvoicing,
+      makeEventEmitter(),
+      makeSubscriptionService(),
+      makeBnaExchangeRate(),
+      makeInvoicePdfService(),
+    );
+  }
+
+  it('lista sin las notas de crédito de anulación (figuran en la fila que anularon)', async () => {
+    const db = makeDb();
+    db.arcaUnregisteredVoucher.findMany.mockResolvedValue([orphan]);
+
+    const rows = await runInTenant(db, () => makeService().listUnregisteredVouchers());
+
+    expect(db.arcaUnregisteredVoucher.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { OR: [{ resolution: null }, { resolution: { not: 'CANCELLATION' } }] } }),
+    );
+    expect(rows).toEqual([expect.objectContaining({ number: '00000003', total: '16.00', resolvedAt: null })]);
+  });
+
+  it('marcar como resuelto con "otro motivo" exige la nota', async () => {
+    const db = makeDb();
+
+    await expect(
+      runInTenant(db, () => makeService().resolveUnregisteredVoucher('orphan-1', { reason: 'OTHER', note: '  ' })),
+    ).rejects.toThrow(/nota/);
+    expect(db.arcaUnregisteredVoucher.update).not.toHaveBeenCalled();
+  });
+
+  it('marcar como resuelto deja motivo, quién y cuándo - sin tocar ARCA', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb();
+
+    await runInTenant(db, () =>
+      makeService(electronicInvoicing).resolveUnregisteredVoucher('orphan-1', { reason: 'TEST', note: 'homologación' }),
+    );
+
+    expect(db.$queryRaw).toHaveBeenCalled();
+    expect(db.arcaUnregisteredVoucher.update).toHaveBeenCalledWith({
+      where: { id: 'orphan-1' },
+      data: expect.objectContaining({ resolution: 'TEST', resolutionNote: 'homologación', resolvedByUserId: 'user-1' }),
+    });
+    expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
+  });
+
+  it('no deja resolver dos veces el mismo comprobante', async () => {
+    const db = makeDb({ ...orphan, resolvedAt: new Date() });
+
+    await expect(
+      runInTenant(db, () => makeService().resolveUnregisteredVoucher('orphan-1', { reason: 'TEST' })),
+    ).rejects.toThrow(/ya está resuelto/);
+  });
+
+  it('anula con una nota de crédito espejo de lo que ARCA tiene, asociada a la factura huérfana', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockResolvedValue({ cae: orphan.cae, detail });
+    const db = makeDb();
+
+    const result = await runInTenant(db, () => makeService(electronicInvoicing).cancelUnregisteredVoucher('orphan-1'));
+
+    expect(electronicInvoicing.getAuthorizedVoucher).toHaveBeenCalledWith(
+      { kind: 'FACTURA', documentLetter: 'C', pointOfSale: '0001' },
+      3,
+    );
+    const request = (electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0];
+    expect(request).toEqual(
+      expect.objectContaining({
+        kind: 'NOTA_CREDITO',
+        number: '00000001',
+        customerTaxId: null,
+        condicionIvaReceptorId: 5,
+        total: detail.total,
+        associatedVoucher: { documentLetter: 'C', pointOfSale: '0001', number: '00000003' },
+      }),
+    );
+    expect(db.arcaUnregisteredVoucher.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ kind: 'NOTA_CREDITO', number: '00000001', cae: 'CAE-1', resolution: 'CANCELLATION' }),
+    });
+    expect(db.arcaUnregisteredVoucher.update).toHaveBeenCalledWith({
+      where: { id: 'orphan-1' },
+      data: expect.objectContaining({ resolution: 'CREDIT_NOTE', cancelledByNumber: '00000001', cancelledByCae: 'CAE-1' }),
+    });
+    expect(result).toEqual({ creditNoteNumber: '00000001', cae: 'CAE-1' });
+  });
+
+  it('no anula si ARCA informa datos que Oplex no sabe copiar', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockResolvedValue({ cae: orphan.cae, detail: null });
+
+    await expect(
+      runInTenant(makeDb(), () => makeService(electronicInvoicing).cancelUnregisteredVoucher('orphan-1')),
+    ).rejects.toThrow(/no sabe copiar/);
+    expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
+  });
+
+  it('a un CUIT sin condición frente al IVA en ARCA ni cliente en Oplex, pide cargarlo antes de anular', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockResolvedValue({
+      cae: orphan.cae,
+      detail: { ...detail, customerTaxId: '30716595549', condicionIvaReceptorId: null },
+    });
+
+    await expect(
+      runInTenant(makeDb(), () => makeService(electronicInvoicing).cancelUnregisteredVoucher('orphan-1')),
+    ).rejects.toThrow(/CUIT 30716595549, que no está cargado en Oplex/);
+    expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
+  });
+
+  it('la numeración cuenta las notas de crédito de anulación: la siguiente no aparece como huérfana', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockResolvedValue({ cae: orphan.cae, detail });
+    // ARCA ya tiene la NC 1 (de una anulación anterior) y Oplex la tiene en esta tabla.
+    (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(1);
+    const db = makeDb();
+    db.arcaUnregisteredVoucher.findFirst.mockResolvedValue({ number: '00000001' });
+
+    const result = await runInTenant(db, () => makeService(electronicInvoicing).cancelUnregisteredVoucher('orphan-1'));
+
+    expect(result.creditNoteNumber).toBe('00000002');
+    expect(db.arcaUnregisteredVoucher.createMany).not.toHaveBeenCalled();
   });
 });

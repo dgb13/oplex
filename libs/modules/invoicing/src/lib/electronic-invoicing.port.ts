@@ -63,6 +63,10 @@ export interface ElectronicInvoiceRequest {
    * "Responsable Inscripto") - se mapea a CondicionIVAReceptorId (RG 5616).
    * Irrelevante sin CUIT (va Consumidor Final). */
   customerTaxCondition: string | null;
+  /** CondicionIVAReceptorId ya resuelto (p. ej. copiado de lo que ARCA
+   * informa del comprobante que se anula) - tiene prioridad sobre
+   * customerTaxCondition. */
+  condicionIvaReceptorId?: number;
   /** Sólo para el mensaje de error si falta la condición IVA. */
   customerName?: string;
   /** Currency.code (e.g. "ARS"/"USD"), mapped to AFIP's own MonId vocabulary
@@ -104,6 +108,28 @@ export interface AuthorizedVoucher {
   /** Tal cual lo devuelve ARCA (ImpTotal), sin convertir a Decimal acá. */
   total: string | null;
   customerDocNumber: string | null;
+  /** Todo lo necesario para emitir una nota de crédito que lo anule con los
+   * mismos importes (InvoicingService.cancelUnregisteredVoucher). null si
+   * ARCA usó algo que Oplex no sabe mapear de vuelta (otra moneda, otra
+   * alícuota, otro tipo de documento). */
+  detail: AuthorizedVoucherDetail | null;
+}
+
+export interface AuthorizedVoucherDetail {
+  concept: InvoiceConcept;
+  /** null = Consumidor Final (DocTipo 99); si no, el CUIT (DocTipo 80). */
+  customerTaxId: string | null;
+  /** Si ARCA lo informa; si no, se resuelve con la ficha del cliente. */
+  condicionIvaReceptorId: number | null;
+  currencyCode: string;
+  exchangeRate: Prisma.Decimal;
+  netAmount: Prisma.Decimal;
+  exemptAmount: Prisma.Decimal;
+  nonTaxedAmount: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  total: Prisma.Decimal;
+  taxLines: ElectronicInvoiceTaxLine[];
+  otherTaxes: ElectronicOtherTax[];
 }
 
 /** Comprobante a numerar/consultar: tipo + letra resuelven el CbteTipo de

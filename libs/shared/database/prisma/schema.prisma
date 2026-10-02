@@ -2198,7 +2198,17 @@ model ArcaUnregisteredVoucher {
   customerDocNumber String?
   detectedAt        DateTime       @default(now())
   resolvedAt        DateTime?
+  resolvedByUserId  String?
+  // Cómo se resolvió (ver InvoicingService.resolveUnregisteredVoucher /
+  // cancelUnregisteredVoucher): "CREDIT_NOTE" (anulada con la nota de
+  // crédito de cancelledBy*), "OTHER_SYSTEM", "TEST", "OTHER". Y
+  // "CANCELLATION" para la fila de la propia nota de crédito que emitió
+  // Oplex para anular otra - tampoco está en los libros de Oplex, pero
+  // tiene que contar para la numeración (lastLocalNumber).
+  resolution        String?
   resolutionNote    String?
+  cancelledByNumber String?
+  cancelledByCae    String?
 
   @@unique([tenantId, kind, documentLetter, pointOfSale, number])
   @@index([tenantId, resolvedAt])

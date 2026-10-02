@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Param, ParseEnumPipe, ParseUUIDPipe, Post, Query, StreamableFile } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
-import { InvoicePdfFormat } from '@plexo/database';
+import { InvoicePdfFormat, LongRunningTransaction } from '@plexo/database';
 import { CreateCurrencyDto } from './dto/create-currency.dto.js';
 import { RecordExchangeRateDto } from './dto/record-exchange-rate.dto.js';
+import { ResolveUnregisteredVoucherDto } from './dto/resolve-unregistered-voucher.dto.js';
 import { InvoicingService } from './invoicing.service.js';
 
 @Controller('invoicing')
@@ -35,6 +36,29 @@ export class InvoicingController {
   @Post('exchange-rates')
   recordExchangeRate(@Body() dto: RecordExchangeRateDto) {
     return this.invoicingService.recordExchangeRate(dto);
+  }
+
+  // Comprobantes que ARCA autorizó y Oplex no tiene registrados (aviso de
+  // Facturación): listarlos, marcarlos como resueltos o anularlos con nota
+  // de crédito. Anular llama a ARCA dos veces (consulta + CAE) dentro de la
+  // transacción del request.
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @Get('arca-unregistered')
+  listUnregisteredVouchers() {
+    return this.invoicingService.listUnregisteredVouchers();
+  }
+
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @Post('arca-unregistered/:id/resolve')
+  resolveUnregisteredVoucher(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResolveUnregisteredVoucherDto) {
+    return this.invoicingService.resolveUnregisteredVoucher(id, dto);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @Post('arca-unregistered/:id/cancel')
+  @LongRunningTransaction(45_000)
+  cancelUnregisteredVoucher(@Param('id', ParseUUIDPipe) id: string) {
+    return this.invoicingService.cancelUnregisteredVoucher(id);
   }
 
   @Get('exchange-rates')

@@ -1,9 +1,11 @@
 import { AfipWsaaClient, type AfipWsaaCredentials } from '@plexo/afip-credentials';
-import type { DocumentLetter, InvoiceConcept, Prisma } from '@plexo/database';
+import { Prisma, type DocumentLetter, type InvoiceConcept } from '@plexo/database';
 import { XMLParser } from 'fast-xml-parser';
 import type {
   AuthorizedVoucher,
+  AuthorizedVoucherDetail,
   ElectronicInvoiceRequest,
+  ElectronicInvoiceTaxLine,
   ElectronicInvoiceResult,
 } from './electronic-invoicing.port.js';
 
@@ -43,6 +45,12 @@ const IVA_ALICUOTA_ID: Record<string, number> = {
   '21.0': 5,
   '27.0': 6,
 };
+
+// Los mismos mapas al revés, para leer lo que ARCA devuelve de un
+// comprobante ya autorizado (FECompConsultar).
+const CONCEPTO_BY_ID: Record<number, InvoiceConcept> = { 1: 'PRODUCTOS', 2: 'SERVICIOS', 3: 'PRODUCTOS_Y_SERVICIOS' };
+const RATE_BY_IVA_ID: Record<number, number> = { 3: 0, 4: 10.5, 5: 21, 6: 27 };
+const CURRENCY_BY_MON_ID: Record<string, string> = { PES: 'ARS', DOL: 'USD' };
 
 /** AFIP's own currency vocabulary (MonId), not ISO 4217 - only the two
  * codes this app's seed/demo data actually uses are mapped; anything else
@@ -168,27 +176,31 @@ export class AfipWsfeClient {
     const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
     const cbteTipo = CBTE_TIPO[invoice.kind][invoice.documentLetter];
     const { docTipo, docNro } = resolveDocTipoNro(invoice.customerTaxId);
-    const condicionIvaReceptor = resolveCondicionIvaReceptor(
-      invoice.customerTaxId,
-      invoice.customerTaxCondition,
-      invoice.customerName,
-    );
+    const condicionIvaReceptor =
+      invoice.condicionIvaReceptorId ??
+      resolveCondicionIvaReceptor(invoice.customerTaxId, invoice.customerTaxCondition, invoice.customerName);
     const monId = resolveMonId(invoice.currencyCode);
     const cbteNro = Number.parseInt(invoice.number, 10);
     // Monotributo (C) never carries an IVA breakdown - there is no IVA on
     // these vouchers at all, discriminated or not.
+    // Todos los bloques con el prefijo ar: (el namespace de FEV1), igual que
+    // el resto del body: sin prefijo quedan fuera del namespace y ARCA los
+    // ignora en silencio - pasó con CbtesAsoc ("[10197] Si el comprobante es
+    // Debito o Credito, enviar estructura CbteAsoc", 2026-10-02), y el mismo
+    // problema dejaba afuera el desglose de IVA de las facturas A/B y las
+    // percepciones.
     const ivaXml =
       invoice.documentLetter === 'C'
         ? ''
-        : `<Iva>${invoice.taxLines
+        : `<ar:Iva>${invoice.taxLines
             .map(
               (line) =>
-                `<AlicIva><Id>${resolveIvaId(line.rate)}</Id><BaseImp>${formatImporte(line.netAmount)}</BaseImp><Importe>${formatImporte(line.taxAmount)}</Importe></AlicIva>`,
+                `<ar:AlicIva><ar:Id>${resolveIvaId(line.rate)}</ar:Id><ar:BaseImp>${formatImporte(line.netAmount)}</ar:BaseImp><ar:Importe>${formatImporte(line.taxAmount)}</ar:Importe></ar:AlicIva>`,
             )
-            .join('')}</Iva>`;
+            .join('')}</ar:Iva>`;
 
     const cbtesAsocXml = invoice.associatedVoucher
-      ? `<CbtesAsoc><CbteAsoc><Tipo>${CBTE_TIPO.FACTURA[invoice.associatedVoucher.documentLetter]}</Tipo><PtoVta>${invoice.associatedVoucher.pointOfSale}</PtoVta><Nro>${Number.parseInt(invoice.associatedVoucher.number, 10)}</Nro></CbteAsoc></CbtesAsoc>`
+      ? `<ar:CbtesAsoc><ar:CbteAsoc><ar:Tipo>${CBTE_TIPO.FACTURA[invoice.associatedVoucher.documentLetter]}</ar:Tipo><ar:PtoVta>${invoice.associatedVoucher.pointOfSale}</ar:PtoVta><ar:Nro>${Number.parseInt(invoice.associatedVoucher.number, 10)}</ar:Nro></ar:CbteAsoc></ar:CbtesAsoc>`
       : '';
 
     // Percepciones/otros tributos (ej. IIBB) - vacío en la enorme mayoría
@@ -197,12 +209,12 @@ export class AfipWsfeClient {
     const otherTaxes = invoice.otherTaxes ?? [];
     const impTrib = otherTaxes.reduce((sum, t) => sum + t.importe.toNumber(), 0);
     const tributosXml = otherTaxes.length
-      ? `<Tributos>${otherTaxes
+      ? `<ar:Tributos>${otherTaxes
           .map(
             (t) =>
-              `<Tributo><Id>${t.id}</Id><Desc>${escapeXml(t.desc)}</Desc><BaseImp>${formatImporte(t.baseImp)}</BaseImp><Alic>${t.alic.toFixed(2)}</Alic><Importe>${formatImporte(t.importe)}</Importe></Tributo>`,
+              `<ar:Tributo><ar:Id>${t.id}</ar:Id><ar:Desc>${escapeXml(t.desc)}</ar:Desc><ar:BaseImp>${formatImporte(t.baseImp)}</ar:BaseImp><ar:Alic>${t.alic.toFixed(2)}</ar:Alic><ar:Importe>${formatImporte(t.importe)}</ar:Importe></ar:Tributo>`,
           )
-          .join('')}</Tributos>`
+          .join('')}</ar:Tributos>`
       : '';
 
     const concepto = CONCEPTO_ID[invoice.concept];
@@ -427,6 +439,59 @@ export class AfipWsfeClient {
       issueDate: /^\d{8}$/.test(fch) ? this.parseCaeExpiry(fch) : null,
       total: get.ImpTotal !== undefined ? String(get.ImpTotal) : null,
       customerDocNumber: get.DocNro !== undefined ? String(get.DocNro) : null,
+      detail: this.parseVoucherDetail(get),
+    };
+  }
+
+  /** ResultGet de FECompConsultar → lo que hace falta para emitir una nota
+   * de crédito espejo. null ante cualquier valor que no se sabe mapear de
+   * vuelta: mejor no ofrecer anular que anular con un dato inventado. */
+  private parseVoucherDetail(get: Record<string, unknown>): AuthorizedVoucherDetail | null {
+    const concept = CONCEPTO_BY_ID[Number(get.Concepto)];
+    const currencyCode = CURRENCY_BY_MON_ID[String(get.MonId ?? '')];
+    const docTipo = Number(get.DocTipo);
+    if (!concept || !currencyCode || (docTipo !== 80 && docTipo !== 99)) {
+      return null;
+    }
+    const dec = (value: unknown) => new Prisma.Decimal(value === undefined || value === '' ? 0 : String(value));
+    const ivaRows = this.toArray((get.Iva as { AlicIva?: unknown } | undefined)?.AlicIva) as {
+      Id: number | string;
+      BaseImp: unknown;
+      Importe: unknown;
+    }[];
+    const taxLines: ElectronicInvoiceTaxLine[] = [];
+    for (const row of ivaRows) {
+      const rate = RATE_BY_IVA_ID[Number(row.Id)];
+      if (rate === undefined) return null;
+      taxLines.push({ rate: new Prisma.Decimal(rate), netAmount: dec(row.BaseImp), taxAmount: dec(row.Importe) });
+    }
+    const tributoRows = this.toArray((get.Tributos as { Tributo?: unknown } | undefined)?.Tributo) as {
+      Id: number | string;
+      Desc?: unknown;
+      BaseImp: unknown;
+      Alic: unknown;
+      Importe: unknown;
+    }[];
+    const condicion = get.CondicionIVAReceptorId;
+    return {
+      concept,
+      customerTaxId: docTipo === 80 ? String(get.DocNro) : null,
+      condicionIvaReceptorId: condicion !== undefined && condicion !== '' ? Number(condicion) : null,
+      currencyCode,
+      exchangeRate: dec(get.MonCotiz ?? 1),
+      netAmount: dec(get.ImpNeto),
+      exemptAmount: dec(get.ImpOpEx),
+      nonTaxedAmount: dec(get.ImpTotConc),
+      taxAmount: dec(get.ImpIVA),
+      total: dec(get.ImpTotal),
+      taxLines,
+      otherTaxes: tributoRows.map((t) => ({
+        id: Number(t.Id),
+        desc: String(t.Desc ?? ''),
+        baseImp: dec(t.BaseImp),
+        alic: dec(t.Alic),
+        importe: dec(t.Importe),
+      })),
     };
   }
 

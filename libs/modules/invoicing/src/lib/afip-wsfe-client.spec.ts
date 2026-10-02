@@ -150,7 +150,7 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(wsfeBody).toContain('<ar:CbteDesde>42</ar:CbteDesde>');
     expect(wsfeBody).toContain('<ar:ImpTotal>121.00</ar:ImpTotal>');
     expect(wsfeBody).toContain('<ar:MonId>PES</ar:MonId>');
-    expect(wsfeBody).toContain('<Id>5</Id>'); // 21% -> alicuota 5
+    expect(wsfeBody).toContain('<ar:Id>5</ar:Id>'); // 21% -> alicuota 5
     expect(wsfeBody).toContain('<ar:Concepto>1</ar:Concepto>');
     expect(wsfeBody).not.toContain('FchServDesde'); // Concepto 1: AFIP rejects these if present
     expect(wsfeBody).toContain('<ar:ImpTotConc>0.00</ar:ImpTotConc>');
@@ -190,7 +190,7 @@ describe('AfipWsfeClient.requestCae', () => {
 
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
     expect(wsfeBody).toContain('<ar:ImpTrib>0.00</ar:ImpTrib>');
-    expect(wsfeBody).not.toContain('<Tributos>');
+    expect(wsfeBody).not.toContain('<ar:Tributos>');
   });
 
   it('sends a Tributos block per otherTax and sums ImpTrib - never the hardcoded 0.00', async () => {
@@ -217,12 +217,12 @@ describe('AfipWsfeClient.requestCae', () => {
 
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
     expect(wsfeBody).toContain('<ar:ImpTrib>30.00</ar:ImpTrib>');
-    expect(wsfeBody).toContain('<Tributos>');
-    expect(wsfeBody).toContain('<Tributo><Id>2</Id><Desc>Percepción IIBB &amp; CABA</Desc><BaseImp>100.00</BaseImp><Alic>21.00</Alic><Importe>21.00</Importe></Tributo>');
-    expect(wsfeBody).toContain('<Tributo><Id>99</Id><Desc>Otro</Desc><BaseImp>100.00</BaseImp><Alic>9.00</Alic><Importe>9.00</Importe></Tributo>');
+    expect(wsfeBody).toContain('<ar:Tributos>');
+    expect(wsfeBody).toContain('<ar:Tributo><ar:Id>2</ar:Id><ar:Desc>Percepción IIBB &amp; CABA</ar:Desc><ar:BaseImp>100.00</ar:BaseImp><ar:Alic>21.00</ar:Alic><ar:Importe>21.00</ar:Importe></ar:Tributo>');
+    expect(wsfeBody).toContain('<ar:Tributo><ar:Id>99</ar:Id><ar:Desc>Otro</ar:Desc><ar:BaseImp>100.00</ar:BaseImp><ar:Alic>9.00</ar:Alic><ar:Importe>9.00</ar:Importe></ar:Tributo>');
     // Tributos va después de CbtesAsoc y antes de Iva, según el orden del
     // XSD real de FECAEDetRequest.
-    expect(wsfeBody.indexOf('<Tributos>')).toBeLessThan(wsfeBody.indexOf('<Iva>'));
+    expect(wsfeBody.indexOf('<ar:Tributos>')).toBeLessThan(wsfeBody.indexOf('<ar:Iva>'));
   });
 
   it('sends Concepto 2 and FchServDesde/FchServHasta/FchVtoPago for a service invoice', async () => {
@@ -304,7 +304,7 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(at('ImpTrib')).toBeLessThan(at('ImpIVA'));
     expect(at('FchVtoPago')).toBeLessThan(at('MonId'));
     expect(at('MonCotiz')).toBeLessThan(at('CondicionIVAReceptorId'));
-    expect(at('CondicionIVAReceptorId')).toBeLessThan(body.indexOf('<Iva>'));
+    expect(at('CondicionIVAReceptorId')).toBeLessThan(body.indexOf('<ar:Iva>'));
   });
 
   it('omits the Iva breakdown for Factura C (Monotributo)', async () => {
@@ -318,7 +318,7 @@ describe('AfipWsfeClient.requestCae', () => {
     );
 
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
-    expect(wsfeBody).not.toContain('<Iva>');
+    expect(wsfeBody).not.toContain('<ar:Iva>');
     expect(wsfeBody).toContain('<ar:CbteTipo>11</ar:CbteTipo>'); // Factura C
   });
 
@@ -337,9 +337,36 @@ describe('AfipWsfeClient.requestCae', () => {
 
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
     expect(wsfeBody).toContain('<ar:CbteTipo>8</ar:CbteTipo>'); // Nota de Crédito B
-    expect(wsfeBody).toContain('<CbtesAsoc>');
-    expect(wsfeBody).toContain('<Tipo>6</Tipo>'); // original Factura B
-    expect(wsfeBody).toContain('<Nro>42</Nro>');
+    expect(wsfeBody).toContain('<ar:CbtesAsoc>');
+    expect(wsfeBody).toContain('<ar:Tipo>6</ar:Tipo>'); // original Factura B
+    expect(wsfeBody).toContain('<ar:Nro>42</ar:Nro>');
+  });
+
+  it('todos los elementos del body van con prefijo ar: (sin prefijo ARCA los ignora - pasó con CbtesAsoc, IVA y Tributos)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await client.requestCae(
+      baseInvoice({
+        kind: 'NOTA_CREDITO',
+        associatedVoucher: { documentLetter: 'B', pointOfSale: '0001', number: '00000042' },
+        otherTaxes: [
+          {
+            id: 2,
+            desc: 'Percepción IIBB',
+            baseImp: new Prisma.Decimal(100),
+            alic: new Prisma.Decimal(3),
+            importe: new Prisma.Decimal(3),
+          },
+        ],
+      }),
+    );
+
+    const wsfeBody = fetchMock.mock.calls[1][1].body as string;
+    const unprefixed = wsfeBody.match(/<\/?(?!ar:|soapenv:|\?xml)[A-Za-z][\w]*/g);
+    expect(unprefixed).toBeNull();
   });
 
   it('throws with AFIP error details when the voucher is rejected', async () => {
@@ -369,5 +396,78 @@ describe('AfipWsfeClient.requestCae', () => {
         }),
       ),
     ).rejects.toThrow(/Alícuota/);
+  });
+
+  function fecompConsultarResponse(resultGet: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <FECompConsultarResponse>
+      <FECompConsultarResult>
+        <ResultGet>${resultGet}</ResultGet>
+      </FECompConsultarResult>
+    </FECompConsultarResponse>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+  }
+
+  it('FECompConsultar: lee el detalle completo para emitir una nota de crédito espejo', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            fecompConsultarResponse(`
+          <Concepto>1</Concepto><DocTipo>80</DocTipo><DocNro>20111111112</DocNro>
+          <CbteDesde>3</CbteDesde><CbteFch>20261001</CbteFch>
+          <ImpTotal>133.1</ImpTotal><ImpTotConc>0</ImpTotConc><ImpNeto>100</ImpNeto><ImpOpEx>0</ImpOpEx>
+          <ImpTrib>12.1</ImpTrib><ImpIVA>21</ImpIVA><MonId>PES</MonId><MonCotiz>1</MonCotiz>
+          <CondicionIVAReceptorId>1</CondicionIVAReceptorId>
+          <Iva><AlicIva><Id>5</Id><BaseImp>100</BaseImp><Importe>21</Importe></AlicIva></Iva>
+          <Tributos><Tributo><Id>2</Id><Desc>Percepción IIBB</Desc><BaseImp>100</BaseImp><Alic>12.1</Alic><Importe>12.1</Importe></Tributo></Tributos>
+          <CodAutorizacion>86400939983525</CodAutorizacion>`),
+          ),
+      });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20-11111111-2' });
+
+    const voucher = await client.getAuthorizedVoucher(1, 6, 3);
+
+    const body = fetchMock.mock.calls[1][1].body as string;
+    expect(body).toContain('<ar:CbteTipo>6</ar:CbteTipo>');
+    expect(body).toContain('<ar:CbteNro>3</ar:CbteNro>');
+    expect(voucher.cae).toBe('86400939983525');
+    expect(voucher.detail).toEqual(
+      expect.objectContaining({
+        concept: 'PRODUCTOS',
+        customerTaxId: '20111111112',
+        condicionIvaReceptorId: 1,
+        currencyCode: 'ARS',
+      }),
+    );
+    expect(voucher.detail?.total.toNumber()).toBe(133.1);
+    expect(voucher.detail?.taxLines).toHaveLength(1);
+    expect(voucher.detail?.taxLines[0].rate.toNumber()).toBe(21);
+    expect(voucher.detail?.otherTaxes[0]).toEqual(expect.objectContaining({ id: 2, desc: 'Percepción IIBB' }));
+  });
+
+  it('FECompConsultar: sin detalle si ARCA usó algo que Oplex no sabe mapear (otra moneda)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            fecompConsultarResponse(
+              '<Concepto>1</Concepto><DocTipo>99</DocTipo><DocNro>0</DocNro><ImpTotal>16</ImpTotal><MonId>060</MonId><CodAutorizacion>1</CodAutorizacion>',
+            ),
+          ),
+      });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20-11111111-2' });
+
+    const voucher = await client.getAuthorizedVoucher(1, 11, 3);
+
+    expect(voucher.cae).toBe('1');
+    expect(voucher.detail).toBeNull();
   });
 });

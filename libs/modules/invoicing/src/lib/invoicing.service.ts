@@ -1013,7 +1013,196 @@ export class InvoicingService {
       sequence.kind === 'FACTURA'
         ? await db.invoice.findFirst({ where, orderBy: { number: 'desc' }, select: { number: true } })
         : await db.creditNote.findFirst({ where, orderBy: { number: 'desc' }, select: { number: true } });
-    return last ? Number.parseInt(last.number, 10) : 0;
+    // También los que ARCA tiene y Oplex no (huérfanos ya registrados y las
+    // notas de crédito que Oplex emitió para anularlos): sin esto, la nota
+    // de crédito de una anulación aparecería como huérfana en la siguiente.
+    const known = await db.arcaUnregisteredVoucher.findFirst({
+      where: { ...where, kind: sequence.kind },
+      orderBy: { number: 'desc' },
+      select: { number: true },
+    });
+    return Math.max(last ? Number.parseInt(last.number, 10) : 0, known ? Number.parseInt(known.number, 10) : 0);
+  }
+
+  /**
+   * "Comprobantes de ARCA sin registrar" (Facturación, mockup aprobado
+   * 2026-10-02): pendientes y resueltos, más nuevos primero. Las notas de
+   * crédito que Oplex emitió para anular uno (resolution CANCELLATION) no se
+   * listan aparte - figuran en la fila que anularon (cancelledBy*).
+   */
+  async listUnregisteredVouchers() {
+    const db = getTenantDb();
+    const rows = await db.arcaUnregisteredVoucher.findMany({
+      where: { OR: [{ resolution: null }, { resolution: { not: 'CANCELLATION' } }] },
+      orderBy: [{ detectedAt: 'desc' }, { number: 'desc' }],
+    });
+    const userIds = [...new Set(rows.map((r) => r.resolvedByUserId).filter((id): id is string => !!id))];
+    const users = userIds.length
+      ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
+      : [];
+    const userName = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      documentLetter: row.documentLetter,
+      pointOfSale: row.pointOfSale,
+      number: row.number,
+      cae: row.cae,
+      issueDate: row.issueDate?.toISOString() ?? null,
+      total: row.total?.toFixed(2) ?? null,
+      customerDocNumber: row.customerDocNumber,
+      detectedAt: row.detectedAt.toISOString(),
+      resolvedAt: row.resolvedAt?.toISOString() ?? null,
+      resolvedByName: row.resolvedByUserId ? (userName.get(row.resolvedByUserId) ?? null) : null,
+      resolution: row.resolution,
+      resolutionNote: row.resolutionNote,
+      cancelledByNumber: row.cancelledByNumber,
+      cancelledByCae: row.cancelledByCae,
+    }));
+  }
+
+  /** "Marcar como resuelto": no emite nada en ARCA, sólo deja el motivo. */
+  async resolveUnregisteredVoucher(id: string, input: { reason: 'OTHER_SYSTEM' | 'TEST' | 'OTHER'; note?: string }) {
+    const row = await this.lockPendingUnregisteredVoucher(id);
+    const note = input.note?.trim() || null;
+    if (input.reason === 'OTHER' && !note) {
+      throw new BadRequestException('Contá el motivo en la nota');
+    }
+    await getTenantDb().arcaUnregisteredVoucher.update({
+      where: { id: row.id },
+      data: { resolvedAt: new Date(), resolvedByUserId: getUserId(), resolution: input.reason, resolutionNote: note },
+    });
+  }
+
+  /**
+   * "Anular con nota de crédito": emite en ARCA una nota de crédito por el
+   * total, asociada a la factura huérfana y con los mismos importes que ARCA
+   * tiene de ella (FECompConsultar, no lo que Oplex creía: Oplex nunca la
+   * registró). En los libros de Oplex no se toca nada - esa venta no está.
+   * La nota de crédito queda como fila CANCELLATION de esta misma tabla para
+   * que la numeración la cuente.
+   */
+  async cancelUnregisteredVoucher(id: string): Promise<{ creditNoteNumber: string; cae: string | null }> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const row = await this.lockPendingUnregisteredVoucher(id);
+    if (row.kind !== 'FACTURA') {
+      throw new BadRequestException(
+        'Sólo se pueden anular facturas: una nota de crédito sin registrar se marca como resuelta',
+      );
+    }
+    const label = `Factura ${row.documentLetter} ${row.pointOfSale}-${row.number}`;
+    const invoiceSequence: VoucherSequence = {
+      kind: 'FACTURA',
+      documentLetter: row.documentLetter,
+      pointOfSale: row.pointOfSale,
+    };
+    const voucher = await this.electronicInvoicing.getAuthorizedVoucher(invoiceSequence, Number.parseInt(row.number, 10));
+    const detail = voucher.detail;
+    if (!detail) {
+      throw new BadRequestException(
+        `ARCA informa datos de la ${label} que Oplex no sabe copiar (moneda, alícuota o tipo de documento): anulala desde ARCA y marcala como resuelta`,
+      );
+    }
+
+    // CondicionIVAReceptorId: lo que informa ARCA; si no, la ficha del
+    // cliente en Oplex (por CUIT). Nunca adivinarlo.
+    let customerTaxCondition: string | null = null;
+    let customerName: string | undefined;
+    if (detail.condicionIvaReceptorId === null && detail.customerTaxId) {
+      const digits = detail.customerTaxId.replace(/\D/g, '');
+      const companies = await db.company.findMany({
+        where: { taxId: { not: null } },
+        select: { name: true, taxId: true, taxCondition: true },
+      });
+      const company = companies.find((c) => c.taxId?.replace(/\D/g, '') === digits);
+      if (!company) {
+        throw new BadRequestException(
+          `La ${label} es a nombre del CUIT ${digits}, que no está cargado en Oplex: cargalo en Empresas (con "Buscar en ARCA") y reintentá`,
+        );
+      }
+      customerTaxCondition = company.taxCondition;
+      customerName = company.name;
+    }
+
+    const number = await this.reserveVoucherNumber({
+      kind: 'NOTA_CREDITO',
+      documentLetter: row.documentLetter,
+      pointOfSale: row.pointOfSale,
+    });
+    const result: { creditNoteNumber: string; cae: string | null } = { creditNoteNumber: number, cae: null };
+    // Mismo criterio que createCreditNote: el CAE al final del request.
+    await beforeCommit(async () => {
+      const { cae } = await this.electronicInvoicing.requestCae({
+        kind: 'NOTA_CREDITO',
+        documentLetter: row.documentLetter,
+        concept: detail.concept,
+        pointOfSale: row.pointOfSale,
+        number,
+        issueDate: new Date(),
+        dueDate: null,
+        customerTaxId: detail.customerTaxId,
+        customerTaxCondition,
+        condicionIvaReceptorId: detail.condicionIvaReceptorId ?? undefined,
+        customerName,
+        currencyCode: detail.currencyCode,
+        exchangeRate: detail.exchangeRate,
+        netAmount: detail.netAmount,
+        exemptAmount: detail.exemptAmount,
+        nonTaxedAmount: detail.nonTaxedAmount,
+        taxAmount: detail.taxAmount,
+        total: detail.total,
+        taxLines: detail.taxLines,
+        otherTaxes: detail.otherTaxes,
+        associatedVoucher: { documentLetter: row.documentLetter, pointOfSale: row.pointOfSale, number: row.number },
+      });
+      const now = new Date();
+      const userId = getUserId();
+      await db.arcaUnregisteredVoucher.create({
+        data: {
+          tenantId,
+          kind: 'NOTA_CREDITO',
+          documentLetter: row.documentLetter,
+          pointOfSale: row.pointOfSale,
+          number,
+          cae,
+          issueDate: now,
+          total: detail.total,
+          customerDocNumber: detail.customerTaxId ?? '0',
+          resolvedAt: now,
+          resolvedByUserId: userId,
+          resolution: 'CANCELLATION',
+          resolutionNote: `Anula la ${label}`,
+        },
+      });
+      await db.arcaUnregisteredVoucher.update({
+        where: { id: row.id },
+        data: {
+          resolvedAt: now,
+          resolvedByUserId: userId,
+          resolution: 'CREDIT_NOTE',
+          cancelledByNumber: number,
+          cancelledByCae: cae,
+        },
+      });
+      result.cae = cae;
+    });
+    return result;
+  }
+
+  /** Lock de la fila: dos personas anulando a la vez emitirían dos notas de
+   * crédito para la misma factura. */
+  private async lockPendingUnregisteredVoucher(id: string) {
+    const db = getTenantDb();
+    await db.$queryRaw`SELECT id FROM arca_unregistered_vouchers WHERE id = ${id} FOR UPDATE`;
+    const row = await db.arcaUnregisteredVoucher.findUnique({ where: { id } });
+    if (!row || row.resolution === 'CANCELLATION') {
+      throw new NotFoundException('Comprobante no encontrado');
+    }
+    if (row.resolvedAt) {
+      throw new BadRequestException('Este comprobante ya está resuelto');
+    }
+    return row;
   }
 
   /**
@@ -1068,7 +1257,7 @@ export class InvoicingService {
         from === to
           ? `ARCA tiene autorizada la **${range}**, que **no está registrada en Oplex**. Hay que registrarla o anularla con una nota de crédito.`
           : `ARCA tiene autorizados comprobantes que **no están registrados en Oplex**: **${range}**. Hay que registrarlos o anularlos con notas de crédito.`,
-      link: '/preferences',
+      link: '/invoicing?arca=pendientes',
     });
   }
 

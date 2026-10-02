@@ -202,6 +202,41 @@ export const invoicingApi = {
   openPdf: (id: string, format?: InvoicePdfFormat) => openPdf(id, format),
 };
 
+/** Comprobante que ARCA autorizó y Oplex no tiene registrado (aviso de
+ * Facturación). `resolution`: null = pendiente; "CREDIT_NOTE" = anulado con
+ * la nota de crédito de cancelledBy*; "OTHER_SYSTEM" | "TEST" | "OTHER" =
+ * marcado como resuelto. */
+export interface ArcaUnregisteredVoucher {
+  id: string;
+  kind: 'FACTURA' | 'NOTA_CREDITO';
+  documentLetter: string;
+  pointOfSale: string;
+  number: string;
+  cae: string | null;
+  issueDate: string | null;
+  total: string | null;
+  customerDocNumber: string | null;
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  resolution: 'CREDIT_NOTE' | 'OTHER_SYSTEM' | 'TEST' | 'OTHER' | null;
+  resolutionNote: string | null;
+  cancelledByNumber: string | null;
+  cancelledByCae: string | null;
+}
+
+export type ArcaResolveReason = 'OTHER_SYSTEM' | 'TEST' | 'OTHER';
+
+export const arcaUnregisteredApi = {
+  list: () => api.get<ArcaUnregisteredVoucher[]>('/invoicing/arca-unregistered').then((r) => r.data),
+  resolve: (id: string, reason: ArcaResolveReason, note?: string) =>
+    api.post(`/invoicing/arca-unregistered/${id}/resolve`, { reason, note }).then((r) => r.data),
+  cancel: (id: string) =>
+    api
+      .post<{ creditNoteNumber: string; cae: string | null }>(`/invoicing/arca-unregistered/${id}/cancel`)
+      .then((r) => r.data),
+};
+
 export const invoicingPreferencesApi = {
   get: () => api.get<{ invoicePdfFormat: InvoicePdfFormat }>('/invoicing/preferences').then((r) => r.data),
   update: (invoicePdfFormat: InvoicePdfFormat) =>
