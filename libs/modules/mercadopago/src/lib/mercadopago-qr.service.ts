@@ -320,6 +320,45 @@ export class MercadoPagoQrService {
     return toCharge(await this.cancelIntent(intent, accessToken));
   }
 
+  /**
+   * "Devolver el dinero" de un cobro QR acreditado que no llegó a ser venta
+   * (el cliente se fue sin la mercadería, pagó dos veces...): devolución
+   * total por Mercado Pago. Sin factura ni nota de crédito - nunca hubo
+   * venta. La clave de idempotencia sale del cobro, así un reintento (o un
+   * doble clic) nunca devuelve dos veces.
+   */
+  async refundCharge(intentId: string): Promise<QrCharge> {
+    const intent = await this.lockCharge(intentId);
+    if (intent.status !== 'PAID') {
+      throw new BadRequestException(
+        intent.status === 'REFUNDED' ? 'Ese cobro QR ya se devolvió' : 'Sólo se puede devolver un cobro QR acreditado',
+      );
+    }
+    if (intent.consumedByInvoiceId) {
+      throw new BadRequestException(
+        'Ese cobro QR ya pagó una venta: para devolverlo, anulá la venta con una nota de crédito',
+      );
+    }
+    if (!intent.externalId) {
+      throw new BadRequestException('El cobro QR no tiene la orden de Mercado Pago');
+    }
+    const { accessToken } = await this.requireConnection();
+    let order: QrOrderResponse;
+    try {
+      order = await this.client.refundOrder(accessToken, intent.externalId, `refund-${intent.id}`);
+    } catch (err) {
+      if (err instanceof MercadoPagoApiError && err.status >= 400 && err.status < 500) {
+        throw new BadRequestException(`Mercado Pago no aceptó la devolución: ${describeMercadoPagoError(err)}`);
+      }
+      throw err;
+    }
+    const updated = await getTenantDb().paymentIntent.update({
+      where: { id: intent.id },
+      data: { status: 'REFUNDED', externalStatus: describeOrderStatus(order) },
+    });
+    return toCharge(updated);
+  }
+
   /** "Order (Mercado Pago)" webhook, already inside the tenant's context -
    * the notification is never trusted for the status, MP is asked again. */
   async syncFromWebhook(orderId: string): Promise<void> {
@@ -342,9 +381,14 @@ export class MercadoPagoQrService {
     amount: number;
     invoiceId: string;
   }): Promise<void> {
-    const intent = await this.loadCharge(input.intentId);
+    // Lock: una devolución en paralelo (refundCharge) no puede dejar una
+    // venta pagada con un cobro devuelto.
+    const intent = await this.lockCharge(input.intentId);
     if (intent.documentId !== input.registerId) {
       throw new BadRequestException('Ese cobro QR es de otra caja');
+    }
+    if (intent.status === 'REFUNDED') {
+      throw new BadRequestException('Ese cobro QR ya se le devolvió al cliente');
     }
     if (intent.status !== 'PAID') {
       throw new BadRequestException('El cobro QR todavía no se acreditó');
@@ -450,6 +494,11 @@ export class MercadoPagoQrService {
       throw new BadRequestException('Ese cobro QR ya se usó en otra venta');
     }
     return toUnclaimedCharge(intent);
+  }
+
+  private async lockCharge(intentId: string): Promise<PaymentIntent> {
+    await getTenantDb().$queryRaw`SELECT id FROM payment_intents WHERE id = ${intentId} FOR UPDATE`;
+    return this.loadCharge(intentId);
   }
 
   private async loadCharge(intentId: string): Promise<PaymentIntent> {

@@ -1,7 +1,7 @@
 import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { ConnectorService } from '@plexo/connectors';
 import type { MercadoPagoConnector } from './mercadopago.connector.js';
-import type { MercadoPagoInStoreClient } from './mercadopago-instore.client.js';
+import { MercadoPagoApiError, type MercadoPagoInStoreClient } from './mercadopago-instore.client.js';
 import { MercadoPagoQrService, splitFiscalAddress } from './mercadopago-qr.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
@@ -42,6 +42,7 @@ function makeIntent(overrides: Record<string, unknown> = {}) {
 function makeDb(opts: { register?: Record<string, unknown>; intent?: Record<string, unknown> | null; open?: unknown[] } = {}) {
   const intent = opts.intent === undefined ? makeIntent() : opts.intent;
   return {
+    $queryRaw: jest.fn().mockResolvedValue([]),
     cashRegister: {
       findUnique: jest.fn().mockResolvedValue(opts.register ?? makeRegister()),
       update: jest.fn().mockResolvedValue({}),
@@ -346,6 +347,60 @@ describe('MercadoPagoQrService - cobros acreditados sin venta', () => {
     const { service } = makeService();
 
     await expect(runInTenant(db, () => service.getUnclaimedCharge('intent-1'))).rejects.toThrow(new RegExp(message, 'i'));
+  });
+});
+
+describe('MercadoPagoQrService.refundCharge', () => {
+  it('devuelve el total por Mercado Pago con una clave de idempotencia fija por cobro y lo marca REFUNDED', async () => {
+    const db = makeDb({ intent: makeIntent({ status: 'PAID' }) });
+    const refundOrder = jest.fn().mockResolvedValue({ id: 'ORD01TEST', status: 'refunded', status_detail: 'refunded' });
+    const { service } = makeService({ refundOrder } as never);
+
+    const charge = await runInTenant(db, () => service.refundCharge('intent-1'));
+
+    expect(db.$queryRaw).toHaveBeenCalled();
+    expect(refundOrder).toHaveBeenCalledWith('APP_USR-tenant', 'ORD01TEST', 'refund-intent-1');
+    expect(db.paymentIntent.update).toHaveBeenCalledWith({
+      where: { id: 'intent-1' },
+      data: expect.objectContaining({ status: 'REFUNDED' }),
+    });
+    expect(charge.status).toBe('REFUNDED');
+  });
+
+  it.each([
+    ['ya devuelto', makeIntent({ status: 'REFUNDED' }), 'ya se devolvió'],
+    ['sin acreditar', makeIntent({ status: 'PENDING' }), 'Sólo se puede devolver un cobro QR acreditado'],
+    ['que ya pagó una venta', makeIntent({ status: 'PAID', consumedByInvoiceId: 'inv-1' }), 'anulá la venta'],
+  ])('no devuelve un cobro %s', async (_label, intent, message) => {
+    const db = makeDb({ intent });
+    const refundOrder = jest.fn();
+    const { service } = makeService({ refundOrder } as never);
+
+    await expect(runInTenant(db, () => service.refundCharge('intent-1'))).rejects.toThrow(message);
+    expect(refundOrder).not.toHaveBeenCalled();
+    expect(db.paymentIntent.update).not.toHaveBeenCalled();
+  });
+
+  it('si Mercado Pago rechaza la devolución, el cobro sigue PAID y se informa el motivo', async () => {
+    const db = makeDb({ intent: makeIntent({ status: 'PAID' }) });
+    const refundOrder = jest
+      .fn()
+      .mockRejectedValue(new MercadoPagoApiError(409, { errors: [{ code: 'refund_in_progress', message: 'refund in progress' }] }));
+    const { service } = makeService({ refundOrder } as never);
+
+    await expect(runInTenant(db, () => service.refundCharge('intent-1'))).rejects.toThrow(/no aceptó la devolución/);
+    expect(db.paymentIntent.update).not.toHaveBeenCalled();
+  });
+
+  it('una venta no puede usar un cobro que ya se devolvió', async () => {
+    const db = makeDb({ intent: makeIntent({ status: 'REFUNDED' }) });
+    const { service } = makeService();
+
+    await expect(
+      runInTenant(db, () =>
+        service.consumeForSale({ intentId: 'intent-1', registerId: 'aaaaaaaa-1111-2222-3333-444444444444', amount: 1500, invoiceId: 'inv-1' }),
+      ),
+    ).rejects.toThrow(/ya se le devolvió/);
   });
 });
 

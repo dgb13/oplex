@@ -110,6 +110,15 @@ export class PosController {
     return this.posService.listUnclaimedQrCharges(id);
   }
 
+  // "Devolver el dinero" de un cobro QR sin venta: devolución total por
+  // Mercado Pago, sin factura ni nota de crédito (nunca hubo venta).
+  @Roles(...SALES_ROLES)
+  @Post('qr-charges/:id/refund')
+  @LongRunningTransaction(30_000)
+  refundQrCharge(@Param('id', ParseUUIDPipe) id: string) {
+    return this.mercadoPagoQrService.refundCharge(id);
+  }
+
   @Roles(...SALES_ROLES)
   @Post('qr-charges/:id/confirm-sale')
   // Misma venta que checkout: pide CAE a ARCA.

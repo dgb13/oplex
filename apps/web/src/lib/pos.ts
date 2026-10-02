@@ -295,6 +295,7 @@ export const posApi = {
   listUnclaimedQrCharges: (registerId: string) =>
     api.get<UnclaimedQrCharge[]>(`/pos/registers/${registerId}/qr-charges/unclaimed`).then((r) => r.data),
   confirmQrSale: (id: string) => api.post<Invoice>(`/pos/qr-charges/${id}/confirm-sale`).then((r) => r.data),
+  refundQrCharge: (id: string) => api.post<QrCharge>(`/pos/qr-charges/${id}/refund`).then((r) => r.data),
   getQrCharge: (id: string) => api.get<QrCharge>(`/pos/qr-charges/${id}`).then((r) => r.data),
   cancelQrCharge: (id: string) => api.post<QrCharge>(`/pos/qr-charges/${id}/cancel`).then((r) => r.data),
 };

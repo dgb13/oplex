@@ -173,6 +173,14 @@ export class MercadoPagoInStoreClient {
     return order.cancel({ id: orderId }) as Promise<QrOrderResponse>;
   }
 
+  /** Devolución total de una orden ya cobrada (status processed): cuerpo
+   * vacío = todo el monto. Por fetch y no por el SDK, mismo motivo que
+   * createQrOrder (el SDK esconde el motivo de los 4xx). La orden queda
+   * "refunded"; el reintegro al cliente se procesa después. */
+  refundOrder(accessToken: string, orderId: string, idempotencyKey: string): Promise<QrOrderResponse> {
+    return this.request(accessToken, 'POST', `/v1/orders/${encodeURIComponent(orderId)}/refund`, {}, idempotencyKey);
+  }
+
   private async fetchLocations<T>(path: string): Promise<T> {
     const res = await fetch(`${LOCATIONS_BASE}${path}`);
     if (!res.ok) {

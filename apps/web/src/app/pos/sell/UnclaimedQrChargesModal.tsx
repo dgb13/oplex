@@ -64,10 +64,10 @@ function SaleLines({ sale }: { sale: NonNullable<UnclaimedQrCharge['sale']> }) {
 }
 
 /**
- * "Cobros con QR sin venta" (mockup aprobado 2026-10-01, sin "Devolver el
- * dinero" por decisión del usuario - queda para después): cobros QR que se
- * acreditaron y no llegaron a ser venta. Los que tienen la venta guardada se
- * confirman acá; los viejos se usan desde el formulario de Cobrar.
+ * "Cobros con QR sin venta" (mockup aprobado 2026-10-01; "Devolver el
+ * dinero" sumado 2026-10-02): cobros QR que se acreditaron y no llegaron a
+ * ser venta. Los que tienen la venta guardada se confirman acá; los viejos se
+ * usan desde el formulario de Cobrar. Cualquiera de los dos se puede devolver.
  */
 export default function UnclaimedQrChargesModal({ charges, closingShift, onClose, onResolved }: Props) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -84,10 +84,88 @@ export default function UnclaimedQrChargesModal({ charges, closingShift, onClose
     },
   });
 
+  // "Devolver el dinero": el cobro que se está por devolver y el ya devuelto.
+  const [refundingCharge, setRefundingCharge] = useState<UnclaimedQrCharge | null>(null);
+  const [refunded, setRefunded] = useState<UnclaimedQrCharge | null>(null);
+  const refund = useMutation({
+    mutationFn: (charge: UnclaimedQrCharge) => posApi.refundQrCharge(charge.id),
+    onSuccess: (_result, charge) => {
+      setRefundingCharge(null);
+      setRefunded(charge);
+      onResolved();
+    },
+  });
+
   const confirming = charges.find((c) => c.id === confirmingId) ?? null;
 
   let body: ReactNode;
-  if (done) {
+  if (refunded) {
+    body = (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-lg font-semibold text-green-700 pos-dark:text-green-400 pos-contrast:text-green-400 pos-emerald:text-green-700">
+          Dinero devuelto
+        </p>
+        <p className={paidPill}>Mercado Pago · devolución de {formatAmount(refunded.amount)}</p>
+        <p className={`text-sm ${mutedText}`}>
+          El cliente lo ve en su app de Mercado Pago. El cobro queda como devuelto.
+        </p>
+        <button
+          type="button"
+          className={primaryButton}
+          onClick={() => (charges.length > 0 ? setRefunded(null) : onClose())}
+        >
+          {charges.length > 0 ? 'Ver los demás' : 'Listo'}
+        </button>
+      </div>
+    );
+  } else if (refundingCharge) {
+    body = (
+      <div className="flex flex-col gap-3">
+        <p className={titleText}>Devolver el dinero</p>
+        <p className="text-sm">
+          Se le reintegran <b>{formatAmount(refundingCharge.amount)}</b> al cliente por Mercado Pago. No se emite factura
+          ni nota de crédito porque nunca hubo venta.
+        </p>
+        <p className={`${panel} ${mutedText}`}>
+          Usalo si el cliente se fue sin llevar la mercadería o pagó dos veces. Si se llevó la mercadería, confirmá la
+          venta.
+        </p>
+        {refund.isError && (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400">
+              {apiMessage(refund.error, 'No se pudo devolver el dinero')}
+            </p>
+            <p className={`text-xs ${mutedText}`}>El cobro sigue acreditado: no se devolvió nada.</p>
+          </div>
+        )}
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            className={ghostButton}
+            disabled={refund.isPending}
+            onClick={() => {
+              refund.reset();
+              setRefundingCharge(null);
+            }}
+          >
+            Volver
+          </button>
+          <button
+            type="button"
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50 pos-dark:bg-red-500 pos-dark:hover:bg-red-400 pos-contrast:bg-red-500 pos-contrast:hover:bg-red-400"
+            disabled={refund.isPending}
+            onClick={() => refund.mutate(refundingCharge)}
+          >
+            {refund.isPending
+              ? 'Devolviendo...'
+              : refund.isError
+                ? 'Reintentar'
+                : `Devolver ${formatAmount(refundingCharge.amount)}`}
+          </button>
+        </div>
+      </div>
+    );
+  } else if (done) {
     body = (
       <div className="flex flex-col items-center gap-3 text-center">
         <p className="text-lg font-semibold text-green-700 pos-dark:text-green-400 pos-contrast:text-green-400 pos-emerald:text-green-700">
@@ -164,11 +242,11 @@ export default function UnclaimedQrChargesModal({ charges, closingShift, onClose
         {closingShift ? (
           <p className={warnBox}>
             {charges.length === 1
-              ? 'Hay un cobro con QR acreditado sin venta. El cliente pagó y no hay factura: confirmá la venta antes de cerrar el turno.'
-              : `Hay ${charges.length} cobros con QR acreditados sin venta. Los clientes pagaron y no hay factura: confirmá las ventas antes de cerrar el turno.`}
+              ? 'Hay un cobro con QR acreditado sin venta. El cliente pagó y no hay factura: confirmá la venta o devolvé el dinero antes de cerrar el turno.'
+              : `Hay ${charges.length} cobros con QR acreditados sin venta. Los clientes pagaron y no hay factura: confirmá las ventas o devolvé el dinero antes de cerrar el turno.`}
           </p>
         ) : (
-          <p className={`text-sm ${mutedText}`}>El cliente ya pagó. Confirmá la venta para emitir la factura.</p>
+          <p className={`text-sm ${mutedText}`}>El cliente ya pagó. Confirmá la venta o devolvé el dinero.</p>
         )}
         <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto">
           {charges.map((charge) => (
@@ -186,20 +264,30 @@ export default function UnclaimedQrChargesModal({ charges, closingShift, onClose
                 {charge.createdByName && <span>QR generado por {charge.createdByName}</span>}
               </div>
               {charge.sale ? (
-                <>
-                  <SaleLines sale={charge.sale} />
-                  <div className="flex justify-end">
-                    <button type="button" className={primaryButton} onClick={() => setConfirmingId(charge.id)}>
-                      Confirmar venta
-                    </button>
-                  </div>
-                </>
+                <SaleLines sale={charge.sale} />
               ) : (
                 <p className={warnBox}>
                   Este cobro no tiene la venta guardada. Cargá los artículos en la Caja y, al cobrar con Mercado Pago,
                   elegí <b>Usar el cobro ya acreditado</b>.
                 </p>
               )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 pos-dark:text-red-400 pos-dark:hover:bg-red-950 pos-contrast:text-red-400 pos-contrast:hover:bg-red-950 pos-emerald:text-red-600 pos-emerald:hover:bg-red-50"
+                  onClick={() => {
+                    refund.reset();
+                    setRefundingCharge(charge);
+                  }}
+                >
+                  Devolver el dinero
+                </button>
+                {charge.sale && (
+                  <button type="button" className={primaryButton} onClick={() => setConfirmingId(charge.id)}>
+                    Confirmar venta
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

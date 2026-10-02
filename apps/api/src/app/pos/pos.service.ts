@@ -206,8 +206,8 @@ export class PosService {
     if (unclaimed.length > 0) {
       throw new BadRequestException(
         unclaimed.length === 1
-          ? 'Hay un cobro con QR acreditado sin venta en esta caja: confirmá la venta antes de cerrar el turno'
-          : `Hay ${unclaimed.length} cobros con QR acreditados sin venta en esta caja: confirmá las ventas antes de cerrar el turno`,
+          ? 'Hay un cobro con QR acreditado sin venta en esta caja: confirmá la venta o devolvé el dinero antes de cerrar el turno'
+          : `Hay ${unclaimed.length} cobros con QR acreditados sin venta en esta caja: confirmá las ventas o devolvé el dinero antes de cerrar el turno`,
       );
     }
     const { session } = await this.cashSessionsService.closeSession(sessionId, dto);
