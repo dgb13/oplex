@@ -15,7 +15,7 @@ import {
 } from '@/lib/collaboration';
 import { getSocket } from '@/lib/socket';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AtSign, Bell, CheckSquare, Factory, Package, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { AtSign, Bell, CheckSquare, Factory, Package, Receipt, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -29,6 +29,7 @@ const CATEGORY: Record<NotificationCategory, { icon: LucideIcon; label: string; 
   STOCK: { icon: TriangleAlert, label: 'Stock', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
   MENTION: { icon: AtSign, label: 'Mención', className: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300' },
   TASK: { icon: CheckSquare, label: 'Tarea', className: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300' },
+  BILLING: { icon: Receipt, label: 'Facturación', className: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' },
 };
 
 const TABS: { key: Tab; label: string }[] = [

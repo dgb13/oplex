@@ -60,10 +60,18 @@ export class ArcaConnectionService {
           pointOfSale,
           CBTE_TIPO.FACTURA[documentLetter],
         );
+        // Comprobantes que ARCA autorizó y Oplex no tiene (ver
+        // InvoicingService.reserveVoucherNumber) - acá también, no sólo en
+        // la campana: el aviso nunca le llega a quien hizo la venta.
+        const unregistered = await db.arcaUnregisteredVoucher.count({ where: { resolvedAt: null } });
+        const unregisteredNote =
+          unregistered > 0
+            ? ` Atención: ARCA tiene ${unregistered === 1 ? '1 comprobante autorizado' : `${unregistered} comprobantes autorizados`} que no ${unregistered === 1 ? 'está registrado' : 'están registrados'} en Oplex.`
+            : '';
         result = {
           ok: true,
           problem: null,
-          message: `Conexión correcta. Último comprobante autorizado en el punto de venta ${String(pointOfSale).padStart(4, '0')}: Factura ${documentLetter} ${String(lastNumber).padStart(8, '0')}.`,
+          message: `Conexión correcta. Último comprobante autorizado en el punto de venta ${String(pointOfSale).padStart(4, '0')}: Factura ${documentLetter} ${String(lastNumber).padStart(8, '0')}.${unregisteredNote}`,
           pointOfSale,
           documentLetter,
           lastNumber,

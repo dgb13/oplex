@@ -2176,6 +2176,35 @@ model CreditNote {
   @@map("credit_notes")
 }
 
+// Comprobante que ARCA tiene autorizado y Oplex no tiene registrado - se
+// detecta al numerar el siguiente (ARCA va adelantado respecto de Oplex,
+// ver InvoicingService.reserveVoucherNumber). Pasa si se autorizó un CAE y
+// la transacción de Oplex no llegó a confirmar, o si otro sistema emite en
+// el mismo punto de venta. Es un comprobante fiscal válido: hay que
+// registrarlo o anularlo con nota de crédito, nunca ignorarlo.
+model ArcaUnregisteredVoucher {
+  id                String         @id @default(uuid())
+  tenantId          String
+  // "FACTURA" | "NOTA_CREDITO" (ElectronicVoucherKind)
+  kind              String
+  documentLetter    DocumentLetter
+  pointOfSale       String
+  number            String
+  // Lo que ARCA informa del comprobante (FECompConsultar) - null si la
+  // consulta falló: igual se registra, el número solo ya alcanza para avisar.
+  cae               String?
+  issueDate         DateTime?
+  total             Decimal?       @db.Decimal(14, 2)
+  customerDocNumber String?
+  detectedAt        DateTime       @default(now())
+  resolvedAt        DateTime?
+  resolutionNote    String?
+
+  @@unique([tenantId, kind, documentLetter, pointOfSale, number])
+  @@index([tenantId, resolvedAt])
+  @@map("arca_unregistered_vouchers")
+}
+
 // One row per (InvoiceLine, credited quantity) - a credit note always
 // targets specific invoice lines, never "the whole invoice" as a separate
 // concept: crediting every line's full quantity IS what used to be called
@@ -3919,6 +3948,7 @@ enum NotificationCategory {
   STOCK
   MENTION
   TASK
+  BILLING
 }
 
 // Aviso para UN usuario (la campana). Se crea con notify() (ver

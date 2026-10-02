@@ -97,6 +97,23 @@ export interface ElectronicInvoiceResult {
   caeExpiry: Date;
 }
 
+/** Lo que ARCA informa de un comprobante ya autorizado (FECompConsultar). */
+export interface AuthorizedVoucher {
+  cae: string | null;
+  issueDate: Date | null;
+  /** Tal cual lo devuelve ARCA (ImpTotal), sin convertir a Decimal acá. */
+  total: string | null;
+  customerDocNumber: string | null;
+}
+
+/** Comprobante a numerar/consultar: tipo + letra resuelven el CbteTipo de
+ * ARCA (ver CBTE_TIPO en afip-wsfe-client.ts). */
+export interface VoucherSequence {
+  kind: ElectronicVoucherKind;
+  documentLetter: DocumentLetter;
+  pointOfSale: string;
+}
+
 /**
  * Stands in for AFIP's WSFE web service (real integration needs the
  * tenant's own AFIP certificates/CUIT and homologation testing - not
@@ -105,6 +122,10 @@ export interface ElectronicInvoiceResult {
  */
 export interface ElectronicInvoicingPort {
   requestCae(invoice: ElectronicInvoiceRequest): Promise<ElectronicInvoiceResult>;
+  /** Último número autorizado por ARCA en esa secuencia (0 si ninguno) -
+   * la fuente de verdad de la numeración, no lo que Oplex tiene guardado. */
+  lastAuthorizedNumber(sequence: VoucherSequence): Promise<number>;
+  getAuthorizedVoucher(sequence: VoucherSequence, number: number): Promise<AuthorizedVoucher>;
 }
 
 export const ELECTRONIC_INVOICING = Symbol('ELECTRONIC_INVOICING');

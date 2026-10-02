@@ -9,6 +9,9 @@ export interface TenantStore {
   tx: Prisma.TransactionClient;
   // Callbacks a correr recién cuando la transacción confirma (ver onCommit).
   afterCommit?: (() => void)[];
+  // Pasos a correr al final del request, todavía dentro de la transacción
+  // (ver beforeCommit).
+  beforeCommit?: (() => Promise<void>)[];
 }
 
 /**
@@ -93,6 +96,25 @@ export function onCommit(fn: () => void): void {
 }
 
 /**
+ * Corre `fn` al final del request, después de que todo el resto del
+ * trabajo terminó bien pero todavía dentro de la transacción: si `fn`
+ * falla, se revierte todo. Para el efecto hacia afuera que no se puede
+ * deshacer y tiene que ser lo ÚLTIMO que pase - pedir el CAE a ARCA: si se
+ * pide en el medio y después falla otra cosa (stock, cobro, asiento), el
+ * rollback borra la factura en Oplex pero ARCA ya la autorizó. Se corren en
+ * el orden en que se registraron. Sin contexto de tenant que lo soporte
+ * (scripts, tests), corre en el momento.
+ */
+export async function beforeCommit(fn: () => Promise<void>): Promise<void> {
+  const store = tenantContextStorage.getStore();
+  if (!store?.beforeCommit) {
+    await fn();
+    return;
+  }
+  store.beforeCommit.push(fn);
+}
+
+/**
  * Corre `fn` dentro de la misma transacción del tenant pero a nombre de
  * `userId` - para procesos sin usuario logueado (ej. el webhook de Mercado
  * Pago) que igual necesitan un autor: JournalEntry.createdById es
@@ -118,13 +140,24 @@ export async function withTenantContext<T>(
   timeoutMs?: number,
 ): Promise<T> {
   const afterCommit: (() => void)[] = [];
+  const beforeCommitSteps: (() => Promise<void>)[] = [];
   const result = await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       if (userId) {
         await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
       }
-      return tenantContextStorage.run({ tenantId, userId, role, tx, afterCommit }, fn);
+      return tenantContextStorage.run(
+        { tenantId, userId, role, tx, afterCommit, beforeCommit: beforeCommitSteps },
+        async () => {
+          const value = await fn();
+          // Índice y no for..of: un paso puede registrar otro.
+          for (let i = 0; i < beforeCommitSteps.length; i++) {
+            await beforeCommitSteps[i]();
+          }
+          return value;
+        },
+      );
     },
     timeoutMs === undefined ? undefined : { timeout: timeoutMs },
   );

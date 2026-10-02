@@ -1,15 +1,18 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  beforeCommit,
   getTenantDb,
   getTenantId,
   getUserId,
+  notify,
+  onCommit,
   Prisma,
+  userIdsWithRoles,
   type Article,
   type ArticleVariant,
   type Currency,
   type DiscountType,
-  type DocumentLetter,
   type Invoice,
   type InvoiceLine,
   type CreditNote,
@@ -35,8 +38,10 @@ import type { RecordReceiptDto } from './dto/record-receipt.dto.js';
 import { EMAIL_SENDER, type EmailSender } from './email-sender.port.js';
 import {
   ELECTRONIC_INVOICING,
+  type AuthorizedVoucher,
   type ElectronicInvoicingPort,
   type ElectronicInvoiceTaxLine,
+  type VoucherSequence,
 } from './electronic-invoicing.port.js';
 import { buildInvoicePdfData } from './pdf/build-pdf-data.js';
 import { InvoicePdfService } from './pdf/invoice-pdf.service.js';
@@ -51,6 +56,14 @@ const AFIP_TRIBUTO_ID: Record<InvoiceTaxLineKind, number> = {
   INTERNAL: 4,
   OTHER: 99,
 };
+
+// Tope de comprobantes huérfanos que se registran de una vez (ver
+// recordUnregisteredVouchers). Más que esto no es un CAE suelto: es otro
+// sistema emitiendo en el mismo punto de venta.
+const MAX_UNREGISTERED_TO_RECORD = 50;
+// Y de esos, a cuántos se les piden los datos a ARCA (una llamada cada uno,
+// dentro de la venta en curso).
+const MAX_UNREGISTERED_TO_QUERY = 5;
 
 type InvoiceWithLines = Invoice & { lines: InvoiceLine[] };
 type InvoiceWithLinesAndTaxLines = InvoiceWithLines & { taxLines: InvoiceTaxLine[] };
@@ -80,6 +93,8 @@ interface LineCalculation {
 
 @Injectable()
 export class InvoicingService {
+  private readonly logger = new Logger(InvoicingService.name);
+
   constructor(
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
     @Inject(ELECTRONIC_INVOICING)
@@ -453,7 +468,11 @@ export class InvoicingService {
     // The taxed-only slice of netSubtotal - what AFIP's ImpNeto actually
     // means once ImpOpEx/ImpTotConc exist as separate buckets.
     const taxedNetAmount = netSubtotal.sub(exemptAmount).sub(nonTaxedAmount);
-    const number = await this.nextInvoiceNumber(dto.pointOfSale, dto.documentLetter);
+    const number = await this.reserveVoucherNumber({
+      kind: 'FACTURA',
+      documentLetter: dto.documentLetter,
+      pointOfSale: dto.pointOfSale,
+    });
     // hasProductLine stays false only when every line is a service (an empty
     // dto.lines never reaches here - lines are required) - both false is
     // unreachable, but hasService-only correctly resolves to SERVICIOS below.
@@ -490,59 +509,73 @@ export class InvoicingService {
       include: { lines: true, taxLines: true },
     });
 
-    const { cae, caeExpiry } = await this.electronicInvoicing.requestCae({
-      kind: 'FACTURA',
-      documentLetter: created.documentLetter,
-      concept: created.concept,
-      pointOfSale: created.pointOfSale,
-      number: created.number,
-      issueDate: created.issueDate,
-      dueDate: created.dueDate,
-      customerTaxId: created.customerTaxId,
-      customerTaxCondition: customer.taxCondition,
-      customerName: customer.name,
-      currencyCode: currency.code,
-      exchangeRate: created.exchangeRate,
-      netAmount: taxedNetAmount,
-      exemptAmount,
-      nonTaxedAmount,
-      taxAmount: created.taxTotal,
-      total: created.total,
-      taxLines: this.groupTaxLines(taxLineRows),
-      otherTaxes: created.taxLines.map((line) => ({
-        id: AFIP_TRIBUTO_ID[line.kind],
-        desc: line.concept,
-        baseImp: line.baseAmount ?? taxedNetAmount,
-        alic: line.rate ?? new Prisma.Decimal(0),
-        importe: line.amount,
-      })),
-    });
-
-    const finalInvoice = await db.invoice.update({
-      where: { id: created.id },
-      data: { afipCae: cae, afipCaeExpiry: caeExpiry },
-      include: { lines: true, taxLines: true },
-    });
-
-    if (customer.email) {
-      await this.emailSender.sendInvoiceEmail({
-        to: customer.email,
-        invoiceNumber: `${dto.pointOfSale}-${finalInvoice.number}`,
-        total: finalInvoice.total.toFixed(2),
-        from: senderFrom,
+    // El CAE se pide recién al final del request (beforeCommit), después de
+    // que quien llamó terminó todo lo suyo (stock, asiento, cobros): si
+    // algo de eso falla, se revierte sin que ARCA haya autorizado nada. El
+    // número ya quedó reservado (reserveVoucherNumber) hasta el commit.
+    await beforeCommit(async () => {
+      const { cae, caeExpiry } = await this.electronicInvoicing.requestCae({
+        kind: 'FACTURA',
+        documentLetter: created.documentLetter,
+        concept: created.concept,
+        pointOfSale: created.pointOfSale,
+        number: created.number,
+        issueDate: created.issueDate,
+        dueDate: created.dueDate,
+        customerTaxId: created.customerTaxId,
+        customerTaxCondition: customer.taxCondition,
+        customerName: customer.name,
+        currencyCode: currency.code,
+        exchangeRate: created.exchangeRate,
+        netAmount: taxedNetAmount,
+        exemptAmount,
+        nonTaxedAmount,
+        taxAmount: created.taxTotal,
+        total: created.total,
+        taxLines: this.groupTaxLines(taxLineRows),
+        otherTaxes: created.taxLines.map((line) => ({
+          id: AFIP_TRIBUTO_ID[line.kind],
+          desc: line.concept,
+          baseImp: line.baseAmount ?? taxedNetAmount,
+          alic: line.rate ?? new Prisma.Decimal(0),
+          importe: line.amount,
+        })),
       });
-    }
-
-    this.eventEmitter.emit('invoice.created', {
-      tenantId: finalInvoice.tenantId,
-      invoiceId: finalInvoice.id,
-      total: finalInvoice.total.toString(),
-      customerName: finalInvoice.customerName,
-      status: finalInvoice.status,
-      issueDate: finalInvoice.issueDate.toISOString(),
+      await db.invoice.update({
+        where: { id: created.id },
+        data: { afipCae: cae, afipCaeExpiry: caeExpiry },
+      });
+      // Este mismo objeto es el que devolvió createInvoice y el controller
+      // serializa recién después del commit: se completa acá para que la
+      // respuesta lleve el CAE.
+      created.afipCae = cae;
+      created.afipCaeExpiry = caeExpiry;
     });
 
-    return finalInvoice;
+    // Mail y aviso al tablero sólo si la factura de verdad se guardó - antes
+    // salían aunque la transacción terminara en rollback.
+    onCommit(() => {
+      if (customer.email) {
+        this.emailSender
+          .sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: `${dto.pointOfSale}-${created.number}`,
+            total: created.total.toFixed(2),
+            from: senderFrom,
+          })
+          .catch((err: Error) => this.logger.warn(`No se pudo mandar el mail de la factura ${created.id}: ${err.message}`));
+      }
+      this.eventEmitter.emit('invoice.created', {
+        tenantId: created.tenantId,
+        invoiceId: created.id,
+        total: created.total.toString(),
+        customerName: created.customerName,
+        status: created.status,
+        issueDate: created.issueDate.toISOString(),
+      });
+    });
+
+    return created;
   }
 
   /**
@@ -651,7 +684,11 @@ export class InvoicingService {
       throw new BadRequestException('Credit note total exceeds the invoice balance due');
     }
 
-    const number = await this.nextCreditNoteNumber(invoice.pointOfSale, invoice.documentLetter);
+    const number = await this.reserveVoucherNumber({
+      kind: 'NOTA_CREDITO',
+      documentLetter: invoice.documentLetter,
+      pointOfSale: invoice.pointOfSale,
+    });
 
     const created = await db.creditNote.create({
       data: {
@@ -673,35 +710,46 @@ export class InvoicingService {
     });
 
     const currency = await db.currency.findUniqueOrThrow({ where: { id: invoice.currencyId } });
-    const { cae, caeExpiry } = await this.electronicInvoicing.requestCae({
-      kind: 'NOTA_CREDITO',
-      documentLetter: created.documentLetter,
-      // Reuses the original invoice's concept as-is - a credit note reverses
-      // those same lines, so it's the same concept by definition, no need
-      // to re-derive it from Article.isService again.
-      concept: invoice.concept,
-      pointOfSale: created.pointOfSale,
-      number: created.number,
-      issueDate: created.issueDate,
-      // A credit note has no due date of its own (it isn't something owed) -
-      // AfipWsfeClient falls back to issueDate for FchVtoPago when null.
-      dueDate: null,
-      customerTaxId: invoice.customerTaxId,
-      customerTaxCondition: invoice.customer.taxCondition,
-      customerName: invoice.customerName,
-      currencyCode: currency.code,
-      exchangeRate: created.exchangeRate,
-      netAmount: subtotal.sub(exemptAmount).sub(nonTaxedAmount),
-      exemptAmount,
-      nonTaxedAmount,
-      taxAmount: created.taxTotal,
-      total: created.total,
-      taxLines: this.groupTaxLines(taxLineRows),
-      associatedVoucher: {
-        documentLetter: invoice.documentLetter,
-        pointOfSale: invoice.pointOfSale,
-        number: invoice.number,
-      },
+    // Mismo criterio que createInvoice: el CAE al final del request, después
+    // del asiento y la reposición de stock que hace SalesService.voidSale.
+    await beforeCommit(async () => {
+      const { cae, caeExpiry } = await this.electronicInvoicing.requestCae({
+        kind: 'NOTA_CREDITO',
+        documentLetter: created.documentLetter,
+        // Reuses the original invoice's concept as-is - a credit note reverses
+        // those same lines, so it's the same concept by definition, no need
+        // to re-derive it from Article.isService again.
+        concept: invoice.concept,
+        pointOfSale: created.pointOfSale,
+        number: created.number,
+        issueDate: created.issueDate,
+        // A credit note has no due date of its own (it isn't something owed) -
+        // AfipWsfeClient falls back to issueDate for FchVtoPago when null.
+        dueDate: null,
+        customerTaxId: invoice.customerTaxId,
+        customerTaxCondition: invoice.customer.taxCondition,
+        customerName: invoice.customerName,
+        currencyCode: currency.code,
+        exchangeRate: created.exchangeRate,
+        netAmount: subtotal.sub(exemptAmount).sub(nonTaxedAmount),
+        exemptAmount,
+        nonTaxedAmount,
+        taxAmount: created.taxTotal,
+        total: created.total,
+        taxLines: this.groupTaxLines(taxLineRows),
+        associatedVoucher: {
+          documentLetter: invoice.documentLetter,
+          pointOfSale: invoice.pointOfSale,
+          number: invoice.number,
+        },
+      });
+      await db.creditNote.update({
+        where: { id: created.id },
+        data: { afipCae: cae, afipCaeExpiry: caeExpiry },
+      });
+      // Ver el mismo comentario en createInvoice.
+      created.afipCae = cae;
+      created.afipCaeExpiry = caeExpiry;
     });
 
     const balanceDue = invoice.balanceDue.sub(total);
@@ -716,11 +764,7 @@ export class InvoicingService {
       data: { balanceDue, status: balanceDue.isZero() ? 'PAID' : invoice.status },
     });
 
-    return db.creditNote.update({
-      where: { id: created.id },
-      data: { afipCae: cae, afipCaeExpiry: caeExpiry },
-      include: { lines: true },
-    });
+    return created;
   }
 
   /**
@@ -911,28 +955,121 @@ export class InvoicingService {
   }
 
   /**
-   * NOT race-free under concurrent invoice creation for the same
-   * (tenant, pointOfSale, documentLetter): two requests can both count N
-   * and try to insert N+1, and the second collides with the
-   * @@unique([tenantId, documentLetter, pointOfSale, number]) constraint
-   * (that request fails cleanly and can be retried, it doesn't corrupt
-   * data). Proper AFIP point-of-sale numbering needs its own sequence
-   * anyway once the real WSFE integration replaces this stub.
+   * Número del próximo comprobante de la secuencia según ARCA (último
+   * autorizado + 1), no según lo que Oplex tiene guardado: ARCA es la que
+   * valida la correlatividad (error 10016 si no coincide).
+   *
+   * El advisory lock serializa, hasta el fin de la transacción, a todo el
+   * que numere la misma secuencia del mismo tenant: dos cajas facturando a
+   * la vez leerían el mismo "último" y una sería rechazada. Como el CAE se
+   * pide al final del request (beforeCommit), el número queda reservado
+   * desde acá hasta el commit, y si el request falla antes del CAE el
+   * número se libera sin haber tocado ARCA.
+   *
+   * Si ARCA va adelantado respecto de Oplex, hay comprobantes autorizados
+   * que Oplex no tiene: se registran y se avisa (recordUnregisteredVouchers)
+   * en vez de saltearlos en silencio.
    */
-  private async nextInvoiceNumber(
-    pointOfSale: string,
-    documentLetter: DocumentLetter,
-  ): Promise<string> {
-    const count = await getTenantDb().invoice.count({ where: { pointOfSale, documentLetter } });
-    return String(count + 1).padStart(8, '0');
+  private async reserveVoucherNumber(sequence: VoucherSequence): Promise<string> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const lockKey = `arca-numbering:${tenantId}:${sequence.kind}:${sequence.documentLetter}:${sequence.pointOfSale}`;
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
+    const arcaLast = await this.electronicInvoicing.lastAuthorizedNumber(sequence);
+    const localLast = await this.lastLocalNumber(sequence);
+    if (arcaLast > localLast) {
+      await this.recordUnregisteredVouchers(sequence, localLast + 1, arcaLast);
+    }
+
+    const number = String(arcaLast + 1).padStart(8, '0');
+    const taken =
+      sequence.kind === 'FACTURA'
+        ? await db.invoice.findFirst({
+            where: { pointOfSale: sequence.pointOfSale, documentLetter: sequence.documentLetter, number },
+            select: { id: true },
+          })
+        : await db.creditNote.findFirst({
+            where: { pointOfSale: sequence.pointOfSale, documentLetter: sequence.documentLetter, number },
+            select: { id: true },
+          });
+    if (taken) {
+      // Oplex tiene un comprobante con un número que ARCA todavía no
+      // autorizó: datos viejos sin CAE real (p. ej. de antes de conectar
+      // ARCA) o un certificado de otro ambiente. Nunca pisarlo.
+      throw new BadRequestException(
+        `No se puede numerar el comprobante: ARCA informa como último autorizado el ${String(arcaLast).padStart(8, '0')} en el punto de venta ${sequence.pointOfSale}, pero Oplex ya tiene registrado el ${number}. Revisá que el certificado ARCA sea del ambiente correcto (homologación o producción).`,
+      );
+    }
+    return number;
   }
 
-  private async nextCreditNoteNumber(
-    pointOfSale: string,
-    documentLetter: DocumentLetter,
-  ): Promise<string> {
-    const count = await getTenantDb().creditNote.count({ where: { pointOfSale, documentLetter } });
-    return String(count + 1).padStart(8, '0');
+  private async lastLocalNumber(sequence: VoucherSequence): Promise<number> {
+    const db = getTenantDb();
+    const where = { pointOfSale: sequence.pointOfSale, documentLetter: sequence.documentLetter };
+    // number es texto con ceros a la izquierda (8 dígitos): el orden
+    // alfabético coincide con el numérico.
+    const last =
+      sequence.kind === 'FACTURA'
+        ? await db.invoice.findFirst({ where, orderBy: { number: 'desc' }, select: { number: true } })
+        : await db.creditNote.findFirst({ where, orderBy: { number: 'desc' }, select: { number: true } });
+    return last ? Number.parseInt(last.number, 10) : 0;
+  }
+
+  /**
+   * Deja registro de los comprobantes `from`..`to` que ARCA autorizó y
+   * Oplex no tiene, y avisa a quien administra la facturación. Corre dentro
+   * de la transacción de la venta en curso: si esa venta termina en
+   * rollback, el registro también, pero se vuelve a detectar en la próxima
+   * (ARCA sigue adelantado) - nunca se pierde.
+   */
+  private async recordUnregisteredVouchers(sequence: VoucherSequence, from: number, to: number): Promise<void> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const last = Math.min(to, from + MAX_UNREGISTERED_TO_RECORD - 1);
+    const rows: Prisma.ArcaUnregisteredVoucherCreateManyInput[] = [];
+    for (let n = from; n <= last; n++) {
+      let details: AuthorizedVoucher | null = null;
+      if (n - from < MAX_UNREGISTERED_TO_QUERY) {
+        try {
+          details = await this.electronicInvoicing.getAuthorizedVoucher(sequence, n);
+        } catch (err) {
+          // Sin los datos igual se registra: el número solo ya alcanza
+          // para avisar y buscarlo en ARCA.
+          this.logger.warn(`No se pudo consultar en ARCA el comprobante ${n}: ${(err as Error).message}`);
+        }
+      }
+      rows.push({
+        tenantId,
+        kind: sequence.kind,
+        documentLetter: sequence.documentLetter,
+        pointOfSale: sequence.pointOfSale,
+        number: String(n).padStart(8, '0'),
+        cae: details?.cae ?? null,
+        issueDate: details?.issueDate ?? null,
+        total: details?.total ?? null,
+        customerDocNumber: details?.customerDocNumber ?? null,
+      });
+    }
+    await db.arcaUnregisteredVoucher.createMany({ data: rows, skipDuplicates: true });
+
+    const label = sequence.kind === 'FACTURA' ? 'Factura' : 'Nota de crédito';
+    const range =
+      from === to
+        ? `${label} ${sequence.documentLetter} ${sequence.pointOfSale}-${String(from).padStart(8, '0')}`
+        : `${label} ${sequence.documentLetter} ${sequence.pointOfSale}-${String(from).padStart(8, '0')} a ${String(to).padStart(8, '0')}`;
+    this.logger.warn(`Tenant ${tenantId}: ARCA tiene autorizados comprobantes que Oplex no registró: ${range}`);
+
+    await notify({
+      recipientUserIds: await userIdsWithRoles(['OWNER', 'ADMIN', 'ACCOUNTANT']),
+      category: 'BILLING',
+      type: 'arca.unregistered_voucher',
+      message:
+        from === to
+          ? `ARCA tiene autorizada la **${range}**, que **no está registrada en Oplex**. Hay que registrarla o anularla con una nota de crédito.`
+          : `ARCA tiene autorizados comprobantes que **no están registrados en Oplex**: **${range}**. Hay que registrarlos o anularlos con notas de crédito.`,
+      link: '/preferences',
+    });
   }
 
   /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md) - fuente

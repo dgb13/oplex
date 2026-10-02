@@ -9,7 +9,22 @@ import { InvoicingService } from './invoicing.service.js';
 import type { InvoicePdfService } from './pdf/invoice-pdf.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T, userId = 'user-1'): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId, tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId, tx: withNumberingDefaults(db) as never }, fn);
+}
+
+/** Lo que reserveVoucherNumber le pide a la base (advisory lock + último
+ * número local) - los tests que no prueban la numeración no lo declaran. */
+function withNumberingDefaults(db: Record<string, unknown>): Record<string, unknown> {
+  for (const model of ['invoice', 'creditNote']) {
+    const delegate = db[model] as Record<string, unknown> | undefined;
+    if (delegate && !delegate.findFirst) {
+      delegate.findFirst = jest.fn().mockResolvedValue(null);
+    }
+  }
+  if (!db.$executeRaw) {
+    db.$executeRaw = jest.fn().mockResolvedValue(0);
+  }
+  return db;
 }
 
 function runWithoutUser<T>(db: Record<string, unknown>, fn: () => T): T {
@@ -28,6 +43,13 @@ function makeElectronicInvoicing(): ElectronicInvoicingPort {
     requestCae: jest
       .fn()
       .mockResolvedValue({ cae: 'CAE-1', caeExpiry: new Date('2030-01-01') }),
+    lastAuthorizedNumber: jest.fn().mockResolvedValue(0),
+    getAuthorizedVoucher: jest.fn().mockResolvedValue({
+      cae: null,
+      issueDate: null,
+      total: null,
+      customerDocNumber: null,
+    }),
   };
 }
 
@@ -1607,5 +1629,169 @@ describe('InvoicingService.getCalendarEntries', () => {
     );
 
     expect(entries).toEqual([]);
+  });
+});
+
+describe('InvoicingService - numeración con ARCA', () => {
+  function makeNumberingDb(localLastNumber: string | null) {
+    return {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      company: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'customer-1',
+          active: true,
+          name: 'Consumidor Final',
+          taxId: null,
+          email: null,
+          taxCondition: null,
+          roles: [{ role: 'CUSTOMER' }],
+        }),
+      },
+      currency: { findUnique: jest.fn().mockResolvedValue({ id: 'currency-1', code: 'ARS', isBase: true }) },
+      articleVariant: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'variant-1',
+          unitPrice: new Prisma.Decimal(100),
+          article: { isService: false, taxDefinition: null },
+        }),
+      },
+      invoice: {
+        // 1ra llamada: último número local; 2da: ¿el número elegido ya existe?
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(localLastNumber ? { number: localLastNumber } : null)
+          .mockResolvedValue(null),
+        create: jest.fn((args: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            ...makeFinalInvoiceFixture(),
+            ...args.data,
+            lines: [],
+            taxLines: [],
+            afipCae: null,
+            afipCaeExpiry: null,
+          }),
+        ),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      arcaUnregisteredVoucher: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'owner-1', mutedNotificationTypes: [] }]) },
+      notification: { create: jest.fn().mockResolvedValue({ id: 'notification-1' }) },
+    };
+  }
+
+  function makeService(electronicInvoicing: ElectronicInvoicingPort) {
+    return new InvoicingService(
+      makeEmailSender(),
+      electronicInvoicing,
+      makeEventEmitter(),
+      makeSubscriptionService(),
+      makeBnaExchangeRate(),
+      makeInvoicePdfService(),
+    );
+  }
+
+  it('numera con el último autorizado por ARCA + 1, no contando las facturas de Oplex, bajo un advisory lock', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(7);
+    const db = makeNumberingDb('00000007');
+
+    const invoice = await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }));
+
+    expect(electronicInvoicing.lastAuthorizedNumber).toHaveBeenCalledWith({
+      kind: 'FACTURA',
+      documentLetter: 'C',
+      pointOfSale: '0001',
+    });
+    expect(db.$executeRaw).toHaveBeenCalled();
+    expect(db.invoice.create.mock.calls[0][0].data.number).toBe('00000008');
+    expect((electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0].number).toBe('00000008');
+    expect(invoice.afipCae).toBe('CAE-1');
+    expect(db.arcaUnregisteredVoucher.createMany).not.toHaveBeenCalled();
+  });
+
+  it('si ARCA va adelantado, registra los comprobantes que Oplex no tiene, avisa y sigue con el siguiente de ARCA', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(3);
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockResolvedValue({
+      cae: '86400000000003',
+      issueDate: new Date('2026-10-01'),
+      total: '16',
+      customerDocNumber: '0',
+    });
+    const db = makeNumberingDb('00000002');
+
+    await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }));
+
+    expect(electronicInvoicing.getAuthorizedVoucher).toHaveBeenCalledWith(
+      { kind: 'FACTURA', documentLetter: 'C', pointOfSale: '0001' },
+      3,
+    );
+    const recorded = db.arcaUnregisteredVoucher.createMany.mock.calls[0][0];
+    expect(recorded.skipDuplicates).toBe(true);
+    expect(recorded.data).toEqual([
+      expect.objectContaining({ kind: 'FACTURA', documentLetter: 'C', number: '00000003', cae: '86400000000003', total: '16' }),
+    ]);
+    expect(db.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: 'BILLING', type: 'arca.unregistered_voucher', recipientUserId: 'owner-1' }),
+      }),
+    );
+    expect(db.invoice.create.mock.calls[0][0].data.number).toBe('00000004');
+  });
+
+  it('si no se pueden consultar los datos en ARCA, igual registra el número', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(3);
+    (electronicInvoicing.getAuthorizedVoucher as jest.Mock).mockRejectedValue(new Error('ARCA caído'));
+    const db = makeNumberingDb('00000002');
+
+    await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }));
+
+    expect(db.arcaUnregisteredVoucher.createMany.mock.calls[0][0].data).toEqual([
+      expect.objectContaining({ number: '00000003', cae: null }),
+    ]);
+  });
+
+  it('nunca pisa un número que Oplex ya tiene y ARCA no autorizó', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    (electronicInvoicing.lastAuthorizedNumber as jest.Mock).mockResolvedValue(0);
+    const db = makeNumberingDb('00000001');
+    db.invoice.findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ number: '00000001' })
+      .mockResolvedValueOnce({ id: 'invoice-stub' });
+
+    await expect(
+      runInTenant(db, () => makeService(electronicInvoicing).createInvoice(baseDto)),
+    ).rejects.toThrow(/Oplex ya tiene registrado el 00000001/);
+    expect(db.invoice.create).not.toHaveBeenCalled();
+    expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
+  });
+
+  it('dentro de un request, el CAE se pide recién en beforeCommit - después de lo que haga quien llamó', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeNumberingDb(null);
+    const steps: (() => Promise<void>)[] = [];
+
+    const invoice = await tenantContextStorage.run(
+      { tenantId: 'tenant-1', userId: 'user-1', tx: db as never, beforeCommit: steps, afterCommit: [] },
+      () => makeService(electronicInvoicing).createInvoice(baseDto),
+    );
+
+    expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
+    expect(invoice.afipCae).toBeNull();
+    expect(steps).toHaveLength(1);
+
+    await tenantContextStorage.run(
+      { tenantId: 'tenant-1', userId: 'user-1', tx: db as never },
+      () => steps[0](),
+    );
+
+    expect(electronicInvoicing.requestCae).toHaveBeenCalledTimes(1);
+    expect(db.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { afipCae: 'CAE-1', afipCaeExpiry: new Date('2030-01-01') } }),
+    );
+    // El objeto ya devuelto se completa: el controller lo serializa después del commit.
+    expect(invoice.afipCae).toBe('CAE-1');
   });
 });

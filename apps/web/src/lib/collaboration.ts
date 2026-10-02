@@ -4,7 +4,7 @@ import { api } from './api';
 // (las tareas son eventos de la Agenda de tipo TASK - ver
 // CalendarEventService en el backend).
 
-export type NotificationCategory = 'PRODUCTION' | 'PURCHASES' | 'STOCK' | 'MENTION' | 'TASK';
+export type NotificationCategory = 'PRODUCTION' | 'PURCHASES' | 'STOCK' | 'MENTION' | 'TASK' | 'BILLING';
 export type NotificationFilter = 'all' | 'unread' | 'mentions';
 
 export interface Person {

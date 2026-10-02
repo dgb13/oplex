@@ -2,6 +2,7 @@ import { AfipWsaaClient, type AfipWsaaCredentials } from '@plexo/afip-credential
 import type { DocumentLetter, InvoiceConcept, Prisma } from '@plexo/database';
 import { XMLParser } from 'fast-xml-parser';
 import type {
+  AuthorizedVoucher,
   ElectronicInvoiceRequest,
   ElectronicInvoiceResult,
 } from './electronic-invoicing.port.js';
@@ -361,6 +362,72 @@ export class AfipWsfeClient {
       throw new Error(`Respuesta de ARCA WSFE sin número de comprobante: ${responseText.slice(0, 300)}`);
     }
     return nro;
+  }
+
+  /** FECompConsultar: los datos de un comprobante ya autorizado. Para
+   * dejar registro de uno que ARCA tiene y Oplex no (ver
+   * InvoicingService.reserveVoucherNumber). */
+  async getAuthorizedVoucher(
+    pointOfSale: number,
+    cbteTipo: number,
+    number: number,
+  ): Promise<AuthorizedVoucher> {
+    const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
+    const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECompConsultar>
+      <ar:Auth>
+        <ar:Token>${ticket.token}</ar:Token>
+        <ar:Sign>${ticket.sign}</ar:Sign>
+        <ar:Cuit>${this.credentials.cuitRepresentada.replace(/\D/g, '')}</ar:Cuit>
+      </ar:Auth>
+      <ar:FeCompConsReq>
+        <ar:CbteTipo>${cbteTipo}</ar:CbteTipo>
+        <ar:CbteNro>${number}</ar:CbteNro>
+        <ar:PtoVta>${pointOfSale}</ar:PtoVta>
+      </ar:FeCompConsReq>
+    </ar:FECompConsultar>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    let responseText: string;
+    try {
+      const response = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompConsultar',
+        },
+        body: soapBody,
+      });
+      responseText = await response.text();
+    } catch (err) {
+      throw new Error(`No se pudo conectar con ARCA WSFE: ${(err as Error).message}`);
+    }
+
+    const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);
+    if (faultMatch) {
+      throw new Error(`ARCA WSFE rechazó la solicitud: ${faultMatch[1]}`);
+    }
+    const parsed = xmlParser.parse(responseText);
+    const result = parsed?.Envelope?.Body?.FECompConsultarResponse?.FECompConsultarResult;
+    const errores = this.toArray(result?.Errors?.Err) as WsfeError[];
+    if (errores.length > 0) {
+      throw new Error(`ARCA WSFE: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join('; ')}`);
+    }
+    const get = result?.ResultGet;
+    if (!get) {
+      throw new Error(`Respuesta de ARCA WSFE sin el comprobante: ${responseText.slice(0, 300)}`);
+    }
+    const fch = String(get.CbteFch ?? '');
+    return {
+      cae: get.CodAutorizacion ? String(get.CodAutorizacion) : null,
+      issueDate: /^\d{8}$/.test(fch) ? this.parseCaeExpiry(fch) : null,
+      total: get.ImpTotal !== undefined ? String(get.ImpTotal) : null,
+      customerDocNumber: get.DocNro !== undefined ? String(get.DocNro) : null,
+    };
   }
 
   private toArray<T>(value: T | T[] | undefined): T[] {
