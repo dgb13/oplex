@@ -1,7 +1,7 @@
 'use client';
 
 import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
-import { posApi } from '@/lib/pos';
+import { formatPaidAt, posApi } from '@/lib/pos';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -10,6 +10,7 @@ import CashMovementModal from './CashMovementModal';
 import CheckoutModal from './CheckoutModal';
 import CloseSessionModal from './CloseSessionModal';
 import { computeTotals, type TicketLine } from './types';
+import UnclaimedQrChargesModal from './UnclaimedQrChargesModal';
 import PosThemePicker from '../PosThemePicker';
 
 interface ProductOption {
@@ -51,6 +52,8 @@ function PosSellScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [cashMovement, setCashMovement] = useState<'CASH_IN' | 'CASH_OUT' | null>(null);
   const [closingSession, setClosingSession] = useState(false);
+  // null = cerrado; 'browse' desde el aviso; 'closing' desde "Cerrar turno".
+  const [unclaimedView, setUnclaimedView] = useState<'browse' | 'closing' | null>(null);
 
   const registersQuery = useQuery({ queryKey: ['pos-registers'], queryFn: () => posApi.listRegisters() });
   const openSessionsQuery = useQuery({
@@ -59,6 +62,15 @@ function PosSellScreen() {
     refetchInterval: 15000,
   });
   const articlesQuery = useQuery({ queryKey: ['inventory-articles'], queryFn: () => inventoryApi.listArticles() });
+  // Cobros QR acreditados que no llegaron a ser venta - mismo intervalo que
+  // el arqueo de arriba.
+  const unclaimedQuery = useQuery({
+    queryKey: ['pos-unclaimed-qr', registerId],
+    queryFn: () => posApi.listUnclaimedQrCharges(registerId),
+    enabled: !!registerId,
+    refetchInterval: 15000,
+  });
+  const unclaimed = unclaimedQuery.data ?? [];
 
   const register = (registersQuery.data ?? []).find((r) => r.id === registerId);
   const session = (openSessionsQuery.data ?? []).find((s) => s.registerId === registerId);
@@ -118,6 +130,17 @@ function PosSellScreen() {
   function refetchSession() {
     void queryClient.invalidateQueries({ queryKey: ['pos-session-summary', session?.id] });
     void queryClient.invalidateQueries({ queryKey: ['pos-open-sessions'] });
+    void queryClient.invalidateQueries({ queryKey: ['pos-unclaimed-qr', registerId] });
+  }
+
+  // Un cobro QR sin venta es plata que entró sin factura: el turno no se
+  // cierra hasta resolverlo (el backend también lo exige).
+  function startClosingSession() {
+    if (unclaimed.length > 0) {
+      setUnclaimedView('closing');
+      return;
+    }
+    setClosingSession(true);
   }
 
   if (!registerId || (!registersQuery.isLoading && !register)) {
@@ -185,7 +208,7 @@ function PosSellScreen() {
             Egreso
           </button>
           <button
-            onClick={() => setClosingSession(true)}
+            onClick={startClosingSession}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 pos-dark:text-slate-300 pos-dark:hover:bg-slate-800 pos-contrast:text-slate-200 pos-contrast:hover:bg-slate-900 pos-emerald:text-slate-600 pos-emerald:hover:bg-emerald-100"
           >
             <LogOut className="h-4 w-4" />
@@ -193,6 +216,31 @@ function PosSellScreen() {
           </button>
         </div>
       </header>
+
+      {unclaimed.length > 0 && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-sm text-amber-800 pos-dark:border-amber-900 pos-dark:bg-amber-950 pos-dark:text-amber-300 pos-contrast:border-amber-900 pos-contrast:bg-amber-950 pos-contrast:text-amber-300 pos-emerald:border-amber-200 pos-emerald:bg-amber-50 pos-emerald:text-amber-800"
+        >
+          <span>
+            <span className="font-semibold">
+              {unclaimed.length === 1
+                ? '1 cobro con QR acreditado sin venta'
+                : `${unclaimed.length} cobros con QR acreditados sin venta`}
+            </span>
+            {' · '}$
+            {unclaimed.reduce((sum, c) => sum + Number(c.amount), 0).toFixed(2)}
+            {unclaimed[0].paidAt && ` · ${formatPaidAt(unclaimed[0].paidAt)}`}. El cliente ya pagó y falta confirmar la
+            venta.
+          </span>
+          <button
+            onClick={() => setUnclaimedView('browse')}
+            className="rounded-lg border border-current px-3 py-1 text-sm font-semibold transition hover:bg-amber-100 pos-dark:hover:bg-amber-900 pos-contrast:hover:bg-amber-900 pos-emerald:hover:bg-amber-100"
+          >
+            Resolver
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex w-2/3 flex-col gap-4 overflow-hidden p-5">
@@ -349,6 +397,15 @@ function PosSellScreen() {
             setCashMovement(null);
             refetchSession();
           }}
+        />
+      )}
+
+      {unclaimedView && (
+        <UnclaimedQrChargesModal
+          charges={unclaimed}
+          closingShift={unclaimedView === 'closing'}
+          onClose={() => setUnclaimedView(null)}
+          onResolved={refetchSession}
         />
       )}
 

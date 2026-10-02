@@ -3709,6 +3709,12 @@ model PaymentIntent {
   // Venta del POS que usó este cobro - un cobro QR acreditado se usa una
   // sola vez. PAID con esto en null = "cobro QR sin venta".
   consumedByInvoiceId String?   @unique
+  // Sólo POS_QR: la venta tal como estaba al generar el QR (artículos,
+  // precios, cliente, filas de pago - el CheckoutDto sin registerId). Si el
+  // pago se acredita y la venta no llega a confirmarse, se retoma con esto
+  // desde "Cobros con QR sin venta" (PosService.confirmQrSale). null en
+  // cobros anteriores a este campo.
+  saleDraft           Json?
 
   // Idempotencia de creación: un UUID fresco por intent, enviado como
   // X-Idempotency-Key a MP - la deduplicación real de "no crear dos

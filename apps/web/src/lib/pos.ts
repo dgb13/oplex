@@ -182,6 +182,37 @@ export interface QrCharge {
   externalPaymentId: string | null;
 }
 
+/** Cobro QR acreditado que no llegó a ser venta (ver "Cobros con QR sin
+ * venta" en la Caja). `sale` es null en cobros anteriores a guardar la venta. */
+export interface UnclaimedQrCharge {
+  id: string;
+  amount: string;
+  paidAt: string | null;
+  createdAt: string;
+  externalPaymentId: string | null;
+  createdByName: string | null;
+  sale: {
+    customerName: string;
+    documentLetter: string;
+    lines: { articleName: string; quantity: number; unitPrice: number | null }[];
+  } | null;
+}
+
+/** "hoy 14:32", "ayer 18:10" o "29/09 14:32" - cuándo se acreditó un cobro. */
+export function formatPaidAt(iso: string): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (date >= startOfToday) return `hoy ${time}`;
+  if (date.getTime() >= startOfToday.getTime() - dayMs) return `ayer ${time}`;
+  return `${date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+/** La venta sin la caja - lo que se guarda junto con el cobro QR. */
+export type CheckoutSaleInput = Omit<CheckoutInput, 'registerId'>;
+
 export interface CheckoutInput {
   registerId: string;
   customerId?: string;
@@ -259,8 +290,11 @@ export const posApi = {
     api.post<RegisterQrSetup>(`/pos/registers/${registerId}/mercadopago-qr/activate`, dto).then((r) => r.data),
   deactivateRegisterQr: (registerId: string) =>
     api.post<RegisterQrSetup>(`/pos/registers/${registerId}/mercadopago-qr/deactivate`).then((r) => r.data),
-  createQrCharge: (registerId: string, amount: number) =>
-    api.post<QrCharge>('/pos/qr-charges', { registerId, amount }).then((r) => r.data),
+  createQrCharge: (registerId: string, amount: number, sale?: CheckoutSaleInput) =>
+    api.post<QrCharge>('/pos/qr-charges', { registerId, amount, sale }).then((r) => r.data),
+  listUnclaimedQrCharges: (registerId: string) =>
+    api.get<UnclaimedQrCharge[]>(`/pos/registers/${registerId}/qr-charges/unclaimed`).then((r) => r.data),
+  confirmQrSale: (id: string) => api.post<Invoice>(`/pos/qr-charges/${id}/confirm-sale`).then((r) => r.data),
   getQrCharge: (id: string) => api.get<QrCharge>(`/pos/qr-charges/${id}`).then((r) => r.data),
   cancelQrCharge: (id: string) => api.post<QrCharge>(`/pos/qr-charges/${id}/cancel`).then((r) => r.data),
 };

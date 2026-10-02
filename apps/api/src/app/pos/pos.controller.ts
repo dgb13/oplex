@@ -99,7 +99,23 @@ export class PosController {
   @Post('qr-charges')
   @LongRunningTransaction(30_000)
   createQrCharge(@Body() dto: CreateQrChargeDto) {
-    return this.mercadoPagoQrService.createCharge(dto.registerId, dto.amount);
+    return this.posService.createQrCharge(dto);
+  }
+
+  // Cobros QR acreditados que no llegaron a ser venta (falló el stock o
+  // ARCA, se cerró la ventana...): el aviso de la Caja y su lista.
+  @Roles(...SALES_ROLES)
+  @Get('registers/:id/qr-charges/unclaimed')
+  listUnclaimedQrCharges(@Param('id', ParseUUIDPipe) id: string) {
+    return this.posService.listUnclaimedQrCharges(id);
+  }
+
+  @Roles(...SALES_ROLES)
+  @Post('qr-charges/:id/confirm-sale')
+  // Misma venta que checkout: pide CAE a ARCA.
+  @LongRunningTransaction(45_000)
+  confirmQrSale(@Param('id', ParseUUIDPipe) id: string) {
+    return this.posService.confirmQrSale(id);
   }
 
   @Roles(...SALES_ROLES)

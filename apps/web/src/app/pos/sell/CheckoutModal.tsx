@@ -4,7 +4,14 @@ import { companiesApi, type AfipPadronData } from '@/lib/companies';
 import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
 import { invoicingApi } from '@/lib/invoicing';
-import { posApi, POS_PAYMENT_METHODS, type CheckoutPaymentInput, type QrCharge } from '@/lib/pos';
+import {
+  formatPaidAt,
+  posApi,
+  POS_PAYMENT_METHODS,
+  type CheckoutPaymentInput,
+  type CheckoutSaleInput,
+  type QrCharge,
+} from '@/lib/pos';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -150,33 +157,58 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   const mpRows = payments.filter((p) => p.method === 'MERCADOPAGO' && Number(p.amount.replace(',', '.')) > 0);
   const useQr = qrActive && mpRows.length > 0;
 
+  // Cobro QR viejo (sin la venta guardada) ya acreditado por el mismo monto
+  // que la fila de Mercado Pago: se ofrece usarlo en vez de generar un QR
+  // nuevo - el cliente ya pagó. Los que sí tienen la venta guardada se
+  // confirman desde el aviso de la Caja, no acá.
+  const unclaimedQuery = useQuery({
+    queryKey: ['pos-unclaimed-qr', registerId],
+    queryFn: () => posApi.listUnclaimedQrCharges(registerId),
+    enabled: qrActive,
+  });
+  const mpAmountCents = mpRows.length === 1 ? Math.round(Number(mpRows[0].amount.replace(',', '.')) * 100) : null;
+  const legacyCharge =
+    useQr && mpAmountCents !== null
+      ? (unclaimedQuery.data ?? []).find((c) => !c.sale && Math.round(Number(c.amount) * 100) === mpAmountCents)
+      : undefined;
+  const [useLegacyCharge, setUseLegacyCharge] = useState(true);
+  const payWithLegacy = !!legacyCharge && useLegacyCharge;
+
+  // La venta tal como se manda a posApi.checkout, sin la caja. También se
+  // guarda junto con el cobro QR (QrChargePanel) para poder retomarla desde
+  // "Cobros con QR sin venta" si el pago se acredita y la venta no se confirma.
+  // charge: el cobro QR ya acreditado que paga la fila de Mercado Pago.
+  function buildSale(charge?: QrCharge): CheckoutSaleInput {
+    const paymentsInput: CheckoutPaymentInput[] = payments
+      .filter((p) => Number(p.amount) > 0)
+      .map((p) => ({
+        method: p.method,
+        amount: Number(p.amount.replace(',', '.')),
+        ...(charge && p.method === 'MERCADOPAGO' ? { paymentIntentId: charge.id } : {}),
+      }));
+    return {
+      customerId: customerId || undefined,
+      documentLetter,
+      currencyId: baseCurrency?.id ?? '',
+      lines: lines.map((l) => ({
+        articleVariantId: l.articleVariantId,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        taxKind: l.taxKind,
+        taxRate: l.taxRate ?? undefined,
+      })),
+      payments: paymentsInput,
+    };
+  }
+
   const mutation = useMutation({
-    // charge: el cobro QR ya acreditado que paga la fila de Mercado Pago.
-    mutationFn: (charge?: QrCharge) => {
-      const paymentsInput: CheckoutPaymentInput[] = payments
-        .filter((p) => Number(p.amount) > 0)
-        .map((p) => ({
-          method: p.method,
-          amount: Number(p.amount.replace(',', '.')),
-          ...(charge && p.method === 'MERCADOPAGO' ? { paymentIntentId: charge.id } : {}),
-        }));
-      return posApi.checkout({
-        registerId,
-        customerId: customerId || undefined,
-        documentLetter,
-        currencyId: baseCurrency?.id ?? '',
-        lines: lines.map((l) => ({
-          articleVariantId: l.articleVariantId,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          taxKind: l.taxKind,
-          taxRate: l.taxRate ?? undefined,
-        })),
-        payments: paymentsInput,
-      });
-    },
-    onSuccess: (invoice) => {
+    mutationFn: (charge?: QrCharge) => posApi.checkout({ registerId, ...buildSale(charge) }),
+    onSuccess: (invoice, charge) => {
+      // El cobro viejo usado desde el formulario (payWithLegacy) recién acá:
+      // si la venta falla, el formulario sigue igual y se puede generar un QR.
+      if (charge) setPaidCharge(charge);
       setCompletedInvoice(invoice);
+      void queryClient.invalidateQueries({ queryKey: ['pos-unclaimed-qr', registerId] });
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       const message = err.response?.data?.message ?? 'No se pudo completar el cobro';
@@ -220,6 +252,19 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
     if (useQr) {
       if (mpRows.length > 1) {
         setError('Para cobrar con QR dejá una sola fila de Mercado Pago');
+        return;
+      }
+      if (payWithLegacy && legacyCharge) {
+        const charge: QrCharge = {
+          id: legacyCharge.id,
+          status: 'PAID',
+          rejected: false,
+          amount: legacyCharge.amount,
+          qrCodeBase64: null,
+          expiresAt: null,
+          externalPaymentId: legacyCharge.externalPaymentId,
+        };
+        mutation.mutate(charge);
         return;
       }
       setQrStep(true);
@@ -315,6 +360,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
               registerId={registerId}
               registerLabel={setup ? `${setup.registerName} · ${setup.branchName}` : ''}
               amount={mpAmount}
+              sale={buildSale()}
               onPaid={handleQrPaid}
               onBack={handleQrBack}
             />
@@ -457,7 +503,49 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           </button>
         </div>
 
-        {useQr && (
+        {useQr && legacyCharge && (
+          <div role="radiogroup" aria-label="Cómo cobrar con Mercado Pago" className="mt-3 flex flex-col gap-2">
+            {[
+              {
+                value: true,
+                title: `Usar el cobro ya acreditado · $${Number(legacyCharge.amount).toFixed(2)}${legacyCharge.paidAt ? ` · ${formatPaidAt(legacyCharge.paidAt)}` : ''}`,
+                detail: 'El cliente ya pagó: no se genera un QR nuevo.',
+              },
+              {
+                value: false,
+                title: 'Generar un QR nuevo',
+                detail: 'El cliente paga ahora con la app de Mercado Pago.',
+              },
+            ].map((option) => (
+              <label
+                key={String(option.value)}
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  useLegacyCharge === option.value
+                    ? 'border-indigo-500 bg-indigo-50 pos-dark:border-indigo-400 pos-dark:bg-indigo-950 pos-contrast:border-amber-400 pos-contrast:bg-slate-900 pos-emerald:border-emerald-500 pos-emerald:bg-emerald-50'
+                    : 'border-slate-200 pos-dark:border-slate-700 pos-contrast:border-slate-700 pos-emerald:border-emerald-100'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="mp-charge"
+                  // El radio nativo toma el color-scheme heredado (oscuro si
+                  // el sistema lo está) aunque el tema de la Caja sea claro.
+                  className="mt-1 accent-indigo-600 [color-scheme:light] pos-dark:accent-indigo-400 pos-dark:[color-scheme:dark] pos-contrast:accent-amber-400 pos-contrast:[color-scheme:dark] pos-emerald:accent-emerald-600"
+                  checked={useLegacyCharge === option.value}
+                  onChange={() => setUseLegacyCharge(option.value)}
+                />
+                <span>
+                  <span className="font-semibold">{option.title}</span>
+                  <span className="block text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                    {option.detail}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {useQr && !payWithLegacy && (
           <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-300 pos-contrast:bg-slate-900 pos-contrast:text-slate-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-600">
             Al confirmar se muestra un QR por el monto de Mercado Pago. La venta se cierra cuando Mercado Pago avise
             que el pago se acreditó.
@@ -482,7 +570,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
             disabled={mutation.isPending || !baseCurrency}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
           >
-            {mutation.isPending ? 'Confirmando...' : useQr ? 'Generar QR' : 'Confirmar cobro'}
+            {mutation.isPending ? 'Confirmando...' : useQr && !payWithLegacy ? 'Generar QR' : 'Confirmar cobro'}
           </button>
         </div>
       </div>

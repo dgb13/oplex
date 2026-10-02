@@ -1,6 +1,6 @@
 'use client';
 
-import { posApi, type QrCharge } from '@/lib/pos';
+import { posApi, type CheckoutSaleInput, type QrCharge } from '@/lib/pos';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useEffect, useRef, useState } from 'react';
@@ -10,6 +10,9 @@ interface Props {
   /** "Caja 1 · Sucursal Centro" */
   registerLabel: string;
   amount: number;
+  /** La venta que paga este cobro: se guarda con el cobro para poder
+   * retomarla si el pago se acredita y la venta no llega a confirmarse. */
+  sale: CheckoutSaleInput;
   /** El pago se acreditó: CheckoutModal confirma la venta con este cobro. */
   onPaid: (charge: QrCharge) => void;
   /** Volver al formulario de Cobrar, ya con el cobro cancelado. */
@@ -46,7 +49,7 @@ function mmss(totalSeconds: number): string {
  * consulta el estado cada 3 segundos - el backend también le pregunta a MP,
  * así que esto funciona aunque el webhook no llegue.
  */
-export default function QrChargePanel({ registerId, registerLabel, amount, onPaid, onBack }: Props) {
+export default function QrChargePanel({ registerId, registerLabel, amount, sale, onPaid, onBack }: Props) {
   const [chargeId, setChargeId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const started = useRef(false);
@@ -54,7 +57,7 @@ export default function QrChargePanel({ registerId, registerLabel, amount, onPai
   const latest = useRef<QrCharge | null>(null);
 
   const create = useMutation({
-    mutationFn: () => posApi.createQrCharge(registerId, amount),
+    mutationFn: () => posApi.createQrCharge(registerId, amount, sale),
     onSuccess: (charge) => {
       latest.current = charge;
       setChargeId(charge.id);

@@ -4,8 +4,10 @@ import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
 import { MercadoPagoQrService } from '@plexo/mercadopago';
 import { CashRegistersService, CashSessionsService } from '@plexo/pos';
 import { ReportsFinancialService } from '@plexo/reports-financial';
-import type { CheckoutDto } from './dto/checkout.dto.js';
+import { instanceToPlain } from 'class-transformer';
+import type { CheckoutDto, CheckoutSaleDto } from './dto/checkout.dto.js';
 import type { CreateRegisterDto } from './dto/create-register.dto.js';
+import type { CreateQrChargeDto } from './dto/mercadopago-qr.dto.js';
 import { SalesService } from '../sales/sales.service.js';
 
 /**
@@ -110,7 +112,98 @@ export class PosService {
     return invoice;
   }
 
+  /** Cobro con QR: guarda la venta junto con el cobro (ver
+   * CreateQrChargeDto.sale) para poder retomarla con confirmQrSale. */
+  async createQrCharge(dto: CreateQrChargeDto) {
+    if (dto.sale) {
+      const mpRows = dto.sale.payments.filter((p) => p.method === 'MERCADOPAGO');
+      if (mpRows.length !== 1 || !new Prisma.Decimal(mpRows[0].amount).eq(new Prisma.Decimal(dto.amount))) {
+        throw new BadRequestException('La venta tiene que tener una sola fila de Mercado Pago, por el monto del QR');
+      }
+    }
+    return this.mercadoPagoQrService.createCharge(
+      dto.registerId,
+      dto.amount,
+      dto.sale ? (instanceToPlain(dto.sale) as Prisma.InputJsonValue) : undefined,
+    );
+  }
+
+  /** "Cobros con QR sin venta" de la caja: el cliente pagó y la venta no se
+   * confirmó. Con la venta guardada resuelta a nombres para mostrarla. */
+  async listUnclaimedQrCharges(registerId: string) {
+    const charges = await this.mercadoPagoQrService.listUnclaimedCharges(registerId);
+    if (charges.length === 0) {
+      return [];
+    }
+    const db = getTenantDb();
+    const drafts = charges.map((c) => c.saleDraft as unknown as CheckoutSaleDto | null);
+    const variantIds = [...new Set(drafts.flatMap((d) => d?.lines.map((l) => l.articleVariantId) ?? []))];
+    const customerIds = [...new Set(drafts.map((d) => d?.customerId).filter((id): id is string => !!id))];
+    const userIds = [...new Set(charges.map((c) => c.createdByUserId).filter((id): id is string => !!id))];
+    const [variants, customers, users] = await Promise.all([
+      db.articleVariant.findMany({ where: { id: { in: variantIds } }, select: { id: true, sku: true, article: { select: { name: true } } } }),
+      db.company.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true } }),
+      db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } }),
+    ]);
+    const variantName = new Map(variants.map((v) => [v.id, v.article.name]));
+    const customerName = new Map(customers.map((c) => [c.id, c.name]));
+    const userName = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
+
+    return charges.map((charge, i) => {
+      const draft = drafts[i];
+      return {
+        id: charge.id,
+        amount: charge.amount,
+        paidAt: charge.paidAt,
+        createdAt: charge.createdAt,
+        externalPaymentId: charge.externalPaymentId,
+        createdByName: charge.createdByUserId ? (userName.get(charge.createdByUserId) ?? null) : null,
+        sale: draft
+          ? {
+              customerName: draft.customerId ? (customerName.get(draft.customerId) ?? 'Cliente') : 'Consumidor Final',
+              documentLetter: draft.documentLetter,
+              lines: draft.lines.map((l) => ({
+                articleName: variantName.get(l.articleVariantId) ?? 'Artículo',
+                quantity: l.quantity,
+                unitPrice: l.unitPrice ?? null,
+              })),
+            }
+          : null,
+      };
+    });
+  }
+
+  /** Confirma la venta guardada de un cobro QR acreditado que no llegó a
+   * venderse: la misma checkout() de siempre, con ese cobro pagando la fila
+   * de Mercado Pago. Si falla (stock, ARCA), el cobro sigue pendiente y se
+   * puede reintentar - nunca se le vuelve a cobrar al cliente. */
+  async confirmQrSale(intentId: string) {
+    const charge = await this.mercadoPagoQrService.getUnclaimedCharge(intentId);
+    const sale = charge.saleDraft as unknown as CheckoutSaleDto | null;
+    if (!sale) {
+      throw new BadRequestException(
+        'Este cobro no tiene la venta guardada: cargá los artículos en la Caja y, al cobrar con Mercado Pago, elegí usar este cobro',
+      );
+    }
+    return this.checkout({
+      ...sale,
+      registerId: charge.registerId,
+      payments: sale.payments.map((p) => (p.method === 'MERCADOPAGO' ? { ...p, paymentIntentId: charge.id } : p)),
+    });
+  }
+
   async closeSession(sessionId: string, dto: Parameters<CashSessionsService['closeSession']>[1]) {
+    // Un cobro QR acreditado sin venta es plata que entró sin factura: el
+    // arqueo no puede cerrar así (decisión del usuario, 2026-10-01).
+    const summary = await this.cashSessionsService.getSessionSummary(sessionId);
+    const unclaimed = await this.mercadoPagoQrService.listUnclaimedCharges(summary.session.registerId);
+    if (unclaimed.length > 0) {
+      throw new BadRequestException(
+        unclaimed.length === 1
+          ? 'Hay un cobro con QR acreditado sin venta en esta caja: confirmá la venta antes de cerrar el turno'
+          : `Hay ${unclaimed.length} cobros con QR acreditados sin venta en esta caja: confirmá las ventas antes de cerrar el turno`,
+      );
+    }
     const { session } = await this.cashSessionsService.closeSession(sessionId, dto);
     if (session.difference !== null && !session.difference.isZero()) {
       await this.accountingService.postCashSessionAdjustmentJournalEntry({

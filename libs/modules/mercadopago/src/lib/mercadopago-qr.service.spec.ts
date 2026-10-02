@@ -308,6 +308,47 @@ describe('MercadoPagoQrService.consumeForSale', () => {
   });
 });
 
+describe('MercadoPagoQrService - cobros acreditados sin venta', () => {
+  const registerId = 'aaaaaaaa-1111-2222-3333-444444444444';
+
+  it('lista sólo los cobros PAID de la caja que no pagaron ninguna venta, con la venta guardada', async () => {
+    const draft = { documentLetter: 'C', lines: [{ articleVariantId: 'v-1', quantity: 2 }], payments: [] };
+    const paid = makeIntent({ status: 'PAID', paidAt: new Date('2026-10-01T13:00:00Z'), createdAt: new Date('2026-10-01T12:58:00Z'), createdByUserId: 'user-1', saleDraft: draft });
+    const db = makeDb({ open: [paid] });
+    const { service } = makeService();
+
+    const result = await runInTenant(db, () => service.listUnclaimedCharges(registerId));
+
+    expect(db.paymentIntent.findMany).toHaveBeenCalledWith({
+      where: { documentType: 'POS_QR', documentId: registerId, status: 'PAID', consumedByInvoiceId: null },
+      orderBy: { paidAt: 'asc' },
+    });
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'intent-1', registerId, paidAt: '2026-10-01T13:00:00.000Z', saleDraft: draft }),
+    ]);
+  });
+
+  it('createCharge guarda la venta junto con el cobro', async () => {
+    const db = makeDb({ register: makeRegister({ mpExternalPosId: 'OPXPOS' }), open: [] });
+    const { service } = makeService();
+    const draft = { documentLetter: 'C', lines: [], payments: [] };
+
+    await runInTenant(db, () => service.createCharge(registerId, 1500, draft));
+
+    expect(db.paymentIntent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ saleDraft: draft }) });
+  });
+
+  it.each([
+    ['not credited yet', makeIntent({ status: 'PENDING' }), 'todavía no se acreditó'],
+    ['already used', makeIntent({ status: 'PAID', consumedByInvoiceId: 'inv-0' }), 'ya se usó'],
+  ])('getUnclaimedCharge refuses a charge %s', async (_label, intent, message) => {
+    const db = makeDb({ intent });
+    const { service } = makeService();
+
+    await expect(runInTenant(db, () => service.getUnclaimedCharge('intent-1'))).rejects.toThrow(new RegExp(message, 'i'));
+  });
+});
+
 describe('splitFiscalAddress', () => {
   it('splits "street number, city, state"', () => {
     expect(splitFiscalAddress('Av. Corrientes 1234, CABA, Ciudad Autónoma de Buenos Aires')).toEqual({

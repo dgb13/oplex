@@ -42,10 +42,10 @@ export class CheckoutPaymentDto {
   paymentIntentId?: string;
 }
 
-export class CheckoutDto {
-  @IsUUID()
-  registerId!: string;
-
+// La venta sin la caja: lo que CheckoutModal arma al cobrar. Se guarda tal
+// cual junto con el cobro QR (CreateQrChargeDto.sale) para poder retomarla
+// si el pago se acredita y la venta no llega a confirmarse.
+export class CheckoutSaleDto {
   // Si no llega, PosService la resuelve (y crea si hace falta) contra
   // "Consumidor Final" - ver PosService.resolveDefaultCustomer.
   @IsOptional()
@@ -90,4 +90,9 @@ export class CheckoutDto {
   @ValidateNested({ each: true })
   @Type(() => CheckoutPaymentDto)
   payments!: CheckoutPaymentDto[];
+}
+
+export class CheckoutDto extends CheckoutSaleDto {
+  @IsUUID()
+  registerId!: string;
 }

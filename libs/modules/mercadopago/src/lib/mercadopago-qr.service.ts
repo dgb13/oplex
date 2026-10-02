@@ -59,6 +59,17 @@ export interface QrCharge {
   externalPaymentId: string | null;
 }
 
+/** Cobro QR acreditado que todavía no pagó ninguna venta (ver
+ * listUnclaimedCharges). `saleDraft` es opaco para este módulo: lo arma y
+ * lo interpreta quien creó el cobro (PosService). */
+export interface UnclaimedQrCharge extends QrCharge {
+  registerId: string;
+  paidAt: string | null;
+  createdAt: string;
+  createdByUserId: string | null;
+  saleDraft: Prisma.JsonValue | null;
+}
+
 /**
  * Cobro con QR presencial en Caja (API de órdenes de MP, modo híbrido):
  * el cliente escanea el QR de la pantalla o el impreso de la caja con la app
@@ -209,7 +220,9 @@ export class MercadoPagoQrService {
     return this.getRegisterSetup(register.id);
   }
 
-  async createCharge(registerId: string, amount: number): Promise<QrCharge> {
+  /** `saleDraft`: la venta tal como está al generar el QR, para retomarla si
+   * el pago se acredita y la venta no llega a confirmarse. */
+  async createCharge(registerId: string, amount: number, saleDraft?: Prisma.InputJsonValue): Promise<QrCharge> {
     const register = await this.loadRegister(registerId);
     if (!register.mpExternalPosId) {
       throw new BadRequestException('Esta caja no tiene el QR de Mercado Pago activado');
@@ -242,6 +255,7 @@ export class MercadoPagoQrService {
         idempotencyKey: randomUUID(),
         createdByUserId: getUserId(),
         expiresAt,
+        saleDraft,
       },
     });
 
@@ -415,6 +429,29 @@ export class MercadoPagoQrService {
     return register;
   }
 
+  /** Cobros QR de la caja ya acreditados que no pagaron ninguna venta: el
+   * cliente pagó y falta la factura (falló el stock o ARCA, se cerró la
+   * ventana...). Más viejo primero. */
+  async listUnclaimedCharges(registerId: string): Promise<UnclaimedQrCharge[]> {
+    const intents = await getTenantDb().paymentIntent.findMany({
+      where: { documentType: POS_QR_DOCUMENT_TYPE, documentId: registerId, status: 'PAID', consumedByInvoiceId: null },
+      orderBy: { paidAt: 'asc' },
+    });
+    return intents.map(toUnclaimedCharge);
+  }
+
+  /** Un cobro de listUnclaimedCharges, para confirmar su venta. */
+  async getUnclaimedCharge(intentId: string): Promise<UnclaimedQrCharge> {
+    const intent = await this.loadCharge(intentId);
+    if (intent.status !== 'PAID') {
+      throw new BadRequestException('El cobro QR todavía no se acreditó');
+    }
+    if (intent.consumedByInvoiceId) {
+      throw new BadRequestException('Ese cobro QR ya se usó en otra venta');
+    }
+    return toUnclaimedCharge(intent);
+  }
+
   private async loadCharge(intentId: string): Promise<PaymentIntent> {
     const intent = await getTenantDb().paymentIntent.findUnique({ where: { id: intentId } });
     if (!intent || intent.documentType !== POS_QR_DOCUMENT_TYPE) {
@@ -469,6 +506,17 @@ function toCharge(intent: PaymentIntent): QrCharge {
     qrCodeBase64: intent.qrCodeBase64,
     expiresAt: intent.expiresAt?.toISOString() ?? null,
     externalPaymentId: intent.externalPaymentId,
+  };
+}
+
+function toUnclaimedCharge(intent: PaymentIntent): UnclaimedQrCharge {
+  return {
+    ...toCharge(intent),
+    registerId: intent.documentId,
+    paidAt: intent.paidAt?.toISOString() ?? null,
+    createdAt: intent.createdAt.toISOString(),
+    createdByUserId: intent.createdByUserId,
+    saleDraft: intent.saleDraft,
   };
 }
 
