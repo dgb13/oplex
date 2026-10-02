@@ -7,6 +7,8 @@ export interface TicketLine {
   quantity: number;
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
+  /** Stock en el depósito de la caja al agregarlo - tope de quantity. */
+  stock: number;
 }
 
 export function computeTotals(lines: TicketLine[]) {

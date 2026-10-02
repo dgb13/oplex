@@ -693,8 +693,12 @@ export class InventoryService {
         });
         const available = (priorLedger?.quantity ?? new Prisma.Decimal(0)).sub(reserved);
         if (available.lt(-delta)) {
+          // Sólo nombrar las reservas cuando las hay: si no, "parte está
+          // reservada" confunde (pasó en la prueba del QR en Caja).
           throw new BadRequestException(
-            'Insufficient available stock in this warehouse (some is reserved for production)',
+            reserved.gt(0)
+              ? `No hay stock disponible suficiente en este depósito: hay ${available.toString()} libres (${reserved.toString()} reservadas para producción) y se piden ${-delta}`
+              : `No hay stock suficiente en este depósito: hay ${available.toString()} y se piden ${-delta}`,
           );
         }
       }
@@ -708,7 +712,7 @@ export class InventoryService {
         data: { quantity: { increment: delta } },
       });
       if (decremented.count === 0) {
-        throw new BadRequestException('Insufficient stock in this warehouse');
+        throw new BadRequestException('No hay stock suficiente en este depósito');
       }
     } else {
       let newAvgUnitCost: Prisma.Decimal | undefined;

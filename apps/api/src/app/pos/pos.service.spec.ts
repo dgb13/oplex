@@ -16,7 +16,28 @@ jest.mock('@plexo/invoicing', () => ({}));
 jest.mock('@plexo/quotes', () => ({}));
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: withStockDefaults(db) as never }, fn);
+}
+
+/** Lo que PosService.assertStockAvailable lee - los tests que no prueban el
+ * stock no lo declaran (sin variantes que revisar = no hay faltante). */
+function withStockDefaults(db: Record<string, unknown>): Record<string, unknown> {
+  return {
+    articleVariant: { findMany: jest.fn().mockResolvedValue([]) },
+    warehouse: { findUnique: jest.fn().mockResolvedValue({ name: 'Depósito Central' }) },
+    ...db,
+  };
+}
+
+/** Stock de QA Marco en el depósito de la caja, para assertStockAvailable. */
+function stockDb(physical: number, reserved = 0) {
+  return {
+    articleVariant: {
+      findMany: jest.fn().mockResolvedValue([{ id: 'variant-1', article: { name: 'QA Marco (prueba)' } }]),
+    },
+    stockLedger: { findUnique: jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(physical) }) },
+    stockReservation: { aggregate: jest.fn().mockResolvedValue({ _sum: { quantityReserved: new Prisma.Decimal(reserved) } }) },
+  };
 }
 
 function makeRegister() {
@@ -177,7 +198,7 @@ describe('PosService - cobros QR sin venta', () => {
     cashSessionsService?: Record<string, jest.Mock>;
   }) {
     return new PosService(
-      {} as CashRegistersService,
+      { getById: jest.fn().mockResolvedValue(makeRegister()) } as unknown as CashRegistersService,
       (overrides.cashSessionsService ?? {}) as unknown as CashSessionsService,
       {} as SalesService,
       {} as AccountingService,
@@ -204,9 +225,46 @@ describe('PosService - cobros QR sin venta', () => {
     const createCharge = jest.fn().mockResolvedValue({ id: 'intent-1' });
     const service = makeService({ mercadoPagoQrService: { createCharge } });
 
-    await service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never);
+    await runInTenant(stockDb(49), () => service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never));
 
     expect(createCharge).toHaveBeenCalledWith('register-1', 16, expect.objectContaining({ documentLetter: 'C', lines: sale.lines }));
+  });
+
+  it('no genera el QR si falta stock en el depósito de la caja - el cliente nunca llega a pagar', async () => {
+    const createCharge = jest.fn();
+    const service = makeService({ mercadoPagoQrService: { createCharge } });
+
+    await expect(
+      runInTenant(stockDb(8), () => service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never)),
+    ).rejects.toThrow('No hay stock suficiente en Depósito Central - QA Marco (prueba): hay 8 y la venta lleva 16');
+    expect(createCharge).not.toHaveBeenCalled();
+  });
+
+  it('checkout corta por falta de stock antes de crear la venta', async () => {
+    const createSale = jest.fn();
+    const service = new PosService(
+      { getById: jest.fn().mockResolvedValue(makeRegister()) } as unknown as CashRegistersService,
+      { getOpenSession: jest.fn().mockResolvedValue({ id: 'session-1' }) } as unknown as CashSessionsService,
+      { createSale } as unknown as SalesService,
+      {} as AccountingService,
+      {} as ReportsFinancialService,
+      {} as MercadoPagoQrService,
+    );
+
+    await expect(
+      runInTenant(stockDb(8), () => service.checkout({ ...sale, registerId: 'register-1' } as never)),
+    ).rejects.toThrow(/hay 8 y la venta lleva 16/);
+    expect(createSale).not.toHaveBeenCalled();
+  });
+
+  it('lo reservado para producción no cuenta como disponible', async () => {
+    const createCharge = jest.fn();
+    const service = makeService({ mercadoPagoQrService: { createCharge } });
+
+    await expect(
+      runInTenant(stockDb(20, 10), () => service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never)),
+    ).rejects.toThrow(/hay 10 y la venta lleva 16/);
+    expect(createCharge).not.toHaveBeenCalled();
   });
 
   it('rechaza una venta cuya fila de Mercado Pago no es el monto del QR', async () => {

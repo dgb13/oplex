@@ -199,7 +199,7 @@ describe('InventoryService.recordMovement', () => {
             quantity: 5,
           }),
       ),
-    ).rejects.toThrow(/reserved for production/);
+    ).rejects.toThrow(/reservadas para producción/);
 
     // Rejected before ever touching the ledger or writing a movement - the
     // whole point of checking disponible BEFORE the atomic decrement.

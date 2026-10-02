@@ -20,12 +20,14 @@ interface ProductOption {
   sku: string;
   imageUrl: string | null;
   unitPrice: number;
-  totalStock: number;
+  // Stock en el depósito de ESTA caja, no la suma de todos los depósitos:
+  // la venta descuenta de acá (PosService.checkout → register.warehouseId).
+  stock: number;
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
 }
 
-function flatten(articles: Article[]): ProductOption[] {
+function flatten(articles: Article[], warehouseId: string | undefined): ProductOption[] {
   return articles.flatMap((article) =>
     article.variants.map((variant) => ({
       id: variant.id,
@@ -34,11 +36,15 @@ function flatten(articles: Article[]): ProductOption[] {
       sku: variant.sku,
       imageUrl: article.imageUrl,
       unitPrice: variant.unitPrice,
-      totalStock: variant.totalStock,
+      stock: variant.stockByWarehouse.find((row) => row.warehouseId === warehouseId)?.quantity ?? 0,
       taxRate: article.taxRate,
       taxKind: article.taxKind,
     })),
   );
+}
+
+function formatStock(n: number): string {
+  return n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
 }
 
 function PosSellScreen() {
@@ -82,7 +88,13 @@ function PosSellScreen() {
     refetchInterval: 15000,
   });
 
-  const products = useMemo(() => flatten(articlesQuery.data ?? []), [articlesQuery.data]);
+  const products = useMemo(
+    () => flatten(articlesQuery.data ?? [], register?.warehouseId),
+    [articlesQuery.data, register?.warehouseId],
+  );
+  // Línea del ticket que intentó pasarse del stock: muestra el aviso abajo
+  // de esa línea hasta que se baje la cantidad o se agregue otra cosa.
+  const [stockWarning, setStockWarning] = useState<string | null>(null);
   const filtered = useMemo(() => {
     const normalized = search.trim().toLowerCase();
     if (!normalized) return products;
@@ -96,11 +108,17 @@ function PosSellScreen() {
   const totals = computeTotals(lines);
 
   function addProduct(product: ProductOption) {
+    const existing = lines.find((l) => l.articleVariantId === product.id);
+    if ((existing?.quantity ?? 0) + 1 > product.stock) {
+      setStockWarning(product.id);
+      return;
+    }
+    setStockWarning(null);
     setLines((prev) => {
       const existing = prev.find((l) => l.articleVariantId === product.id);
       if (existing) {
         return prev.map((l) =>
-          l.articleVariantId === product.id ? { ...l, quantity: l.quantity + 1 } : l,
+          l.articleVariantId === product.id ? { ...l, quantity: l.quantity + 1, stock: product.stock } : l,
         );
       }
       return [
@@ -114,12 +132,19 @@ function PosSellScreen() {
           quantity: 1,
           taxRate: product.taxRate,
           taxKind: product.taxKind,
+          stock: product.stock,
         },
       ];
     });
   }
 
   function updateQuantity(articleVariantId: string, quantity: number) {
+    const line = lines.find((l) => l.articleVariantId === articleVariantId);
+    if (line && quantity > line.stock) {
+      setStockWarning(articleVariantId);
+      return;
+    }
+    setStockWarning(null);
     if (quantity <= 0) {
       setLines((prev) => prev.filter((l) => l.articleVariantId !== articleVariantId));
       return;
@@ -259,8 +284,14 @@ function PosSellScreen() {
                 // Sin precio (producto fabricado creado desde Recetas sin
                 // precio todavía) no se puede vender desde la caja - acá el
                 // precio no se edita, se carga en Inventario.
-                disabled={product.totalStock <= 0 || !(product.unitPrice > 0)}
-                title={!(product.unitPrice > 0) ? 'Sin precio de venta - cargalo en Inventario' : undefined}
+                disabled={product.stock <= 0 || !(product.unitPrice > 0)}
+                title={
+                  !(product.unitPrice > 0)
+                    ? 'Sin precio de venta - cargalo en Inventario'
+                    : product.stock <= 0
+                      ? `Sin stock en ${register?.warehouse.name ?? 'el depósito de esta caja'}`
+                      : undefined
+                }
                 className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:border-indigo-300 hover:shadow-md disabled:opacity-40 pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-dark:hover:border-indigo-500 pos-contrast:border-slate-700 pos-contrast:bg-black pos-contrast:hover:border-amber-400 pos-emerald:border-emerald-100 pos-emerald:bg-white pos-emerald:hover:border-emerald-300"
               >
                 <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-slate-100 pos-dark:bg-slate-800 pos-contrast:bg-slate-900 pos-emerald:bg-emerald-50">
@@ -288,6 +319,15 @@ function PosSellScreen() {
                     Sin precio
                   </p>
                 )}
+                <p
+                  className={`text-xs ${
+                    product.stock <= 0
+                      ? 'font-semibold text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400 pos-emerald:text-red-600'
+                      : 'text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500'
+                  }`}
+                >
+                  {product.stock <= 0 ? 'Sin stock' : `Stock: ${formatStock(product.stock)}`}
+                </p>
               </button>
             ))}
             {!articlesQuery.isLoading && filtered.length === 0 && (
@@ -307,43 +347,55 @@ function PosSellScreen() {
             ) : (
               <div className="flex flex-col gap-3">
                 {lines.map((line) => (
-                  <div key={line.articleVariantId} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {line.articleName}
-                        {line.variantLabel && (
-                          <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-                            {' '}
-                            · {line.variantLabel}
-                          </span>
-                        )}
+                  <div key={line.articleVariantId} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {line.articleName}
+                          {line.variantLabel && (
+                            <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                              {' '}
+                              · {line.variantLabel}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                          ${line.unitPrice.toFixed(2)} c/u
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => updateQuantity(line.articleVariantId, line.quantity - 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-6 text-center text-sm">{line.quantity}</span>
+                      <button
+                        onClick={() => updateQuantity(line.articleVariantId, line.quantity + 1)}
+                        disabled={line.quantity >= line.stock}
+                        title={line.quantity >= line.stock ? `No hay más stock (${formatStock(line.stock)})` : undefined}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-40 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                      <p className="w-16 text-right text-sm font-semibold">
+                        ${(line.unitPrice * line.quantity).toFixed(2)}
                       </p>
-                      <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-                        ${line.unitPrice.toFixed(2)} c/u
-                      </p>
+                      <button
+                        onClick={() => updateQuantity(line.articleVariantId, 0)}
+                        className="text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => updateQuantity(line.articleVariantId, line.quantity - 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-6 text-center text-sm">{line.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(line.articleVariantId, line.quantity + 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <p className="w-16 text-right text-sm font-semibold">
-                      ${(line.unitPrice * line.quantity).toFixed(2)}
-                    </p>
-                    <button
-                      onClick={() => updateQuantity(line.articleVariantId, 0)}
-                      className="text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {stockWarning === line.articleVariantId && (
+                      <p
+                        role="status"
+                        className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 pos-dark:bg-amber-950 pos-dark:text-amber-300 pos-contrast:bg-amber-950 pos-contrast:text-amber-300 pos-emerald:bg-amber-50 pos-emerald:text-amber-800"
+                      >
+                        No hay más stock: {formatStock(line.stock)} en {register?.warehouse.name ?? 'el depósito de esta caja'}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
 import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
+import { getReservedQuantity } from '@plexo/inventory';
 import { MercadoPagoQrService } from '@plexo/mercadopago';
 import { CashRegistersService, CashSessionsService } from '@plexo/pos';
 import { ReportsFinancialService } from '@plexo/reports-financial';
@@ -52,6 +53,8 @@ export class PosService {
     if (!session) {
       throw new BadRequestException('Abrí un turno antes de vender en esta caja');
     }
+
+    await this.assertStockAvailable(register.warehouseId, dto.lines);
 
     const customerId = dto.customerId ?? (await this.resolveDefaultCustomer()).id;
 
@@ -120,6 +123,9 @@ export class PosService {
       if (mpRows.length !== 1 || !new Prisma.Decimal(mpRows[0].amount).eq(new Prisma.Decimal(dto.amount))) {
         throw new BadRequestException('La venta tiene que tener una sola fila de Mercado Pago, por el monto del QR');
       }
+      // Antes de que el cliente pague, no después.
+      const register = await this.cashRegistersService.getById(dto.registerId);
+      await this.assertStockAvailable(register.warehouseId, dto.sale.lines);
     }
     return this.mercadoPagoQrService.createCharge(
       dto.registerId,
@@ -213,6 +219,46 @@ export class PosService {
       });
     }
     return session;
+  }
+
+  /**
+   * Stock disponible (físico menos lo reservado para producción, mismo
+   * criterio que InventoryService.recordMovement) en el depósito de la caja,
+   * ANTES de cobrar: con QR, si faltaba stock, el cliente pagaba y la venta
+   * fallaba después. recordMovement sigue siendo el control final (bajo
+   * lock); esto es para cortar antes y con un mensaje que nombre el artículo.
+   */
+  private async assertStockAvailable(warehouseId: string, lines: { articleVariantId: string; quantity: number }[]) {
+    const db = getTenantDb();
+    const needed = new Map<string, number>();
+    for (const line of lines) {
+      needed.set(line.articleVariantId, (needed.get(line.articleVariantId) ?? 0) + line.quantity);
+    }
+    const [variants, warehouse] = await Promise.all([
+      db.articleVariant.findMany({
+        where: { id: { in: [...needed.keys()] } },
+        select: { id: true, article: { select: { name: true } } },
+      }),
+      db.warehouse.findUnique({ where: { id: warehouseId }, select: { name: true } }),
+    ]);
+    const problems: string[] = [];
+    for (const variant of variants) {
+      const ledger = await db.stockLedger.findUnique({
+        where: { warehouseId_articleVariantId: { warehouseId, articleVariantId: variant.id } },
+        select: { quantity: true },
+      });
+      const reserved = await getReservedQuantity(db, { warehouseId, articleVariantId: variant.id });
+      const available = Prisma.Decimal.max((ledger?.quantity ?? new Prisma.Decimal(0)).sub(reserved), 0);
+      const quantity = needed.get(variant.id) ?? 0;
+      if (available.lt(quantity)) {
+        problems.push(`${variant.article.name}: hay ${available.toString()} y la venta lleva ${quantity}`);
+      }
+    }
+    if (problems.length > 0) {
+      throw new BadRequestException(
+        `No hay stock suficiente en ${warehouse?.name ?? 'el depósito de esta caja'} - ${problems.join('; ')}`,
+      );
+    }
   }
 
   /** Company placeholder para venta de mostrador sin cliente elegido -
