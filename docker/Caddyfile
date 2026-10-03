@@ -1,0 +1,25 @@
+# Un solo dominio: /api y /uploads van a la API, todo lo demás a la web.
+# Así la web y la API comparten origen (sin CORS) y resolveUploadUrl() de la
+# web arma bien las URLs de imágenes y adjuntos.
+#
+# Caddy saca y renueva solo el certificado HTTPS de Let's Encrypt.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /uploads/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy web:4200
+	}
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}

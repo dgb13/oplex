@@ -12,5 +12,12 @@ generated
 .claude
 .github
 *.md
+# El chat de ayuda del asistente los lee en runtime (ver Dockerfile.api).
+!docs/ayuda/**
 .env
 .env.*
+uploads
+*.log
+*.env
+tmp
+coverage

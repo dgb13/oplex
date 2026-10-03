@@ -1,26 +1,31 @@
 FROM node:24-alpine AS base
 WORKDIR /workspace
+ENV NX_DAEMON=false
 
-FROM base AS deps
-COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/package.json
-RUN npm ci
-
-FROM deps AS build
+FROM base AS build
 COPY . .
-RUN npx prisma generate
+RUN --mount=type=cache,target=/root/.npm npm ci
+# prisma.config.ts exige DATABASE_URL aunque generate no se conecte.
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npx prisma generate
 RUN npx nx build api --configuration=production
 
 FROM base AS runtime
 ENV NODE_ENV=production
-# pg_dump for BackupSchedulerService's daily cron (see .env.example's
-# BACKUP_STORAGE_DIR) - matches this image's own Postgres major version
-# closely enough via Alpine's postgresql-client package; without it the
-# cron just logs a clean FAILED row instead of crashing (see that service).
-RUN apk add --no-cache postgresql-client
-COPY --from=build /workspace/apps/api/dist ./dist
-COPY --from=build /workspace/libs/shared/database/src/generated ./libs/shared/database/src/generated
+# pg_dump para el backup diario (BackupSchedulerService). Misma versión mayor
+# que el Postgres de docker-compose.prod.yml.
+RUN apk add --no-cache postgresql17-client
+# Las librerías @plexo/* son workspaces de npm: node_modules/@plexo/* son
+# enlaces a libs/*, que tienen que viajar con su dist/ y su package.json.
+COPY --from=build /workspace/package.json /workspace/package-lock.json ./
 COPY --from=build /workspace/node_modules ./node_modules
-COPY --from=build /workspace/package.json ./package.json
+COPY --from=build /workspace/libs ./libs
+COPY --from=build /workspace/apps/api/package.json ./apps/api/package.json
+COPY --from=build /workspace/apps/api/dist ./apps/api/dist
+# Lo lee AssistantHelpService (chat de ayuda del asistente) desde process.cwd().
+COPY --from=build /workspace/docs/ayuda ./docs/ayuda
+# Para `prisma migrate deploy` (servicio migrate del compose).
+COPY --from=build /workspace/prisma.config.ts ./prisma.config.ts
+RUN mkdir -p /workspace/uploads /backups && chown -R node:node /workspace/uploads /backups
+USER node
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["node", "apps/api/dist/main.js"]

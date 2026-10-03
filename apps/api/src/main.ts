@@ -61,8 +61,13 @@ async function bootstrap() {
   // request from the browser fails preflight with a CORS error that never
   // reaches this server's logs, since the browser blocks it client-side
   // before sending the real request.
+  // En producción la web y la API comparten origen (el proxy manda /api y
+  // /uploads a la API), así que CORS no entra en juego; FRONTEND_URL queda
+  // permitido igual por si se sirven en dominios distintos.
+  const corsOrigins = ['http://localhost:4200', 'http://localhost:3000'];
+  if (process.env['FRONTEND_URL']) corsOrigins.push(process.env['FRONTEND_URL']);
   app.enableCors({
-    origin: ['http://localhost:4200', 'http://localhost:3000'],
+    origin: corsOrigins,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

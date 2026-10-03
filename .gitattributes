@@ -1,0 +1,4 @@
+# Archivos que corren dentro de contenedores Linux: siempre con LF, aunque
+# se editen en Windows (core.autocrlf=true los pasaría a CRLF y sh falla).
+*.sh text eol=lf
+docker/Caddyfile text eol=lf

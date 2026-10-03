@@ -1,0 +1,92 @@
+# Producción. En el servidor, junto a este archivo, va un .env armado a partir
+# de .env.production.example. Lo usa el deploy de GitHub Actions
+# (.github/workflows/deploy.yml); el paso a paso está en docs/DEPLOY.md.
+#
+# docker-compose.yml (sin .prod) sigue siendo el de desarrollo.
+
+x-image-prefix: &api_image ${OPLEX_IMAGE_PREFIX:-ghcr.io/dgb13/oplex}-api:${IMAGE_TAG:-latest}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: plexo
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?falta APP_DB_PASSWORD en .env}
+    # Sin "ports": la base sólo se ve desde adentro de la red de Docker.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init-prod:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d plexo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: *api_image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/plexo?schema=public
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    restart: 'no'
+
+  api:
+    image: *api_image
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      PORT: 3000
+      APP_DATABASE_URL: postgresql://plexo_app:${APP_DB_PASSWORD}@postgres:5432/plexo?schema=public
+      # Sólo para pg_dump del backup diario.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/plexo?schema=public
+      BACKUP_STORAGE_DIR: /backups
+      FRONTEND_URL: https://${DOMAIN}
+      OAUTH_CALLBACK_BASE_URL: https://${DOMAIN}/api
+      MP_OAUTH_REDIRECT_URI: https://${DOMAIN}/api/connectors/mercadopago/callback
+    volumes:
+      - uploads:/workspace/uploads
+      - backups:/backups
+
+  web:
+    image: ${OPLEX_IMAGE_PREFIX:-ghcr.io/dgb13/oplex}-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # La landing pide los planes desde el servidor de Next: va directo al
+      # contenedor de la API, sin salir a internet.
+      INTERNAL_API_BASE_URL: http://api:3000/api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:?falta DOMAIN en .env}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  uploads:
+  backups:
+  caddy_data:
+  caddy_config:

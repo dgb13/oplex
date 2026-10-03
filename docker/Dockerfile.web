@@ -1,20 +1,28 @@
 FROM node:24-alpine AS base
 WORKDIR /workspace
+ENV NX_DAEMON=false
 
-FROM base AS deps
-COPY package.json package-lock.json ./
-COPY apps/web/package.json apps/web/package.json
-RUN npm ci
-
-FROM deps AS build
+FROM base AS build
+# Next graba las NEXT_PUBLIC_* en el JS del navegador al compilar: cambiar
+# el dominio pide reconstruir la imagen, no alcanza con reiniciarla.
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_WHATSAPP_NUMBER
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_WHATSAPP_NUMBER=$NEXT_PUBLIC_WHATSAPP_NUMBER \
+    NEXT_TELEMETRY_DISABLED=1
 COPY . .
+RUN --mount=type=cache,target=/root/.npm npm ci
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npx prisma generate
 RUN npx nx build web --configuration=production
 
 FROM base AS runtime
-ENV NODE_ENV=production
-ENV PORT=4200
-COPY --from=build /workspace/apps/web/.next/standalone ./
-COPY --from=build /workspace/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build /workspace/apps/web/public ./apps/web/public
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=4200 \
+    HOSTNAME=0.0.0.0
+COPY --from=build --chown=node:node /workspace/apps/web/.next/standalone ./
+COPY --from=build --chown=node:node /workspace/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=node:node /workspace/apps/web/public ./apps/web/public
+USER node
 EXPOSE 4200
 CMD ["node", "apps/web/server.js"]

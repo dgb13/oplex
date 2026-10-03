@@ -12,7 +12,10 @@ export const metadata = {
     'Facturación ARCA, Caja, stock, compras, producción y contabilidad en un solo sistema, con un asistente de IA que responde por WhatsApp. Probalo 15 días gratis.',
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
+// Esto corre en el servidor de Next: en Docker, INTERNAL_API_BASE_URL va
+// directo al contenedor de la API en vez de salir a internet y volver.
+const API_BASE_URL =
+  process.env.INTERNAL_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
 
 // Planes y precios en vivo desde la API pública (GET /plans), así un cambio
 // de precio en Admin se ve en la landing sin tocar código. Cacheado 5 min.

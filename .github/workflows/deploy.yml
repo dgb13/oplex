@@ -1,0 +1,129 @@
+name: Deploy
+
+# Se dispara a mano: Actions → Deploy → Run workflow, eligiendo la rama.
+# Un push a main NO publica; sólo corre el CI.
+#
+# Volver atrás: correrlo con "image_tag" = el commit (sha corto) de una
+# versión anterior. No compila nada, sólo vuelve a levantar esas imágenes.
+#
+# Configuración (Settings → Environments → production): ver docs/DEPLOY.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Sólo para volver atrás: sha corto de una versión ya publicada. Vacío = publicar la rama elegida.'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    if: inputs.image_tag == ''
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: tag
+        run: echo "tag=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Imagen de la API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-api:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Imagen de la web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://${{ vars.DOMAIN }}/api
+            NEXT_PUBLIC_WHATSAPP_NUMBER=${{ vars.NEXT_PUBLIC_WHATSAPP_NUMBER }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-web:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  deploy:
+    needs: build
+    # Corre también cuando build se salteó (vuelta atrás con image_tag).
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TAG: ${{ inputs.image_tag != '' && inputs.image_tag || needs.build.outputs.tag }}
+      APP_DIR: ${{ vars.APP_DIR || '/opt/oplex' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Llave SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Copiar compose, Caddyfile y scripts de la base
+        run: |
+          tar czf deploy-files.tgz docker-compose.prod.yml docker/Caddyfile docker/postgres-init-prod
+          scp -i ~/.ssh/id_deploy deploy-files.tgz "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/oplex-deploy-files.tgz"
+
+      - name: Levantar la versión ${{ env.TAG }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            TAG="$TAG" APP_DIR="$APP_DIR" GHCR_USER="${{ github.actor }}" GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "$APP_DIR"
+          tar xzf /tmp/oplex-deploy-files.tgz && rm /tmp/oplex-deploy-files.tgz
+          # Las imágenes en ghcr.io son privadas: el token del job sirve
+          # mientras dura el deploy.
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=\"$TAG\"/" .env
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker logout ghcr.io
+          docker image prune -f
+          docker compose -f docker-compose.prod.yml ps
+          REMOTE
+
+      - name: Chequear que responde
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "https://${{ vars.DOMAIN }}/api/plans" > /dev/null; then
+              echo "OK: https://${{ vars.DOMAIN }} responde con la versión $TAG"; exit 0
+            fi
+            sleep 10
+          done
+          echo "La API no respondió en 5 minutos. Revisar: docker compose -f docker-compose.prod.yml logs api"
+          exit 1
