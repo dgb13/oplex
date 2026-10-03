@@ -28,9 +28,12 @@ function bucketRate(rate: number, amount: number, into: typeof ZERO_BUCKET): voi
  * Facturación y Cotizaciones (a diferencia del backend, que sí duplica esta
  * lógica entre InvoicingService/QuoteService por la regla de "un lib module
  * nunca importa el Service de otro módulo" - acá no aplica esa regla). */
-export function computeLineTotals(line: VatSummaryLine, pricesIncludeTax: boolean) {
-  const rate = line.taxRate ?? 0;
-  const kind = line.taxKind ?? 'GRAVADO';
+/** withoutVat: comprobante sin IVA (Factura C - emisor Monotributo/Exento):
+ * mismo criterio que el backend, la alícuota se ignora y el precio es el
+ * final. */
+export function computeLineTotals(line: VatSummaryLine, pricesIncludeTax: boolean, withoutVat = false) {
+  const rate = withoutVat ? 0 : (line.taxRate ?? 0);
+  const kind = withoutVat ? 'GRAVADO' : (line.taxKind ?? 'GRAVADO');
   const rawUnitPrice = line.unitPrice ?? 0;
   const unitPrice =
     pricesIncludeTax && kind === 'GRAVADO' && rate > 0 ? rawUnitPrice / (1 + rate / 100) : rawUnitPrice;

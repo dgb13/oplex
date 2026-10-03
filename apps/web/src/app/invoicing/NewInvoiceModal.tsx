@@ -95,7 +95,9 @@ export default function NewInvoiceModal({ onClose }: Props) {
   }, [customerId, letterSuggestion.letter]);
 
   const validOtherTaxLines = otherTaxLines.filter((l) => l.concept.trim() && l.amount > 0);
-  const totals = computeSalesTotals(lines, pricesIncludeTax, validOtherTaxLines);
+  // Factura C (emisor Monotributo/Exento): sin IVA, igual que el backend.
+  const withoutVat = documentLetter === 'C';
+  const totals = computeSalesTotals(lines, pricesIncludeTax, validOtherTaxLines, withoutVat);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -109,7 +111,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
           selectedCurrency && !selectedCurrency.isBase && exchangeRateOverride
             ? Number(exchangeRateOverride)
             : undefined,
-        pricesIncludeTax,
+        pricesIncludeTax: pricesIncludeTax && !withoutVat,
         lines: lines.map((l) => ({
           articleVariantId: l.articleVariantId,
           quantity: l.quantity,
@@ -210,6 +212,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                 onPricesIncludeTaxChange={setPricesIncludeTax}
                 currencyCode={selectedCurrency?.code}
                 addInputRef={addArticleRef}
+                withoutVat={withoutVat}
               />
 
               {showOtherTaxes || otherTaxLines.length > 0 ? (
@@ -289,7 +292,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
             </section>
 
             <div className="mt-auto flex flex-col gap-3">
-              <SalesTotalsPanel totals={totals} currencyCode={selectedCurrency?.code} />
+              <SalesTotalsPanel totals={totals} currencyCode={selectedCurrency?.code} withoutVat={withoutVat} />
               {!afipConfigured && (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}

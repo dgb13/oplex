@@ -14,6 +14,7 @@ import {
   type ArticleVariant,
   type Currency,
   type DiscountType,
+  type DocumentLetter,
   type Invoice,
   type InvoiceLine,
   type CreditNote,
@@ -27,6 +28,7 @@ import {
   type ReminderTone,
   type TaxDefinition,
   type TaxLineKind,
+  type TenantTaxCondition,
 } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { CalendarEntry } from '@plexo/types';
@@ -57,6 +59,32 @@ const AFIP_TRIBUTO_ID: Record<InvoiceTaxLineKind, number> = {
   INTERNAL: 4,
   OTHER: 99,
 };
+
+/**
+ * La letra que puede emitir el tenant según su condición frente al IVA:
+ * Monotributo/Exento sólo C; Responsable Inscripto A, B o M, nunca C. La
+ * pantalla ya la fija (documentLetter.ts en el front), esto es para que
+ * ningún otro camino emita una letra equivocada - ARCA la rechazaría, o peor,
+ * la aceptaría. Sin condición cargada no se valida (el tenant todavía no la
+ * configuró en Preferencias).
+ */
+export function assertDocumentLetterAllowed(
+  ownTaxCondition: TenantTaxCondition | null,
+  documentLetter: DocumentLetter,
+): void {
+  if (!ownTaxCondition) {
+    return;
+  }
+  const noVatIssuer = ownTaxCondition === 'MONOTRIBUTO' || ownTaxCondition === 'EXENTO';
+  if (noVatIssuer && documentLetter !== 'C') {
+    throw new BadRequestException(
+      `Tu empresa es ${ownTaxCondition === 'MONOTRIBUTO' ? 'Monotributo' : 'Exenta'}: sólo puede emitir Factura C, no ${documentLetter}`,
+    );
+  }
+  if (!noVatIssuer && documentLetter === 'C') {
+    throw new BadRequestException('Tu empresa es Responsable Inscripto: no puede emitir Factura C (corresponde A o B)');
+  }
+}
 
 // Tope de comprobantes huérfanos que se registran de una vez (ver
 // recordUnregisteredVouchers). Más que esto no es un CAE suelto: es otro
@@ -311,6 +339,13 @@ export class InvoicingService {
       throw new BadRequestException('This company is not flagged as a customer');
     }
 
+    const settings = await db.tenantSettings.findUnique({ where: { tenantId }, select: { ownTaxCondition: true } });
+    assertDocumentLetterAllowed(settings?.ownTaxCondition ?? null, dto.documentLetter);
+    // Factura C (emisor Monotributo/Exento) no lleva IVA: ARCA exige
+    // ImpIVA = 0 y el precio es el final. La alícuota del artículo (o la que
+    // venga en la línea) se ignora - ver withoutVat abajo.
+    const withoutVat = dto.documentLetter === 'C';
+
     const currency = await db.currency.findUnique({ where: { id: dto.currencyId } });
     if (!currency) {
       throw new NotFoundException('Currency not found');
@@ -351,8 +386,12 @@ export class InvoicingService {
       // clasificación fiscal del artículo en el catálogo, sólo esta factura.
       // Del catálogo, la versión del impuesto vigente hoy - no la que quedó
       // guardada en el artículo (ver resolveCurrentTaxDefinition).
-      const { rate: taxRate, kind: taxKind } =
-        line.taxKind !== undefined || line.taxRate !== undefined
+      // Factura C: sin IVA y todo como neto (GRAVADO al 0%) - ARCA exige
+      // ImpOpEx/ImpTotConc/ImpIVA en 0 para la clase C, así que tampoco hay
+      // exento ni no gravado aunque el artículo lo diga.
+      const { rate: taxRate, kind: taxKind } = withoutVat
+        ? { rate: new Prisma.Decimal(0), kind: 'GRAVADO' as TaxLineKind }
+        : line.taxKind !== undefined || line.taxRate !== undefined
           ? this.resolveLineTaxOverride(line.taxKind, line.taxRate)
           : this.resolveLineTax(await resolveCurrentTaxDefinition(db, variant.article.taxDefinition));
       // rawUnitPrice: override de línea tal cual (ya en la moneda del

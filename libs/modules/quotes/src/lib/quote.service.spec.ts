@@ -35,10 +35,49 @@ function makeCreateDb(overrides: Record<string, unknown> = {}) {
     currency: { findUnique: jest.fn().mockResolvedValue({ id: 'currency-1', code: 'ARS' }) },
     articleVariant: { findUnique: makeVariantLookup({ 'variant-1': makeVariant() }) },
     taxDefinition: { findFirst: jest.fn().mockResolvedValue(null) },
+    tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
     quote: { create: jest.fn((args) => Promise.resolve({ id: 'quote-1', ...args.data })) },
     ...overrides,
   };
 }
+
+describe('QuoteService.create - emisor Monotributo/Exento', () => {
+  it.each(['MONOTRIBUTO', 'EXENTO'])('%s: no suma IVA aunque el artículo tenga alícuota (factura C)', async (condition) => {
+    const db = makeCreateDb({
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: condition }) },
+    });
+    const service = makeService();
+
+    const result = await runAsUser(db, () =>
+      service.create({
+        customerId: 'customer-1',
+        currencyId: 'currency-1',
+        lines: [{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 150, taxRate: 21 }],
+      } as never),
+    );
+
+    expect(result.total.toNumber()).toBe(300);
+    const createdLine = (db.quote.create as jest.Mock).mock.calls[0][0].data.lines.createMany.data[0];
+    expect(createdLine.taxRate.toNumber()).toBe(0);
+  });
+
+  it('Responsable Inscripto: sigue sumando el IVA (sin cambios)', async () => {
+    const db = makeCreateDb({
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: 'RESPONSABLE_INSCRIPTO' }) },
+    });
+    const service = makeService();
+
+    const result = await runAsUser(db, () =>
+      service.create({
+        customerId: 'customer-1',
+        currencyId: 'currency-1',
+        lines: [{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 150 }],
+      } as never),
+    );
+
+    expect(result.total.toNumber()).toBeCloseTo(363, 2);
+  });
+});
 
 describe('QuoteService.create', () => {
   it('resuelve el precio y la alícuota del catálogo cuando la línea no las anula', async () => {

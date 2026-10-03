@@ -140,6 +140,14 @@ export class QuoteService {
     const db = getTenantDb();
     const lineInputs: Omit<Prisma.QuoteLineCreateManyInput, 'tenantId' | 'quoteId'>[] = [];
     let total = new Prisma.Decimal(0);
+    // Un emisor Monotributo/Exento factura C, sin IVA: la cotización tampoco
+    // lo suma (la cotización todavía no tiene letra - se decide por la
+    // condición del tenant, la misma que fija la C al facturar).
+    const settings = await db.tenantSettings.findUnique({
+      where: { tenantId: getTenantId() },
+      select: { ownTaxCondition: true },
+    });
+    const withoutVat = settings?.ownTaxCondition === 'MONOTRIBUTO' || settings?.ownTaxCondition === 'EXENTO';
 
     for (const line of lines) {
       const variant = await db.articleVariant.findUnique({
@@ -152,8 +160,9 @@ export class QuoteService {
 
       // Mismo criterio que InvoicingService.createInvoice: la versión del
       // impuesto vigente hoy, no la guardada en el artículo.
-      const { rate: taxRate, kind: taxKind } =
-        line.taxKind !== undefined || line.taxRate !== undefined
+      const { rate: taxRate, kind: taxKind } = withoutVat
+        ? { rate: new Prisma.Decimal(0), kind: 'GRAVADO' as TaxLineKind }
+        : line.taxKind !== undefined || line.taxRate !== undefined
           ? this.resolveLineTaxOverride(line.taxKind, line.taxRate)
           : this.resolveLineTax(await resolveCurrentTaxDefinition(db, variant.article.taxDefinition));
 

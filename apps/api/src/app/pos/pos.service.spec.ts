@@ -263,7 +263,7 @@ describe('PosService - cobros QR sin venta', () => {
 
     await expect(
       runInTenant(stockDb(20, 10), () => service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never)),
-    ).rejects.toThrow(/hay 10 y la venta lleva 16/);
+    ).rejects.toThrow('hay 10 libres (10 reservadas para producción) y la venta lleva 16');
     expect(createCharge).not.toHaveBeenCalled();
   });
 

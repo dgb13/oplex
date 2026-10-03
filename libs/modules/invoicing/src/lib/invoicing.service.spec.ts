@@ -5,7 +5,7 @@ import type { SubscriptionService } from '@plexo/subscriptions';
 import type { BnaExchangeRatePort } from './bna-exchange-rate.port.js';
 import type { EmailSender } from './email-sender.port.js';
 import type { ElectronicInvoicingPort } from './electronic-invoicing.port.js';
-import { InvoicingService } from './invoicing.service.js';
+import { assertDocumentLetterAllowed, InvoicingService } from './invoicing.service.js';
 import type { InvoicePdfService } from './pdf/invoice-pdf.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T, userId = 'user-1'): T {
@@ -23,6 +23,10 @@ function withNumberingDefaults(db: Record<string, unknown>): Record<string, unkn
   }
   if (!db.$executeRaw) {
     db.$executeRaw = jest.fn().mockResolvedValue(0);
+  }
+  // Sin condición frente al IVA cargada: no se valida la letra (como antes).
+  if (!db.tenantSettings) {
+    db.tenantSettings = { findUnique: jest.fn().mockResolvedValue(null) };
   }
   // resolveCurrentTaxDefinition: sin otra versión vigente, usa la del artículo.
   if (!db.taxDefinition) {
@@ -1648,6 +1652,8 @@ describe('InvoicingService - numeración con ARCA', () => {
   function makeNumberingDb(localLastNumber: string | null) {
     return {
       $executeRaw: jest.fn().mockResolvedValue(0),
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      taxDefinition: { findFirst: jest.fn().mockResolvedValue(null) },
       company: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'customer-1',
@@ -1785,7 +1791,10 @@ describe('InvoicingService - numeración con ARCA', () => {
     );
 
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ code: { in: ['IVA21'] } }) }));
-    const line = db.invoice.create.mock.calls[0][0].data.lines.createMany.data[0];
+    const created = db.invoice.create.mock.calls[0][0].data as {
+      lines: { createMany: { data: { taxRate: Prisma.Decimal; lineTotal: Prisma.Decimal }[] } };
+    };
+    const line = created.lines.createMany.data[0];
     expect(line.taxRate.toNumber()).toBe(21);
     expect(line.lineTotal.toNumber()).toBe(121);
   });
@@ -2009,5 +2018,157 @@ describe('InvoicingService - comprobantes de ARCA sin registrar', () => {
 
     expect(result.creditNoteNumber).toBe('00000002');
     expect(db.arcaUnregisteredVoucher.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('assertDocumentLetterAllowed (protección de la letra)', () => {
+  it.each([
+    ['MONOTRIBUTO', 'C'],
+    ['EXENTO', 'C'],
+    ['RESPONSABLE_INSCRIPTO', 'A'],
+    ['RESPONSABLE_INSCRIPTO', 'B'],
+    ['RESPONSABLE_INSCRIPTO', 'M'],
+    [null, 'B'],
+    [null, 'C'],
+  ] as const)('%s puede emitir %s', (condition, letter) => {
+    expect(() => assertDocumentLetterAllowed(condition, letter)).not.toThrow();
+  });
+
+  it.each([
+    ['MONOTRIBUTO', 'A', /sólo puede emitir Factura C/],
+    ['MONOTRIBUTO', 'B', /sólo puede emitir Factura C/],
+    ['EXENTO', 'B', /Exenta: sólo puede emitir Factura C/],
+    ['RESPONSABLE_INSCRIPTO', 'C', /no puede emitir Factura C/],
+  ] as const)('%s no puede emitir %s', (condition, letter, message) => {
+    expect(() => assertDocumentLetterAllowed(condition, letter)).toThrow(message);
+  });
+});
+
+describe('InvoicingService.createInvoice - Factura C sin IVA', () => {
+  function makeDb(ownTaxCondition: string | null, taxDefinition: Record<string, unknown> | null) {
+    return {
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue(ownTaxCondition ? { ownTaxCondition } : null) },
+      taxDefinition: { findFirst: jest.fn().mockResolvedValue(null) },
+      company: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'customer-1',
+          active: true,
+          name: 'Consumidor Final',
+          taxId: null,
+          email: null,
+          taxCondition: null,
+          roles: [{ role: 'CUSTOMER' }],
+        }),
+      },
+      currency: { findUnique: jest.fn().mockResolvedValue({ id: 'currency-1', code: 'ARS', isBase: true }) },
+      articleVariant: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'variant-1',
+          unitPrice: new Prisma.Decimal(100),
+          article: { isService: false, taxDefinition },
+        }),
+      },
+      invoice: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn((args: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            ...makeFinalInvoiceFixture(),
+            ...args.data,
+            lines: [],
+            taxLines: [],
+            afipCae: null,
+            afipCaeExpiry: null,
+          }),
+        ),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      arcaUnregisteredVoucher: { findFirst: jest.fn().mockResolvedValue(null), createMany: jest.fn() },
+    };
+  }
+
+  function makeService(electronicInvoicing: ElectronicInvoicingPort) {
+    return new InvoicingService(
+      makeEmailSender(),
+      electronicInvoicing,
+      makeEventEmitter(),
+      makeSubscriptionService(),
+      makeBnaExchangeRate(),
+      makeInvoicePdfService(),
+    );
+  }
+
+  type CreatedInvoice = {
+    taxTotal: Prisma.Decimal;
+    total: Prisma.Decimal;
+    lines: { createMany: { data: { taxRate: Prisma.Decimal; taxKind: string; lineTotal: Prisma.Decimal }[] } };
+  };
+
+  const iva21 = { id: 'iva21', code: 'IVA21', calculationType: 'PERCENTAGE', rate: new Prisma.Decimal(21) };
+  const exento = { id: 'exento', code: 'EXENTO', calculationType: 'EXENTO', rate: null };
+
+  it('un monotributista factura C un artículo con IVA 21% sin sumarle IVA: el precio es el final', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb('MONOTRIBUTO', iva21);
+
+    await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }));
+
+    const created = db.invoice.create.mock.calls[0][0].data as unknown as CreatedInvoice;
+    expect(created.taxTotal.toNumber()).toBe(0);
+    expect(created.total.toNumber()).toBe(100);
+    expect(created.lines.createMany.data[0].taxRate.toNumber()).toBe(0);
+    const request = (electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0];
+    expect(request.taxAmount.toNumber()).toBe(0);
+    expect(request.netAmount.toNumber()).toBe(100);
+    expect(request.exemptAmount.toNumber()).toBe(0);
+  });
+
+  it('también ignora una alícuota que venga forzada en la línea', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb('MONOTRIBUTO', null);
+
+    await runInTenant(db, () =>
+      makeService(electronicInvoicing).createInvoice({
+        ...baseDto,
+        documentLetter: 'C',
+        lines: [{ articleVariantId: 'variant-1', quantity: 1, taxKind: 'GRAVADO', taxRate: 21 }],
+      }),
+    );
+
+    const created = db.invoice.create.mock.calls[0][0].data as unknown as CreatedInvoice;
+    expect(created.total.toNumber()).toBe(100);
+  });
+
+  it('un artículo exento en una C va como neto (ARCA exige ImpOpEx = 0 en la clase C)', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb('MONOTRIBUTO', exento);
+
+    await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }));
+
+    const request = (electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0];
+    expect(request.exemptAmount.toNumber()).toBe(0);
+    expect(request.netAmount.toNumber()).toBe(100);
+  });
+
+  it('un Responsable Inscripto sigue sumando el IVA del artículo en una B (sin cambios)', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb('RESPONSABLE_INSCRIPTO', iva21);
+
+    await runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'B' }));
+
+    const created = db.invoice.create.mock.calls[0][0].data as unknown as CreatedInvoice;
+    expect(created.taxTotal.toNumber()).toBe(21);
+    expect(created.total.toNumber()).toBe(121);
+  });
+
+  it('un monotributista no puede emitir una B: corta antes de numerar o pedir CAE', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb('MONOTRIBUTO', iva21);
+
+    await expect(
+      runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'B' })),
+    ).rejects.toThrow(/sólo puede emitir Factura C/);
+    expect(electronicInvoicing.lastAuthorizedNumber).not.toHaveBeenCalled();
+    expect(db.invoice.create).not.toHaveBeenCalled();
   });
 });

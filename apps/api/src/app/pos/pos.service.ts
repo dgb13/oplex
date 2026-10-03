@@ -251,7 +251,13 @@ export class PosService {
       const available = Prisma.Decimal.max((ledger?.quantity ?? new Prisma.Decimal(0)).sub(reserved), 0);
       const quantity = needed.get(variant.id) ?? 0;
       if (available.lt(quantity)) {
-        problems.push(`${variant.article.name}: hay ${available.toString()} y la venta lleva ${quantity}`);
+        // Nombrar las reservas cuando las hay: si no, "hay 0" contradice
+        // el stock físico que el usuario ve en Inventario.
+        problems.push(
+          reserved.gt(0)
+            ? `${variant.article.name}: hay ${available.toString()} libres (${reserved.toString()} reservadas para producción) y la venta lleva ${quantity}`
+            : `${variant.article.name}: hay ${available.toString()} y la venta lleva ${quantity}`,
+        );
       }
     }
     if (problems.length > 0) {

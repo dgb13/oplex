@@ -54,6 +54,8 @@ export function computeSalesTotals(
   lines: SalesLine[],
   pricesIncludeTax: boolean,
   otherTaxLines?: { amount: number }[],
+  // Factura C / emisor Monotributo-Exento: sin IVA (ver computeLineTotals).
+  withoutVat = false,
 ): SalesTotals {
   let netTaxed = 0;
   let netExempt = 0;
@@ -62,7 +64,7 @@ export function computeSalesTotals(
   for (const line of lines) {
     if (!line.articleVariantId) continue;
     lineCount += 1;
-    const { netAmount, taxAmount, taxRate, taxKind } = computeLineTotals(line, pricesIncludeTax);
+    const { netAmount, taxAmount, taxRate, taxKind } = computeLineTotals(line, pricesIncludeTax, withoutVat);
     if (taxKind === 'GRAVADO') {
       netTaxed += netAmount;
       if (taxAmount > 0) vat.set(taxRate, (vat.get(taxRate) ?? 0) + taxAmount);

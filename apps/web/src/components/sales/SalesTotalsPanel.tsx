@@ -6,7 +6,16 @@ const AMOUNT_FORMAT = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2,
 
 /** Totales en vivo del panel lateral: neto, IVA por alícuota (sólo las que
  * aparecen), otros tributos si hay, y el total grande. */
-export default function SalesTotalsPanel({ totals, currencyCode }: { totals: SalesTotals; currencyCode?: string }) {
+export default function SalesTotalsPanel({
+  totals,
+  currencyCode,
+  withoutVat = false,
+}: {
+  totals: SalesTotals;
+  currencyCode?: string;
+  // Factura C: no hay neto gravado ni IVA que discriminar, sólo subtotal.
+  withoutVat?: boolean;
+}) {
   const row = (label: string, value: number) => (
     <div className="flex justify-between gap-3 text-sm text-muted-foreground">
       <span>{label}</span>
@@ -21,7 +30,7 @@ export default function SalesTotalsPanel({ totals, currencyCode }: { totals: Sal
           ? 'Sin artículos todavía'
           : `${totals.lineCount} artículo${totals.lineCount === 1 ? '' : 's'}`}
       </p>
-      {row('Neto gravado', totals.netTaxed)}
+      {row(withoutVat ? 'Subtotal' : 'Neto gravado', totals.netTaxed)}
       {totals.netExempt > 0 && row('Exento / no gravado', totals.netExempt)}
       {totals.vatByRate.map((v) => (
         <div key={v.rate}>{row(`IVA ${formatRate(v.rate)}%`, v.amount)}</div>

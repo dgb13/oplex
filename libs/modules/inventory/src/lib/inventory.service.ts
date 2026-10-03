@@ -52,6 +52,10 @@ export interface WarehouseStockRow {
   warehouseId: string;
   warehouseName: string;
   quantity: number;
+  // Lo comprometido por órdenes de producción (reservas ACTIVE) - el
+  // disponible para vender es quantity - reserved, mismo criterio que
+  // recordMovement (ver getReservedQuantity).
+  reserved: number;
 }
 
 export interface ArticleVariantListItem {
@@ -370,6 +374,18 @@ export class InventoryService {
       getTenantDb(),
       articles.map((a) => a.taxDefinition),
     );
+    // Reservas de producción por depósito+variante, en una sola consulta.
+    const reservations = await getTenantDb().stockReservation.groupBy({
+      by: ['warehouseId', 'inputArticleVariantId'],
+      where: { status: 'ACTIVE' },
+      _sum: { quantityReserved: true },
+    });
+    const reservedByKey = new Map(
+      reservations.map((r) => [
+        `${r.warehouseId}:${r.inputArticleVariantId}`,
+        r._sum.quantityReserved?.toNumber() ?? 0,
+      ]),
+    );
 
     return articles.map((article) => {
       const { rate: taxRate, kind: taxKind } = resolveArticleTax(
@@ -407,6 +423,7 @@ export class InventoryService {
           warehouseId: sl.warehouseId,
           warehouseName: sl.warehouse.name,
           quantity: sl.quantity.toNumber(),
+          reserved: reservedByKey.get(`${sl.warehouseId}:${variant.id}`) ?? 0,
         }));
         return {
           id: variant.id,

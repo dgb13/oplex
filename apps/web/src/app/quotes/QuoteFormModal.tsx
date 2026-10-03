@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { companiesApi } from '@/lib/companies';
 import { invoicingApi } from '@/lib/invoicing';
 import { quotePreferencesApi, quotesApi, type QuoteDetail } from '@/lib/quotes';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
@@ -79,7 +80,12 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
   if (!currencyId && defaultCurrency) setCurrencyId(defaultCurrency.id);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code;
 
-  const totals = computeSalesTotals(lines, pricesIncludeTax);
+  // Emisor Monotributo/Exento: factura C, sin IVA - la cotización tampoco lo
+  // suma (mismo criterio que QuoteService en el backend).
+  const { data: tenantSettings } = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const withoutVat =
+    tenantSettings?.ownTaxCondition === 'MONOTRIBUTO' || tenantSettings?.ownTaxCondition === 'EXENTO';
+  const totals = computeSalesTotals(lines, pricesIncludeTax, undefined, withoutVat);
   const nextNumber = preferencesQuery.data
     ? `${preferencesQuery.data.quotePrefix}-${String(preferencesQuery.data.quoteNextNumber).padStart(6, '0')}`
     : null;
@@ -92,7 +98,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
         currencyId,
         validUntil: validUntil || undefined,
         notes: notes.trim() || undefined,
-        pricesIncludeTax,
+        pricesIncludeTax: pricesIncludeTax && !withoutVat,
         lines: lines.map((l) => ({
           articleVariantId: l.articleVariantId,
           quantity: l.quantity,
@@ -184,6 +190,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                 currencyCode={currencyCode}
                 allowNotes
                 addInputRef={addArticleRef}
+                withoutVat={withoutVat}
               />
             </>
           )
@@ -225,7 +232,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
             </section>
 
             <div className="mt-auto flex flex-col gap-3">
-              <SalesTotalsPanel totals={totals} currencyCode={currencyCode} />
+              <SalesTotalsPanel totals={totals} currencyCode={currencyCode} withoutVat={withoutVat} />
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending || loading}>
                 {mutation.isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear cotización'}

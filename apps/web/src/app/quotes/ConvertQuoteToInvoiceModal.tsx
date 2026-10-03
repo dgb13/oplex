@@ -3,12 +3,13 @@
 import { Button } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
-import type { DocumentLetter } from '@/lib/documentLetter';
+import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
 import { quotesApi, type QuoteDetail } from '@/lib/quotes';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Props {
   quote: QuoteDetail;
@@ -24,6 +25,21 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   const [warehouseId, setWarehouseId] = useState('');
   const [documentLetter, setDocumentLetter] = useState<DocumentLetter>('B');
   const [error, setError] = useState('');
+
+  // La letra se sugiere igual que en la Caja y en Nueva factura (condición
+  // IVA propia + la del cliente) - antes arrancaba siempre en "B", y un
+  // Monotributo que no la cambiaba emitía una B que no le corresponde.
+  const tenantSettingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const customersQuery = useQuery({ queryKey: ['companies', 'CUSTOMER'], queryFn: () => companiesApi.list('CUSTOMER') });
+  const customer = (customersQuery.data ?? []).find((c) => c.id === quote.customer.id);
+  const letterSuggestion = suggestDocumentLetter(
+    tenantSettingsQuery.data?.ownTaxCondition ?? null,
+    customer?.taxId ?? quote.customer.taxId,
+    customer?.taxCondition ?? null,
+  );
+  useEffect(() => {
+    if (letterSuggestion.letter) setDocumentLetter(letterSuggestion.letter);
+  }, [letterSuggestion.letter]);
 
   const branchesQuery = useQuery({ queryKey: ['companies', 'BRANCH'], queryFn: () => companiesApi.list('BRANCH') });
   const warehousesQuery = useQuery({ queryKey: ['inventory-warehouses'], queryFn: inventoryApi.listWarehouses });
@@ -91,7 +107,13 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
               value={documentLetter}
               onChange={(l) => setDocumentLetter(l as DocumentLetter)}
               options={DOCUMENT_LETTERS.map((l) => ({ value: l, label: `Factura ${l}` }))}
+              disabled={letterSuggestion.locked}
             />
+            <p
+              className={`text-xs ${letterSuggestion.locked ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
+            >
+              {letterSuggestion.reason}
+            </p>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

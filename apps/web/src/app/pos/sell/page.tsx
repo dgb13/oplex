@@ -2,6 +2,7 @@
 
 import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
 import { formatPaidAt, posApi } from '@/lib/pos';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,26 +21,35 @@ interface ProductOption {
   sku: string;
   imageUrl: string | null;
   unitPrice: number;
-  // Stock en el depósito de ESTA caja, no la suma de todos los depósitos:
-  // la venta descuenta de acá (PosService.checkout → register.warehouseId).
+  // Disponible para vender en el depósito de ESTA caja (no la suma de todos
+  // los depósitos): físico menos lo reservado para producción, el mismo
+  // número que controla PosService antes de cobrar.
   stock: number;
+  // Lo reservado para producción en ese depósito, para explicar un "sin
+  // stock" con unidades físicas.
+  reserved: number;
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
 }
 
 function flatten(articles: Article[], warehouseId: string | undefined): ProductOption[] {
   return articles.flatMap((article) =>
-    article.variants.map((variant) => ({
-      id: variant.id,
-      articleName: article.name,
-      variantLabel: buildVariantLabel(variant),
-      sku: variant.sku,
-      imageUrl: article.imageUrl,
-      unitPrice: variant.unitPrice,
-      stock: variant.stockByWarehouse.find((row) => row.warehouseId === warehouseId)?.quantity ?? 0,
-      taxRate: article.taxRate,
-      taxKind: article.taxKind,
-    })),
+    article.variants.map((variant) => {
+      const row = variant.stockByWarehouse.find((r) => r.warehouseId === warehouseId);
+      const reserved = row?.reserved ?? 0;
+      return {
+        id: variant.id,
+        articleName: article.name,
+        variantLabel: buildVariantLabel(variant),
+        sku: variant.sku,
+        imageUrl: article.imageUrl,
+        unitPrice: variant.unitPrice,
+        stock: Math.max((row?.quantity ?? 0) - reserved, 0),
+        reserved,
+        taxRate: article.taxRate,
+        taxKind: article.taxKind,
+      };
+    }),
   );
 }
 
@@ -105,7 +115,13 @@ function PosSellScreen() {
     });
   }, [products, search]);
 
-  const totals = computeTotals(lines);
+  // Emisor Monotributo/Exento: factura C, sin IVA (mismo criterio que el
+  // backend, que es el que factura).
+  const tenantSettingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const withoutVat =
+    tenantSettingsQuery.data?.ownTaxCondition === 'MONOTRIBUTO' ||
+    tenantSettingsQuery.data?.ownTaxCondition === 'EXENTO';
+  const totals = computeTotals(lines, withoutVat);
 
   function addProduct(product: ProductOption) {
     const existing = lines.find((l) => l.articleVariantId === product.id);
@@ -289,7 +305,7 @@ function PosSellScreen() {
                   !(product.unitPrice > 0)
                     ? 'Sin precio de venta - cargalo en Inventario'
                     : product.stock <= 0
-                      ? `Sin stock en ${register?.warehouse.name ?? 'el depósito de esta caja'}`
+                      ? `Sin stock disponible en ${register?.warehouse.name ?? 'el depósito de esta caja'}${product.reserved > 0 ? ` (${formatStock(product.reserved)} reservadas para producción)` : ''}`
                       : undefined
                 }
                 className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:border-indigo-300 hover:shadow-md disabled:opacity-40 pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-dark:hover:border-indigo-500 pos-contrast:border-slate-700 pos-contrast:bg-black pos-contrast:hover:border-amber-400 pos-emerald:border-emerald-100 pos-emerald:bg-white pos-emerald:hover:border-emerald-300"
@@ -327,6 +343,7 @@ function PosSellScreen() {
                   }`}
                 >
                   {product.stock <= 0 ? 'Sin stock' : `Stock: ${formatStock(product.stock)}`}
+                  {product.reserved > 0 && ` · ${formatStock(product.reserved)} reservad${product.reserved === 1 ? 'a' : 'as'} p/ producción`}
                 </p>
               </button>
             ))}
@@ -393,7 +410,7 @@ function PosSellScreen() {
                         role="status"
                         className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 pos-dark:bg-amber-950 pos-dark:text-amber-300 pos-contrast:bg-amber-950 pos-contrast:text-amber-300 pos-emerald:bg-amber-50 pos-emerald:text-amber-800"
                       >
-                        No hay más stock: {formatStock(line.stock)} en {register?.warehouse.name ?? 'el depósito de esta caja'}
+                        No hay más stock disponible: {formatStock(line.stock)} en {register?.warehouse.name ?? 'el depósito de esta caja'}
                       </p>
                     )}
                   </div>
@@ -407,10 +424,12 @@ function PosSellScreen() {
               <span>Subtotal</span>
               <span>${totals.subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-              <span>IVA</span>
-              <span>${totals.taxTotal.toFixed(2)}</span>
-            </div>
+            {!withoutVat && (
+              <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+                <span>IVA</span>
+                <span>${totals.taxTotal.toFixed(2)}</span>
+              </div>
+            )}
             <div className="mt-1 flex justify-between text-lg font-semibold">
               <span>Total</span>
               <span>${totals.total.toFixed(2)}</span>

@@ -78,6 +78,7 @@ export default function SalesLinesEditor({
   currencyCode,
   allowNotes,
   addInputRef,
+  withoutVat = false,
 }: {
   lines: SalesLine[];
   onChange: (lines: SalesLine[]) => void;
@@ -88,6 +89,9 @@ export default function SalesLinesEditor({
   // Cotizaciones lo guarda hoy.
   allowNotes?: boolean;
   addInputRef?: React.RefObject<HTMLInputElement | null>;
+  // Factura C / emisor Monotributo-Exento: sin IVA - no hay columna de IVA
+  // ni "precios con IVA incluido", el precio es el final.
+  withoutVat?: boolean;
 }) {
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
@@ -216,14 +220,18 @@ export default function SalesLinesEditor({
     <section>
       <SectionLabel
         action={
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-            <ToggleSwitch
-              checked={pricesIncludeTax}
-              onChange={onPricesIncludeTaxChange}
-              label="Precios con IVA incluido"
-            />
-            Precios con IVA incluido
-          </label>
+          withoutVat ? (
+            <span className="text-xs text-muted-foreground">Sin IVA (Factura C): el precio es el final</span>
+          ) : (
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              <ToggleSwitch
+                checked={pricesIncludeTax}
+                onChange={onPricesIncludeTaxChange}
+                label="Precios con IVA incluido"
+              />
+              Precios con IVA incluido
+            </label>
+          )
         }
       >
         Artículos
@@ -239,9 +247,9 @@ export default function SalesLinesEditor({
                 Cant.
               </th>
               <th className="w-32 px-2 py-2.5 text-right font-semibold">
-                Precio unit.{pricesIncludeTax ? ' (final)' : ''}
+                Precio unit.{pricesIncludeTax && !withoutVat ? ' (final)' : ''}
               </th>
-              <th className="w-36 px-2 py-2.5 font-semibold">IVA</th>
+              {!withoutVat && <th className="w-36 px-2 py-2.5 font-semibold">IVA</th>}
               <th className="w-36 px-2 py-2.5 text-right font-semibold">
                 Subtotal
               </th>
@@ -252,7 +260,7 @@ export default function SalesLinesEditor({
             {lines.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={withoutVat ? 6 : 7}
                   className="px-3 py-8 text-center text-muted-foreground"
                 >
                   Todavía no agregaste artículos. Buscalos abajo.
@@ -261,7 +269,7 @@ export default function SalesLinesEditor({
             )}
             {lines.map((line, index) => {
               const option = optionById.get(line.articleVariantId);
-              const { lineTotal } = computeLineTotals(line, pricesIncludeTax);
+              const { lineTotal } = computeLineTotals(line, pricesIncludeTax, withoutVat);
               const noPrice = !(line.unitPrice > 0);
               const shortStock =
                 option &&
@@ -371,17 +379,19 @@ export default function SalesLinesEditor({
                       onKeyDown={backToSearch}
                     />
                   </td>
-                  <td className="px-2 py-2.5">
-                    <VatRateSelect
-                      value={{ taxKind: line.taxKind, taxRate: line.taxRate }}
-                      onChange={(v) =>
-                        updateLine(line.key, {
-                          taxKind: v.taxKind,
-                          taxRate: v.taxRate,
-                        })
-                      }
-                    />
-                  </td>
+                  {!withoutVat && (
+                    <td className="px-2 py-2.5">
+                      <VatRateSelect
+                        value={{ taxKind: line.taxKind, taxRate: line.taxRate }}
+                        onChange={(v) =>
+                          updateLine(line.key, {
+                            taxKind: v.taxKind,
+                            taxRate: v.taxRate,
+                          })
+                        }
+                      />
+                    </td>
+                  )}
                   <td className="px-2 pt-4 text-right font-semibold tabular-nums">
                     {formatAmount(lineTotal, currencyCode)}
                   </td>

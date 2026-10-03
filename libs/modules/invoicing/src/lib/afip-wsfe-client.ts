@@ -120,6 +120,40 @@ function resolveIvaId(rate: Prisma.Decimal): number {
   return id;
 }
 
+/**
+ * Los importes que van a FECAESolicitar. Clase C (Monotributo/Exento) no
+ * discrimina nada: ImpNeto es el subtotal completo y ImpOpEx/ImpTotConc/
+ * ImpIVA van en 0 (manual WSFEv1, errores 10043/10044/10045/10047; 10048:
+ * ImpTotal = ImpNeto + ImpTrib). Una C con IVA no se manda: es un error
+ * aguas arriba (InvoicingService factura la C sin IVA), no algo a corregir
+ * acá en silencio. Exportado para tests.
+ */
+export function resolveVoucherAmounts(invoice: ElectronicInvoiceRequest): {
+  net: Prisma.Decimal;
+  exempt: Prisma.Decimal;
+  nonTaxed: Prisma.Decimal;
+  tax: Prisma.Decimal;
+} {
+  if (invoice.documentLetter !== 'C') {
+    return {
+      net: invoice.netAmount,
+      exempt: invoice.exemptAmount,
+      nonTaxed: invoice.nonTaxedAmount,
+      tax: invoice.taxAmount,
+    };
+  }
+  if (!invoice.taxAmount.isZero()) {
+    throw new Error('Un comprobante clase C no puede llevar IVA (el emisor es Monotributo o Exento)');
+  }
+  const zero = new Prisma.Decimal(0);
+  return {
+    net: invoice.netAmount.add(invoice.exemptAmount).add(invoice.nonTaxedAmount),
+    exempt: zero,
+    nonTaxed: zero,
+    tax: zero,
+  };
+}
+
 function formatFecha(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, '');
 }
@@ -173,6 +207,9 @@ export class AfipWsfeClient {
   }
 
   async requestCae(invoice: ElectronicInvoiceRequest): Promise<ElectronicInvoiceResult> {
+    // Antes de llamar a ARCA: una C con IVA es un error nuestro, no algo a
+    // mandar.
+    const amounts = resolveVoucherAmounts(invoice);
     const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
     const cbteTipo = CBTE_TIPO[invoice.kind][invoice.documentLetter];
     const { docTipo, docNro } = resolveDocTipoNro(invoice.customerTaxId);
@@ -250,11 +287,11 @@ export class AfipWsfeClient {
             <ar:CbteHasta>${cbteNro}</ar:CbteHasta>
             <ar:CbteFch>${formatFecha(invoice.issueDate)}</ar:CbteFch>
             <ar:ImpTotal>${formatImporte(invoice.total)}</ar:ImpTotal>
-            <ar:ImpTotConc>${formatImporte(invoice.nonTaxedAmount)}</ar:ImpTotConc>
-            <ar:ImpNeto>${formatImporte(invoice.netAmount)}</ar:ImpNeto>
-            <ar:ImpOpEx>${formatImporte(invoice.exemptAmount)}</ar:ImpOpEx>
+            <ar:ImpTotConc>${formatImporte(amounts.nonTaxed)}</ar:ImpTotConc>
+            <ar:ImpNeto>${formatImporte(amounts.net)}</ar:ImpNeto>
+            <ar:ImpOpEx>${formatImporte(amounts.exempt)}</ar:ImpOpEx>
             <ar:ImpTrib>${impTrib.toFixed(2)}</ar:ImpTrib>
-            <ar:ImpIVA>${formatImporte(invoice.taxAmount)}</ar:ImpIVA>
+            <ar:ImpIVA>${formatImporte(amounts.tax)}</ar:ImpIVA>
             ${servicioXml}
             <ar:MonId>${monId}</ar:MonId>
             <ar:MonCotiz>${invoice.exchangeRate.toFixed(6)}</ar:MonCotiz>

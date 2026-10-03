@@ -470,4 +470,42 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(voucher.cae).toBe('1');
     expect(voucher.detail).toBeNull();
   });
+
+  it('clase C: todo va en ImpNeto y ImpOpEx/ImpTotConc/ImpIVA en 0 (manual WSFEv1, errores 10043/10044/10047)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await client.requestCae(
+      baseInvoice({
+        documentLetter: 'C',
+        customerTaxId: null,
+        netAmount: new Prisma.Decimal(80),
+        exemptAmount: new Prisma.Decimal(15),
+        nonTaxedAmount: new Prisma.Decimal(5),
+        taxAmount: new Prisma.Decimal(0),
+        total: new Prisma.Decimal(100),
+        taxLines: [],
+      }),
+    );
+
+    const wsfeBody = fetchMock.mock.calls[1][1].body as string;
+    expect(wsfeBody).toContain('<ar:CbteTipo>11</ar:CbteTipo>');
+    expect(wsfeBody).toContain('<ar:ImpNeto>100.00</ar:ImpNeto>');
+    expect(wsfeBody).toContain('<ar:ImpOpEx>0.00</ar:ImpOpEx>');
+    expect(wsfeBody).toContain('<ar:ImpTotConc>0.00</ar:ImpTotConc>');
+    expect(wsfeBody).toContain('<ar:ImpIVA>0.00</ar:ImpIVA>');
+    expect(wsfeBody).toContain('<ar:ImpTotal>100.00</ar:ImpTotal>');
+    expect(wsfeBody).not.toContain('<ar:Iva>');
+  });
+
+  it('clase C con IVA no se manda a ARCA: es un error de quien la armó', async () => {
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+
+    await expect(
+      client.requestCae(baseInvoice({ documentLetter: 'C', customerTaxId: null, taxLines: [] })),
+    ).rejects.toThrow(/clase C no puede llevar IVA/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

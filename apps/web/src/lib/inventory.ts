@@ -16,6 +16,9 @@ export interface WarehouseStockRow {
   warehouseId: string;
   warehouseName: string;
   quantity: number;
+  // Comprometido por órdenes de producción: el disponible para vender es
+  // quantity - reserved.
+  reserved: number;
 }
 
 export interface ArticleVariant {
