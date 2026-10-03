@@ -484,7 +484,7 @@ describe('Permisos por tipo de empresa', () => {
 
   it('Ventas sigue manejando sucursales', async () => {
     const db = dbFor();
-    await runAs('SALES', db, () => service().createCompany({ name: 'Sucursal Centro', roles: ['BRANCH'], pointOfSaleNumber: 2 }));
+    await runAs('SALES', db, () => service().createCompany({ name: 'Sucursal Centro', roles: ['BRANCH'], pointOfSaleNumber: '2' }));
     expect(db.company.create).toHaveBeenCalled();
   });
 

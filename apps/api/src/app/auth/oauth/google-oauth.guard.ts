@@ -28,7 +28,7 @@ export class GoogleOAuthGuard extends AuthGuard('google') {
   // wrapper, which has no `setHeader`/`end` (`TypeError: res.setHeader is
   // not a function`) - `.raw` is the real underlying http.ServerResponse
   // Passport expects.
-  override getResponse(context: ExecutionContext) {
+  getResponse(context: ExecutionContext) {
     return context.switchToHttp().getResponse().raw;
   }
 }

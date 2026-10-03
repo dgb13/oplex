@@ -79,7 +79,10 @@ interface Deps {
   salesService: jest.Mocked<SalesService>;
   eventEmitter: jest.Mocked<EventEmitter2>;
   qrService: jest.Mocked<MercadoPagoQrService>;
-  tx: Record<string, unknown>;
+  tx: Record<string, unknown> & {
+    paymentIntent: { findFirst: jest.Mock; update: jest.Mock };
+    userActivityLog: { create: jest.Mock };
+  };
 }
 
 function makeDeps(overrides: {

@@ -23,7 +23,7 @@ export class AppleOAuthGuard extends AuthGuard('apple') {
   // Same reasoning as GoogleOAuthGuard.getResponse - Passport's
   // `strategy.redirect()` needs the real http.ServerResponse, not the
   // FastifyReply wrapper Nest hands guards by default.
-  override getResponse(context: ExecutionContext) {
+  getResponse(context: ExecutionContext) {
     return context.switchToHttp().getResponse().raw;
   }
 }

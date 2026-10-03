@@ -208,6 +208,7 @@ describe('SignupService.resendCode', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       authEmailSender,
+      {} as LegalService,
     );
 
     const result = await service.resendCode(dto);
@@ -254,6 +255,7 @@ describe('SignupService.resendCode', () => {
       {} as unknown as TenantProvisioningService,
       makeAuthService(),
       authEmailSender,
+      {} as LegalService,
     );
 
     const result = await service.resendCode(dto);

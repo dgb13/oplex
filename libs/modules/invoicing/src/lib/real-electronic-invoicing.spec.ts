@@ -14,6 +14,7 @@ function makeInvoice(): ElectronicInvoiceRequest {
     issueDate: new Date('2026-01-01'),
     dueDate: null,
     customerTaxId: null,
+    customerTaxCondition: null,
     currencyCode: 'ARS',
     exchangeRate: new Prisma.Decimal(1),
     netAmount: new Prisma.Decimal(100),

@@ -14,7 +14,7 @@ import type { CreateCommentDto } from './dto/create-comment.dto.js';
 
 export type NotificationFilter = 'all' | 'unread' | 'mentions';
 
-interface PersonSummary {
+export interface PersonSummary {
   id: string;
   name: string | null;
   email: string;

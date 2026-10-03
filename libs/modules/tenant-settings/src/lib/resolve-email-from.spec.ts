@@ -1,6 +1,8 @@
 import type { TenantSettingsView } from './tenant-settings.service.js';
 import { resolveEmailFrom } from './resolve-email-from.js';
 
+// resolveEmailFrom sólo mira los campos de email; el resto de la vista no
+// importa para estos casos.
 function baseSettings(overrides: Partial<TenantSettingsView> = {}): TenantSettingsView {
   return {
     arReminderIntervalDays: null,
@@ -11,7 +13,7 @@ function baseSettings(overrides: Partial<TenantSettingsView> = {}): TenantSettin
     domainStatus: null,
     reminderTone: 'NEUTRAL',
     ...overrides,
-  };
+  } as TenantSettingsView;
 }
 
 describe('resolveEmailFrom', () => {

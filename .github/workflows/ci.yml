@@ -10,21 +10,24 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   main:
     runs-on: ubuntu-latest
+    env:
+      # prisma.config.ts lee DATABASE_URL; `prisma generate` no se conecta,
+      # sólo necesita que la variable exista.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      NX_DAEMON: 'false'
     steps:
       - uses: actions/checkout@v5
         with:
           filter: tree:0
           fetch-depth: 0
 
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/docs/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e"
-
-      # Cache node_modules
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -32,9 +35,11 @@ jobs:
 
       - run: npm ci
 
-      # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      - run: npx nx record -- npx nx format:check --base="remotes/origin/main"
-      - run: npx nx run-many -t lint test build typecheck e2e
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/docs/features/ci-features/self-healing-ci
-      - run: npx nx fix-ci
-        if: always()
+      # El cliente de Prisma está en .gitignore (libs/shared/database/src/generated).
+      - run: npx prisma generate
+
+      - uses: nrwl/nx-set-shas@v4
+
+      # Sin format:check: el repo no sigue .prettierrc y formatear todo inflaría
+      # cada diff. Sin e2e: api-e2e necesita la API levantada contra una base real.
+      - run: npx nx affected -t lint test typecheck build --exclude=api-e2e

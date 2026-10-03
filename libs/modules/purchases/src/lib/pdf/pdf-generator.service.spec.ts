@@ -18,7 +18,7 @@ const SAMPLE_DATA: PurchaseDocumentPdfData = {
   deliveryTimeName: '7 días',
   currencyCode: 'USD',
   lines: [
-    { articleName: 'Agua mineral 500ml', sku: 'AGUA-500', quantity: '10,00', unitCost: '1,50', lineTotal: '15,00' },
+    { articleName: 'Agua mineral 500ml', variantLabel: null, sku: 'AGUA-500', quantity: '10,00', unitCost: '1,50', lineTotal: '15,00' },
   ],
   total: '15,00',
   notes: 'Entregar en el depósito central',

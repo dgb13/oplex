@@ -72,6 +72,7 @@ describe('PosService.checkout', () => {
       {} as SalesService,
       {} as AccountingService,
       {} as ReportsFinancialService,
+      {} as MercadoPagoQrService,
     );
 
     await expect(
@@ -106,6 +107,7 @@ describe('PosService.checkout', () => {
       salesService,
       {} as AccountingService,
       {} as ReportsFinancialService,
+      {} as MercadoPagoQrService,
     );
 
     await expect(
@@ -146,6 +148,7 @@ describe('PosService.checkout', () => {
       salesService,
       {} as AccountingService,
       reportsFinancialService,
+      {} as MercadoPagoQrService,
     );
 
     const result = await runInTenant({}, () =>

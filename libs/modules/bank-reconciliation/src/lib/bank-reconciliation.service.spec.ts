@@ -8,7 +8,7 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
 }
 
 async function buildWorkbookBuffer(
-  rows: Array<[string, string, unknown]>,
+  rows: Array<[string, string, ExcelJS.CellValue]>,
   headers: string[] = ['Fecha', 'Descripción', 'Importe'],
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -93,7 +93,7 @@ describe('BankReconciliationService.parseAndValidate', () => {
 
   it('rejects a file with more than 500 data rows', async () => {
     const service = new BankReconciliationService();
-    const rows: Array<[string, string, unknown]> = Array.from({ length: 501 }, (_, i) => [
+    const rows: Array<[string, string, ExcelJS.CellValue]> = Array.from({ length: 501 }, (_, i) => [
       '01/09/2026',
       `Movimiento ${i}`,
       100,

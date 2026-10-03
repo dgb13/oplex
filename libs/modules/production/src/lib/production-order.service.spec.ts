@@ -388,7 +388,7 @@ describe('ProductionOrderService - avisos al creador', () => {
     const order = await runAsTenant(db, () => service.finishOrder('order-1'));
 
     expect(order.finishedByUserId).toBe('user-1');
-    expect((db as { notification: { create: jest.Mock } }).notification.create).toHaveBeenCalledWith({
+    expect((db as unknown as { notification: { create: jest.Mock } }).notification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         recipientUserId: 'creator-1',
         category: 'PRODUCTION',
@@ -405,7 +405,7 @@ describe('ProductionOrderService - avisos al creador', () => {
 
     await runAsTenant(db, () => service.finishOrder('order-1'));
 
-    expect((db as { notification: { create: jest.Mock } }).notification.create).not.toHaveBeenCalled();
+    expect((db as unknown as { notification: { create: jest.Mock } }).notification.create).not.toHaveBeenCalled();
   });
 });
 

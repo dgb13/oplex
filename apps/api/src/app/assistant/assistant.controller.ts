@@ -4,6 +4,7 @@ import { AssistantIntent, LongRunningTransaction } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyReply } from 'fastify';
+import type { OutgoingHttpHeaders } from 'node:http';
 import { SendAssistantMessageDto } from './dto/send-assistant-message.dto.js';
 import { SetMessageFeedbackDto } from './dto/set-message-feedback.dto.js';
 import { AssistantConversationService } from './assistant-conversation.service.js';
@@ -162,7 +163,7 @@ export class AssistantController {
     // red genérico sin ningún detalle server-side porque el request se
     // procesó 100% bien, sólo que el browser bloqueó la respuesta por
     // CORS antes de dejarle leer nada a este código.
-    const corsHeaders = reply.getHeaders();
+    const corsHeaders = reply.getHeaders() as OutgoingHttpHeaders;
     reply.hijack();
     reply.raw.writeHead(200, {
       ...corsHeaders,

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import type { ArcaPadronService } from '@plexo/afip-credentials';
 import type { SubscriptionService } from '@plexo/subscriptions';
 import { AdminSystemStatusService } from './admin-system-status.service.js';
 
