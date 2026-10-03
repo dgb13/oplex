@@ -73,6 +73,7 @@ export type {
   InventoryCartItem,
   Plan,
   TenantSubscription,
+  SubscriptionPayment,
   SystemErrorLog,
   DatabaseBackup,
   Connector,

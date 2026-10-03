@@ -1,5 +1,5 @@
 import type { PrismaService } from '@plexo/database';
-import type { SubscriptionService } from '@plexo/subscriptions';
+import type { SubscriptionBillingService, SubscriptionService } from '@plexo/subscriptions';
 import { SubscriptionsSchedulerService } from './subscriptions-scheduler.service.js';
 
 jest.mock('@plexo/database', () => ({
@@ -8,6 +8,10 @@ jest.mock('@plexo/database', () => ({
 }));
 
 const { withTenantContext } = jest.requireMock('@plexo/database') as { withTenantContext: jest.Mock };
+
+function makeBillingService() {
+  return { sweepBillingStatus: jest.fn().mockResolvedValue(null) } as unknown as SubscriptionBillingService;
+}
 
 describe('SubscriptionsSchedulerService.expireTrialsForAllTenants', () => {
   beforeEach(() => {
@@ -22,7 +26,7 @@ describe('SubscriptionsSchedulerService.expireTrialsForAllTenants', () => {
     const subscriptionService = {
       expireIfTrialEnded: jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
     } as unknown as SubscriptionService;
-    const scheduler = new SubscriptionsSchedulerService(prisma, subscriptionService);
+    const scheduler = new SubscriptionsSchedulerService(prisma, subscriptionService, makeBillingService());
 
     await scheduler.expireTrialsForAllTenants();
 
@@ -42,7 +46,7 @@ describe('SubscriptionsSchedulerService.expireTrialsForAllTenants', () => {
         .mockRejectedValueOnce(new Error('boom'))
         .mockResolvedValueOnce(false),
     } as unknown as SubscriptionService;
-    const scheduler = new SubscriptionsSchedulerService(prisma, subscriptionService);
+    const scheduler = new SubscriptionsSchedulerService(prisma, subscriptionService, makeBillingService());
 
     await expect(scheduler.expireTrialsForAllTenants()).resolves.toBeUndefined();
     expect(subscriptionService.expireIfTrialEnded).toHaveBeenCalledTimes(2);

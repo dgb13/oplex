@@ -12,6 +12,9 @@ import { AdminSystemStatusService } from './admin-system-status.service.js';
 import { AdminTenantsController } from './admin-tenants.controller.js';
 import { AdminTenantsService } from './admin-tenants.service.js';
 
+import { AdminSubscriptionsController } from './admin-subscriptions.controller.js';
+import { AdminSubscriptionsService } from './admin-subscriptions.service.js';
+
 @Module({
   imports: [SubscriptionModule, AuthModule, AfipCredentialsModule],
   controllers: [
@@ -20,7 +23,8 @@ import { AdminTenantsService } from './admin-tenants.service.js';
     AdminMercadoPagoController,
     AdminSystemStatusController,
     AdminArcaPadronController,
+    AdminSubscriptionsController,
   ],
-  providers: [AdminTenantsService, AdminAuditService, AdminMercadoPagoService, AdminSystemStatusService],
+  providers: [AdminTenantsService, AdminAuditService, AdminMercadoPagoService, AdminSystemStatusService, AdminSubscriptionsService],
 })
 export class AdminModule {}

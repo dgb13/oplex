@@ -1,17 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService, withTenantContext } from '@plexo/database';
-import { SubscriptionService } from '@plexo/subscriptions';
+import { SubscriptionBillingService, SubscriptionService } from '@plexo/subscriptions';
 
 /**
  * Daily sweep across every tenant, same list_tenant_ids() + withTenantContext
  * recipe as ReceivablesSchedulerService (see that file's docstring for why
  * this needs its own tenant loop instead of a request-scoped tenant
  * context - it runs outside any HTTP request). Flips TRIALING -> EXPIRED
- * once trialEndsAt has passed - deliberately does NOT touch ACTIVE/PAST_DUE
- * at all, since there is no real payment gateway wired up yet to signal a
- * failed charge; that transition, if ever needed, is set by hand via
- * /api/admin/plans's operator.
+ * once trialEndsAt has passed, ACTIVE -> PAST_DUE once the paid period ends
+ * without a new payment, and PAST_DUE -> EXPIRED once its grace days are
+ * over (see SubscriptionBillingService.sweepBillingStatus).
  */
 @Injectable()
 export class SubscriptionsSchedulerService {
@@ -20,6 +19,7 @@ export class SubscriptionsSchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly billingService: SubscriptionBillingService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
@@ -32,6 +32,10 @@ export class SubscriptionsSchedulerService {
           const expired = await this.subscriptionService.expireIfTrialEnded();
           if (expired) {
             this.logger.log(`Tenant ${tenantId}: trial expired`);
+          }
+          const change = await this.billingService.sweepBillingStatus();
+          if (change) {
+            this.logger.log(`Tenant ${tenantId}: subscription -> ${change}`);
           }
         });
       } catch (err) {

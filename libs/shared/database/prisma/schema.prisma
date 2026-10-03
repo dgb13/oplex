@@ -189,6 +189,7 @@ model Tenant {
 
   settings     TenantSettings?
   subscription TenantSubscription?
+  subscriptionPayments SubscriptionPayment[]
 
   @@map("tenants")
 }
@@ -324,6 +325,9 @@ model Plan {
   // débito - ver SubscriptionService. Editable por el SuperAdmin sin tocar
   // código, igual que el resto de los campos de este modelo.
   debitDiscountPercent Decimal  @default(0) @db.Decimal(5, 2)
+  // % de descuento al pagar 12 meses por adelantado. No se suma con el de
+  // débito (ese es por el débito mensual). Editable por el SuperAdmin.
+  annualDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
   isActive             Boolean  @default(true)
   // Documento de SLA de este plan, en Markdown, editable por el SuperAdmin
   // desde /admin/plans (mismo criterio que el resto del modelo - texto libre,
@@ -356,6 +360,7 @@ model Plan {
   updatedAt            DateTime @updatedAt
 
   subscriptions TenantSubscription[]
+  payments      SubscriptionPayment[]
 
   @@map("plans")
 }
@@ -471,10 +476,16 @@ model TenantSubscription {
   plan                 Plan               @relation(fields: [planId], references: [id])
   status               SubscriptionStatus @default(TRIALING)
   trialEndsAt          DateTime?
-  // Informativo únicamente - no hay pasarela de cobro real integrada
-  // todavía, nada dispara esta fecha automáticamente.
+  // Hasta cuándo está pago (o cubierto provisoriamente por una transferencia
+  // avisada, ver SubscriptionBillingService.reportTransfer). Vencido sin
+  // pago, el cron diario pasa a PAST_DUE con graceEndsAt y después a EXPIRED.
   currentPeriodEnd     DateTime?
+  // Último medio de pago usado (SubscriptionPaymentMethod como texto).
   paymentMethod        String?
+  // Fin de los días de gracia de PAST_DUE (la cuenta sigue funcionando).
+  graceEndsAt          DateTime?
+  // Suscripción de débito automático en Mercado Pago (preapproval).
+  mpPreapprovalId      String?
   promoLabel           String?
   promoDiscountPercent Decimal?           @db.Decimal(5, 2)
   promoExpiresAt       DateTime?
@@ -482,6 +493,58 @@ model TenantSubscription {
   updatedAt            DateTime           @updatedAt
 
   @@map("tenant_subscriptions")
+}
+
+enum SubscriptionPaymentMethod {
+  MP_DEBIT
+  TRANSFER
+  CASH
+  OTHER
+}
+
+enum SubscriptionPaymentStatus {
+  PENDING
+  PAID
+  REJECTED
+  REFUNDED
+}
+
+// Cada cobro del plan de Oplex a un tenant: débito de Mercado Pago,
+// transferencia avisada por el tenant (PENDING hasta que Oplex la confirma
+// en /admin) o pago registrado a mano. Importes ya con el descuento por
+// débito (Plan.debitDiscountPercent) y el IVA 21% - los precios de Plan son
+// sin IVA. Tenant-scoped con RLS, igual que TenantSubscription.
+model SubscriptionPayment {
+  id             String                    @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id])
+  planId         String
+  plan           Plan                      @relation(fields: [planId], references: [id])
+  method         SubscriptionPaymentMethod
+  status         SubscriptionPaymentStatus
+  months         Int                       @default(1)
+  // Período que cubre (para un PENDING, el que cubriría al confirmarse).
+  periodStart    DateTime
+  periodEnd      DateTime
+  listPrice      Decimal                   @db.Decimal(14, 2)
+  discountAmount Decimal                   @default(0) @db.Decimal(14, 2)
+  netAmount      Decimal                   @db.Decimal(14, 2)
+  vatAmount      Decimal                   @db.Decimal(14, 2)
+  total          Decimal                   @db.Decimal(14, 2)
+  // N° de operación de la transferencia o nota del pago manual.
+  reference      String?
+  // Comprobante subido por el tenant (/uploads/...).
+  receiptUrl     String?
+  // Id del pago en Mercado Pago.
+  externalId     String?
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([status])
+  @@map("subscription_payments")
 }
 
 // Global como Plan - sin tenantId, sin RLS (ver la migración). Muchos 500
