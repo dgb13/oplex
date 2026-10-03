@@ -30,4 +30,11 @@ export class QuoteLineDto {
   @Min(0)
   @Max(100)
   taxRate?: number;
+
+  // Bonificación de la línea en %, sobre precio × cantidad.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
 }

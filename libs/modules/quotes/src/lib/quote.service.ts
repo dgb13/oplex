@@ -6,12 +6,16 @@ import type { QuoteLineDto } from './dto/quote-line.dto.js';
 import type { UpdateQuoteDto } from './dto/update-quote.dto.js';
 import { QUOTE_EMAIL_SENDER, type QuoteEmailSender } from './email/quote-email-sender.port.js';
 import { buildQuotePdfData } from './pdf/build-pdf-data.js';
+import { loadPdfImage } from './pdf/load-pdf-image.js';
 import { PdfGeneratorService } from './pdf/pdf-generator.service.js';
 import { QuoteNumberingService } from './quote-numbering.service.js';
 
 const DETAIL_INCLUDE = {
   lines: { include: { articleVariant: { include: { article: true } } } },
-  customer: { select: { id: true, name: true, taxId: true, email: true, fiscalAddress: true } },
+  customer: {
+    select: { id: true, name: true, taxId: true, email: true, fiscalAddress: true, taxCondition: true, phone: true },
+  },
+  contactPerson: { select: { id: true, firstName: true, lastName: true, email: true, whatsapp: true } },
   currency: true,
   createdBy: { select: { id: true, name: true, email: true } },
   // A lo sumo una (Invoice.quoteId es @@unique por tenant) - el frontend la
@@ -65,6 +69,15 @@ export class QuoteService {
     await this.validateReferences(dto);
     const number = await this.numbering.nextNumber();
     const { lineInputs, total } = await this.resolveLines(dto.lines, dto.pricesIncludeTax);
+    const defaults = await db.tenantSettings.findUnique({
+      where: { tenantId },
+      select: {
+        quoteDefaultPaymentTerms: true,
+        quoteDefaultDeliveryTerms: true,
+        quoteDefaultDeliveryPlace: true,
+        quoteDefaultWarranty: true,
+      },
+    });
 
     return db.quote.create({
       data: {
@@ -74,6 +87,11 @@ export class QuoteService {
         currencyId: dto.currencyId,
         validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
         notes: dto.notes,
+        paymentTerms: dto.paymentTerms ?? defaults?.quoteDefaultPaymentTerms,
+        deliveryTerms: dto.deliveryTerms ?? defaults?.quoteDefaultDeliveryTerms,
+        deliveryPlace: dto.deliveryPlace ?? defaults?.quoteDefaultDeliveryPlace,
+        warranty: dto.warranty ?? defaults?.quoteDefaultWarranty,
+        contactPersonId: dto.contactPersonId ?? undefined,
         total,
         createdByUserId: userId,
         lines: {
@@ -95,7 +113,7 @@ export class QuoteService {
       throw new BadRequestException('Only a DRAFT quote can be edited');
     }
 
-    await this.validateReferences(dto);
+    await this.validateReferences(dto, existing.customerId);
 
     let total = existing.total;
     if (dto.lines) {
@@ -114,6 +132,11 @@ export class QuoteService {
         currencyId: dto.currencyId,
         validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
         notes: dto.notes,
+        paymentTerms: dto.paymentTerms,
+        deliveryTerms: dto.deliveryTerms,
+        deliveryPlace: dto.deliveryPlace,
+        warranty: dto.warranty,
+        contactPersonId: dto.contactPersonId,
         total,
       },
       include: DETAIL_INCLUDE,
@@ -128,8 +151,8 @@ export class QuoteService {
    * unitPrice del DTO se interpreta como precio final y se desglosa a neto
    * acá mismo - una línea EXENTO/NO_GRAVADO tiene taxRate=0, así que el
    * desglose es un no-op para ellas. Sin descuento global (a diferencia de
-   * Facturación, Cotizaciones no tiene ese concepto todavía) - lineTotal
-   * es simplemente netAmount+taxAmount de esa línea sola. */
+   * Facturación), sólo la bonificación de cada línea: netAmount ya la tiene
+   * descontada y lineTotal es netAmount+taxAmount de esa línea sola. */
   private async resolveLines(
     lines: QuoteLineDto[],
     pricesIncludeTax: boolean | undefined,
@@ -173,7 +196,8 @@ export class QuoteService {
           : rawUnitPrice;
 
       const quantity = new Prisma.Decimal(line.quantity);
-      const netAmount = unitPrice.mul(quantity);
+      const discountPercent = new Prisma.Decimal(line.discountPercent ?? 0);
+      const netAmount = unitPrice.mul(quantity).mul(new Prisma.Decimal(100).sub(discountPercent)).div(100);
       const taxAmount = taxKind === 'GRAVADO' ? netAmount.mul(taxRate).div(100) : new Prisma.Decimal(0);
       const lineTotal = netAmount.add(taxAmount);
 
@@ -183,6 +207,7 @@ export class QuoteService {
         quantity: line.quantity,
         unitPrice,
         notes: line.notes,
+        discountPercent,
         taxRate,
         taxKind,
         netAmount,
@@ -303,20 +328,27 @@ export class QuoteService {
     const db = getTenantDb();
     const quote = await this.findOrThrow(id);
     const tenant = await db.tenant.findUniqueOrThrow({ where: { id: getTenantId() } });
+    const settings = await db.tenantSettings.findUnique({ where: { tenantId: getTenantId() } });
+    // Discriminar o no el IVA depende de la condición del emisor: sin ella
+    // no hay forma correcta de armar el presupuesto (mismo criterio que
+    // Facturación, que no emite sin la condición cargada).
+    if (!settings?.ownTaxCondition) {
+      throw new BadRequestException(
+        'Cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa para generar cotizaciones',
+      );
+    }
     const resolvedStyle = style ?? (await this.resolveRequesterPdfStyle());
 
+    const [logo, ...lineImages] = await Promise.all([
+      loadPdfImage(settings.logoUrl),
+      // Sólo Natural muestra fotos de artículos; las demás no las leen de disco.
+      ...quote.lines.map((line) => (resolvedStyle === 'NATURAL' ? loadPdfImage(line.articleVariant.article.imageUrl) : null)),
+    ]);
+
     const data = buildQuotePdfData(
-      {
-        number: quote.number,
-        createdAt: quote.createdAt,
-        validUntil: quote.validUntil,
-        notes: quote.notes,
-        total: quote.total,
-        currency: quote.currency,
-        customer: quote.customer,
-        lines: quote.lines,
-      },
-      tenant,
+      quote,
+      { ...settings, name: tenant.name, taxId: tenant.taxId, ownTaxCondition: settings.ownTaxCondition },
+      { logo, lineImages },
     );
 
     const buffer = await this.pdfGenerator.generate(resolvedStyle, data);
@@ -349,9 +381,17 @@ export class QuoteService {
   }
 
   private async validateReferences(
-    dto: Pick<CreateQuoteDto | UpdateQuoteDto, 'customerId' | 'currencyId' | 'lines'>,
+    dto: Pick<CreateQuoteDto | UpdateQuoteDto, 'customerId' | 'currencyId' | 'lines' | 'contactPersonId'>,
+    currentCustomerId?: string,
   ): Promise<void> {
     const db = getTenantDb();
+
+    if (dto.contactPersonId) {
+      const person = await db.person.findUnique({ where: { id: dto.contactPersonId } });
+      if (!person || person.companyId !== (dto.customerId ?? currentCustomerId)) {
+        throw new BadRequestException('El contacto elegido no pertenece a este cliente');
+      }
+    }
 
     if (dto.customerId) {
       const customer = await db.company.findUnique({

@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import CurrencySettings from './CurrencySettings';
+import DocumentBrandingCard from './DocumentBrandingCard';
 import MercadoPagoCard from './MercadoPagoCard';
 
 function pillClass(active: boolean): string {
@@ -91,6 +92,7 @@ export default function PreferencesPage() {
         <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
         <>
+          <DocumentBrandingCard settings={settings} />
           <EmailSettingsCard settings={settings} />
           <CurrencySettings />
           <MercadoPagoCard />

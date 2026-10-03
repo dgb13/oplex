@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { renderToBuffer } from '@react-pdf/renderer';
 import type { PdfStyle } from '@plexo/database';
+import { registerPdfFonts } from './fonts.js';
 import type { QuotePdfData } from './pdf-data.js';
 import { CompactoTemplate } from './templates/compacto.js';
 import { LetrasGrandesTemplate } from './templates/letras-grandes.js';
@@ -14,6 +15,10 @@ import { TradicionalTemplate } from './templates/tradicional.js';
  * @plexo/purchases' PdfGeneratorService exactly. */
 @Injectable()
 export class PdfGeneratorService {
+  constructor() {
+    registerPdfFonts();
+  }
+
   async generate(style: PdfStyle, data: QuotePdfData): Promise<Buffer> {
     return renderToBuffer(this.pickTemplate(style, data));
   }

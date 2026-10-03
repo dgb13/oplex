@@ -37,6 +37,21 @@ export interface TenantSettings {
   grossIncomeType: GrossIncomeType | null;
   activityStartDate: string | null;
   defaultMarkupPercent: number | null;
+  // Cómo se presenta la empresa en los PDF (Preferencias → Tu empresa en los documentos).
+  tradeName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  website: string | null;
+  brandColor: string | null;
+  bankName: string | null;
+  bankCbu: string | null;
+  bankAlias: string | null;
+  quoteDefaultPaymentTerms: string | null;
+  quoteDefaultDeliveryTerms: string | null;
+  quoteDefaultDeliveryPlace: string | null;
+  quoteDefaultWarranty: string | null;
+  logoUrl: string | null;
+  quoteShowBankDetails: boolean;
   tenantTaxId: string | null;
   // Razón social (Tenant.name) - emisor en los comprobantes.
   tenantName: string | null;
@@ -86,8 +101,30 @@ export const tenantSettingsApi = {
       grossIncomeType: GrossIncomeType | null;
       activityStartDate: string | null;
       defaultMarkupPercent: number | null;
+      tradeName: string | null;
+      contactPhone: string | null;
+      contactEmail: string | null;
+      website: string | null;
+      brandColor: string | null;
+      bankName: string | null;
+      bankCbu: string | null;
+      bankAlias: string | null;
+      quoteDefaultPaymentTerms: string | null;
+      quoteDefaultDeliveryTerms: string | null;
+      quoteDefaultDeliveryPlace: string | null;
+      quoteDefaultWarranty: string | null;
+      quoteShowBankDetails: boolean;
     }>,
   ) => api.patch<TenantSettings>('/tenant-settings', dto).then((r) => r.data),
+};
+
+export const tenantLogoApi = {
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<TenantSettings>('/tenant-settings/logo', form).then((r) => r.data);
+  },
+  remove: () => api.delete<TenantSettings>('/tenant-settings/logo').then((r) => r.data),
 };
 
 export const tenantInfoApi = {

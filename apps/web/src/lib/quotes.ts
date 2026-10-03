@@ -26,6 +26,8 @@ export interface QuoteLineInput {
   // backend para el criterio completo (mismo que Facturación).
   taxKind?: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
   taxRate?: number;
+  // Bonificación de la línea, en %.
+  discountPercent?: number;
 }
 
 export interface QuoteLineDetail {
@@ -39,6 +41,7 @@ export interface QuoteLineDetail {
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO' | null;
   netAmount: string | null;
   lineTotal: string | null;
+  discountPercent: string;
   articleVariant: {
     sku: string;
     color: string | null;
@@ -55,6 +58,8 @@ export interface CustomerRef {
   taxId: string | null;
   email: string | null;
   fiscalAddress: string | null;
+  taxCondition: string | null;
+  phone: string | null;
 }
 
 export interface QuoteSummary {
@@ -81,6 +86,11 @@ export interface QuoteDetail {
   customer: CustomerRef;
   currency: { id: string; code: string; name: string };
   lines: QuoteLineDetail[];
+  paymentTerms: string | null;
+  deliveryTerms: string | null;
+  deliveryPlace: string | null;
+  warranty: string | null;
+  contactPerson: { id: string; firstName: string; lastName: string | null; email: string | null; whatsapp: string | null } | null;
   createdBy: { id: string; name: string | null; email: string };
   // A lo sumo una (una Cotización se factura una sola vez) - ver
   // "Convertir a factura" en QuoteDetailPanel.tsx.
@@ -102,6 +112,11 @@ export interface CreateQuoteInput {
   validUntil?: string;
   notes?: string;
   pricesIncludeTax?: boolean;
+  paymentTerms?: string;
+  deliveryTerms?: string;
+  deliveryPlace?: string;
+  warranty?: string;
+  contactPersonId?: string | null;
   lines: QuoteLineInput[];
 }
 
@@ -137,11 +152,29 @@ export function describeQuoteStatus(quote: {
   return { label: STATUS_LABELS[quote.status], colorClass: STATUS_COLOR_CLASSES[quote.status] };
 }
 
+/** Abre el PDF en otra pestaña. Si la API lo rechaza (p. ej. falta la
+ * condición frente al IVA), tira un Error con el mensaje de la API: con
+ * responseType 'blob' ese mensaje llega como Blob y hay que leerlo a mano. */
 async function openPdf(id: string, style?: PdfStyle): Promise<void> {
-  const res = await api.get(`/quotes/${id}/pdf`, {
-    params: style ? { style } : {},
-    responseType: 'blob',
-  });
+  let res;
+  try {
+    res = await api.get(`/quotes/${id}/pdf`, {
+      params: style ? { style } : {},
+      responseType: 'blob',
+    });
+  } catch (err) {
+    const data = (err as { response?: { data?: unknown } }).response?.data;
+    let message = 'No se pudo generar el PDF';
+    if (data instanceof Blob) {
+      try {
+        const parsed = JSON.parse(await data.text()) as { message?: string | string[] };
+        if (parsed.message) message = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message;
+      } catch {
+        // Respuesta que no es JSON: queda el mensaje genérico.
+      }
+    }
+    throw new Error(message);
+  }
   const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
   window.open(url, '_blank');
 }

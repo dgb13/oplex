@@ -669,6 +669,28 @@ model TenantSettings {
   // absoluto para esos casos. Ver ese campo para el resto del criterio.
   defaultMarkupPercent Decimal? @db.Decimal(6, 2)
 
+  // Cómo se presenta la empresa en los PDF que ve el cliente (por ahora
+  // Cotizaciones, ver libs/modules/quotes/src/lib/pdf). Todo opcional: la
+  // plantilla omite lo que no esté cargado. logoUrl es una ruta /uploads/...
+  // subida desde Preferencias (TenantLogoService), PNG o JPG - el generador
+  // de PDF no lee SVG. brandColor: hex #rrggbb, sin cargar = índigo Oplex.
+  tradeName    String?
+  contactPhone String?
+  contactEmail String?
+  website      String?
+  logoUrl      String?
+  brandColor   String?
+  // Datos para transferencia que se imprimen en la cotización.
+  bankName             String?
+  bankCbu              String?
+  bankAlias            String?
+  quoteShowBankDetails Boolean @default(true)
+  // Valores con los que arranca cada cotización nueva (editables en cada una).
+  quoteDefaultPaymentTerms  String?
+  quoteDefaultDeliveryTerms String?
+  quoteDefaultDeliveryPlace String?
+  quoteDefaultWarranty      String?
+
   // Cuándo se pasó de la cuenta contable única "Caja" a una cuenta contable
   // por cada cuenta de dinero (AccountingService.ensureMoneyAccounts): null =
   // todavía no; la primera operación de dinero lo hace y reclasifica el saldo.
@@ -1092,6 +1114,8 @@ model Person {
   avatarUrl String?
   jobTitle  String?
   createdAt DateTime @default(now())
+
+  quotes Quote[]
 
   @@index([tenantId, companyId])
   @@map("people")
@@ -2289,6 +2313,15 @@ model Quote {
   notes           String?
   brandingLogoUrl String?
   total           Decimal     @db.Decimal(14, 2)
+  // Condiciones comerciales impresas en el PDF - arrancan con los
+  // quoteDefault* de TenantSettings y se editan por cotización.
+  paymentTerms    String?
+  deliveryTerms   String?
+  deliveryPlace   String?
+  warranty        String?
+  // Persona del cliente a quien va dirigida ("At.:" / saludo en el PDF).
+  contactPersonId String?
+  contactPerson   Person?     @relation(fields: [contactPersonId], references: [id])
 
   // How/whether this was sent to the customer - same "user-confirmed, no
   // delivery receipt" semantics as PurchaseOrder.sentAt/sentVia.
@@ -2330,6 +2363,8 @@ model QuoteLine {
   taxKind          TaxLineKind?
   netAmount        Decimal?       @db.Decimal(14, 2)
   lineTotal        Decimal?       @db.Decimal(14, 2)
+  // Bonificación de la línea (%). netAmount ya la tiene descontada.
+  discountPercent  Decimal        @default(0) @db.Decimal(5, 2)
 
   @@index([tenantId])
   @@map("quote_lines")

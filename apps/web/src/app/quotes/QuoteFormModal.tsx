@@ -15,7 +15,7 @@ import { quotePreferencesApi, quotesApi, type QuoteDetail } from '@/lib/quotes';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 
 interface Props {
@@ -69,8 +69,18 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
         notes: l.notes ?? undefined,
         taxKind: l.taxKind ?? 'GRAVADO',
         taxRate: l.taxRate ? Number(l.taxRate) : 0,
+        discountPercent: Number(l.discountPercent ?? 0) || undefined,
       })) ?? [],
   );
+  // Condiciones comerciales del PDF. En una cotización nueva arrancan con
+  // los valores por defecto de Preferencias (ver el useEffect de abajo).
+  const [conditions, setConditions] = useState({
+    paymentTerms: quote?.paymentTerms ?? '',
+    deliveryTerms: quote?.deliveryTerms ?? '',
+    deliveryPlace: quote?.deliveryPlace ?? '',
+    warranty: quote?.warranty ?? '',
+  });
+  const [contactPersonId, setContactPersonId] = useState(quote?.contactPerson?.id ?? '');
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const addArticleRef = useRef<HTMLInputElement>(null);
@@ -83,6 +93,24 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
   // Emisor Monotributo/Exento: factura C, sin IVA - la cotización tampoco lo
   // suma (mismo criterio que QuoteService en el backend).
   const { data: tenantSettings } = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const [defaultsApplied, setDefaultsApplied] = useState(isEdit);
+  useEffect(() => {
+    if (defaultsApplied || !tenantSettings) return;
+    setDefaultsApplied(true);
+    setConditions({
+      paymentTerms: tenantSettings.quoteDefaultPaymentTerms ?? '',
+      deliveryTerms: tenantSettings.quoteDefaultDeliveryTerms ?? '',
+      deliveryPlace: tenantSettings.quoteDefaultDeliveryPlace ?? '',
+      warranty: tenantSettings.quoteDefaultWarranty ?? '',
+    });
+  }, [defaultsApplied, tenantSettings]);
+
+  const peopleQuery = useQuery({
+    queryKey: ['company-people', customerId],
+    queryFn: () => companiesApi.listPeople(customerId),
+    enabled: Boolean(customerId),
+  });
+  const people = peopleQuery.data ?? [];
   const withoutVat =
     tenantSettings?.ownTaxCondition === 'MONOTRIBUTO' || tenantSettings?.ownTaxCondition === 'EXENTO';
   const totals = computeSalesTotals(lines, pricesIncludeTax, undefined, withoutVat);
@@ -99,6 +127,11 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
         validUntil: validUntil || undefined,
         notes: notes.trim() || undefined,
         pricesIncludeTax: pricesIncludeTax && !withoutVat,
+        paymentTerms: conditions.paymentTerms.trim(),
+        deliveryTerms: conditions.deliveryTerms.trim(),
+        deliveryPlace: conditions.deliveryPlace.trim(),
+        warranty: conditions.warranty.trim(),
+        contactPersonId: contactPersonId || null,
         lines: lines.map((l) => ({
           articleVariantId: l.articleVariantId,
           quantity: l.quantity,
@@ -106,6 +139,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
           notes: l.notes?.trim() || undefined,
           taxKind: l.taxKind,
           taxRate: l.taxRate,
+          discountPercent: l.discountPercent || undefined,
         })),
       };
       return quote ? quotesApi.update(quote.id, dto) : quotesApi.create(dto);
@@ -176,7 +210,10 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                 <CustomerPicker
                   customers={customers}
                   value={customerId}
-                  onChange={setCustomerId}
+                  onChange={(id) => {
+                    if (id !== customerId) setContactPersonId('');
+                    setCustomerId(id);
+                  }}
                   autoFocus={!isEdit}
                   onPicked={() => addArticleRef.current?.focus()}
                 />
@@ -189,6 +226,7 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
                 onPricesIncludeTaxChange={setPricesIncludeTax}
                 currencyCode={currencyCode}
                 allowNotes
+                allowDiscount
                 addInputRef={addArticleRef}
                 withoutVat={withoutVat}
               />
@@ -221,13 +259,41 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
               <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
             </section>
 
+            {customerId && (
+              <section>
+                <SectionLabel>Dirigida a</SectionLabel>
+                <select
+                  id="quote-contact"
+                  value={contactPersonId}
+                  onChange={(e) => setContactPersonId(e.target.value)}
+                  className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+                >
+                  <option value="">{people.length ? 'Sin contacto' : 'El cliente no tiene contactos cargados'}</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {[p.firstName, p.lastName].filter(Boolean).join(' ')}
+                      {p.jobTitle ? ` · ${p.jobTitle}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
+
+            <section className="flex flex-col gap-2">
+              <SectionLabel>Condiciones</SectionLabel>
+              <ConditionInput id="quote-payment" label="Forma de pago" value={conditions.paymentTerms} onChange={(v) => setConditions({ ...conditions, paymentTerms: v })} />
+              <ConditionInput id="quote-delivery" label="Plazo de entrega" value={conditions.deliveryTerms} onChange={(v) => setConditions({ ...conditions, deliveryTerms: v })} />
+              <ConditionInput id="quote-place" label="Lugar de entrega" value={conditions.deliveryPlace} onChange={(v) => setConditions({ ...conditions, deliveryPlace: v })} />
+              <ConditionInput id="quote-warranty" label="Garantía" value={conditions.warranty} onChange={(v) => setConditions({ ...conditions, warranty: v })} />
+            </section>
+
             <section>
               <SectionLabel>Notas para el cliente</SectionLabel>
               <Textarea
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Condiciones de pago, plazo de entrega, lo que quieras que figure en el PDF"
+                placeholder="Lo que quieras que figure en el PDF como observación"
               />
             </section>
 
@@ -268,5 +334,14 @@ function ValidityChip({ active, onClick, children }: { active: boolean; onClick:
     >
       {children}
     </button>
+  );
+}
+
+function ConditionInput({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label htmlFor={id} className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
   );
 }

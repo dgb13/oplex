@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
 import {
   describeQuoteStatus,
@@ -12,6 +12,8 @@ import {
   type QuoteDetail,
 } from '@/lib/quotes';
 import { buildVariantLabel } from '@/lib/inventory';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
@@ -28,6 +30,9 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
   const queryClient = useQueryClient();
   const [visible, setVisible] = useState(false);
   const [pdfStyle, setPdfStyle] = useState<PdfStyle>('MODERNO');
+  const { data: tenantSettings } = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  // Sin condición frente al IVA no se puede armar el PDF (ver QuoteService.generatePdf).
+  const missingTaxCondition = Boolean(tenantSettings && !tenantSettings.ownTaxCondition);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -181,11 +186,23 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => void quotesApi.openPdf(quoteId, pdfStyle)}
+                  onClick={() => {
+                    setError('');
+                    quotesApi.openPdf(quoteId, pdfStyle).catch((err: Error) => setError(err.message));
+                  }}
+                  disabled={missingTaxCondition}
                 >
                   Descargar PDF
                 </Button>
               </div>
+              {missingTaxCondition && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                  <span className="flex-1">Cargá tu condición frente al IVA para generar cotizaciones: de eso depende si el PDF discrimina el IVA.</span>
+                  <Link href="/accounting/arca" className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+                    Ir a Datos de la empresa
+                  </Link>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 {data.status === 'DRAFT' && (

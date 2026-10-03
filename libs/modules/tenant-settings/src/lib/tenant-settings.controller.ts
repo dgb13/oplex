@@ -1,12 +1,15 @@
-import { Body, Controller, Delete, Get, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Patch, Post, Req } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
 import { AuditEntity } from '@plexo/database';
+import type { FastifyRequest } from 'fastify';
+import '@fastify/multipart';
 import { RegisterDomainDto } from './dto/register-domain.dto.js';
 import { UpdateTenantInfoDto } from './dto/update-tenant-info.dto.js';
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto.js';
 import { GenerateAfipCsrDto } from './dto/generate-afip-csr.dto.js';
 import { InspectAfipFileDto } from './dto/inspect-afip-file.dto.js';
 import { UploadAfipCertificateDto } from './dto/upload-afip-certificate.dto.js';
+import { TenantLogoService } from './tenant-logo.service.js';
 import { TenantSettingsService } from './tenant-settings.service.js';
 
 // Tenant-wide business policy, not a personal preference like theme/density
@@ -16,7 +19,10 @@ const WRITE_ROLES = ['OWNER', 'ADMIN'] as const;
 
 @Controller('tenant-settings')
 export class TenantSettingsController {
-  constructor(private readonly tenantSettingsService: TenantSettingsService) {}
+  constructor(
+    private readonly tenantSettingsService: TenantSettingsService,
+    private readonly tenantLogoService: TenantLogoService,
+  ) {}
 
   @Get()
   getSettings() {
@@ -75,5 +81,25 @@ export class TenantSettingsController {
   @Delete('afip-certificate')
   removeAfipCertificate() {
     return this.tenantSettingsService.removeAfipCertificate();
+  }
+
+  @AuditEntity('tenantSettings', { idParam: null })
+  @Roles(...WRITE_ROLES)
+  @Post('logo')
+  async uploadLogo(@Req() req: FastifyRequest) {
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No se recibió ningún archivo');
+    }
+    await this.tenantLogoService.setLogo(data.mimetype, await data.toBuffer());
+    return this.tenantSettingsService.getSettings();
+  }
+
+  @AuditEntity('tenantSettings', { idParam: null })
+  @Roles(...WRITE_ROLES)
+  @Delete('logo')
+  async removeLogo() {
+    await this.tenantLogoService.removeLogo();
+    return this.tenantSettingsService.getSettings();
   }
 }

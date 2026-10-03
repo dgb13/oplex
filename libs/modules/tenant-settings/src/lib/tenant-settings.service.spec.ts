@@ -13,7 +13,25 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
  * into whatever `db` object a test builds, so each test only overrides
  * `tenantSettings`/`tenant` and stops paying attention to the join for
  * everything else it's not about. */
-function withTenant(db: Record<string, unknown>, taxId: string | null = '20-11111111-2') {
+// Datos de la empresa para los PDF (ver TenantSettings.tradeName) sin cargar.
+const EMPTY_BRANDING = {
+  tradeName: null,
+  contactPhone: null,
+  contactEmail: null,
+  website: null,
+  logoUrl: null,
+  brandColor: null,
+  bankName: null,
+  bankCbu: null,
+  bankAlias: null,
+  quoteDefaultPaymentTerms: null,
+  quoteDefaultDeliveryTerms: null,
+  quoteDefaultDeliveryPlace: null,
+  quoteDefaultWarranty: null,
+  quoteShowBankDetails: true,
+};
+
+function withTenant<T extends Record<string, unknown>>(db: T, taxId: string | null = '20-11111111-2') {
   return {
     tenant: { findUniqueOrThrow: jest.fn().mockResolvedValue({ taxId }) },
     ...db,
@@ -72,6 +90,7 @@ describe('TenantSettingsService.getSettings', () => {
       grossIncomeType: null,
       activityStartDate: null,
       defaultMarkupPercent: null,
+      ...EMPTY_BRANDING,
       tenantTaxId: null,
       tenantName: null,
     });
@@ -132,6 +151,7 @@ describe('TenantSettingsService.getSettings', () => {
       grossIncomeType: null,
       activityStartDate: null,
       defaultMarkupPercent: null,
+      ...EMPTY_BRANDING,
       tenantTaxId: '20-11111111-2',
       tenantName: null,
     });
@@ -226,6 +246,19 @@ describe('TenantSettingsService.updateSettings', () => {
         grossIncomeType: null,
         activityStartDate: null,
         defaultMarkupPercent: null,
+        tradeName: null,
+        contactPhone: null,
+        contactEmail: null,
+        website: null,
+        brandColor: null,
+        bankName: null,
+        bankCbu: null,
+        bankAlias: null,
+        quoteDefaultPaymentTerms: null,
+        quoteDefaultDeliveryTerms: null,
+        quoteDefaultDeliveryPlace: null,
+        quoteDefaultWarranty: null,
+        quoteShowBankDetails: undefined,
       },
       update: {
         arReminderIntervalDays: 5,
@@ -243,6 +276,19 @@ describe('TenantSettingsService.updateSettings', () => {
         grossIncomeType: undefined,
         activityStartDate: undefined,
         defaultMarkupPercent: undefined,
+        tradeName: undefined,
+        contactPhone: undefined,
+        contactEmail: undefined,
+        website: undefined,
+        brandColor: undefined,
+        bankName: undefined,
+        bankCbu: undefined,
+        bankAlias: undefined,
+        quoteDefaultPaymentTerms: undefined,
+        quoteDefaultDeliveryTerms: undefined,
+        quoteDefaultDeliveryPlace: undefined,
+        quoteDefaultWarranty: undefined,
+        quoteShowBankDetails: undefined,
       },
     });
     expect(result.arReminderIntervalDays).toBe(5);

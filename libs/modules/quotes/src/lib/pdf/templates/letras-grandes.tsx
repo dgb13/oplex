@@ -1,101 +1,128 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import type { QuotePdfData } from '../pdf-data.js';
+import { FONTS } from '../fonts.js';
+import { NOT_AN_INVOICE_LEGEND, type QuotePdfData } from '../pdf-data.js';
+import { joinDefined, PageFooter, vatNotice } from './parts.js';
 
-// Large type throughout, generous line-height, high contrast - a tight
-// 5-column table doesn't fit at this scale, so each line is its own block
-// instead (article name big, details on a second line) rather than
-// shrinking columns to make a table fit.
-const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 14, fontFamily: 'Helvetica', color: '#000000', lineHeight: 1.4 },
-  tenantName: { fontSize: 20, fontFamily: 'Helvetica-Bold' },
-  docType: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginTop: 8 },
-  docNumber: { fontSize: 14, marginBottom: 12 },
-  divider: { borderBottomWidth: 2, borderBottomColor: '#000000', marginVertical: 10 },
-  block: { marginBottom: 10 },
-  label: { fontFamily: 'Helvetica-Bold' },
-  lineBlock: { marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#d4d4d4' },
-  lineArticle: { fontSize: 15, fontFamily: 'Helvetica-Bold' },
-  lineDetails: { fontSize: 13, color: '#262626', marginTop: 2 },
-  vatSummary: { marginTop: 8 },
-  vatSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', fontSize: 13 },
-  totalBlock: { marginTop: 12, fontSize: 18, fontFamily: 'Helvetica-Bold' },
-  notes: { marginTop: 16, fontSize: 13 },
-  footer: { position: 'absolute', bottom: 20, left: 28, right: 28, fontSize: 10, color: '#404040', textAlign: 'center' },
+// Sin lineHeight en la hoja: ahí hace desaparecer el pie fijo (bug de
+// @react-pdf/renderer). Va sólo en los textos de varios renglones.
+const s = StyleSheet.create({
+  page: { paddingTop: 36, paddingHorizontal: 40, paddingBottom: 56, fontFamily: FONTS.legible, fontSize: 13, color: '#000000' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 3.5, borderBottomColor: '#000000', paddingBottom: 10 },
+  emitterName: { fontSize: 19, fontWeight: 700 },
+  small: { fontSize: 11 },
+  docTitle: { fontSize: 22, fontWeight: 700, textAlign: 'right' },
+  docSub: { fontSize: 14, textAlign: 'right' },
+  two: { flexDirection: 'row', gap: 14, marginTop: 12, fontSize: 12.5 },
+  lab: { fontWeight: 700 },
+  valid: { marginTop: 11, backgroundColor: '#000000', color: '#ffffff', paddingVertical: 7, paddingHorizontal: 11, fontSize: 14, fontWeight: 700 },
+  item: { flexDirection: 'row', gap: 14, paddingVertical: 8, borderBottomWidth: 1.4, borderBottomColor: '#000000' },
+  itemName: { fontSize: 14.5, fontWeight: 700 },
+  itemDetail: { fontSize: 12 },
+  amount: { fontSize: 15.5, fontWeight: 700, textAlign: 'right', alignSelf: 'center' },
+  totals: { marginTop: 11, alignItems: 'flex-end', gap: 2 },
+  grand: { marginTop: 6, borderWidth: 2.6, borderColor: '#000000', paddingVertical: 7, paddingHorizontal: 13, fontSize: 20, fontWeight: 700 },
+  cond: { marginTop: 11, fontSize: 12 },
+  footer: { bottom: 20, left: 40, right: 40, fontSize: 10 },
 });
 
 export function LetrasGrandesTemplate({ data }: { data: QuotePdfData }) {
+  const { emitter, customer, conditions, totals } = data;
+  const discriminated = data.vatMode === 'DISCRIMINATED';
+  const notice = vatNotice(data);
+
   return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.tenantName}>{data.tenantName}</Text>
-        {data.tenantTaxId && <Text>CUIT {data.tenantTaxId}</Text>}
-        <Text style={styles.docType}>Cotización N° {data.number}</Text>
-        <Text style={styles.docNumber}>{data.issueDate}</Text>
-        <View style={styles.divider} />
-
-        <View style={styles.block}>
-          <Text><Text style={styles.label}>Cliente: </Text>{data.customerName}</Text>
-          {data.customerTaxId && <Text><Text style={styles.label}>CUIT: </Text>{data.customerTaxId}</Text>}
-          {data.customerAddress && <Text><Text style={styles.label}>Domicilio: </Text>{data.customerAddress}</Text>}
-        </View>
-        <View style={styles.block}>
-          <Text><Text style={styles.label}>Moneda: </Text>{data.currencyCode}</Text>
-          {data.validUntil && <Text><Text style={styles.label}>Válida hasta: </Text>{data.validUntil}</Text>}
-        </View>
-
-        <View style={styles.divider} />
-
-        {data.lines.map((line, i) => (
-          <View style={styles.lineBlock} key={i}>
-            <Text style={styles.lineArticle}>
-              {line.articleName}
-              {line.variantLabel ? ` · ${line.variantLabel}` : ''}
+    <Document title={`Presupuesto ${data.number}`} author={emitter.name}>
+      <Page size="A4" style={s.page}>
+        <View style={s.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.emitterName}>{emitter.tradeName ?? emitter.name}</Text>
+            <Text style={s.small}>
+              {joinDefined([emitter.taxId ? `CUIT ${emitter.taxId}` : null, emitter.taxConditionLabel])}
             </Text>
-            <Text style={styles.lineDetails}>
-              SKU {line.sku} · Cantidad {line.quantity} · Precio unit. {line.unitPrice}
-              {line.vatLabel ? ` · IVA ${line.vatLabel}` : ''} · Subtotal {line.lineTotal}
+            <Text style={s.small}>{joinDefined([emitter.phone ? `Tel. ${emitter.phone}` : null, emitter.email])}</Text>
+          </View>
+          <View>
+            <Text style={s.docTitle}>Presupuesto</Text>
+            <Text style={s.docSub}>N° {data.number}</Text>
+            <Text style={s.docSub}>{data.issueDate}</Text>
+          </View>
+        </View>
+
+        <View style={s.two}>
+          <View style={{ flex: 1 }}>
+            <Text>
+              <Text style={s.lab}>Cliente: </Text>
+              {customer.name}
             </Text>
+            {customer.taxId ? (
+              <Text>
+                <Text style={s.lab}>CUIT: </Text>
+                {customer.taxId}
+              </Text>
+            ) : null}
+            {customer.contactName ? (
+              <Text>
+                <Text style={s.lab}>Contacto: </Text>
+                {customer.contactName}
+              </Text>
+            ) : null}
           </View>
-        ))}
-
-        {data.vatSummary && (
-          <View style={styles.vatSummary}>
-            <View style={styles.vatSummaryRow}>
-              <Text>Neto Gravado</Text>
-              <Text>{data.vatSummary.netTaxed}</Text>
-            </View>
-            <View style={styles.vatSummaryRow}>
-              <Text>Exento/No Gravado</Text>
-              <Text>{data.vatSummary.netExempt}</Text>
-            </View>
-            <View style={styles.vatSummaryRow}>
-              <Text>IVA 21%</Text>
-              <Text>{data.vatSummary.vat21}</Text>
-            </View>
-            <View style={styles.vatSummaryRow}>
-              <Text>IVA 10,5%</Text>
-              <Text>{data.vatSummary.vat10_5}</Text>
-            </View>
-            <View style={styles.vatSummaryRow}>
-              <Text>IVA 27%</Text>
-              <Text>{data.vatSummary.vat27}</Text>
-            </View>
-            <View style={styles.vatSummaryRow}>
-              <Text>IVA Otras</Text>
-              <Text>{data.vatSummary.vatOther}</Text>
-            </View>
+          <View style={{ flex: 1 }}>
+            {conditions.payment ? (
+              <Text>
+                <Text style={s.lab}>Pago: </Text>
+                {conditions.payment}
+              </Text>
+            ) : null}
+            {conditions.delivery ? (
+              <Text>
+                <Text style={s.lab}>Entrega: </Text>
+                {conditions.delivery}
+              </Text>
+            ) : null}
           </View>
-        )}
+        </View>
 
-        <Text style={styles.totalBlock}>Total ({data.currencyCode}): {data.total}</Text>
+        {data.validUntil ? <Text style={s.valid}>Este presupuesto vale hasta el {data.validUntil}</Text> : null}
 
-        {data.notes && (
-          <View style={styles.notes}>
-            <Text><Text style={styles.label}>Notas: </Text>{data.notes}</Text>
-          </View>
-        )}
+        <View style={{ marginTop: 9 }}>
+          {data.lines.map((line, i) => (
+            <View key={i} style={s.item} wrap={false}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.itemName}>{line.articleName}</Text>
+                <Text style={s.itemDetail}>
+                  {joinDefined([
+                    `${line.quantity} ${line.unit} × $ ${line.unitPrice}`,
+                    line.discount ? `descuento ${line.discount}` : null,
+                    discriminated ? `más IVA ${line.vatLabel}` : null,
+                    line.variantLabel,
+                    line.note,
+                  ])}
+                </Text>
+              </View>
+              <Text style={s.amount}>$ {line.amount}</Text>
+            </View>
+          ))}
+        </View>
 
-        <Text style={styles.footer}>Generado por Oplex</Text>
+        <View style={s.totals} wrap={false}>
+          {totals.discount ? <Text>Descuentos: -$ {totals.discount}</Text> : null}
+          {discriminated && totals.netTaxed ? <Text>Neto: $ {totals.netTaxed}</Text> : null}
+          {discriminated && totals.vatTotal ? <Text>IVA: $ {totals.vatTotal}</Text> : null}
+          <Text style={s.grand}>TOTAL: $ {totals.total}</Text>
+          {totals.vatContained ? <Text style={{ fontSize: 11 }}>IVA contenido: $ {totals.vatContained}</Text> : null}
+          {notice ? <Text style={{ fontSize: 11 }}>{notice}</Text> : null}
+        </View>
+
+        {data.bank?.alias ? (
+          <Text style={s.cond}>
+            <Text style={s.lab}>Para pagar por transferencia:</Text> alias {data.bank.alias}
+            {data.bank.name ? ` (${data.bank.name})` : ''}
+          </Text>
+        ) : null}
+        {data.notes ? <Text style={s.cond}>{data.notes}</Text> : null}
+
+        <PageFooter style={s.footer} left={NOT_AN_INVOICE_LEGEND} />
       </Page>
     </Document>
   );

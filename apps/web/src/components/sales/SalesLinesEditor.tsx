@@ -77,6 +77,7 @@ export default function SalesLinesEditor({
   onPricesIncludeTaxChange,
   currencyCode,
   allowNotes,
+  allowDiscount = false,
   addInputRef,
   withoutVat = false,
 }: {
@@ -88,6 +89,8 @@ export default function SalesLinesEditor({
   // Botón de "detalle" por línea (texto libre que sale en el PDF) - sólo
   // Cotizaciones lo guarda hoy.
   allowNotes?: boolean;
+  // Columna de bonificación % por línea - sólo Cotizaciones la guarda hoy.
+  allowDiscount?: boolean;
   addInputRef?: React.RefObject<HTMLInputElement | null>;
   // Factura C / emisor Monotributo-Exento: sin IVA - no hay columna de IVA
   // ni "precios con IVA incluido", el precio es el final.
@@ -249,6 +252,7 @@ export default function SalesLinesEditor({
               <th className="w-32 px-2 py-2.5 text-right font-semibold">
                 Precio unit.{pricesIncludeTax && !withoutVat ? ' (final)' : ''}
               </th>
+              {allowDiscount && <th className="w-20 px-2 py-2.5 text-right font-semibold">Bonif. %</th>}
               {!withoutVat && <th className="w-36 px-2 py-2.5 font-semibold">IVA</th>}
               <th className="w-36 px-2 py-2.5 text-right font-semibold">
                 Subtotal
@@ -260,7 +264,7 @@ export default function SalesLinesEditor({
             {lines.length === 0 && (
               <tr>
                 <td
-                  colSpan={withoutVat ? 6 : 7}
+                  colSpan={(withoutVat ? 6 : 7) + (allowDiscount ? 1 : 0)}
                   className="px-3 py-8 text-center text-muted-foreground"
                 >
                   Todavía no agregaste artículos. Buscalos abajo.
@@ -379,6 +383,26 @@ export default function SalesLinesEditor({
                       onKeyDown={backToSearch}
                     />
                   </td>
+                  {allowDiscount && (
+                    <td className="px-2 py-2.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="any"
+                        aria-label="Bonificación %"
+                        placeholder="0"
+                        className={cellClass}
+                        value={line.discountPercent || ''}
+                        onChange={(e) =>
+                          updateLine(line.key, {
+                            discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                          })
+                        }
+                        onKeyDown={backToSearch}
+                      />
+                    </td>
+                  )}
                   {!withoutVat && (
                     <td className="px-2 py-2.5">
                       <VatRateSelect

@@ -112,4 +112,67 @@ export class UpdateTenantSettingsDto {
   @IsNumber()
   @Min(0)
   defaultMarkupPercent?: number | null;
+
+  // Datos de la empresa para los PDF (ver TenantSettings.tradeName en el
+  // schema). null borra el valor, omitir el campo lo deja como está.
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(120)
+  tradeName?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(60)
+  contactPhone?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
+  @IsEmail()
+  contactEmail?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(200)
+  website?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'El color tiene que ser un código como #4f39f6' })
+  brandColor?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(80)
+  bankName?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
+  @Matches(/^\d{22}$/,{ message: 'El CBU/CVU tiene que tener 22 números' })
+  bankCbu?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(40)
+  bankAlias?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  quoteShowBankDetails?: boolean;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(300)
+  quoteDefaultPaymentTerms?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(300)
+  quoteDefaultDeliveryTerms?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(300)
+  quoteDefaultDeliveryPlace?: string | null;
+
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  @MaxLength(300)
+  quoteDefaultWarranty?: string | null;
 }

@@ -8,6 +8,8 @@ export interface VatSummaryLine {
   unitPrice?: number;
   taxKind?: VatKind;
   taxRate?: number;
+  // Bonificación de la línea en % (sólo Cotizaciones la usa hoy).
+  discountPercent?: number;
 }
 
 const ZERO_BUCKET = { vat21: 0, vat10_5: 0, vat27: 0, vatOther: 0 };
@@ -37,7 +39,7 @@ export function computeLineTotals(line: VatSummaryLine, pricesIncludeTax: boolea
   const rawUnitPrice = line.unitPrice ?? 0;
   const unitPrice =
     pricesIncludeTax && kind === 'GRAVADO' && rate > 0 ? rawUnitPrice / (1 + rate / 100) : rawUnitPrice;
-  const netAmount = unitPrice * (line.quantity || 0);
+  const netAmount = unitPrice * (line.quantity || 0) * (1 - (line.discountPercent ?? 0) / 100);
   const taxAmount = kind === 'GRAVADO' ? (netAmount * rate) / 100 : 0;
   return { netAmount, taxAmount, taxRate: rate, taxKind: kind, lineTotal: netAmount + taxAmount };
 }

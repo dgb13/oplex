@@ -14,6 +14,8 @@ export interface SalesLine {
   taxRate: number;
   // Detalle libre de la línea (sólo Cotizaciones lo persiste hoy).
   notes?: string;
+  // Bonificación en % (sólo Cotizaciones, ver allowDiscount en SalesLinesEditor).
+  discountPercent?: number;
 }
 
 let lineSeq = 0;

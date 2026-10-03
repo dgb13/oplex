@@ -64,6 +64,21 @@ export interface TenantSettingsView {
   // el schema. Usado por Inventario para pre-completar el precio de venta
   // cuando el Article en cuestión no tiene su propio markupPercent.
   defaultMarkupPercent: number | null;
+  // Datos de la empresa para los PDF - ver TenantSettings.tradeName en el schema.
+  tradeName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  website: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
+  bankName: string | null;
+  bankCbu: string | null;
+  bankAlias: string | null;
+  quoteDefaultPaymentTerms: string | null;
+  quoteDefaultDeliveryTerms: string | null;
+  quoteDefaultDeliveryPlace: string | null;
+  quoteDefaultWarranty: string | null;
+  quoteShowBankDetails: boolean;
   // Tenant.taxId (the tenant's OWN CUIT - who the AFIP certificate is
   // registered under), surfaced here because Preferencias/AFIP is the only
   // screen that needs to show/edit it today - see updateTenantInfo. Not a
@@ -173,6 +188,20 @@ export class TenantSettingsService {
       grossIncomeType: row?.grossIncomeType ?? null,
       activityStartDate: row?.activityStartDate ?? null,
       defaultMarkupPercent: row?.defaultMarkupPercent?.toNumber() ?? null,
+      tradeName: row?.tradeName ?? null,
+      contactPhone: row?.contactPhone ?? null,
+      contactEmail: row?.contactEmail ?? null,
+      website: row?.website ?? null,
+      logoUrl: row?.logoUrl ?? null,
+      brandColor: row?.brandColor ?? null,
+      bankName: row?.bankName ?? null,
+      bankCbu: row?.bankCbu ?? null,
+      bankAlias: row?.bankAlias ?? null,
+      quoteDefaultPaymentTerms: row?.quoteDefaultPaymentTerms ?? null,
+      quoteDefaultDeliveryTerms: row?.quoteDefaultDeliveryTerms ?? null,
+      quoteDefaultDeliveryPlace: row?.quoteDefaultDeliveryPlace ?? null,
+      quoteDefaultWarranty: row?.quoteDefaultWarranty ?? null,
+      quoteShowBankDetails: row?.quoteShowBankDetails ?? true,
       tenantTaxId,
       tenantName,
     };
@@ -201,6 +230,19 @@ export class TenantSettingsService {
         grossIncomeType: dto.grossIncomeType ?? null,
         activityStartDate: dto.activityStartDate ? new Date(dto.activityStartDate) : null,
         defaultMarkupPercent: dto.defaultMarkupPercent ?? null,
+        tradeName: blankToNull(dto.tradeName) ?? null,
+        contactPhone: blankToNull(dto.contactPhone) ?? null,
+        contactEmail: blankToNull(dto.contactEmail) ?? null,
+        website: blankToNull(dto.website) ?? null,
+        brandColor: blankToNull(dto.brandColor) ?? null,
+        bankName: blankToNull(dto.bankName) ?? null,
+        bankCbu: blankToNull(dto.bankCbu) ?? null,
+        bankAlias: blankToNull(dto.bankAlias) ?? null,
+        quoteDefaultPaymentTerms: blankToNull(dto.quoteDefaultPaymentTerms) ?? null,
+        quoteDefaultDeliveryTerms: blankToNull(dto.quoteDefaultDeliveryTerms) ?? null,
+        quoteDefaultDeliveryPlace: blankToNull(dto.quoteDefaultDeliveryPlace) ?? null,
+        quoteDefaultWarranty: blankToNull(dto.quoteDefaultWarranty) ?? null,
+        quoteShowBankDetails: dto.quoteShowBankDetails,
       },
       update: {
         arReminderIntervalDays: dto.arReminderIntervalDays,
@@ -218,6 +260,19 @@ export class TenantSettingsService {
         grossIncomeType: dto.grossIncomeType,
         activityStartDate: dto.activityStartDate === undefined ? undefined : dto.activityStartDate ? new Date(dto.activityStartDate) : null,
         defaultMarkupPercent: dto.defaultMarkupPercent,
+        tradeName: blankToNull(dto.tradeName),
+        contactPhone: blankToNull(dto.contactPhone),
+        contactEmail: blankToNull(dto.contactEmail),
+        website: blankToNull(dto.website),
+        brandColor: blankToNull(dto.brandColor),
+        bankName: blankToNull(dto.bankName),
+        bankCbu: blankToNull(dto.bankCbu),
+        bankAlias: blankToNull(dto.bankAlias),
+        quoteDefaultPaymentTerms: blankToNull(dto.quoteDefaultPaymentTerms),
+        quoteDefaultDeliveryTerms: blankToNull(dto.quoteDefaultDeliveryTerms),
+        quoteDefaultDeliveryPlace: blankToNull(dto.quoteDefaultDeliveryPlace),
+        quoteDefaultWarranty: blankToNull(dto.quoteDefaultWarranty),
+        quoteShowBankDetails: dto.quoteShowBankDetails,
       },
     });
     return this.toView(row, await this.getTenantTaxId());
@@ -468,4 +523,12 @@ export class TenantSettingsService {
       update: { emailCustomDomain: domain, resendDomainId, domainStatus: status },
     });
   }
+}
+
+/** "" desde un input vacío se guarda como null; undefined (campo omitido)
+ * sigue siendo undefined para que Prisma no lo toque. */
+function blankToNull(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
 }
