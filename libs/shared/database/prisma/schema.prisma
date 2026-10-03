@@ -162,6 +162,11 @@ enum FinancialAccountProvider {
   MERCADOPAGO
   PAYPAL
   CASH
+  // "Cobranzas a depositar": cuenta puente que Oplex crea sola para los
+  // cobros que no dicen en qué cuenta entró la plata (tarjeta, transferencia
+  // sin banco, Facturación sin cuenta). Se vacía con "Transferencia entre
+  // cuentas" cuando la plata llega al banco.
+  PENDING_DEPOSIT
 }
 
 // ACTIVE/SUSPENDED es un eje administrativo separado de
@@ -663,6 +668,11 @@ model TenantSettings {
   // suya propia (Article.markupPercent) - null = sin sugerencia en
   // absoluto para esos casos. Ver ese campo para el resto del criterio.
   defaultMarkupPercent Decimal? @db.Decimal(6, 2)
+
+  // Cuándo se pasó de la cuenta contable única "Caja" a una cuenta contable
+  // por cada cuenta de dinero (AccountingService.ensureMoneyAccounts): null =
+  // todavía no; la primera operación de dinero lo hace y reclasifica el saldo.
+  moneyAccountsSplitAt DateTime?
 
   updatedAt DateTime @updatedAt
 
@@ -2359,6 +2369,9 @@ model AccountingAccount {
   isMonetary Boolean @default(true)
 
   lines JournalEntryLine[]
+  // La cuenta de dinero (Tesorería) que esta cuenta contable representa, si
+  // es una (ver FinancialAccount.accountingAccountId).
+  financialAccount FinancialAccount?
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -2698,6 +2711,11 @@ model FinancialAccount {
   // revaluó contablemente esta cuenta - ver
   // AccountingService.postExchangeRateRevaluation. null = nunca revaluada.
   lastRevaluationRate Decimal?            @db.Decimal(18, 6)
+  // Su cuenta contable propia (1.1.03.NN) - la crea AccountingService la
+  // primera vez que se asienta algo contra esta cuenta (moneyAccountFor).
+  // null = todavía no. Antes todo el dinero iba a la cuenta única "Caja".
+  accountingAccountId String?
+  accountingAccount   AccountingAccount? @relation(fields: [tenantId, accountingAccountId], references: [tenantId, id])
 
   receipts         Receipt[]
   transactions     FinancialTransaction[]
@@ -2713,6 +2731,7 @@ model FinancialAccount {
   cashRegister         CashRegister?
 
   @@unique([tenantId, name])
+  @@unique([tenantId, accountingAccountId])
   @@index([tenantId])
   @@map("financial_accounts")
 }

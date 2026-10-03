@@ -42,6 +42,9 @@ export interface RejectCheckResult {
    * todavía en PORTFOLIO o ya ENDORSED nunca tocó una FinancialAccount, no
    * hay nada que revertir ahí. */
   wasDeposited: boolean;
+  /** Dónde estaba el cheque al rebotar - decide qué cuenta se acredita en
+   * el asiento del rechazo (cartera, el banco, o Proveedores si se endosó). */
+  previousStatus: 'PORTFOLIO' | 'DEPOSITED' | 'ENDORSED';
 }
 
 /**
@@ -187,7 +190,8 @@ export class CheckService {
     if (check.status !== 'PORTFOLIO' && check.status !== 'DEPOSITED' && check.status !== 'ENDORSED') {
       throw new BadRequestException(`No se puede rechazar un cheque en estado ${check.status}`);
     }
-    const wasDeposited = check.status === 'DEPOSITED';
+    const previousStatus = check.status;
+    const wasDeposited = previousStatus === 'DEPOSITED';
     const updated = await getTenantDb().check.update({
       where: { id: checkId },
       data: {
@@ -197,6 +201,6 @@ export class CheckService {
         rejectedAt: new Date(),
       },
     });
-    return { check: updated, wasDeposited };
+    return { check: updated, wasDeposited, previousStatus };
   }
 }

@@ -206,10 +206,21 @@ export class PosService {
           : `Hay ${unclaimed.length} cobros con QR acreditados sin venta en esta caja: confirmá las ventas o devolvé el dinero antes de cerrar el turno`,
       );
     }
+    await this.accountingService.ensureMoneyAccounts();
     const { session } = await this.cashSessionsService.closeSession(sessionId, dto);
     if (session.difference !== null && !session.difference.isZero()) {
+      const register = await this.cashRegistersService.getById(summary.session.registerId);
+      // El sobrante/faltante también mueve el saldo de la caja en Tesorería,
+      // igual que el asiento - si no, la cuenta contable de la caja y su
+      // saldo dejan de coincidir.
+      await this.reportsFinancialService.recordFinancialTransaction({
+        financialAccountId: register.financialAccountId,
+        amount: session.difference.toNumber(),
+        externalRef: `${session.difference.lt(0) ? 'Faltante' : 'Sobrante'} de arqueo - turno ${session.id}`,
+      });
       await this.accountingService.postCashSessionAdjustmentJournalEntry({
         cashSessionId: session.id,
+        financialAccountId: register.financialAccountId,
         difference: session.difference,
         date: session.closedAt ?? undefined,
       });

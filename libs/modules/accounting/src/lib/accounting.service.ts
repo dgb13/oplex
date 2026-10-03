@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   getTenantDb,
   getTenantId,
+  getOrCreateSystemFinancialAccount,
   getUserId,
   isDebitNormal,
   Prisma,
@@ -16,6 +17,16 @@ import type { CreateReversingEntryDto } from './dto/create-reversing-entry.dto.j
 import type { PostJournalEntryDto } from './dto/post-journal-entry.dto.js';
 
 type JournalEntryWithLines = JournalEntry & { lines: JournalEntryLine[] };
+
+/**
+ * El lado "dinero" de un asiento de cobro/pago: una cuenta de Tesorería (su
+ * cuenta contable propia, ver moneyAccountFor), o una cuenta que no es de
+ * Tesorería - cheques en cartera, cheques propios a pagar, o Proveedores
+ * (un cheque endosado que rebota vuelve a ser deuda con el proveedor).
+ */
+export type MoneySide =
+  | { financialAccountId: string }
+  | { kind: 'CHECKS_IN_PORTFOLIO' | 'OWN_CHECKS_PAYABLE' | 'ACCOUNTS_PAYABLE' };
 
 /** System accounts auto-posting resolves by code, creating them on first
  * use if a tenant hasn't set up its chart of accounts yet. Codes/names are
@@ -73,9 +84,35 @@ const PURCHASES_NO_RECEIPT_ACCOUNT = {
   name: 'Compras sin remito',
   type: 'EXPENSE' as const,
 };
-// Reused as-is for supplier payments (Cr side) - same code an earlier
-// session already created manually in this chart of accounts.
+// La cuenta única de dinero de antes de ensureMoneyAccounts: hoy sólo se
+// usa para reclasificar su saldo a la cuenta contable de cada cuenta de
+// dinero (1.1.03.NN, ver moneyAccountFor), nunca para asientos nuevos.
 const CASH_ACCOUNT = { code: '1.1.03', name: 'Caja', type: 'ASSET' as const };
+const MONEY_ACCOUNT_CODE_PREFIX = `${CASH_ACCOUNT.code}.`;
+
+// Cheques de terceros recibidos y todavía no depositados ni endosados (ver
+// TreasuryService.depositCheck). No es una cuenta de Tesorería: un cheque
+// en cartera no está en ningún banco.
+const CHECKS_IN_PORTFOLIO_ACCOUNT = { code: '1.1.07', name: 'Cheques en Cartera', type: 'ASSET' as const };
+
+// Cheques propios emitidos que todavía no se debitaron del banco (ver
+// postOwnCheckClearedJournalEntry) - la plata sigue en el banco hasta que
+// el cheque se cobra.
+const OWN_CHECKS_PAYABLE_ACCOUNT = {
+  code: '2.1.10',
+  name: 'Cheques Diferidos a Pagar',
+  type: 'LIABILITY' as const,
+};
+
+// Contrapartida de la reclasificación (ensureMoneyAccounts) cuando las
+// cuentas de dinero tienen más saldo que lo que la contabilidad había
+// registrado en "Caja": saldos iniciales y movimientos manuales que nunca
+// se asentaron.
+const MONEY_OPENING_BALANCES_ACCOUNT = {
+  code: '3.1.02',
+  name: 'Saldos Iniciales de Cuentas de Dinero',
+  type: 'EQUITY' as const,
+};
 
 // Gasto de rechazo que se le recobra al cliente (ver
 // postCheckRejectionJournalEntry) - un ingreso genuino, no una reversa de
@@ -303,12 +340,19 @@ export interface PostSupplierPaymentJournalEntryInput {
   // - grouped/summed here by taxType (the composition root doesn't need to
   // pre-aggregate, see apps/api's PurchaseInvoicesService.recordPayment).
   withholdings?: SupplierPaymentWithholdingInput[];
+  // De dónde salió la plata: la cuenta de Tesorería, un cheque de cartera
+  // endosado (CHECKS_IN_PORTFOLIO) o un cheque propio diferido
+  // (OWN_CHECKS_PAYABLE).
+  money: MoneySide;
   date?: Date;
 }
 
 export interface PostReceiptJournalEntryInput {
   receiptId: string;
   amount: Prisma.Decimal | number | string;
+  // Dónde entró la plata: la cuenta de Tesorería o, si se cobró con un
+  // cheque de tercero, CHECKS_IN_PORTFOLIO.
+  money: MoneySide;
   date?: Date;
 }
 
@@ -316,11 +360,40 @@ export interface PostCheckRejectionJournalEntryInput {
   checkId: string;
   amount: Prisma.Decimal | number | string;
   feeAmount?: Prisma.Decimal | number | string;
+  // Dónde estaba el cheque al rebotar: el banco donde se depositó, la
+  // cartera, o ACCOUNTS_PAYABLE si se había endosado a un proveedor.
+  money: MoneySide;
+  date?: Date;
+}
+
+export interface PostTransferJournalEntryInput {
+  fromFinancialAccountId: string;
+  toFinancialAccountId: string;
+  /** En la moneda base (pesos): quien llama ya convirtió si las cuentas son
+   * en otra moneda. */
+  amount: Prisma.Decimal | number | string;
+  description: string;
+  date?: Date;
+}
+
+export interface PostCheckDepositJournalEntryInput {
+  checkId: string;
+  financialAccountId: string;
+  amount: Prisma.Decimal | number | string;
+  date?: Date;
+}
+
+export interface PostOwnCheckClearedJournalEntryInput {
+  checkId: string;
+  financialAccountId: string;
+  amount: Prisma.Decimal | number | string;
   date?: Date;
 }
 
 export interface PostBankStatementAdjustmentJournalEntryInput {
   bankStatementLineId: string;
+  // La cuenta bancaria del extracto.
+  financialAccountId: string;
   kind: 'EXPENSE' | 'INCOME';
   /** Siempre una magnitud positiva - el signo ya lo decide `kind`, no el
    * signo de este número. */
@@ -330,6 +403,8 @@ export interface PostBankStatementAdjustmentJournalEntryInput {
 
 export interface PostCashSessionAdjustmentJournalEntryInput {
   cashSessionId: string;
+  // La cuenta de Tesorería de la caja (CashRegister.financialAccountId).
+  financialAccountId: string;
   /** CashSession.difference tal cual (countedAmount - expectedAmount) -
    * positivo = sobrante, negativo = faltante, nunca cero (ver short-circuit
    * en el método). El signo decide qué cuenta de resultado se usa, el
@@ -494,6 +569,218 @@ export class AccountingService {
         ...(spec.isMonetary !== undefined ? { isMonetary: spec.isMonetary } : {}),
       },
     });
+  }
+
+  /**
+   * Pasa al tenant de la cuenta contable única "Caja" a una cuenta contable
+   * por cada cuenta de dinero de Tesorería. Corre una sola vez por tenant
+   * (TenantSettings.moneyAccountsSplitAt) y reclasifica con un asiento: el
+   * saldo de "Caja" va a la cuenta de cada cuenta de dinero según su saldo
+   * actual; lo que la contabilidad tenía de más (cobros sin cuenta) va a
+   * "Cobranzas a depositar" - también como movimiento de Tesorería, para que
+   * esa cuenta muestre lo mismo -, y lo que tenía de menos (saldos iniciales
+   * y movimientos manuales nunca asentados) contra "Saldos Iniciales de
+   * Cuentas de Dinero".
+   *
+   * Quien registre un movimiento de dinero la llama ANTES de tocar
+   * FinancialAccount.currentBalance: si corriera después, la reclasificación
+   * contaría dos veces ese mismo movimiento (ya en el saldo de la cuenta y
+   * otra vez en su asiento). moneyAccountFor exige que ya haya corrido.
+   */
+  async ensureMoneyAccounts(): Promise<void> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const isDone = async () =>
+      Boolean(
+        (await db.tenantSettings.findUnique({ where: { tenantId }, select: { moneyAccountsSplitAt: true } }))
+          ?.moneyAccountsSplitAt,
+      );
+    if (await isDone()) {
+      return;
+    }
+    // Dos requests a la vez no reclasifican dos veces.
+    const lockKey = `money-accounts:${tenantId}`;
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    if (await isDone()) {
+      return;
+    }
+
+    const legacy = await db.accountingAccount.findFirst({ where: { code: CASH_ACCOUNT.code } });
+    const legacyBalance = legacy ? await this.accountBalance(legacy.id) : new Prisma.Decimal(0);
+
+    const lines: PostJournalEntryDto['lines'] = [];
+    const push = (accountId: string, value: Prisma.Decimal) => {
+      if (value.isZero()) return;
+      lines.push({
+        accountId,
+        direction: value.gt(0) ? 'DEBIT' : 'CREDIT',
+        amount: value.abs().toNumber(),
+      });
+    };
+
+    let assigned = new Prisma.Decimal(0);
+    const financialAccounts = await db.financialAccount.findMany({ orderBy: { name: 'asc' } });
+    for (const financialAccount of financialAccounts) {
+      const account = await this.linkMoneyAccount(financialAccount.id);
+      // En pesos: una cuenta en otra moneda vale su saldo al último tipo de
+      // cambio al que se revaluó; nunca revaluada = todavía no tiene valor
+      // contable (la primera revaluación lo fija, ver postExchangeRateRevaluation).
+      const value = financialAccount.currencyId
+        ? financialAccount.currentBalance.mul(financialAccount.lastRevaluationRate ?? 0).toDecimalPlaces(2)
+        : financialAccount.currentBalance;
+      push(account.id, value);
+      assigned = assigned.add(value);
+    }
+
+    // Lo que "Caja" registró y no está en ninguna cuenta de dinero, separado
+    // por qué es (lecturas directas de cobros/pagos/cheques: es una
+    // migración de una sola vez, no lógica de esos módulos):
+    // - Cheques de terceros todavía en cartera -> Cheques en Cartera.
+    const portfolio = await this.sumChecks({ kind: 'THIRD_PARTY', status: 'PORTFOLIO' });
+    if (!portfolio.isZero()) {
+      push((await this.getOrCreateAccount(CHECKS_IN_PORTFOLIO_ACCOUNT)).id, portfolio);
+    }
+    // - Cheques propios emitidos que el banco todavía no debitó: "Caja" ya
+    //   los había restado, son deuda -> Cheques Diferidos a Pagar.
+    const ownIssued = await this.sumChecks({ kind: 'OWN', status: 'ISSUED' });
+    if (!ownIssued.isZero()) {
+      push((await this.getOrCreateAccount(OWN_CHECKS_PAYABLE_ACCOUNT)).id, ownIssued.neg());
+    }
+    // - Cobros (y pagos) sin cuenta de dinero ni cheque: la plata está en
+    //   algún lado que Oplex no sabe -> "Cobranzas a depositar", para que se
+    //   pase a donde está.
+    //   Se mide lo que "Caja" registró por ellos (en pesos y neto de
+    //   retenciones), no el importe del documento.
+    let pendingValue = legacy
+      ? await this.accountBalance(legacy.id, {
+          OR: [
+            { receipt: { financialAccountId: null, check: null } },
+            { supplierPayment: { financialAccountId: null, check: null } },
+          ],
+        })
+      : new Prisma.Decimal(0);
+
+    // Lo que quede sin explicar: si "Caja" tenía de más, también va a
+    // "Cobranzas a depositar" (plata que entró sin cuenta); si tenía de
+    // menos, son saldos que nunca se asentaron (saldos iniciales de las
+    // cuentas, movimientos manuales) -> Saldos Iniciales de Cuentas de Dinero.
+    const unexplained = legacyBalance.sub(assigned).sub(pendingValue).sub(portfolio).add(ownIssued);
+    if (unexplained.gt(0)) {
+      pendingValue = pendingValue.add(unexplained);
+    } else if (unexplained.lt(0)) {
+      push((await this.getOrCreateAccount(MONEY_OPENING_BALANCES_ACCOUNT)).id, unexplained);
+    }
+    if (!pendingValue.isZero()) {
+      const pending = await getOrCreateSystemFinancialAccount(db, tenantId, 'PENDING_DEPOSIT');
+      push((await this.linkMoneyAccount(pending.id)).id, pendingValue);
+      // Tesorería tiene que mostrar lo mismo que la contabilidad.
+      await db.financialTransaction.create({
+        data: {
+          tenantId,
+          financialAccountId: pending.id,
+          amount: pendingValue,
+          externalRef: 'Cobros sin cuenta de dinero asignada (reclasificación de "Caja")',
+        },
+      });
+      await db.financialAccount.update({
+        where: { id: pending.id },
+        data: { currentBalance: { increment: pendingValue } },
+      });
+    }
+    if (legacy) {
+      push(legacy.id, legacyBalance.neg());
+    }
+
+    if (lines.length > 0) {
+      await this.createBalancedEntry(
+        'Reclasificación: de "Caja" a una cuenta contable por cada cuenta de dinero',
+        lines,
+        {},
+      );
+    }
+    await db.tenantSettings.upsert({
+      where: { tenantId },
+      create: { tenantId, moneyAccountsSplitAt: new Date() },
+      update: { moneyAccountsSplitAt: new Date() },
+    });
+  }
+
+  /** La cuenta contable de una cuenta de dinero (Tesorería). */
+  private async moneyAccountFor(financialAccountId: string): Promise<AccountingAccount> {
+    const settings = await getTenantDb().tenantSettings.findUnique({
+      where: { tenantId: getTenantId() },
+      select: { moneyAccountsSplitAt: true },
+    });
+    if (!settings?.moneyAccountsSplitAt) {
+      // Error de programación, no del usuario: ver ensureMoneyAccounts.
+      throw new Error('ensureMoneyAccounts() tiene que correr antes de asentar un movimiento de dinero');
+    }
+    return this.linkMoneyAccount(financialAccountId);
+  }
+
+  /** Crea (la primera vez) y vincula la cuenta contable 1.1.03.NN de una
+   * cuenta de dinero, con su mismo nombre. */
+  private async linkMoneyAccount(financialAccountId: string): Promise<AccountingAccount> {
+    const db = getTenantDb();
+    const financialAccount = await db.financialAccount.findUnique({
+      where: { id: financialAccountId },
+      include: { accountingAccount: true },
+    });
+    if (!financialAccount) {
+      throw new NotFoundException('Financial account not found');
+    }
+    if (financialAccount.accountingAccount) {
+      return financialAccount.accountingAccount;
+    }
+    const siblings = await db.accountingAccount.findMany({
+      where: { code: { startsWith: MONEY_ACCOUNT_CODE_PREFIX } },
+      select: { code: true },
+    });
+    const next =
+      siblings.reduce((max, s) => Math.max(max, Number.parseInt(s.code.slice(MONEY_ACCOUNT_CODE_PREFIX.length), 10) || 0), 0) +
+      1;
+    const account = await db.accountingAccount.create({
+      data: {
+        tenantId: getTenantId(),
+        code: `${MONEY_ACCOUNT_CODE_PREFIX}${String(next).padStart(2, '0')}`,
+        name: financialAccount.name,
+        type: CASH_ACCOUNT.type,
+      },
+    });
+    await db.financialAccount.update({
+      where: { id: financialAccountId },
+      data: { accountingAccountId: account.id },
+    });
+    return account;
+  }
+
+  private async resolveMoneySide(side: MoneySide): Promise<AccountingAccount> {
+    if ('financialAccountId' in side) {
+      return this.moneyAccountFor(side.financialAccountId);
+    }
+    switch (side.kind) {
+      case 'CHECKS_IN_PORTFOLIO':
+        return this.getOrCreateAccount(CHECKS_IN_PORTFOLIO_ACCOUNT);
+      case 'OWN_CHECKS_PAYABLE':
+        return this.getOrCreateAccount(OWN_CHECKS_PAYABLE_ACCOUNT);
+      case 'ACCOUNTS_PAYABLE':
+        return this.getOrCreateAccount(ACCOUNTS_PAYABLE_ACCOUNT);
+    }
+  }
+
+  private async sumChecks(where: { kind: 'THIRD_PARTY' | 'OWN'; status: 'PORTFOLIO' | 'ISSUED' }): Promise<Prisma.Decimal> {
+    const result = await getTenantDb().check.aggregate({ where, _sum: { amount: true } });
+    return result._sum.amount ?? new Prisma.Decimal(0);
+  }
+
+  /** Debe - Haber de una cuenta, todos los asientos (o sólo los que cumplan journalEntry). */
+  private async accountBalance(accountId: string, journalEntry?: Prisma.JournalEntryWhereInput): Promise<Prisma.Decimal> {
+    const db = getTenantDb();
+    const [debit, credit] = await Promise.all([
+      db.journalEntryLine.aggregate({ where: { accountId, direction: 'DEBIT', journalEntry }, _sum: { amount: true } }),
+      db.journalEntryLine.aggregate({ where: { accountId, direction: 'CREDIT', journalEntry }, _sum: { amount: true } }),
+    ]);
+    return (debit._sum.amount ?? new Prisma.Decimal(0)).sub(credit._sum.amount ?? new Prisma.Decimal(0));
   }
 
   /**
@@ -1004,7 +1291,7 @@ export class AccountingService {
 
     const [payable, cash] = await Promise.all([
       this.getOrCreateAccount(ACCOUNTS_PAYABLE_ACCOUNT),
-      amount.gt(0) ? this.getOrCreateAccount(CASH_ACCOUNT) : Promise.resolve(undefined),
+      amount.gt(0) ? this.resolveMoneySide(input.money) : Promise.resolve(undefined),
     ]);
     const withholdingAccounts = await Promise.all(
       Array.from(withheldByTaxType.entries()).map(async ([taxType, withheldAmount]) => ({
@@ -1034,8 +1321,9 @@ export class AccountingService {
 
   /**
    * Posted when a Receipt (cobro a cliente) is recorded (see apps/api's
-   * SalesService.recordReceipt) - debit Caja (cash in), credit Deudores por
-   * Ventas (they owe less). AR-side mirror of postSupplierPaymentJournalEntry
+   * SalesService.recordReceipt) - debit the money account it came into (or
+   * Cheques en Cartera), credit Deudores por Ventas (they owe less). AR-side
+   * mirror of postSupplierPaymentJournalEntry
    * above: Deudores por Ventas was only ever debited by
    * postInvoiceJournalEntry and never credited on collection, same
    * structural gap Compras had for Mercaderías before this feature existed.
@@ -1048,7 +1336,7 @@ export class AccountingService {
       return undefined;
     }
     const [cash, receivable] = await Promise.all([
-      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.resolveMoneySide(input.money),
       this.getOrCreateAccount(ACCOUNTS_RECEIVABLE_ACCOUNT),
     ]);
     return this.createBalancedEntry(
@@ -1062,15 +1350,88 @@ export class AccountingService {
   }
 
   /**
+   * Transferencia entre dos cuentas de dinero propias (ver apps/api's
+   * TreasuryService.transferBetweenAccounts): Debe destino / Haber origen.
+   * Antes no se asentaba porque las dos eran la misma "Caja"; con una cuenta
+   * contable por cuenta de dinero, sin esto el balance no sabría que la
+   * plata se movió (ej. "Cobranzas a depositar" -> Banco).
+   */
+  async postTransferJournalEntry(input: PostTransferJournalEntryInput): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lte(0)) {
+      return undefined;
+    }
+    const [from, to] = await Promise.all([
+      this.moneyAccountFor(input.fromFinancialAccountId),
+      this.moneyAccountFor(input.toFinancialAccountId),
+    ]);
+    return this.createBalancedEntry(
+      input.description,
+      [
+        { accountId: to.id, direction: 'DEBIT', amount: amount.toNumber() },
+        { accountId: from.id, direction: 'CREDIT', amount: amount.toNumber() },
+      ],
+      { date: input.date },
+    );
+  }
+
+  /** Depósito de un cheque de tercero (TreasuryService.depositCheck): sale
+   * de Cheques en Cartera y entra al banco elegido. */
+  async postCheckDepositJournalEntry(
+    input: PostCheckDepositJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lte(0)) {
+      return undefined;
+    }
+    const [bank, portfolio] = await Promise.all([
+      this.moneyAccountFor(input.financialAccountId),
+      this.getOrCreateAccount(CHECKS_IN_PORTFOLIO_ACCOUNT),
+    ]);
+    return this.createBalancedEntry(
+      `Depósito de cheque - ${input.checkId}`,
+      [
+        { accountId: bank.id, direction: 'DEBIT', amount: amount.toNumber() },
+        { accountId: portfolio.id, direction: 'CREDIT', amount: amount.toNumber() },
+      ],
+      { date: input.date },
+    );
+  }
+
+  /** Un cheque propio diferido se cobró (TreasuryService.markCleared): la
+   * deuda en "Cheques Diferidos a Pagar" se cancela y recién ahí sale la
+   * plata del banco. */
+  async postOwnCheckClearedJournalEntry(
+    input: PostOwnCheckClearedJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lte(0)) {
+      return undefined;
+    }
+    const [payable, bank] = await Promise.all([
+      this.getOrCreateAccount(OWN_CHECKS_PAYABLE_ACCOUNT),
+      this.moneyAccountFor(input.financialAccountId),
+    ]);
+    return this.createBalancedEntry(
+      `Débito de cheque propio - ${input.checkId}`,
+      [
+        { accountId: payable.id, direction: 'DEBIT', amount: amount.toNumber() },
+        { accountId: bank.id, direction: 'CREDIT', amount: amount.toNumber() },
+      ],
+      { date: input.date },
+    );
+  }
+
+  /**
    * Rebote de un cheque de tercero (ver CheckService.rejectCheck /
-   * apps/api's TreasuryService) - reabre la deuda del cliente reversando
-   * exactamente el Dr Caja / Cr Deudores que postReceiptJournalEntry ya
-   * hizo al cobrarlo, sin importar si después se depositó/endosó (ese
-   * asiento original nunca sabía que era un cheque, sólo que era un
-   * cobro). El gasto de rechazo opcional que se le recobra al cliente es
-   * un ingreso genuino aparte, no una reversa - tres líneas balanceadas:
-   * Dr Deudores (amount+fee) = Cr Caja (amount) + Cr Gastos de Cheques
-   * Rechazados (fee). Mismo molde inmutable que
+   * apps/api's TreasuryService) - reabre la deuda del cliente y saca el
+   * cheque de donde estaba al rebotar (input.money): la cartera, el banco
+   * donde se depositó, o Proveedores si se había endosado (el proveedor
+   * vuelve a reclamar ese pago). El gasto de rechazo opcional que se le
+   * recobra al cliente es un ingreso genuino aparte, no una reversa - tres
+   * líneas balanceadas: Dr Deudores (amount+fee) = Cr donde estaba el
+   * cheque (amount) + Cr Gastos de Cheques Rechazados (fee). Mismo molde
+   * inmutable que
    * reverseSupplierReturnAgainstPayable - nunca se edita el asiento
    * original, se postea uno nuevo.
    */
@@ -1084,7 +1445,7 @@ export class AccountingService {
     }
     const [receivable, cash, fee] = await Promise.all([
       this.getOrCreateAccount(ACCOUNTS_RECEIVABLE_ACCOUNT),
-      amount.gt(0) ? this.getOrCreateAccount(CASH_ACCOUNT) : Promise.resolve(undefined),
+      amount.gt(0) ? this.resolveMoneySide(input.money) : Promise.resolve(undefined),
       feeAmount.gt(0) ? this.getOrCreateAccount(CHECK_REJECTION_FEE_ACCOUNT) : Promise.resolve(undefined),
     ]);
     const lines: PostJournalEntryDto['lines'] = [
@@ -1107,9 +1468,7 @@ export class AccountingService {
    * matchear en un movimiento nuevo (ver apps/api's BankReconciliationService.
    * createTransactionFromLine) - un gasto/ingreso bancario real que el
    * extracto reveló y nadie había cargado todavía (comisión, interés).
-   * No recibe financialAccountId - igual que postReceiptJournalEntry, el
-   * asiento siempre postea contra la CASH_ACCOUNT genérica del plan de
-   * cuentas, no una cuenta contable distinta por cada banco.
+   * Contra la cuenta contable de la cuenta bancaria del extracto.
    */
   async postBankStatementAdjustmentJournalEntry(
     input: PostBankStatementAdjustmentJournalEntryInput,
@@ -1119,7 +1478,7 @@ export class AccountingService {
       return undefined;
     }
     const [cash, other] = await Promise.all([
-      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.moneyAccountFor(input.financialAccountId),
       this.getOrCreateAccount(input.kind === 'EXPENSE' ? BANK_FEES_EXPENSE_ACCOUNT : BANK_INTEREST_INCOME_ACCOUNT),
     ]);
     const lines: PostJournalEntryDto['lines'] =
@@ -1143,9 +1502,8 @@ export class AccountingService {
    * Ajuste posteado al cerrar un turno de Caja/POS con diferencia entre lo
    * contado y lo esperado (ver apps/api's PosService.closeSession, que ya
    * calculó `difference` vía CashSessionsService.closeSession). Mismo molde
-   * que postBankStatementAdjustmentJournalEntry: no recibe financialAccountId,
-   * el asiento siempre postea contra la CASH_ACCOUNT genérica del plan de
-   * cuentas, no una cuenta contable distinta por cada caja física.
+   * que postBankStatementAdjustmentJournalEntry: contra la cuenta contable
+   * de la cuenta de dinero de esa caja (CashRegister.financialAccountId).
    */
   async postCashSessionAdjustmentJournalEntry(
     input: PostCashSessionAdjustmentJournalEntryInput,
@@ -1157,7 +1515,7 @@ export class AccountingService {
     const isShortage = difference.lt(0);
     const amount = difference.abs();
     const [cash, other] = await Promise.all([
-      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.moneyAccountFor(input.financialAccountId),
       this.getOrCreateAccount(isShortage ? CASH_SHORTAGE_ACCOUNT : CASH_OVERAGE_ACCOUNT),
     ]);
     const lines: PostJournalEntryDto['lines'] = isShortage
@@ -1223,8 +1581,8 @@ export class AccountingService {
    * ReportsFinancialService.revalueFinancialAccount) - la cuenta sigue
    * llevando su propio currentBalance en su moneda, sin cambios; esto sólo
    * ajusta cuánto vale ese saldo en pesos para el balance. Mismo molde que
-   * postCashSessionAdjustmentJournalEntry: dos líneas contra la CASH_ACCOUNT
-   * genérica, sin una cuenta contable por moneda. previousRate null/undefined
+   * postCashSessionAdjustmentJournalEntry: dos líneas contra la cuenta
+   * contable de esa cuenta de dinero. previousRate null/undefined
    * = primera revaluación, sólo fija la base, no hay diferencia posible.
    */
   async postExchangeRateRevaluation(
@@ -1243,7 +1601,7 @@ export class AccountingService {
     const isGain = delta.gt(0);
     const amount = delta.abs();
     const [cash, result] = await Promise.all([
-      this.getOrCreateAccount(CASH_ACCOUNT),
+      this.moneyAccountFor(input.financialAccountId),
       this.getOrCreateAccount(isGain ? EXCHANGE_GAIN_ACCOUNT : EXCHANGE_LOSS_ACCOUNT),
     ]);
     const lines: PostJournalEntryDto['lines'] = isGain
@@ -1256,7 +1614,7 @@ export class AccountingService {
           { accountId: cash.id, direction: 'CREDIT', amount: amount.toNumber() },
         ];
     return this.createBalancedEntry(
-      `${isGain ? 'Ganancia' : 'Pérdida'} por diferencia de cambio - cuenta ${input.financialAccountId}`,
+      `${isGain ? 'Ganancia' : 'Pérdida'} por diferencia de cambio - ${cash.name}`,
       lines,
       { date: input.date },
     );

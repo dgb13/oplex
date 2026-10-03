@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { invoicingApi, type Invoice } from '@/lib/invoicing';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { reportsApi } from '@/lib/reports';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 
@@ -32,6 +33,19 @@ export default function ReceiptModal({ invoice, onClose }: Props) {
   const [checkIssueDate, setCheckIssueDate] = useState('');
   const [checkDueDate, setCheckDueDate] = useState('');
   const [error, setError] = useState('');
+  // Cuenta de dinero donde entró la plata (opcional): sin elegir, el backend
+  // la manda a "Cobranzas a depositar". Sólo cuentas en la misma moneda que
+  // la factura - una en otra moneda la rechaza el backend. Si el usuario no
+  // tiene acceso a Tesorería, la consulta falla y el selector no aparece.
+  const [financialAccountId, setFinancialAccountId] = useState('');
+  const accountsQuery = useQuery({
+    queryKey: ['financial-accounts'],
+    queryFn: reportsApi.listFinancialAccounts,
+    retry: false,
+  });
+  const moneyAccounts = (accountsQuery.data ?? []).filter(
+    (a) => a.provider !== 'PENDING_DEPOSIT' && (a.currencyId === null || a.currencyId === invoice.currencyId),
+  );
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -39,6 +53,7 @@ export default function ReceiptModal({ invoice, onClose }: Props) {
         invoiceId: invoice.id,
         amount: Number(amount),
         method,
+        financialAccountId: method !== 'CHECK' && financialAccountId ? financialAccountId : undefined,
         check:
           method === 'CHECK'
             ? {
@@ -104,6 +119,25 @@ export default function ReceiptModal({ invoice, onClose }: Props) {
               options={METHODS.map((m) => ({ value: m, label: METHOD_LABELS[m] }))}
             />
           </div>
+          {method !== 'CHECK' && moneyAccounts.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground">¿Dónde entró la plata? (opcional)</label>
+              <Select
+                value={financialAccountId}
+                onChange={setFinancialAccountId}
+                options={[
+                  { value: '', label: 'Sin especificar - Cobranzas a depositar' },
+                  ...moneyAccounts.map((a) => ({ value: a.id, label: a.name })),
+                ]}
+              />
+              {!financialAccountId && (
+                <p className="text-xs text-muted-foreground">
+                  Queda en "Cobranzas a depositar" hasta que la pases a la cuenta donde está, con una transferencia en
+                  Tesorería.
+                </p>
+              )}
+            </div>
+          )}
           {method === 'CHECK' && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <div className="grid grid-cols-2 gap-2">

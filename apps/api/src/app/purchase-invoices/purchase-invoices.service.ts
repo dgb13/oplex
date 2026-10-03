@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
-import { getTenantDb, getUserId, Prisma } from '@plexo/database';
+import { getOrCreateSystemFinancialAccount, getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
 import {
   PurchaseInvoiceService,
   type CreatePurchaseInvoiceDto,
@@ -79,25 +79,39 @@ export class PurchaseInvoicesService {
       throw new BadRequestException('No se puede endosar un cheque de cartera y emitir uno propio en el mismo pago');
     }
 
-    const payment = await this.purchaseInvoiceService.recordPayment(invoiceId, dto);
+    // Antes de mover cualquier saldo (ver AccountingService.ensureMoneyAccounts).
+    await this.accountingService.ensureMoneyAccounts();
+
+    // De dónde sale la plata: un cheque de cartera endosado, un cheque propio
+    // diferido (sale del banco recién al cobrarse), o la cuenta elegida - sin
+    // cuenta elegida, "Cobranzas a depositar" (mismo criterio que los cobros).
+    const paysWithCheck = Boolean(dto.endorseCheckId || dto.ownCheck);
+    const financialAccountId = paysWithCheck
+      ? undefined
+      : (dto.financialAccountId ??
+        (await getOrCreateSystemFinancialAccount(getTenantDb(), getTenantId(), 'PENDING_DEPOSIT')).id);
+
+    const payment = await this.purchaseInvoiceService.recordPayment(invoiceId, { ...dto, financialAccountId });
     await this.accountingService.postSupplierPaymentJournalEntry({
       supplierPaymentId: payment.id,
       amount: payment.amount,
       withholdings: payment.withholdings.map((w) => ({ taxType: w.taxType, amount: w.amount })),
+      money: dto.ownCheck
+        ? { kind: 'OWN_CHECKS_PAYABLE' }
+        : dto.endorseCheckId || !financialAccountId
+          ? { kind: 'CHECKS_IN_PORTFOLIO' }
+          : { financialAccountId },
       // The date the payment was actually made, not "now" - same reasoning
       // as createInvoice's supplierInvoiceDate above.
       date: payment.paidAt,
     });
 
-    // Cierra el mismo gap que recordReceipt (Ventas): un pago en
-    // efectivo/transferencia contra una cuenta propia también tiene que
-    // debitar esa cuenta, no sólo el asiento contable de arriba. Endosar
-    // un cheque de cartera o emitir uno propio diferido son las únicas
-    // excepciones reales (ver el comentario debajo) - a lo sumo uno de los
-    // dos, nunca junto con financialAccountId de efectivo/transferencia.
-    if (dto.financialAccountId && !dto.endorseCheckId && !dto.ownCheck) {
+    // El pago también mueve el saldo de la cuenta de dinero, igual que el
+    // asiento de arriba. Endosar un cheque de cartera o emitir uno propio
+    // diferido son las únicas excepciones (ver el comentario debajo).
+    if (financialAccountId) {
       const account = await getTenantDb().financialAccount.findUnique({
-        where: { id: dto.financialAccountId },
+        where: { id: financialAccountId },
       });
       if (!account) {
         throw new NotFoundException('Financial account not found');
@@ -112,7 +126,7 @@ export class PurchaseInvoicesService {
         );
       }
       await this.reportsFinancialService.recordFinancialTransaction({
-        financialAccountId: dto.financialAccountId,
+        financialAccountId,
         amount: -payment.amount.toNumber(),
         externalRef: `Pago factura de compra ${invoiceId}`,
       });

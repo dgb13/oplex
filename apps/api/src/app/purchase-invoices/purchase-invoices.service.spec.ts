@@ -13,7 +13,22 @@ import { PurchaseInvoicesService } from './purchase-invoices.service.js';
 jest.mock('@plexo/purchases', () => ({ PurchaseInvoiceService: jest.fn() }));
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: withMoneyDefaults(db) as never }, fn);
+}
+
+/** Lo que el pago lee de la base para elegir la cuenta de dinero ("Cobranzas
+ * a depositar" = fa-pending si no se eligió ninguna). */
+function withMoneyDefaults(db: Record<string, unknown>): Record<string, unknown> {
+  return {
+    financialAccount: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'fa-pending', provider: 'PENDING_DEPOSIT', currencyId: null }),
+      findUnique: jest.fn(({ where }: { where: { id: string } }) => Promise.resolve({ id: where.id, currencyId: null })),
+    },
+    purchaseInvoice: {
+      findUnique: jest.fn().mockResolvedValue({ supplierId: 'supplier-1', currencyId: 'ars', currency: { code: 'ARS' } }),
+    },
+    ...db,
+  };
 }
 
 function makeCheckService(overrides: Partial<CheckService> = {}): CheckService {
@@ -117,11 +132,12 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const service = new PurchaseInvoicesService(purchaseInvoiceService, accountingService, makeReportsFinancialService(), makeCheckService());
 
-    await service.recordPayment('pinv-1', { amount: 500, method: 'Transferencia' } as never);
+    await runInTenant({}, () => service.recordPayment('pinv-1', { amount: 500, method: 'Transferencia' } as never));
 
     const journalArg = (accountingService.postSupplierPaymentJournalEntry as jest.Mock).mock.calls[0][0];
     expect(journalArg.date).toEqual(new Date('2026-07-20'));
@@ -142,11 +158,12 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const service = new PurchaseInvoicesService(purchaseInvoiceService, accountingService, makeReportsFinancialService(), makeCheckService());
 
-    await service.recordPayment('pinv-2', { amount: 700, method: 'Transferencia' } as never);
+    await runInTenant({}, () => service.recordPayment('pinv-2', { amount: 700, method: 'Transferencia' } as never));
 
     const journalArg = (accountingService.postSupplierPaymentJournalEntry as jest.Mock).mock.calls[0][0];
     expect(journalArg.supplierPaymentId).toBe('pay-2');
@@ -167,6 +184,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const reportsFinancialService = makeReportsFinancialService();
@@ -195,6 +213,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const reportsFinancialService = makeReportsFinancialService();
@@ -215,6 +234,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const reportsFinancialService = makeReportsFinancialService();
@@ -236,7 +256,10 @@ describe('PurchaseInvoicesService.recordPayment', () => {
 
   it('rejects a payment that both endorses a check and issues one, without calling recordPayment at all', async () => {
     const purchaseInvoiceService = { recordPayment: jest.fn() } as unknown as PurchaseInvoiceService;
-    const accountingService = { postSupplierPaymentJournalEntry: jest.fn() } as unknown as AccountingService;
+    const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
+      postSupplierPaymentJournalEntry: jest.fn(),
+    } as unknown as AccountingService;
     const checkService = makeCheckService();
     const service = new PurchaseInvoicesService(purchaseInvoiceService, accountingService, makeReportsFinancialService(), checkService);
 
@@ -257,6 +280,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const checkService = makeCheckService();
@@ -277,6 +301,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const checkService = makeCheckService();
@@ -306,6 +331,7 @@ describe('PurchaseInvoicesService.recordPayment', () => {
       recordPayment: jest.fn().mockResolvedValue(payment),
     } as unknown as PurchaseInvoiceService;
     const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
       postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
     } as unknown as AccountingService;
     const checkService = makeCheckService();
@@ -317,5 +343,67 @@ describe('PurchaseInvoicesService.recordPayment', () => {
         service.recordPayment('pinv-5', { amount: 500, method: 'Cheque', endorseCheckId: 'chk-1' } as never),
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('PurchaseInvoicesService.recordPayment - de qué cuenta sale la plata', () => {
+  const payment = { id: 'pay-9', amount: new Prisma.Decimal(500), paidAt: new Date('2026-10-02'), withholdings: [] };
+
+  function makeService() {
+    const purchaseInvoiceService = { recordPayment: jest.fn().mockResolvedValue(payment) } as unknown as PurchaseInvoiceService;
+    const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
+      postSupplierPaymentJournalEntry: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const reportsFinancialService = makeReportsFinancialService();
+    const service = new PurchaseInvoicesService(purchaseInvoiceService, accountingService, reportsFinancialService, makeCheckService());
+    return { service, purchaseInvoiceService, accountingService, reportsFinancialService };
+  }
+
+  it('sin cuenta elegida sale de "Cobranzas a depositar" (asiento y saldo)', async () => {
+    const { service, purchaseInvoiceService, accountingService, reportsFinancialService } = makeService();
+
+    await runInTenant({}, () => service.recordPayment('pinv-9', { amount: 500, method: 'Efectivo' } as never));
+
+    expect(purchaseInvoiceService.recordPayment).toHaveBeenCalledWith(
+      'pinv-9',
+      expect.objectContaining({ financialAccountId: 'fa-pending' }),
+    );
+    expect(accountingService.postSupplierPaymentJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ money: { financialAccountId: 'fa-pending' } }),
+    );
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-pending', amount: -500 }),
+    );
+  });
+
+  it('endosando un cheque de cartera sale de Cheques en Cartera, sin tocar ninguna cuenta de dinero', async () => {
+    const { service, accountingService, reportsFinancialService } = makeService();
+
+    await runInTenant({}, () =>
+      service.recordPayment('pinv-9', { amount: 500, method: 'Cheque', endorseCheckId: 'chk-1' } as never),
+    );
+
+    expect(accountingService.postSupplierPaymentJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ money: { kind: 'CHECKS_IN_PORTFOLIO' } }),
+    );
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
+  });
+
+  it('con un cheque propio diferido la deuda pasa a "Cheques Diferidos a Pagar"', async () => {
+    const { service, accountingService, reportsFinancialService } = makeService();
+
+    await runInTenant({}, () =>
+      service.recordPayment('pinv-9', {
+        amount: 500,
+        method: 'Cheque',
+        ownCheck: { number: '1', bankName: 'Galicia', format: 'PHYSICAL', issueDate: '2026-10-02', dueDate: '2026-11-02', financialAccountId: 'fa-bank' },
+      } as never),
+    );
+
+    expect(accountingService.postSupplierPaymentJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ money: { kind: 'OWN_CHECKS_PAYABLE' } }),
+    );
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
   });
 });

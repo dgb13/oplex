@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
-import { getTenantDb, getUserId, Prisma } from '@plexo/database';
+import { getOrCreateSystemFinancialAccount, getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 import { InvoicingService, type CreateCreditNoteDto, type RecordReceiptDto } from '@plexo/invoicing';
 import { QuoteService } from '@plexo/quotes';
@@ -215,24 +215,39 @@ export class SalesService {
    * AccountingService.postReceiptJournalEntry.
    */
   async recordReceipt(dto: RecordReceiptDto) {
-    const receipt = await this.invoicingService.recordReceipt(dto);
+    // Antes de mover cualquier saldo (ver AccountingService.ensureMoneyAccounts).
+    await this.accountingService.ensureMoneyAccounts();
+
+    // Dónde entró la plata: la cuenta elegida; si no se eligió ninguna,
+    // Mercado Pago para los cobros por Mercado Pago (QR/link) y "Cobranzas a
+    // depositar" para el resto (tarjeta, transferencia, Facturación sin
+    // cuenta) - de ahí se pasa con una transferencia entre cuentas. Un
+    // cheque de tercero no entra a ninguna cuenta hasta depositarlo.
+    const financialAccountId = dto.check
+      ? dto.financialAccountId
+      : (dto.financialAccountId ??
+        (
+          await getOrCreateSystemFinancialAccount(
+            getTenantDb(),
+            getTenantId(),
+            dto.method === 'MERCADOPAGO' ? 'MERCADOPAGO' : 'PENDING_DEPOSIT',
+          )
+        ).id);
+
+    const receipt = await this.invoicingService.recordReceipt({ ...dto, financialAccountId });
     await this.accountingService.postReceiptJournalEntry({
       receiptId: receipt.id,
       amount: receipt.amount,
+      money: dto.check || !financialAccountId ? { kind: 'CHECKS_IN_PORTFOLIO' } : { financialAccountId },
       date: receipt.paidAt,
     });
 
-    // Cierra el gap que pos.service.spec.ts documenta para POS: fuera de
-    // Cheques/Conciliación Bancaria/POS, nada movía
-    // FinancialAccount.currentBalance todavía - este Receipt es "cash" en
-    // los términos contables de arriba, así que también tiene que
-    // acreditar la cuenta elegida. Un cheque de tercero es la única
-    // excepción real: no afecta el saldo hasta depositarlo (ver
-    // apps/api/src/app/treasury/) - eso es a propósito, ver el comentario
-    // en CheckService.
-    if (dto.financialAccountId && !dto.check) {
+    // El cobro también mueve el saldo de la cuenta de dinero, igual que el
+    // asiento de arriba. Un cheque de tercero es la única excepción: no
+    // afecta ningún saldo hasta depositarlo (ver apps/api/src/app/treasury/).
+    if (financialAccountId && !dto.check) {
       const account = await getTenantDb().financialAccount.findUnique({
-        where: { id: dto.financialAccountId },
+        where: { id: financialAccountId },
       });
       if (!account) {
         throw new NotFoundException('Financial account not found');
@@ -247,7 +262,7 @@ export class SalesService {
         );
       }
       await this.reportsFinancialService.recordFinancialTransaction({
-        financialAccountId: dto.financialAccountId,
+        financialAccountId,
         amount: receipt.amount.toNumber(),
         externalRef: `Cobro factura ${dto.invoiceId}`,
       });
@@ -257,9 +272,8 @@ export class SalesService {
     // CheckService.registerThirdPartyCheck) - si el DTO trae el detalle,
     // lo registramos en Cartera en la misma transacción. No afecta
     // FinancialAccount.currentBalance todavía (recién al depositarlo, ver
-    // apps/api/src/app/treasury/) ni el asiento de arriba, que ya trató
-    // este cobro como "cash" igual que cualquier otro método - eso es a
-    // propósito, ver el comentario en CheckService.
+    // apps/api/src/app/treasury/); el asiento de arriba ya lo mandó a
+    // Cheques en Cartera.
     if (dto.check) {
       const userId = getUserId();
       if (!userId) {

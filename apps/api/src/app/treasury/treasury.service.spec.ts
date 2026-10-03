@@ -31,8 +31,12 @@ function makeServices(overrides: {
     ...overrides.invoicingService,
   } as unknown as InvoicingService;
   const accountingService = {
+    ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
     postCheckRejectionJournalEntry: jest.fn().mockResolvedValue({}),
     postExchangeRateRevaluation: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
+    postCheckDepositJournalEntry: jest.fn().mockResolvedValue({}),
+    postOwnCheckClearedJournalEntry: jest.fn().mockResolvedValue({}),
+    postTransferJournalEntry: jest.fn().mockResolvedValue({}),
     ...overrides.accountingService,
   } as unknown as AccountingService;
   const service = new TreasuryService(checkService, reportsFinancialService, invoicingService, accountingService);
@@ -230,5 +234,136 @@ describe('TreasuryService.revalueFinancialAccount', () => {
     };
 
     await expect(runInTenant(db, () => service.revalueFinancialAccount('fa-1'))).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('TreasuryService - asientos por cuenta de dinero', () => {
+  it('depositar un cheque también lo asienta: entra al banco, sale de Cheques en Cartera', async () => {
+    const { service, accountingService } = makeServices({
+      checkService: {
+        depositCheck: jest.fn().mockResolvedValue({ ...baseCheck, status: 'DEPOSITED', financialAccountId: 'acc-1' }),
+      },
+    });
+
+    await runInTenant({}, () => service.depositCheck('chk-1', 'acc-1'));
+
+    expect(accountingService.ensureMoneyAccounts).toHaveBeenCalled();
+    expect(accountingService.postCheckDepositJournalEntry).toHaveBeenCalledWith({
+      checkId: 'chk-1',
+      financialAccountId: 'acc-1',
+      amount: baseCheck.amount,
+    });
+  });
+
+  it('un cheque propio que se cobra cancela "Cheques Diferidos a Pagar" contra el banco', async () => {
+    const { service, accountingService } = makeServices({
+      checkService: {
+        markCleared: jest.fn().mockResolvedValue({ ...baseCheck, kind: 'OWN', status: 'CLEARED', financialAccountId: 'acc-1' }),
+      },
+    });
+
+    await runInTenant({}, () => service.markCleared('chk-1'));
+
+    expect(accountingService.postOwnCheckClearedJournalEntry).toHaveBeenCalledWith({
+      checkId: 'chk-1',
+      financialAccountId: 'acc-1',
+      amount: baseCheck.amount,
+    });
+  });
+
+  it.each([
+    ['DEPOSITED', 'acc-1', { financialAccountId: 'acc-1' }],
+    ['PORTFOLIO', null, { kind: 'CHECKS_IN_PORTFOLIO' }],
+    ['ENDORSED', null, { kind: 'ACCOUNTS_PAYABLE' }],
+  ] as const)('el rechazo de un cheque %s sale de donde estaba', async (previousStatus, financialAccountId, money) => {
+    const { service, accountingService } = makeServices({
+      checkService: {
+        rejectCheck: jest.fn().mockResolvedValue({
+          check: { ...baseCheck, status: 'REJECTED', financialAccountId },
+          wasDeposited: previousStatus === 'DEPOSITED',
+          previousStatus,
+        }),
+      },
+    });
+    const db = { receipt: { findUnique: jest.fn().mockResolvedValue({ invoiceId: 'invoice-1' }) } };
+
+    await runInTenant(db, () => service.rejectCheck('chk-1', { reason: 'sin fondos' }));
+
+    expect(accountingService.postCheckRejectionJournalEntry).toHaveBeenCalledWith(expect.objectContaining({ money }));
+  });
+});
+
+describe('TreasuryService.transferBetweenAccounts', () => {
+  const transfer = { fromFinancialAccountId: 'fa-pending', toFinancialAccountId: 'fa-bank', amount: 900 };
+
+  function makeDb(fromCurrency: string | null, toCurrency: string | null, rate?: number) {
+    return {
+      financialAccount: {
+        findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+          Promise.resolve(
+            where.id === 'fa-pending'
+              ? { id: 'fa-pending', name: 'Cobranzas a depositar', currencyId: fromCurrency }
+              : { id: 'fa-bank', name: 'Banco Galicia', currencyId: toCurrency },
+          ),
+        ),
+      },
+      exchangeRateHistory: {
+        findFirst: jest.fn().mockResolvedValue(rate ? { rate: new Prisma.Decimal(rate) } : null),
+      },
+    };
+  }
+
+  it('mueve los dos saldos y asienta Debe destino / Haber origen, reclasificando antes', async () => {
+    const order: string[] = [];
+    const { service, accountingService, reportsFinancialService } = makeServices({
+      reportsFinancialService: {
+        transferBetweenAccounts: jest.fn(() => {
+          order.push('balances');
+          return Promise.resolve({ from: { id: 'tx-1' }, to: { id: 'tx-2' } });
+        }) as never,
+      },
+      accountingService: {
+        ensureMoneyAccounts: jest.fn(() => {
+          order.push('ensure');
+          return Promise.resolve();
+        }) as never,
+      },
+    });
+
+    await runInTenant(makeDb(null, null), () => service.transferBetweenAccounts(transfer));
+
+    expect(order).toEqual(['ensure', 'balances']);
+    expect(reportsFinancialService.transferBetweenAccounts).toHaveBeenCalledWith(transfer);
+    expect(accountingService.postTransferJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromFinancialAccountId: 'fa-pending',
+        toFinancialAccountId: 'fa-bank',
+        amount: new Prisma.Decimal(900),
+        description: 'Transferencia de Cobranzas a depositar a Banco Galicia',
+      }),
+    );
+  });
+
+  it('no deja transferir entre cuentas de distinta moneda (eso es una compra de divisas)', async () => {
+    const { service, reportsFinancialService } = makeServices({
+      reportsFinancialService: { transferBetweenAccounts: jest.fn() as never },
+    });
+
+    await expect(runInTenant(makeDb(null, 'usd'), () => service.transferBetweenAccounts(transfer))).rejects.toThrow(
+      /misma moneda/,
+    );
+    expect(reportsFinancialService.transferBetweenAccounts).not.toHaveBeenCalled();
+  });
+
+  it('entre dos cuentas en dólares, el asiento va en pesos a la última cotización', async () => {
+    const { service, accountingService } = makeServices({
+      reportsFinancialService: { transferBetweenAccounts: jest.fn().mockResolvedValue({}) as never },
+    });
+
+    await runInTenant(makeDb('usd', 'usd', 1500), () => service.transferBetweenAccounts({ ...transfer, amount: 10 }));
+
+    expect(accountingService.postTransferJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: new Prisma.Decimal(15000) }),
+    );
   });
 });

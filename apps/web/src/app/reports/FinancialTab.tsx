@@ -20,6 +20,7 @@ const PROVIDER_LABELS: Record<FinancialAccountProvider, string> = {
   MERCADOPAGO: 'MercadoPago',
   PAYPAL: 'PayPal',
   CASH: 'Efectivo',
+  PENDING_DEPOSIT: 'Cobranzas a depositar',
 };
 
 export default function FinancialTab() {

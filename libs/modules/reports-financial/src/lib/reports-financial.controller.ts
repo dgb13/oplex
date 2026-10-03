@@ -2,7 +2,6 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestj
 import { RequireModuleAccess } from '@plexo/auth';
 import { CreateFinancialAccountDto } from './dto/create-financial-account.dto.js';
 import { RecordFinancialTransactionDto } from './dto/record-financial-transaction.dto.js';
-import { TransferBetweenAccountsDto } from './dto/transfer-between-accounts.dto.js';
 import { ReportsFinancialService } from './reports-financial.service.js';
 
 const MODULE = 'reports-financial';
@@ -29,11 +28,8 @@ export class ReportsFinancialController {
     return this.reportsFinancialService.recordFinancialTransaction(dto);
   }
 
-  @RequireModuleAccess(MODULE, 'write')
-  @Post('transfers')
-  transferBetweenAccounts(@Body() dto: TransferBetweenAccountsDto) {
-    return this.reportsFinancialService.transferBetweenAccounts(dto);
-  }
+  // POST transfers vive en apps/api (FinancialAccountTransferController):
+  // además de mover los saldos, asienta la transferencia (AccountingService).
 
   @RequireModuleAccess(MODULE, 'write')
   @Post('transactions/:id/reconcile')

@@ -48,7 +48,7 @@ export interface ProductSales {
   revenue: string;
 }
 
-export type FinancialAccountProvider = 'BANK' | 'MERCADOPAGO' | 'PAYPAL' | 'CASH';
+export type FinancialAccountProvider = 'BANK' | 'MERCADOPAGO' | 'PAYPAL' | 'CASH' | 'PENDING_DEPOSIT';
 
 export interface FinancialAccount {
   id: string;

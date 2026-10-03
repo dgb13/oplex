@@ -22,6 +22,7 @@ function makeServices(overrides: {
     ...overrides.reportsFinancialService,
   } as unknown as ReportsFinancialService;
   const accountingService = {
+    ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
     postBankStatementAdjustmentJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1' }),
     ...overrides.accountingService,
   } as unknown as AccountingService;
@@ -189,6 +190,7 @@ describe('BankReconciliationService.createTransactionFromLine', () => {
     });
     expect(accountingService.postBankStatementAdjustmentJournalEntry).toHaveBeenCalledWith({
       bankStatementLineId: 'line-1',
+      financialAccountId: 'acc-1',
       kind: 'EXPENSE',
       amount: 850,
       date: lineDate,

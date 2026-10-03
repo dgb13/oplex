@@ -319,3 +319,49 @@ describe('PosService - cobros QR sin venta', () => {
     expect(closeSession).not.toHaveBeenCalled();
   });
 });
+
+describe('PosService.closeSession - diferencia de arqueo', () => {
+  it('el faltante mueve el saldo de la caja y se asienta contra la cuenta contable de esa caja', async () => {
+    const order: string[] = [];
+    const reportsFinancialService = {
+      recordFinancialTransaction: jest.fn(() => {
+        order.push('balance');
+        return Promise.resolve({ id: 'tx-1' });
+      }),
+    } as unknown as ReportsFinancialService;
+    const accountingService = {
+      ensureMoneyAccounts: jest.fn(() => {
+        order.push('ensure');
+        return Promise.resolve();
+      }),
+      postCashSessionAdjustmentJournalEntry: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const closedAt = new Date('2026-10-02T23:00:00Z');
+    const service = new PosService(
+      { getById: jest.fn().mockResolvedValue(makeRegister()) } as unknown as CashRegistersService,
+      {
+        getSessionSummary: jest.fn().mockResolvedValue({ session: { id: 'session-1', registerId: 'register-1' } }),
+        closeSession: jest.fn().mockResolvedValue({
+          session: { id: 'session-1', difference: new Prisma.Decimal(-50), closedAt },
+        }),
+      } as unknown as CashSessionsService,
+      {} as SalesService,
+      accountingService,
+      reportsFinancialService,
+      { listUnclaimedCharges: jest.fn().mockResolvedValue([]) } as unknown as MercadoPagoQrService,
+    );
+
+    await runInTenant({}, () => service.closeSession('session-1', { countedAmount: 950 } as never));
+
+    expect(order).toEqual(['ensure', 'balance']);
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'account-1', amount: -50 }),
+    );
+    expect(accountingService.postCashSessionAdjustmentJournalEntry).toHaveBeenCalledWith({
+      cashSessionId: 'session-1',
+      financialAccountId: 'account-1',
+      difference: new Prisma.Decimal(-50),
+      date: closedAt,
+    });
+  });
+});

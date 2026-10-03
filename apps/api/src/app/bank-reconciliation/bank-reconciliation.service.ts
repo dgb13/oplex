@@ -133,6 +133,8 @@ export class BankReconciliationService {
       throw new BadRequestException('Ingreso bancario sólo aplica a una línea de importe positivo (ingreso)');
     }
 
+    // Antes de mover cualquier saldo (ver AccountingService.ensureMoneyAccounts).
+    await this.accountingService.ensureMoneyAccounts();
     const transaction = await this.reportsFinancialService.recordFinancialTransaction({
       financialAccountId: line.financialAccountId,
       amount,
@@ -144,6 +146,7 @@ export class BankReconciliationService {
     await this.reportsFinancialService.reconcileTransaction(transaction.id);
     const journalEntry = await this.accountingService.postBankStatementAdjustmentJournalEntry({
       bankStatementLineId: line.id,
+      financialAccountId: line.financialAccountId,
       kind: dto.kind,
       amount: Math.abs(amount),
       date: line.lineDate,
