@@ -57,6 +57,11 @@ function formatStock(n: number): string {
   return n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
 }
 
+/** "$100.000,00" - con separador de miles, legible con muchos dígitos. */
+function formatMoney(n: number): string {
+  return `$${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function PosSellScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -231,7 +236,7 @@ function PosSellScreen() {
               <span className="text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-600">
                 Efectivo esperado:{' '}
               </span>
-              <span className="font-semibold">${Number(expectedAmount).toFixed(2)}</span>
+              <span className="font-semibold tabular-nums">{formatMoney(Number(expectedAmount))}</span>
             </div>
           )}
           <button
@@ -269,8 +274,8 @@ function PosSellScreen() {
                 ? '1 cobro con QR acreditado sin venta'
                 : `${unclaimed.length} cobros con QR acreditados sin venta`}
             </span>
-            {' · '}$
-            {unclaimed.reduce((sum, c) => sum + Number(c.amount), 0).toFixed(2)}
+            {' · '}
+            {formatMoney(unclaimed.reduce((sum, c) => sum + Number(c.amount), 0))}
             {unclaimed[0].paidAt && ` · ${formatPaidAt(unclaimed[0].paidAt)}`}. El cliente ya pagó y falta confirmar la
             venta.
           </span>
@@ -328,7 +333,7 @@ function PosSellScreen() {
                 </p>
                 {product.unitPrice > 0 ? (
                   <p className="text-sm font-semibold text-indigo-700 pos-dark:text-indigo-400 pos-contrast:text-amber-400 pos-emerald:text-emerald-700">
-                    ${product.unitPrice.toFixed(2)}
+                    {formatMoney(product.unitPrice)}
                   </p>
                 ) : (
                   <p className="text-xs font-semibold text-amber-700 pos-dark:text-amber-400 pos-contrast:text-amber-400 pos-emerald:text-amber-700">
@@ -377,30 +382,34 @@ function PosSellScreen() {
                           )}
                         </p>
                         <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-                          ${line.unitPrice.toFixed(2)} c/u
+                          {formatMoney(line.unitPrice)} c/u
                         </p>
                       </div>
+                      {/* Cantidad e importe crecen con su contenido (shrink-0):
+                          antes tenían ancho fijo y con muchos dígitos se
+                          encimaban con los botones. Lo que cede es el nombre,
+                          que ya se recorta con "…". */}
                       <button
                         onClick={() => updateQuantity(line.articleVariantId, line.quantity - 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
-                      <span className="w-6 text-center text-sm">{line.quantity}</span>
+                      <span className="min-w-7 shrink-0 text-center text-sm tabular-nums">{formatStock(line.quantity)}</span>
                       <button
                         onClick={() => updateQuantity(line.articleVariantId, line.quantity + 1)}
                         disabled={line.quantity >= line.stock}
                         title={line.quantity >= line.stock ? `No hay más stock (${formatStock(line.stock)})` : undefined}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-40 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-40 pos-dark:bg-slate-800 pos-dark:hover:bg-slate-700 pos-contrast:bg-slate-900 pos-contrast:hover:bg-slate-800 pos-emerald:bg-emerald-50 pos-emerald:hover:bg-emerald-100"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
-                      <p className="w-16 text-right text-sm font-semibold">
-                        ${(line.unitPrice * line.quantity).toFixed(2)}
+                      <p className="min-w-28 shrink-0 text-right text-sm font-semibold whitespace-nowrap tabular-nums">
+                        {formatMoney(line.unitPrice * line.quantity)}
                       </p>
                       <button
                         onClick={() => updateQuantity(line.articleVariantId, 0)}
-                        className="text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
+                        className="shrink-0 text-slate-400 hover:text-red-600 pos-dark:text-slate-500 pos-dark:hover:text-red-400 pos-contrast:text-slate-400 pos-contrast:hover:text-red-400 pos-emerald:text-slate-400 pos-emerald:hover:text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -422,17 +431,17 @@ function PosSellScreen() {
           <div className="border-t border-slate-200 p-4 pos-dark:border-slate-800 pos-contrast:border-slate-800 pos-emerald:border-emerald-100">
             <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
               <span>Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span className="tabular-nums">{formatMoney(totals.subtotal)}</span>
             </div>
             {!withoutVat && (
               <div className="flex justify-between text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
                 <span>IVA</span>
-                <span>${totals.taxTotal.toFixed(2)}</span>
+                <span className="tabular-nums">{formatMoney(totals.taxTotal)}</span>
               </div>
             )}
             <div className="mt-1 flex justify-between text-lg font-semibold">
               <span>Total</span>
-              <span>${totals.total.toFixed(2)}</span>
+              <span className="tabular-nums">{formatMoney(totals.total)}</span>
             </div>
             <button
               onClick={() => setCheckingOut(true)}
