@@ -12,6 +12,7 @@ export interface Plan {
   maxClients: number;
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
+  annualDiscountPercent: string;
   isActive: boolean;
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
@@ -53,3 +54,39 @@ export const plansApi = {
 export const subscriptionsApi = {
   getCurrent: () => api.get<TenantSubscription>('/subscriptions/me').then((r) => r.data),
 };
+
+/** Mismo cálculo que computeSubscriptionCharge en @plexo/subscriptions (el
+ * backend es el que vale; esto es sólo para mostrar el importe antes de
+ * pagar). Precios sin IVA: descuento y después IVA 21%. 12 meses = descuento
+ * anual; débito automático mensual = descuento por débito; no se suman. */
+export const SUBSCRIPTION_VAT_PERCENT = 21;
+export const SUBSCRIPTION_MONTH_OPTIONS = [1, 3, 6, 12] as const;
+
+export interface SubscriptionCharge {
+  listPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  netAmount: number;
+  vatAmount: number;
+  total: number;
+}
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+export function computeSubscriptionCharge(
+  plan: Pick<Plan, 'priceMonthly' | 'debitDiscountPercent' | 'annualDiscountPercent'>,
+  method: 'MP_DEBIT' | 'TRANSFER' | 'CASH' | 'OTHER',
+  months: number,
+): SubscriptionCharge {
+  const listPrice = round2(Number(plan.priceMonthly) * months);
+  const discountPercent =
+    months === 12 ? Number(plan.annualDiscountPercent) : method === 'MP_DEBIT' && months === 1 ? Number(plan.debitDiscountPercent) : 0;
+  const discountAmount = round2((listPrice * discountPercent) / 100);
+  const netAmount = round2(listPrice - discountAmount);
+  const vatAmount = round2((netAmount * SUBSCRIPTION_VAT_PERCENT) / 100);
+  return { listPrice, discountPercent, discountAmount, netAmount, vatAmount, total: round2(netAmount + vatAmount) };
+}
+
+export function formatPesos(value: number | string): string {
+  return `$ ${Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}

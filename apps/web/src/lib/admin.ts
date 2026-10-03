@@ -194,6 +194,7 @@ export interface AdminPlan {
   maxClients: number;
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
+  annualDiscountPercent: string;
   isActive: boolean;
   slaMarkdown: string | null;
   slaUpdatedAt: string | null;
@@ -212,6 +213,7 @@ export interface CreatePlanInput {
   maxClients: number;
   maxMonthlyInvoices: number;
   debitDiscountPercent?: number;
+  annualDiscountPercent?: number;
   isActive?: boolean;
   slaMarkdown?: string;
   // null = sacar al plan de "Carga de comprobantes IA" (no incluida).
@@ -362,4 +364,68 @@ export const adminArcaPadronApi = {
   test: (cuit: string) => api.post<ArcaPadronTestResult>('/admin/arca-padron/test', { cuit }).then((r) => r.data),
   uploadCertificate: (certPem: string, keyPem: string) =>
     api.post<ArcaPadronStatus>('/admin/arca-padron/certificate', { certPem, keyPem }).then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Suscripciones (cobro de planes) - ver SubscriptionBillingService.
+
+export type SubscriptionStatusValue = 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED' | 'CANCELLED';
+export type SubscriptionPaymentMethodValue = 'MP_DEBIT' | 'TRANSFER' | 'CASH' | 'OTHER';
+export type SubscriptionPaymentStatusValue = 'PENDING' | 'PAID' | 'REJECTED' | 'REFUNDED';
+
+export interface SubscriptionPaymentRow {
+  id: string;
+  method: SubscriptionPaymentMethodValue;
+  status: SubscriptionPaymentStatusValue;
+  months: number;
+  periodStart: string;
+  periodEnd: string;
+  listPrice: string;
+  discountAmount: string;
+  netAmount: string;
+  vatAmount: string;
+  total: string;
+  reference: string | null;
+  receiptUrl: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
+  plan: { key: string; name: string };
+}
+
+export interface TenantSubscriptionRow {
+  tenantId: string;
+  tenantName: string;
+  planKey: string;
+  planName: string;
+  status: SubscriptionStatusValue;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  graceEndsAt: string | null;
+  paymentMethod: SubscriptionPaymentMethodValue | null;
+  pendingPayment: SubscriptionPaymentRow | null;
+}
+
+export interface RecordSubscriptionPaymentInput {
+  planKey: string;
+  months: number;
+  method: 'TRANSFER' | 'CASH' | 'OTHER';
+  reference?: string;
+  total?: number;
+}
+
+export const adminSubscriptionsApi = {
+  list: () => api.get<TenantSubscriptionRow[]>('/admin/subscriptions').then((r) => r.data),
+  payments: (tenantId: string) =>
+    api.get<SubscriptionPaymentRow[]>(`/admin/subscriptions/${tenantId}/payments`).then((r) => r.data),
+  recordPayment: (tenantId: string, dto: RecordSubscriptionPaymentInput) =>
+    api.post(`/admin/subscriptions/${tenantId}/payments`, dto).then((r) => r.data),
+  confirm: (tenantId: string, paymentId: string) =>
+    api.post(`/admin/subscriptions/${tenantId}/payments/${paymentId}/confirm`).then((r) => r.data),
+  reject: (tenantId: string, paymentId: string) =>
+    api.post(`/admin/subscriptions/${tenantId}/payments/${paymentId}/reject`).then((r) => r.data),
+  extendTrial: (tenantId: string, days: number) =>
+    api.post(`/admin/subscriptions/${tenantId}/extend-trial`, { days }).then((r) => r.data),
+  changePlan: (tenantId: string, planKey: string) =>
+    api.post(`/admin/subscriptions/${tenantId}/plan`, { planKey }).then((r) => r.data),
 };

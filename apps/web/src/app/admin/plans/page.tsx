@@ -29,6 +29,7 @@ const EMPTY_FORM: CreatePlanInput = {
   maxClients: 10,
   maxMonthlyInvoices: 10,
   debitDiscountPercent: 0,
+  annualDiscountPercent: 0,
   isActive: true,
   slaMarkdown: '',
   productionModuleEnabled: false,
@@ -101,6 +102,7 @@ export default function AdminPlansPage() {
                   <th className="p-3 text-right">Cupo IA/mes</th>
                   <th className="p-3 text-right">Cupo Asistente/mes</th>
                   <th className="p-3 text-right">Desc. débito</th>
+                  <th className="p-3 text-right">Desc. anual</th>
                   <th className="p-3">Activo</th>
                   <th className="p-3">Producción</th>
                   <th className="p-3">SLA</th>
@@ -113,7 +115,7 @@ export default function AdminPlansPage() {
                   .map((plan) =>
                     editingId === plan.id ? (
                       <tr key={plan.id} className="border-b border-slate-800/50">
-                        <td colSpan={13} className="p-3">
+                        <td colSpan={14} className="p-3">
                           <PlanForm
                             initial={plan}
                             saving={updateMutation.isPending}
@@ -148,6 +150,7 @@ export default function AdminPlansPage() {
                             : '—'}
                         </td>
                         <td className="p-3 text-right text-slate-300">{Number(plan.debitDiscountPercent)}%</td>
+                        <td className="p-3 text-right text-slate-300">{Number(plan.annualDiscountPercent)}%</td>
                         <td className="p-3">
                           <span
                             className={`rounded px-2 py-0.5 text-xs font-medium ${
@@ -229,6 +232,7 @@ function PlanForm({
     maxClients: initial.maxClients,
     maxMonthlyInvoices: initial.maxMonthlyInvoices,
     debitDiscountPercent: Number(initial.debitDiscountPercent ?? 0),
+    annualDiscountPercent: Number(initial.annualDiscountPercent ?? 0),
     isActive: initial.isActive ?? true,
     productionModuleEnabled: initial.productionModuleEnabled ?? false,
     slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
@@ -282,6 +286,9 @@ function PlanForm({
         </Field>
         <Field label="Desc. débito %">
           <NumberInput value={form.debitDiscountPercent} onChange={(v) => setForm({ ...form, debitDiscountPercent: v })} />
+        </Field>
+        <Field label="Desc. pago anual %">
+          <NumberInput value={form.annualDiscountPercent} onChange={(v) => setForm({ ...form, annualDiscountPercent: v })} />
         </Field>
         <Field label="Cupo IA/mes (vacío = no incluido)">
           <input
@@ -382,6 +389,7 @@ function PlanForm({
                     maxClients: form.maxClients,
                     maxMonthlyInvoices: form.maxMonthlyInvoices,
                     debitDiscountPercent: form.debitDiscountPercent,
+                    annualDiscountPercent: form.annualDiscountPercent,
                     isActive: form.isActive,
                     productionModuleEnabled: form.productionModuleEnabled,
                     slaMarkdown: form.slaMarkdown,

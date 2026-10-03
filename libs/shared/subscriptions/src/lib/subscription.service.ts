@@ -283,6 +283,7 @@ export class SubscriptionService {
         maxClients: dto.maxClients,
         maxMonthlyInvoices: dto.maxMonthlyInvoices,
         debitDiscountPercent: new Prisma.Decimal(dto.debitDiscountPercent ?? 0),
+        annualDiscountPercent: new Prisma.Decimal(dto.annualDiscountPercent ?? 0),
         isActive: dto.isActive ?? true,
         slaMarkdown: dto.slaMarkdown,
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
@@ -309,6 +310,8 @@ export class SubscriptionService {
         maxMonthlyInvoices: dto.maxMonthlyInvoices,
         debitDiscountPercent:
           dto.debitDiscountPercent === undefined ? undefined : new Prisma.Decimal(dto.debitDiscountPercent),
+        annualDiscountPercent:
+          dto.annualDiscountPercent === undefined ? undefined : new Prisma.Decimal(dto.annualDiscountPercent),
         isActive: dto.isActive,
         // slaUpdatedAt sólo se toca cuando el contenido del SLA cambia de
         // verdad (dto.slaMarkdown viene seteado) - no en cada guardado del

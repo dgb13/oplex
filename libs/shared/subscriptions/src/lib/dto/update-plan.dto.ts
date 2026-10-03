@@ -37,6 +37,12 @@ export class UpdatePlanDto {
   @Min(0)
   debitDiscountPercent?: number;
 
+  // % de descuento al pagar 12 meses por adelantado (no se suma con el de débito).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  annualDiscountPercent?: number;
+
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
