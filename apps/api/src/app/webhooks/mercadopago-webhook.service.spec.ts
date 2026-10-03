@@ -200,7 +200,7 @@ describe('MercadoPagoWebhookService.handleNotification - reconciliation happy pa
     expect(deps.salesService.recordReceipt).toHaveBeenCalledWith({
       invoiceId: 'invoice-1',
       amount: 1810,
-      method: 'MERCADO_PAGO',
+      method: 'MERCADOPAGO',
     });
     expect(deps.tx.userActivityLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: 'mercadopago.payment_received' }) }),

@@ -302,7 +302,7 @@ export class MercadoPagoWebhookService {
       this.salesService.recordReceipt({
         invoiceId: intent.documentId,
         amount: intent.amount.toNumber(),
-        method: 'MERCADO_PAGO',
+        method: 'MERCADOPAGO',
       }),
     );
 

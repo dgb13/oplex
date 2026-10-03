@@ -43,9 +43,10 @@ export class PosService {
    * Reusa SalesService.createSale/recordReceipt tal cual - cero código
    * nuevo para factura/stock/asiento/cobro. Lo único propio de Caja: exigir
    * un turno abierto, resolver Consumidor Final si no vino un cliente, y
-   * dejar el rastro del pago en efectivo tanto en el ledger de la sesión
-   * (arqueo) como en FinancialAccount.currentBalance (recordReceipt NO lo
-   * hace por sí solo - ver la nota en InvoicingService.recordReceipt).
+   * dejar el rastro del pago en efectivo en el ledger de la sesión (arqueo).
+   * FinancialAccount.currentBalance lo mueve SalesService.recordReceipt
+   * (desde 2026-09-13, al pasarle financialAccountId) - acá antes se volvía
+   * a sumar y cada venta en efectivo contaba doble en el saldo de la caja.
    */
   async checkout(dto: CheckoutDto) {
     const register = await this.cashRegistersService.getById(dto.registerId);
@@ -104,11 +105,6 @@ export class PosService {
 
       if (isCash) {
         await this.cashSessionsService.recordSaleMovement(session.id, invoice.id, payment.amount);
-        await this.reportsFinancialService.recordFinancialTransaction({
-          financialAccountId: register.financialAccountId,
-          amount: payment.amount,
-          externalRef: `Venta ${invoice.documentLetter}-${invoice.number}`,
-        });
       }
     }
 

@@ -123,7 +123,7 @@ describe('PosService.checkout', () => {
     expect(salesService.recordReceipt).not.toHaveBeenCalled();
   });
 
-  it('split payment (cash + card): records one Receipt per payment, a CashMovement only for the cash leg, and increments FinancialAccount.currentBalance only by the cash amount', async () => {
+  it('split payment (cash + card): records one Receipt per payment and a CashMovement only for the cash leg - the balance is moved once, by recordReceipt', async () => {
     const register = makeRegister();
     const invoice = makeInvoice(150);
     const cashRegistersService = {
@@ -175,13 +175,10 @@ describe('PosService.checkout', () => {
     expect(cashSessionsService.recordSaleMovement).toHaveBeenCalledTimes(1);
     expect(cashSessionsService.recordSaleMovement).toHaveBeenCalledWith('session-1', 'invoice-1', 100);
 
-    // ...y sólo esa porción incrementa FinancialAccount.currentBalance (el
-    // gap real de InvoicingService.recordReceipt que este composition-root
-    // existe para cerrar).
-    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledTimes(1);
-    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ financialAccountId: 'account-1', amount: 100 }),
-    );
+    // ...y el saldo de la caja lo mueve SalesService.recordReceipt (por el
+    // financialAccountId de arriba), una sola vez: la Caja ya no suma por su
+    // cuenta - cada venta en efectivo contaba doble (2026-10-02).
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
   });
 });
 
