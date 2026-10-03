@@ -2,8 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { reportsApi } from '@/lib/reports';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Select from '@/components/ui/Select';
+import { reportsApi, type MoneyConcept } from '@/lib/reports';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 
@@ -12,19 +13,57 @@ interface Props {
   onClose: () => void;
 }
 
+// Valor del Select de concepto: "concept:<key>" (frecuente) o
+// "account:<id>" (otra cuenta del plan).
+const CONCEPT_PREFIX = 'concept:';
+const ACCOUNT_PREFIX = 'account:';
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function NewFinancialTransactionModal({ financialAccountId, onClose }: Props) {
   const queryClient = useQueryClient();
+  const [direction, setDirection] = useState<'OUT' | 'IN'>('OUT');
   const [amount, setAmount] = useState('');
-  const [occurredAt, setOccurredAt] = useState('');
+  const [concept, setConcept] = useState('');
+  const [occurredAt, setOccurredAt] = useState(today);
   const [externalRef, setExternalRef] = useState('');
   const [error, setError] = useState('');
+
+  const conceptsQuery = useQuery({
+    queryKey: ['financial-movement-concepts'],
+    queryFn: reportsApi.listMovementConcepts,
+  });
+  const conceptOptions = [
+    ...(conceptsQuery.data?.frequent ?? [])
+      .filter((c) => c.direction === direction)
+      .map((c) => ({
+        value: `${CONCEPT_PREFIX}${c.key}`,
+        label: c.label,
+        group: direction === 'OUT' ? 'Egresos frecuentes' : 'Ingresos frecuentes',
+      })),
+    ...(conceptsQuery.data?.others ?? []).map((a) => ({
+      value: `${ACCOUNT_PREFIX}${a.id}`,
+      label: `${a.code} ${a.name}`,
+      group: 'Otra cuenta del plan',
+    })),
+  ];
 
   const mutation = useMutation({
     mutationFn: () =>
       reportsApi.recordFinancialTransaction({
         financialAccountId,
+        direction,
         amount: Number(amount),
-        occurredAt: occurredAt || undefined,
+        concept: concept.startsWith(CONCEPT_PREFIX)
+          ? (concept.slice(CONCEPT_PREFIX.length) as MoneyConcept)
+          : undefined,
+        accountingAccountId: concept.startsWith(ACCOUNT_PREFIX) ? concept.slice(ACCOUNT_PREFIX.length) : undefined,
+        // Hoy = ahora; otro día = mediodía de ese día en la hora local (un
+        // "2026-10-03" pelado es medianoche UTC, el día anterior en Argentina).
+        occurredAt: occurredAt && occurredAt !== today() ? new Date(`${occurredAt}T12:00:00`).toISOString() : undefined,
         externalRef: externalRef || undefined,
       }),
     onSuccess: () => {
@@ -39,15 +78,40 @@ export default function NewFinancialTransactionModal({ financialAccountId, onClo
     },
   });
 
+  function changeDirection(next: 'OUT' | 'IN') {
+    setDirection(next);
+    // Un concepto frecuente es de un solo sentido; otra cuenta del plan sirve para los dos.
+    if (concept.startsWith(CONCEPT_PREFIX)) {
+      setConcept('');
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!amount || Number(amount) === 0) {
-      setError('El importe es obligatorio y no puede ser cero');
+    if (!(Number(amount) > 0)) {
+      setError('El importe tiene que ser mayor a cero');
+      return;
+    }
+    if (!concept) {
+      setError('Elegí un concepto');
       return;
     }
     mutation.mutate();
   }
+
+  const segment = (value: 'OUT' | 'IN', label: string) => (
+    <button
+      type="button"
+      aria-pressed={direction === value}
+      onClick={() => changeDirection(value)}
+      className={`rounded-md px-3 py-1.5 text-sm transition ${
+        direction === value ? 'bg-card font-semibold text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -58,32 +122,30 @@ export default function NewFinancialTransactionModal({ financialAccountId, onClo
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Importe positivo para un ingreso, negativo para un egreso.
-        </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-muted-foreground">Importe</label>
-            <Input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="1000 o -500"
-            />
+          <div className="grid grid-cols-2 rounded-lg bg-muted p-1" role="group" aria-label="Tipo">
+            {segment('OUT', 'Egreso')}
+            {segment('IN', 'Ingreso')}
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-muted-foreground">Fecha (opcional, por defecto ahora)</label>
+            <label className="text-sm text-muted-foreground">Importe</label>
+            <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-muted-foreground">Concepto</label>
+            <Select value={concept} onChange={setConcept} options={conceptOptions} placeholder="Elegir concepto..." />
+            <p className="text-xs text-muted-foreground">
+              ¿Pasás plata a otra cuenta tuya? Usá <span className="font-semibold text-foreground">Transferencia entre cuentas</span>.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-muted-foreground">Fecha</label>
             <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-muted-foreground">Referencia externa (opcional)</label>
-            <Input
-              value={externalRef}
-              onChange={(e) => setExternalRef(e.target.value)}
-              placeholder="N° de comprobante bancario"
-            />
+            <label className="text-sm text-muted-foreground">Detalle (opcional)</label>
+            <Input value={externalRef} onChange={(e) => setExternalRef(e.target.value)} />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">

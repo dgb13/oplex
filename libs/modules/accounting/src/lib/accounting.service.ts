@@ -135,6 +135,31 @@ const BANK_INTEREST_INCOME_ACCOUNT = {
   type: 'INCOME' as const,
 };
 
+// Conceptos de un ingreso/egreso de dinero suelto (Tesorería "Nuevo
+// movimiento", Caja POS ingreso/egreso) - ver postMoneyMovementJournalEntry.
+// Los más usados, para no obligar al usuario a conocer el plan de cuentas.
+const MONEY_CONCEPT_ACCOUNTS = {
+  BANK_FEES: BANK_FEES_EXPENSE_ACCOUNT,
+  GENERAL_EXPENSES: { code: '5.1.10', name: 'Gastos Generales', type: 'EXPENSE' as const },
+  TAXES: { code: '5.1.11', name: 'Impuestos y Tasas', type: 'EXPENSE' as const },
+  PARTNER_WITHDRAWALS: { code: '3.1.11', name: 'Retiros de Socios', type: 'EQUITY' as const },
+  BANK_INTEREST: BANK_INTEREST_INCOME_ACCOUNT,
+  OTHER_INCOME: { code: '4.2.10', name: 'Otros Ingresos', type: 'INCOME' as const },
+  PARTNER_CONTRIBUTIONS: { code: '3.1.10', name: 'Aportes de Socios', type: 'EQUITY' as const },
+};
+export type MoneyConcept = keyof typeof MONEY_CONCEPT_ACCOUNTS;
+/** Para las pantallas: qué conceptos se ofrecen en un egreso y en un ingreso. */
+export const MONEY_CONCEPTS: { key: MoneyConcept; label: string; direction: 'OUT' | 'IN' }[] = [
+  { key: 'BANK_FEES', label: 'Gastos bancarios', direction: 'OUT' },
+  { key: 'GENERAL_EXPENSES', label: 'Gastos generales', direction: 'OUT' },
+  { key: 'TAXES', label: 'Impuestos y tasas', direction: 'OUT' },
+  { key: 'PARTNER_WITHDRAWALS', label: 'Retiro de socios', direction: 'OUT' },
+  { key: 'BANK_INTEREST', label: 'Intereses ganados', direction: 'IN' },
+  { key: 'OTHER_INCOME', label: 'Otros ingresos', direction: 'IN' },
+  { key: 'PARTNER_CONTRIBUTIONS', label: 'Aporte de socios', direction: 'IN' },
+];
+export const MONEY_CONCEPT_CODES: string[] = Object.values(MONEY_CONCEPT_ACCOUNTS).map((a) => a.code);
+
 // Ajuste por Inflación (RT6/NC39, ver postInflationAdjustmentJournalEntry) -
 // asiento neto de 2 líneas: Resultado (Pérdida o Ganancia, según el signo
 // del RECPAM) contra una cuenta de Patrimonio dedicada. No hay ninguna
@@ -376,6 +401,17 @@ export interface PostTransferJournalEntryInput {
   date?: Date;
 }
 
+export interface PostMoneyMovementJournalEntryInput {
+  financialAccountId: string;
+  /** En pesos y con signo: positivo entra plata a la cuenta, negativo sale. */
+  amount: Prisma.Decimal | number | string;
+  /** Contra qué: uno de los conceptos frecuentes, una cuenta del plan
+   * elegida por el usuario, o el saldo inicial de una cuenta de dinero nueva. */
+  counterpart: { concept: MoneyConcept } | { accountId: string } | { kind: 'OPENING_BALANCE' };
+  description: string;
+  date?: Date;
+}
+
 export interface PostCheckDepositJournalEntryInput {
   checkId: string;
   financialAccountId: string;
@@ -429,9 +465,9 @@ export interface PostExchangeRateRevaluationInput {
    * propia moneda (no en la base) - ver
    * ReportsFinancialService.revalueFinancialAccount, que ya lo trae. */
   currentBalance: Prisma.Decimal | number | string;
-  /** Tipo de cambio anterior (FinancialAccount.lastRevaluationRate) contra
-   * el que se compara. undefined/null = primera revaluación: sólo fija la
-   * base, no hay asiento posible sin un valor previo del cual difiera. */
+  /** Tipo de cambio anterior (FinancialAccount.lastRevaluationRate).
+   * undefined/null = primera revaluación: lo que falte para llegar al valor
+   * no es una diferencia de cambio sino un saldo que nunca se valuó. */
   previousRate: Prisma.Decimal | number | string | null | undefined;
   /** Tipo de cambio nuevo a aplicar (moneda de la cuenta por 1 base). */
   newRate: Prisma.Decimal | number | string;
@@ -624,7 +660,7 @@ export class AccountingService {
       const account = await this.linkMoneyAccount(financialAccount.id);
       // En pesos: una cuenta en otra moneda vale su saldo al último tipo de
       // cambio al que se revaluó; nunca revaluada = todavía no tiene valor
-      // contable (la primera revaluación lo fija, ver postExchangeRateRevaluation).
+      // contable (la primera revaluación lo asienta, ver postExchangeRateRevaluation).
       const value = financialAccount.currencyId
         ? financialAccount.currentBalance.mul(financialAccount.lastRevaluationRate ?? 0).toDecimalPlaces(2)
         : financialAccount.currentBalance;
@@ -1350,6 +1386,55 @@ export class AccountingService {
   }
 
   /**
+   * Movimiento de dinero que no viene de un comprobante: el saldo inicial de
+   * una cuenta nueva (contra Saldos Iniciales de Cuentas de Dinero) o un
+   * ingreso/egreso manual en Tesorería o en la Caja del POS (contra la cuenta
+   * del plan que eligió el usuario: un gasto, un aporte de socios...).
+   */
+  async postMoneyMovementJournalEntry(
+    input: PostMoneyMovementJournalEntryInput,
+  ): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.isZero()) {
+      return undefined;
+    }
+    const money = await this.moneyAccountFor(input.financialAccountId);
+    let counterpartId: string;
+    if ('kind' in input.counterpart) {
+      counterpartId = (await this.getOrCreateAccount(MONEY_OPENING_BALANCES_ACCOUNT)).id;
+    } else if ('concept' in input.counterpart) {
+      const concept = MONEY_CONCEPT_ACCOUNTS[input.counterpart.concept];
+      if (!concept) {
+        throw new BadRequestException('Concepto desconocido');
+      }
+      counterpartId = (await this.getOrCreateAccount(concept)).id;
+    } else {
+      const counterpart = await getTenantDb().accountingAccount.findUnique({
+        where: { id: input.counterpart.accountId },
+        include: { financialAccount: { select: { id: true } } },
+      });
+      if (!counterpart) {
+        throw new NotFoundException('Cuenta contable no encontrada');
+      }
+      // Entre dos cuentas de dinero es una transferencia: tiene que mover
+      // también el saldo de la otra cuenta en Tesorería.
+      if (counterpart.financialAccount || counterpart.code === CASH_ACCOUNT.code) {
+        throw new BadRequestException('Para pasar plata entre cuentas de dinero usá "Transferencia entre cuentas"');
+      }
+      counterpartId = counterpart.id;
+    }
+    const inflow = amount.gt(0);
+    return this.createBalancedEntry(
+      input.description,
+      [
+        { accountId: money.id, direction: inflow ? 'DEBIT' : 'CREDIT', amount: amount.abs().toNumber() },
+        { accountId: counterpartId, direction: inflow ? 'CREDIT' : 'DEBIT', amount: amount.abs().toNumber() },
+      ],
+      { date: input.date },
+    );
+  }
+
+  /**
    * Transferencia entre dos cuentas de dinero propias (ver apps/api's
    * TreasuryService.transferBetweenAccounts): Debe destino / Haber origen.
    * Antes no se asentaba porque las dos eran la misma "Caja"; con una cuenta
@@ -1582,28 +1667,40 @@ export class AccountingService {
    * llevando su propio currentBalance en su moneda, sin cambios; esto sólo
    * ajusta cuánto vale ese saldo en pesos para el balance. Mismo molde que
    * postCashSessionAdjustmentJournalEntry: dos líneas contra la cuenta
-   * contable de esa cuenta de dinero. previousRate null/undefined
-   * = primera revaluación, sólo fija la base, no hay diferencia posible.
+   * contable de esa cuenta de dinero.
+   *
+   * Lleva la cuenta contable a saldo × cotización nueva, contra lo que la
+   * cuenta contable tiene hoy (no contra saldo × cotización anterior): así
+   * también se corrige lo que entró o salió a otra cotización desde la
+   * última revaluación. En la primera revaluación lo que falta es un saldo
+   * que nunca se valuó, va contra Saldos Iniciales de Cuentas de Dinero.
    */
   async postExchangeRateRevaluation(
     input: PostExchangeRateRevaluationInput,
   ): Promise<JournalEntryWithLines | undefined> {
-    if (input.previousRate === null || input.previousRate === undefined) {
-      return undefined;
-    }
-    const balance = new Prisma.Decimal(input.currentBalance);
-    const previousRate = new Prisma.Decimal(input.previousRate);
-    const newRate = new Prisma.Decimal(input.newRate);
-    const delta = balance.mul(newRate.sub(previousRate));
+    const cash = await this.moneyAccountFor(input.financialAccountId);
+    const target = new Prisma.Decimal(input.currentBalance).mul(input.newRate).toDecimalPlaces(2);
+    const delta = target.sub(await this.accountBalance(cash.id));
     if (delta.eq(0)) {
       return undefined;
     }
     const isGain = delta.gt(0);
     const amount = delta.abs();
-    const [cash, result] = await Promise.all([
-      this.moneyAccountFor(input.financialAccountId),
-      this.getOrCreateAccount(isGain ? EXCHANGE_GAIN_ACCOUNT : EXCHANGE_LOSS_ACCOUNT),
-    ]);
+    if (input.previousRate === null || input.previousRate === undefined) {
+      return this.createBalancedEntry(
+        `Valuación inicial en pesos - ${cash.name}`,
+        [
+          { accountId: cash.id, direction: isGain ? 'DEBIT' : 'CREDIT', amount: amount.toNumber() },
+          {
+            accountId: (await this.getOrCreateAccount(MONEY_OPENING_BALANCES_ACCOUNT)).id,
+            direction: isGain ? 'CREDIT' : 'DEBIT',
+            amount: amount.toNumber(),
+          },
+        ],
+        { date: input.date },
+      );
+    }
+    const result = await this.getOrCreateAccount(isGain ? EXCHANGE_GAIN_ACCOUNT : EXCHANGE_LOSS_ACCOUNT);
     const lines: PostJournalEntryDto['lines'] = isGain
       ? [
           { accountId: cash.id, direction: 'DEBIT', amount: amount.toNumber() },

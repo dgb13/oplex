@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AccountingService } from '@plexo/accounting';
+import { AccountingService, MONEY_CONCEPTS, type MoneyConcept } from '@plexo/accounting';
 import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
 import { getReservedQuantity } from '@plexo/inventory';
 import { MercadoPagoQrService } from '@plexo/mercadopago';
@@ -9,7 +9,12 @@ import { instanceToPlain } from 'class-transformer';
 import type { CheckoutDto, CheckoutSaleDto } from './dto/checkout.dto.js';
 import type { CreateRegisterDto } from './dto/create-register.dto.js';
 import type { CreateQrChargeDto } from './dto/mercadopago-qr.dto.js';
+import type { PosCashMovementDto } from './dto/pos-cash-movement.dto.js';
 import { SalesService } from '../sales/sales.service.js';
+
+// Lo que un cajero puede elegir como gasto o ingreso en la Caja.
+const POS_EXPENSE_CONCEPTS: MoneyConcept[] = ['GENERAL_EXPENSES', 'TAXES', 'BANK_FEES'];
+const POS_INCOME_CONCEPTS: MoneyConcept[] = ['OTHER_INCOME', 'BANK_INTEREST'];
 
 /**
  * Composes @plexo/pos (CashRegistersService/CashSessionsService) +
@@ -192,6 +197,93 @@ export class PosService {
       registerId: charge.registerId,
       payments: sale.payments.map((p) => (p.method === 'MERCADOPAGO' ? { ...p, paymentIntentId: charge.id } : p)),
     });
+  }
+
+  /** Lo que el cajero puede elegir en un ingreso/egreso: las otras cuentas
+   * de dinero en pesos (para un retiro/depósito) y los conceptos de gasto e
+   * ingreso. Sin el plan de cuentas: el cajero no tiene por qué conocerlo. */
+  async getCashMovementOptions(registerId: string) {
+    const register = await this.cashRegistersService.getById(registerId);
+    const accounts = await getTenantDb().financialAccount.findMany({
+      where: { id: { not: register.financialAccountId }, currencyId: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return {
+      accounts,
+      expenseConcepts: MONEY_CONCEPTS.filter((c) => POS_EXPENSE_CONCEPTS.includes(c.key)),
+      incomeConcepts: MONEY_CONCEPTS.filter((c) => POS_INCOME_CONCEPTS.includes(c.key)),
+    };
+  }
+
+  /**
+   * Ingreso/egreso de efectivo: queda en el ledger del turno (arqueo, igual
+   * que siempre), mueve el saldo de la caja en Tesorería y se asienta según
+   * lo que es - transferencia a/desde otra cuenta, gasto/ingreso, o
+   * retiro/aporte de un socio (ver PosCashMovementDto). La caja del POS es
+   * siempre en pesos (createRegister), sin conversión.
+   */
+  async recordCashMovement(sessionId: string, dto: PosCashMovementDto, type: 'CASH_IN' | 'CASH_OUT') {
+    const isOut = type === 'CASH_OUT';
+    if (dto.kind === (isOut ? 'INCOME' : 'EXPENSE')) {
+      throw new BadRequestException(isOut ? 'Un egreso no puede ser un ingreso' : 'Un ingreso no puede ser un gasto');
+    }
+    if (dto.kind === 'TRANSFER' && !dto.financialAccountId) {
+      throw new BadRequestException(isOut ? 'Elegí a qué cuenta va la plata' : 'Elegí de qué cuenta viene la plata');
+    }
+    if (dto.kind === 'EXPENSE' && !(dto.concept && POS_EXPENSE_CONCEPTS.includes(dto.concept))) {
+      throw new BadRequestException('Elegí qué gasto es');
+    }
+    if (dto.kind === 'INCOME' && !(dto.concept && POS_INCOME_CONCEPTS.includes(dto.concept))) {
+      throw new BadRequestException('Elegí qué ingreso es');
+    }
+
+    await this.accountingService.ensureMoneyAccounts();
+    const movement = await this.cashSessionsService.recordCashMovement(sessionId, dto, type);
+    const { session } = await this.cashSessionsService.getSessionSummary(sessionId);
+    const register = await this.cashRegistersService.getById(session.registerId);
+    const cashAccountId = register.financialAccountId;
+    const amount = new Prisma.Decimal(dto.amount).abs();
+    const signed = isOut ? amount.neg() : amount;
+
+    if (dto.kind === 'TRANSFER') {
+      const other = await getTenantDb().financialAccount.findUnique({ where: { id: dto.financialAccountId } });
+      if (!other || other.id === cashAccountId || other.currencyId) {
+        throw new BadRequestException('Elegí otra cuenta de dinero en pesos');
+      }
+      await this.reportsFinancialService.recordFinancialTransaction({
+        financialAccountId: cashAccountId,
+        amount: signed.toNumber(),
+        externalRef: `${isOut ? 'Retiro a' : 'Ingreso desde'} ${other.name} - ${dto.reason}`,
+      });
+      await this.reportsFinancialService.recordFinancialTransaction({
+        financialAccountId: other.id,
+        amount: signed.neg().toNumber(),
+        externalRef: `${isOut ? 'Retiro de' : 'Fondo para'} ${register.name} - ${dto.reason}`,
+      });
+      await this.accountingService.postTransferJournalEntry({
+        fromFinancialAccountId: isOut ? cashAccountId : other.id,
+        toFinancialAccountId: isOut ? other.id : cashAccountId,
+        amount,
+        description: `Transferencia de ${isOut ? register.name : other.name} a ${isOut ? other.name : register.name} - ${dto.reason}`,
+      });
+      return movement;
+    }
+
+    const concept: MoneyConcept =
+      dto.kind === 'PARTNER' ? (isOut ? 'PARTNER_WITHDRAWALS' : 'PARTNER_CONTRIBUTIONS') : (dto.concept as MoneyConcept);
+    await this.reportsFinancialService.recordFinancialTransaction({
+      financialAccountId: cashAccountId,
+      amount: signed.toNumber(),
+      externalRef: dto.reason,
+    });
+    await this.accountingService.postMoneyMovementJournalEntry({
+      financialAccountId: cashAccountId,
+      amount: signed,
+      counterpart: { concept },
+      description: `${MONEY_CONCEPTS.find((c) => c.key === concept)?.label} - ${register.name} - ${dto.reason}`,
+    });
+    return movement;
   }
 
   async closeSession(sessionId: string, dto: Parameters<CashSessionsService['closeSession']>[1]) {

@@ -880,20 +880,22 @@ describe('AccountingService.postCashSessionAdjustmentJournalEntry', () => {
 });
 
 describe('AccountingService.postExchangeRateRevaluation', () => {
-  function dbWithAccounts(existingByCode: Record<string, { id: string }> = {}) {
-    const created: { code: string; name: string; type: string }[] = [];
+  /** ledger = lo que la cuenta contable de la cuenta de dinero tiene hoy, en pesos. */
+  function dbWithAccounts(ledger: number) {
     return {
       accountingAccount: {
-        findFirst: jest.fn(({ where }: { where: { code: string } }) =>
-          Promise.resolve(existingByCode[where.code] ?? null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(({ data }: { data: { code: string; name: string; type: string } }) =>
+          Promise.resolve({ id: `acc-${data.code}`, ...data }),
         ),
-        create: jest.fn(({ data }: { data: { code: string; name: string; type: string } }) => {
-          created.push({ code: data.code, name: data.name, type: data.type });
-          return Promise.resolve({ id: `acc-${data.code}`, ...data });
-        }),
       },
       journalEntry: {
         create: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
+      },
+      journalEntryLine: {
+        aggregate: jest.fn(({ where }: { where: { direction: string } }) =>
+          Promise.resolve({ _sum: { amount: new Prisma.Decimal(where.direction === 'DEBIT' ? Math.max(ledger, 0) : Math.max(-ledger, 0)) } }),
+        ),
       },
       tenantSettings: { findUnique: jest.fn().mockResolvedValue({ moneyAccountsSplitAt: new Date('2026-10-01') }) },
       financialAccount: {
@@ -901,16 +903,14 @@ describe('AccountingService.postExchangeRateRevaluation', () => {
           Promise.resolve({ id: where.id, name: 'Caja USD', accountingAccount: { id: `acc-fa:${where.id}`, name: 'Caja USD' } }),
         ),
       },
-      _created: created,
     };
   }
 
   it('books debit Caja / credit Ganancia por Diferencia de Cambio when the rate went up', async () => {
-    const db = dbWithAccounts();
-    const service = new AccountingService();
+    const db = dbWithAccounts(100000);
 
     await runInTenant(db, () =>
-      service.postExchangeRateRevaluation({
+      new AccountingService().postExchangeRateRevaluation({
         financialAccountId: 'fa-1',
         currentBalance: 100,
         previousRate: 1000,
@@ -927,11 +927,10 @@ describe('AccountingService.postExchangeRateRevaluation', () => {
   });
 
   it('books debit Pérdida por Diferencia de Cambio / credit Caja when the rate went down', async () => {
-    const db = dbWithAccounts();
-    const service = new AccountingService();
+    const db = dbWithAccounts(110000);
 
     await runInTenant(db, () =>
-      service.postExchangeRateRevaluation({
+      new AccountingService().postExchangeRateRevaluation({
         financialAccountId: 'fa-1',
         currentBalance: 100,
         previousRate: 1100,
@@ -946,12 +945,32 @@ describe('AccountingService.postExchangeRateRevaluation', () => {
     ]);
   });
 
-  it('skips posting when the rate did not move', async () => {
-    const db = dbWithAccounts();
-    const service = new AccountingService();
+  it('lleva la cuenta a saldo × cotización nueva aunque algo haya entrado a otra cotización', async () => {
+    // 100 USD a 1000 = 100.000, y entraron 10 USD asentados a 1200 = 12.000.
+    const db = dbWithAccounts(112000);
+
+    await runInTenant(db, () =>
+      new AccountingService().postExchangeRateRevaluation({
+        financialAccountId: 'fa-1',
+        currentBalance: 110,
+        previousRate: 1000,
+        newRate: 1100,
+      }),
+    );
+
+    // 110 × 1100 = 121.000 - 112.000
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-fa:fa-1', direction: 'DEBIT', amount: 9000 },
+      { accountId: 'acc-4.2.05', direction: 'CREDIT', amount: 9000 },
+    ]);
+  });
+
+  it('skips posting when the account is already at that value', async () => {
+    const db = dbWithAccounts(100000);
 
     const result = await runInTenant(db, () =>
-      service.postExchangeRateRevaluation({
+      new AccountingService().postExchangeRateRevaluation({
         financialAccountId: 'fa-1',
         currentBalance: 100,
         previousRate: 1000,
@@ -963,12 +982,11 @@ describe('AccountingService.postExchangeRateRevaluation', () => {
     expect(db.journalEntry.create).not.toHaveBeenCalled();
   });
 
-  it('skips posting on the first revaluation (no previous rate to compare against)', async () => {
-    const db = dbWithAccounts();
-    const service = new AccountingService();
+  it('la primera revaluación asienta el valor que nunca se valuó contra Saldos Iniciales, no como ganancia', async () => {
+    const db = dbWithAccounts(0);
 
-    const result = await runInTenant(db, () =>
-      service.postExchangeRateRevaluation({
+    await runInTenant(db, () =>
+      new AccountingService().postExchangeRateRevaluation({
         financialAccountId: 'fa-1',
         currentBalance: 100,
         previousRate: null,
@@ -976,8 +994,12 @@ describe('AccountingService.postExchangeRateRevaluation', () => {
       }),
     );
 
-    expect(result).toBeUndefined();
-    expect(db.journalEntry.create).not.toHaveBeenCalled();
+    const createArgs = (db.journalEntry.create as jest.Mock).mock.calls[0][0];
+    expect(createArgs.data.description).toBe('Valuación inicial en pesos - Caja USD');
+    expect(createArgs.data.lines.createMany.data).toEqual([
+      { accountId: 'acc-fa:fa-1', direction: 'DEBIT', amount: 100000 },
+      { accountId: 'acc-3.1.02', direction: 'CREDIT', amount: 100000 },
+    ]);
   });
 });
 
@@ -1614,6 +1636,91 @@ describe('AccountingService - asientos de dinero nuevos', () => {
       { accountId: 'acc-fa:fa-bank', direction: 'DEBIT', amount: 900 },
       { accountId: 'acc-fa:fa-pending', direction: 'CREDIT', amount: 900 },
     ]);
+  });
+
+  it('saldo inicial de una cuenta nueva: contra Saldos Iniciales de Cuentas de Dinero', async () => {
+    const db = makeDb();
+
+    await runInTenant(db, () =>
+      new AccountingService().postMoneyMovementJournalEntry({
+        financialAccountId: 'fa-bank',
+        amount: 5000,
+        counterpart: { kind: 'OPENING_BALANCE' },
+        description: 'Saldo inicial - Banco',
+      }),
+    );
+
+    expect(linesOf(db)).toEqual([
+      { accountId: 'acc-fa:fa-bank', direction: 'DEBIT', amount: 5000 },
+      { accountId: 'acc-3.1.02', direction: 'CREDIT', amount: 5000 },
+    ]);
+  });
+
+  it('concepto frecuente: crea su cuenta la primera vez (Aportes de Socios)', async () => {
+    const db = makeDb();
+
+    await runInTenant(db, () =>
+      new AccountingService().postMoneyMovementJournalEntry({
+        financialAccountId: 'fa-cash',
+        amount: 3000,
+        counterpart: { concept: 'PARTNER_CONTRIBUTIONS' },
+        description: 'Aporte de socios - Caja 2',
+      }),
+    );
+
+    expect(db.accountingAccount.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ code: '3.1.10', name: 'Aportes de Socios', type: 'EQUITY' }),
+    });
+    expect(linesOf(db)).toEqual([
+      { accountId: 'acc-fa:fa-cash', direction: 'DEBIT', amount: 3000 },
+      { accountId: 'acc-3.1.10', direction: 'CREDIT', amount: 3000 },
+    ]);
+  });
+
+  it('egreso manual: Debe la cuenta elegida / Haber la cuenta de dinero', async () => {
+    const db = {
+      ...makeDb(),
+      accountingAccount: {
+        ...makeDb().accountingAccount,
+        findUnique: jest.fn().mockResolvedValue({ id: 'acc-expense', code: '5.1.03', financialAccount: null }),
+      },
+    };
+
+    await runInTenant(db, () =>
+      new AccountingService().postMoneyMovementJournalEntry({
+        financialAccountId: 'fa-cash',
+        amount: -300,
+        counterpart: { accountId: 'acc-expense' },
+        description: 'Pago de flete',
+      }),
+    );
+
+    expect(linesOf(db as never)).toEqual([
+      { accountId: 'acc-fa:fa-cash', direction: 'CREDIT', amount: 300 },
+      { accountId: 'acc-expense', direction: 'DEBIT', amount: 300 },
+    ]);
+  });
+
+  it('contra otra cuenta de dinero no: eso es una transferencia (movería un solo saldo de Tesorería)', async () => {
+    const db = {
+      ...makeDb(),
+      accountingAccount: {
+        ...makeDb().accountingAccount,
+        findUnique: jest.fn().mockResolvedValue({ id: 'acc-bank', code: '1.1.03.01', financialAccount: { id: 'fa-bank' } }),
+      },
+    };
+
+    await expect(
+      runInTenant(db, () =>
+        new AccountingService().postMoneyMovementJournalEntry({
+          financialAccountId: 'fa-cash',
+          amount: -300,
+          counterpart: { accountId: 'acc-bank' },
+          description: 'Retiro',
+        }),
+      ),
+    ).rejects.toThrow(/Transferencia entre cuentas/);
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
   });
 
   it('depósito de cheque: entra al banco y sale de Cheques en Cartera', async () => {

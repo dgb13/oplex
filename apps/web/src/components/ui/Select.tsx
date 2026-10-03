@@ -2,10 +2,14 @@
 
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/react';
 import { Check, ChevronDown } from 'lucide-react';
+import { Fragment } from 'react';
 
 export interface SelectOption {
   value: string;
   label: string;
+  // Título de grupo (como <optgroup>): se muestra arriba de la primera
+  // opción de cada grupo - las opciones de un grupo van juntas.
+  group?: string;
 }
 
 interface SelectProps {
@@ -70,19 +74,25 @@ export default function Select({
           anchor="bottom start"
           className="z-[80] mt-1 max-h-72 min-w-[var(--button-width)] overflow-y-auto rounded-xl border bg-popover py-1 shadow-xl outline-none"
         >
-          {options.map((o) => (
-            <ListboxOption
-              key={o.value}
-              value={o.value}
-              className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-popover-foreground data-[focus]:bg-muted"
-            >
-              {({ selected: isSelected }) => (
-                <>
-                  <span className="truncate">{o.label}</span>
-                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-                </>
+          {options.map((o, i) => (
+            <Fragment key={o.value}>
+              {o.group && o.group !== options[i - 1]?.group && (
+                <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {o.group}
+                </div>
               )}
-            </ListboxOption>
+              <ListboxOption
+                value={o.value}
+                className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-popover-foreground data-[focus]:bg-muted"
+              >
+                {({ selected: isSelected }) => (
+                  <>
+                    <span className="truncate">{o.label}</span>
+                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                  </>
+                )}
+              </ListboxOption>
+            </Fragment>
           ))}
         </ListboxOptions>
       </div>

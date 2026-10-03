@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountingService } from '@plexo/accounting';
+import { AccountingService, MONEY_CONCEPT_CODES, MONEY_CONCEPTS } from '@plexo/accounting';
 import { getTenantDb, Prisma } from '@plexo/database';
 import { InvoicingService } from '@plexo/invoicing';
-import { ReportsFinancialService } from '@plexo/reports-financial';
+import { ReportsFinancialService, type CreateFinancialAccountDto } from '@plexo/reports-financial';
 import { CheckService } from '@plexo/treasury';
+import type { RecordMoneyMovementDto } from './dto/record-money-movement.dto.js';
 
 /**
  * Composición-root para las acciones de Cartera de Cheques que necesitan
@@ -21,6 +22,104 @@ export class TreasuryService {
     private readonly invoicingService: InvoicingService,
     private readonly accountingService: AccountingService,
   ) {}
+
+  /** Cuenta de dinero nueva: el saldo inicial queda como un movimiento más
+   * de la cuenta y se asienta contra Saldos Iniciales de Cuentas de Dinero.
+   * En otra moneda se valúa a la última cotización cargada; sin cotización
+   * queda sin valuar hasta el primer "Actualizar cotización". */
+  async createFinancialAccount(dto: CreateFinancialAccountDto) {
+    await this.accountingService.ensureMoneyAccounts();
+    const account = await this.reportsFinancialService.createFinancialAccount({ ...dto, currentBalance: undefined });
+    const opening = dto.currentBalance ?? 0;
+    if (opening === 0) {
+      return account;
+    }
+    await this.reportsFinancialService.recordFinancialTransaction({
+      financialAccountId: account.id,
+      amount: opening,
+      externalRef: 'Saldo inicial',
+    });
+    if (!account.currencyId) {
+      await this.accountingService.postMoneyMovementJournalEntry({
+        financialAccountId: account.id,
+        amount: opening,
+        counterpart: { kind: 'OPENING_BALANCE' },
+        description: `Saldo inicial - ${account.name}`,
+      });
+    } else {
+      const hasRate = await getTenantDb().exchangeRateHistory.findFirst({ where: { currencyId: account.currencyId } });
+      if (hasRate) {
+        return (await this.revalueFinancialAccount(account.id)).account;
+      }
+    }
+    return getTenantDb().financialAccount.findUniqueOrThrow({ where: { id: account.id } });
+  }
+
+  /** Qué puede elegir el usuario como concepto de un "Nuevo movimiento":
+   * los frecuentes y, aparte, cualquier otra cuenta del plan que no sea de
+   * dinero (eso es una transferencia) ni uno de los frecuentes. */
+  async listMovementConcepts() {
+    const others = await getTenantDb().accountingAccount.findMany({
+      where: {
+        financialAccount: null,
+        code: { notIn: [...MONEY_CONCEPT_CODES, '1.1.03'] },
+      },
+      select: { id: true, code: true, name: true, type: true },
+      orderBy: { code: 'asc' },
+    });
+    return { frequent: MONEY_CONCEPTS, others };
+  }
+
+  /** "Nuevo movimiento" de Tesorería: mueve el saldo y lo asienta contra el
+   * concepto elegido. Una cuenta en otra moneda se asienta en pesos a la
+   * cotización a la que está valuada (la próxima revaluación corrige el
+   * resto). */
+  async recordManualMovement(dto: RecordMoneyMovementDto) {
+    if (Boolean(dto.concept) === Boolean(dto.accountingAccountId)) {
+      throw new BadRequestException('Elegí un concepto para el movimiento');
+    }
+    if (dto.concept) {
+      const concept = MONEY_CONCEPTS.find((c) => c.key === dto.concept);
+      if (concept && concept.direction !== dto.direction) {
+        throw new BadRequestException(`"${concept.label}" no es un ${dto.direction === 'IN' ? 'ingreso' : 'egreso'}`);
+      }
+    }
+    const db = getTenantDb();
+    const account = await db.financialAccount.findUnique({ where: { id: dto.financialAccountId } });
+    if (!account) {
+      throw new NotFoundException('Financial account not found');
+    }
+    let rate = new Prisma.Decimal(1);
+    if (account.currencyId) {
+      const found =
+        account.lastRevaluationRate ??
+        (await db.exchangeRateHistory.findFirst({ where: { currencyId: account.currencyId }, orderBy: { effectiveAt: 'desc' } }))
+          ?.rate;
+      if (!found) {
+        throw new BadRequestException('Cargá una cotización para la moneda de esta cuenta antes de registrar movimientos');
+      }
+      rate = found;
+    }
+
+    await this.accountingService.ensureMoneyAccounts();
+    const signed = dto.direction === 'IN' ? dto.amount : -dto.amount;
+    const transaction = await this.reportsFinancialService.recordFinancialTransaction({
+      financialAccountId: account.id,
+      amount: signed,
+      occurredAt: dto.occurredAt,
+      externalRef: dto.externalRef,
+    });
+    const label = dto.concept ? MONEY_CONCEPTS.find((c) => c.key === dto.concept)?.label : undefined;
+    await this.accountingService.postMoneyMovementJournalEntry({
+      financialAccountId: account.id,
+      amount: new Prisma.Decimal(signed).mul(rate).toDecimalPlaces(2),
+      counterpart: dto.concept ? { concept: dto.concept } : { accountId: dto.accountingAccountId as string },
+      description:
+        [label ?? (dto.direction === 'IN' ? 'Ingreso' : 'Egreso'), account.name, dto.externalRef].filter(Boolean).join(' - '),
+      date: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
+    });
+    return transaction;
+  }
 
   listChecks(filters: Parameters<CheckService['listChecks']>[0]) {
     return this.checkService.listChecks(filters);

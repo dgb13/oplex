@@ -471,6 +471,7 @@ function PosSellScreen() {
       {cashMovement && session && (
         <CashMovementModal
           sessionId={session.id}
+          registerId={registerId}
           type={cashMovement}
           onClose={() => setCashMovement(null)}
           onDone={() => {

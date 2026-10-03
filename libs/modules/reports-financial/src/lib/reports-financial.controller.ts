@@ -1,7 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { RequireModuleAccess } from '@plexo/auth';
-import { CreateFinancialAccountDto } from './dto/create-financial-account.dto.js';
-import { RecordFinancialTransactionDto } from './dto/record-financial-transaction.dto.js';
 import { ReportsFinancialService } from './reports-financial.service.js';
 
 const MODULE = 'reports-financial';
@@ -10,26 +8,15 @@ const MODULE = 'reports-financial';
 export class ReportsFinancialController {
   constructor(private readonly reportsFinancialService: ReportsFinancialService) {}
 
-  @RequireModuleAccess(MODULE, 'write')
-  @Post('accounts')
-  createFinancialAccount(@Body() dto: CreateFinancialAccountDto) {
-    return this.reportsFinancialService.createFinancialAccount(dto);
-  }
+  // POST accounts, POST transactions y POST transfers viven en apps/api
+  // (FinancialAccountsController): además de mover los saldos, se asientan
+  // (AccountingService).
 
   @RequireModuleAccess(MODULE, 'read')
   @Get('accounts')
   listFinancialAccounts() {
     return this.reportsFinancialService.listFinancialAccounts();
   }
-
-  @RequireModuleAccess(MODULE, 'write')
-  @Post('transactions')
-  recordFinancialTransaction(@Body() dto: RecordFinancialTransactionDto) {
-    return this.reportsFinancialService.recordFinancialTransaction(dto);
-  }
-
-  // POST transfers vive en apps/api (FinancialAccountTransferController):
-  // además de mover los saldos, asienta la transferencia (AccountingService).
 
   @RequireModuleAccess(MODULE, 'write')
   @Post('transactions/:id/reconcile')

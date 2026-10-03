@@ -37,6 +37,7 @@ function makeServices(overrides: {
     postCheckDepositJournalEntry: jest.fn().mockResolvedValue({}),
     postOwnCheckClearedJournalEntry: jest.fn().mockResolvedValue({}),
     postTransferJournalEntry: jest.fn().mockResolvedValue({}),
+    postMoneyMovementJournalEntry: jest.fn().mockResolvedValue({}),
     ...overrides.accountingService,
   } as unknown as AccountingService;
   const service = new TreasuryService(checkService, reportsFinancialService, invoicingService, accountingService);
@@ -365,5 +366,134 @@ describe('TreasuryService.transferBetweenAccounts', () => {
     expect(accountingService.postTransferJournalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ amount: new Prisma.Decimal(15000) }),
     );
+  });
+});
+
+describe('TreasuryService.createFinancialAccount', () => {
+  it('el saldo inicial queda como movimiento de la cuenta y se asienta contra Saldos Iniciales', async () => {
+    const createFinancialAccount = jest.fn().mockResolvedValue({ id: 'fa-new', name: 'Banco Nación', currencyId: null });
+    const { service, reportsFinancialService, accountingService } = makeServices({
+      reportsFinancialService: { createFinancialAccount },
+    });
+    const db = { financialAccount: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'fa-new' }) } };
+
+    await runInTenant(db, () => service.createFinancialAccount({ name: 'Banco Nación', provider: 'BANK', currentBalance: 5000 }));
+
+    // La cuenta nace en 0: el saldo entra por el movimiento, no dos veces.
+    expect(createFinancialAccount).toHaveBeenCalledWith(expect.objectContaining({ currentBalance: undefined }));
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith({
+      financialAccountId: 'fa-new',
+      amount: 5000,
+      externalRef: 'Saldo inicial',
+    });
+    expect(accountingService.postMoneyMovementJournalEntry).toHaveBeenCalledWith({
+      financialAccountId: 'fa-new',
+      amount: 5000,
+      counterpart: { kind: 'OPENING_BALANCE' },
+      description: 'Saldo inicial - Banco Nación',
+    });
+  });
+
+  it('sin saldo inicial no hay movimiento ni asiento', async () => {
+    const { service, reportsFinancialService, accountingService } = makeServices({
+      reportsFinancialService: { createFinancialAccount: jest.fn().mockResolvedValue({ id: 'fa-new', currencyId: null }) },
+    });
+
+    await runInTenant({}, () => service.createFinancialAccount({ name: 'Caja chica', provider: 'CASH' }));
+
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
+    expect(accountingService.postMoneyMovementJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it('en dólares se valúa a la última cotización (Valuación inicial)', async () => {
+    const { service, accountingService } = makeServices({
+      reportsFinancialService: {
+        createFinancialAccount: jest.fn().mockResolvedValue({ id: 'fa-usd', name: 'Caja USD', currencyId: 'usd' }),
+      },
+    });
+    const db = {
+      exchangeRateHistory: { findFirst: jest.fn().mockResolvedValue({ rate: new Prisma.Decimal(1500) }) },
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'fa-usd',
+          currencyId: 'usd',
+          currentBalance: new Prisma.Decimal(100),
+          lastRevaluationRate: null,
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'fa-usd', lastRevaluationRate: 1500 }),
+      },
+    };
+
+    await runInTenant(db, () =>
+      service.createFinancialAccount({ name: 'Caja USD', provider: 'CASH', currencyId: 'usd', currentBalance: 100 }),
+    );
+
+    expect(accountingService.postMoneyMovementJournalEntry).not.toHaveBeenCalled();
+    expect(accountingService.postExchangeRateRevaluation).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-usd', previousRate: null, newRate: 1500 }),
+    );
+  });
+});
+
+describe('TreasuryService.recordManualMovement', () => {
+  const bank = { id: 'fa-bank', name: 'Banco Galicia CC', currencyId: null, lastRevaluationRate: null };
+
+  it('egreso con concepto: baja el saldo y se asienta contra el concepto', async () => {
+    const { service, reportsFinancialService, accountingService } = makeServices();
+    const db = { financialAccount: { findUnique: jest.fn().mockResolvedValue(bank) } };
+
+    await runInTenant(db, () =>
+      service.recordManualMovement({
+        financialAccountId: 'fa-bank',
+        direction: 'OUT',
+        amount: 1850,
+        concept: 'BANK_FEES',
+        externalRef: 'Mantenimiento de cuenta',
+      }),
+    );
+
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-bank', amount: -1850 }),
+    );
+    expect(accountingService.postMoneyMovementJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        financialAccountId: 'fa-bank',
+        amount: new Prisma.Decimal(-1850),
+        counterpart: { concept: 'BANK_FEES' },
+        description: 'Gastos bancarios - Banco Galicia CC - Mantenimiento de cuenta',
+      }),
+    );
+  });
+
+  it('en dólares se asienta en pesos a la cotización de la cuenta', async () => {
+    const { service, accountingService } = makeServices();
+    const db = {
+      financialAccount: {
+        findUnique: jest.fn().mockResolvedValue({ ...bank, currencyId: 'usd', lastRevaluationRate: new Prisma.Decimal(1500) }),
+      },
+    };
+
+    await runInTenant(db, () =>
+      service.recordManualMovement({ financialAccountId: 'fa-bank', direction: 'IN', amount: 10, accountingAccountId: 'acc-x' }),
+    );
+
+    expect(accountingService.postMoneyMovementJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: new Prisma.Decimal(15000), counterpart: { accountId: 'acc-x' } }),
+    );
+  });
+
+  it('sin concepto, o con un concepto del otro sentido, no se registra', async () => {
+    const { service, reportsFinancialService } = makeServices();
+    const db = { financialAccount: { findUnique: jest.fn().mockResolvedValue(bank) } };
+
+    await expect(
+      runInTenant(db, () => service.recordManualMovement({ financialAccountId: 'fa-bank', direction: 'OUT', amount: 5 })),
+    ).rejects.toThrow(/concepto/);
+    await expect(
+      runInTenant(db, () =>
+        service.recordManualMovement({ financialAccountId: 'fa-bank', direction: 'OUT', amount: 5, concept: 'OTHER_INCOME' }),
+      ),
+    ).rejects.toThrow(/no es un egreso/);
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
   });
 });

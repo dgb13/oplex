@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import type { CreateSaleLineInput, Invoice, ReceiptCheckInput } from '@/lib/invoicing';
+import type { MoneyConcept, MoneyConceptOption } from '@/lib/reports';
 
 export interface CashRegister {
   id: string;
@@ -104,9 +105,20 @@ export interface OpenCashSessionInput {
   denominationBreakdown?: DenominationBreakdownItem[];
 }
 
+// kind: TRANSFER = a/desde otra cuenta (financialAccountId); EXPENSE/INCOME
+// = un gasto/ingreso (concept); PARTNER = retiro/aporte de un socio.
 export interface CashMovementInput {
   amount: number;
   reason: string;
+  kind: 'TRANSFER' | 'EXPENSE' | 'PARTNER' | 'INCOME';
+  financialAccountId?: string;
+  concept?: MoneyConcept;
+}
+
+export interface CashMovementOptions {
+  accounts: { id: string; name: string }[];
+  expenseConcepts: MoneyConceptOption[];
+  incomeConcepts: MoneyConceptOption[];
 }
 
 export interface CloseCashSessionInput {
@@ -274,6 +286,8 @@ export const posApi = {
     api.post<CashSessionDetail>('/pos/sessions', dto).then((r) => r.data),
   getSessionSummary: (id: string) =>
     api.get<CashSessionSummary>(`/pos/sessions/${id}`).then((r) => r.data),
+  getCashMovementOptions: (registerId: string) =>
+    api.get<CashMovementOptions>(`/pos/registers/${registerId}/cash-movement-options`).then((r) => r.data),
   cashIn: (sessionId: string, dto: CashMovementInput) =>
     api.post<CashMovement>(`/pos/sessions/${sessionId}/cash-in`, dto).then((r) => r.data),
   cashOut: (sessionId: string, dto: CashMovementInput) =>

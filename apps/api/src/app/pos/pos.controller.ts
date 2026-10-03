@@ -3,7 +3,6 @@ import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
 import { MercadoPagoQrService } from '@plexo/mercadopago';
 import {
-  CashMovementDto,
   CashRegistersService,
   CashSessionExcelService,
   CashSessionsService,
@@ -14,6 +13,7 @@ import {
 } from '@plexo/pos';
 import { CheckoutDto } from './dto/checkout.dto.js';
 import { CreateRegisterDto } from './dto/create-register.dto.js';
+import { PosCashMovementDto } from './dto/pos-cash-movement.dto.js';
 import { ActivateRegisterQrDto, CreateQrChargeDto } from './dto/mercadopago-qr.dto.js';
 import { PosService } from './pos.service.js';
 
@@ -179,6 +179,12 @@ export class PosController {
   }
 
   @Roles(...SALES_ROLES)
+  @Get('registers/:id/cash-movement-options')
+  getCashMovementOptions(@Param('id', ParseUUIDPipe) id: string) {
+    return this.posService.getCashMovementOptions(id);
+  }
+
+  @Roles(...SALES_ROLES)
   @Get('sessions/:id')
   getSessionSummary(@Param('id', ParseUUIDPipe) id: string) {
     return this.cashSessionsService.getSessionSummary(id);
@@ -186,14 +192,14 @@ export class PosController {
 
   @Roles(...SALES_ROLES)
   @Post('sessions/:id/cash-in')
-  cashIn(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CashMovementDto) {
-    return this.cashSessionsService.recordCashMovement(id, dto, 'CASH_IN');
+  cashIn(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PosCashMovementDto) {
+    return this.posService.recordCashMovement(id, dto, 'CASH_IN');
   }
 
   @Roles(...SALES_ROLES)
   @Post('sessions/:id/cash-out')
-  cashOut(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CashMovementDto) {
-    return this.cashSessionsService.recordCashMovement(id, dto, 'CASH_OUT');
+  cashOut(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PosCashMovementDto) {
+    return this.posService.recordCashMovement(id, dto, 'CASH_OUT');
   }
 
   @Roles(...SALES_ROLES)

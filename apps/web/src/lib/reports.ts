@@ -86,9 +86,34 @@ export interface CreateFinancialAccountInput {
   currencyId?: string;
 }
 
+export type MoneyConcept =
+  | 'BANK_FEES'
+  | 'GENERAL_EXPENSES'
+  | 'TAXES'
+  | 'PARTNER_WITHDRAWALS'
+  | 'BANK_INTEREST'
+  | 'OTHER_INCOME'
+  | 'PARTNER_CONTRIBUTIONS';
+
+export interface MoneyConceptOption {
+  key: MoneyConcept;
+  label: string;
+  direction: 'IN' | 'OUT';
+}
+
+export interface MovementConcepts {
+  frequent: MoneyConceptOption[];
+  others: { id: string; code: string; name: string; type: string }[];
+}
+
+// Contra qué va: concept (frecuente) o accountingAccountId (otra cuenta del
+// plan), uno de los dos.
 export interface RecordFinancialTransactionInput {
   financialAccountId: string;
+  direction: 'IN' | 'OUT';
   amount: number;
+  concept?: MoneyConcept;
+  accountingAccountId?: string;
   occurredAt?: string;
   externalRef?: string;
 }
@@ -114,6 +139,8 @@ export const reportsApi = {
     api.get<FinancialAccount[]>('/reports/financial/accounts').then((r) => r.data),
   createFinancialAccount: (dto: CreateFinancialAccountInput) =>
     api.post<FinancialAccount>('/reports/financial/accounts', dto).then((r) => r.data),
+  listMovementConcepts: () =>
+    api.get<MovementConcepts>('/reports/financial/movement-concepts').then((r) => r.data),
   recordFinancialTransaction: (dto: RecordFinancialTransactionInput) =>
     api.post<FinancialTransaction>('/reports/financial/transactions', dto).then((r) => r.data),
   transferBetweenAccounts: (dto: TransferBetweenAccountsInput) =>

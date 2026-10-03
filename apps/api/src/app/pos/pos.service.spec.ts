@@ -365,3 +365,122 @@ describe('PosService.closeSession - diferencia de arqueo', () => {
     });
   });
 });
+
+describe('PosService.recordCashMovement - ingresos y egresos de la Caja', () => {
+  function makeService(db: Record<string, unknown> = {}) {
+    const reportsFinancialService = {
+      recordFinancialTransaction: jest.fn().mockResolvedValue({ id: 'tx-1' }),
+    } as unknown as ReportsFinancialService;
+    const accountingService = {
+      ensureMoneyAccounts: jest.fn().mockResolvedValue(undefined),
+      postMoneyMovementJournalEntry: jest.fn().mockResolvedValue({}),
+      postTransferJournalEntry: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const cashSessionsService = {
+      recordCashMovement: jest.fn().mockResolvedValue({ id: 'mov-1' }),
+      getSessionSummary: jest.fn().mockResolvedValue({ session: { id: 'session-1', registerId: 'register-1' } }),
+    } as unknown as CashSessionsService;
+    const service = new PosService(
+      { getById: jest.fn().mockResolvedValue({ ...makeRegister(), name: 'Caja 2' }) } as unknown as CashRegistersService,
+      cashSessionsService,
+      {} as SalesService,
+      accountingService,
+      reportsFinancialService,
+      {} as MercadoPagoQrService,
+    );
+    const run = <T>(fn: () => T) => runInTenant(db, fn);
+    return { service, reportsFinancialService, accountingService, cashSessionsService, run };
+  }
+
+  it('pago de un gasto: baja la caja y se asienta contra el concepto', async () => {
+    const { service, reportsFinancialService, accountingService, cashSessionsService, run } = makeService();
+
+    await run(() =>
+      service.recordCashMovement(
+        'session-1',
+        { amount: 1200, reason: 'Artículos de limpieza', kind: 'EXPENSE', concept: 'GENERAL_EXPENSES' },
+        'CASH_OUT',
+      ),
+    );
+
+    // El arqueo lo sigue contando igual.
+    expect(cashSessionsService.recordCashMovement).toHaveBeenCalledWith('session-1', expect.anything(), 'CASH_OUT');
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith({
+      financialAccountId: 'account-1',
+      amount: -1200,
+      externalRef: 'Artículos de limpieza',
+    });
+    expect(accountingService.postMoneyMovementJournalEntry).toHaveBeenCalledWith({
+      financialAccountId: 'account-1',
+      amount: new Prisma.Decimal(-1200),
+      counterpart: { concept: 'GENERAL_EXPENSES' },
+      description: 'Gastos generales - Caja 2 - Artículos de limpieza',
+    });
+  });
+
+  it('retiro a otra cuenta: transferencia, baja la caja y sube la otra', async () => {
+    const db = {
+      financialAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'fa-bank', name: 'Banco Galicia CC', currencyId: null }) },
+    };
+    const { service, reportsFinancialService, accountingService, run } = makeService(db);
+
+    await run(() =>
+      service.recordCashMovement(
+        'session-1',
+        { amount: 50000, reason: 'Retiro del mediodía', kind: 'TRANSFER', financialAccountId: 'fa-bank' },
+        'CASH_OUT',
+      ),
+    );
+
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'account-1', amount: -50000 }),
+    );
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-bank', amount: 50000 }),
+    );
+    expect(accountingService.postTransferJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromFinancialAccountId: 'account-1',
+        toFinancialAccountId: 'fa-bank',
+        amount: new Prisma.Decimal(50000),
+      }),
+    );
+    expect(accountingService.postMoneyMovementJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it('aporte de un socio: ingreso contra Aportes de Socios', async () => {
+    const { service, accountingService, run } = makeService();
+
+    await run(() => service.recordCashMovement('session-1', { amount: 3000, reason: 'Cambio', kind: 'PARTNER' }, 'CASH_IN'));
+
+    expect(accountingService.postMoneyMovementJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: new Prisma.Decimal(3000), counterpart: { concept: 'PARTNER_CONTRIBUTIONS' } }),
+    );
+  });
+
+  it('un gasto sin decir cuál no se registra (ni en el arqueo)', async () => {
+    const { service, cashSessionsService, run } = makeService();
+
+    await expect(
+      run(() => service.recordCashMovement('session-1', { amount: 100, reason: 'x', kind: 'EXPENSE' }, 'CASH_OUT')),
+    ).rejects.toThrow(BadRequestException);
+    expect(cashSessionsService.recordCashMovement).not.toHaveBeenCalled();
+  });
+
+  it('no se puede "retirar" a la misma caja', async () => {
+    const db = {
+      financialAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', name: 'Caja 2', currencyId: null }) },
+    };
+    const { service, run } = makeService(db);
+
+    await expect(
+      run(() =>
+        service.recordCashMovement(
+          'session-1',
+          { amount: 100, reason: 'x', kind: 'TRANSFER', financialAccountId: 'account-1' },
+          'CASH_OUT',
+        ),
+      ),
+    ).rejects.toThrow(/otra cuenta/);
+  });
+});
