@@ -1796,3 +1796,91 @@ describe('AccountingService - asientos de dinero nuevos', () => {
     ]);
   });
 });
+
+describe('AccountingService.postCardSettlementJournalEntry', () => {
+  function makeDb() {
+    return {
+      accountingAccount: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(({ data }: { data: { code: string } }) => Promise.resolve({ id: `acc-${data.code}`, ...data })),
+      },
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ moneyAccountsSplitAt: new Date('2026-10-01') }) },
+      financialAccount: {
+        findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+          Promise.resolve({ id: where.id, name: where.id, accountingAccount: { id: `acc-fa:${where.id}` } }),
+        ),
+      },
+      journalEntry: { create: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }) },
+    };
+  }
+  const base = {
+    fromFinancialAccountId: 'fa-pending',
+    toFinancialAccountId: 'fa-bank',
+    grossAmount: 100000,
+    description: 'Liquidación de tarjeta',
+  };
+  const linesOf = (db: ReturnType<typeof makeDb>) =>
+    (db.journalEntry.create as jest.Mock).mock.calls[0][0].data.lines.createMany.data;
+
+  it('monotributo: el IVA del arancel se suma a Comisiones de Tarjetas; neto al banco, total sale de la cuenta puente', async () => {
+    const db = makeDb();
+
+    await runInTenant(db, () =>
+      new AccountingService().postCardSettlementJournalEntry({
+        ...base,
+        vatRecoverable: false,
+        discounts: [
+          { type: 'FEE', amount: 1800 },
+          { type: 'FEE_VAT', amount: 378 },
+          { type: 'WITHHOLDING_IIBB', amount: 1500 },
+          { type: 'FINANCIAL_COST', amount: 0 },
+        ],
+      }),
+    );
+
+    expect(linesOf(db)).toEqual([
+      { accountId: 'acc-fa:fa-bank', direction: 'DEBIT', amount: 96322 },
+      { accountId: 'acc-5.1.12', direction: 'DEBIT', amount: 2178 },
+      { accountId: 'acc-1.1.08', direction: 'DEBIT', amount: 1500 },
+      { accountId: 'acc-fa:fa-pending', direction: 'CREDIT', amount: 100000 },
+    ]);
+  });
+
+  it('responsable inscripto: el IVA del arancel va a IVA Crédito Fiscal', async () => {
+    const db = makeDb();
+
+    await runInTenant(db, () =>
+      new AccountingService().postCardSettlementJournalEntry({
+        ...base,
+        vatRecoverable: true,
+        discounts: [
+          { type: 'FEE', amount: 1800 },
+          { type: 'FEE_VAT', amount: 378 },
+        ],
+      }),
+    );
+
+    expect(linesOf(db)).toEqual(
+      expect.arrayContaining([
+        { accountId: 'acc-5.1.12', direction: 'DEBIT', amount: 1800 },
+        { accountId: 'acc-1.1.05', direction: 'DEBIT', amount: 378 },
+      ]),
+    );
+  });
+
+  it('descuentos iguales o mayores al total no se asientan', async () => {
+    const db = makeDb();
+
+    await expect(
+      runInTenant(db, () =>
+        new AccountingService().postCardSettlementJournalEntry({
+          ...base,
+          grossAmount: 1000,
+          vatRecoverable: false,
+          discounts: [{ type: 'FEE', amount: 1000 }],
+        }),
+      ),
+    ).rejects.toThrow(/descuentos/);
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});

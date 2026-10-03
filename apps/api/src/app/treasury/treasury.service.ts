@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService, MONEY_CONCEPT_CODES, MONEY_CONCEPTS } from '@plexo/accounting';
-import { getTenantDb, Prisma } from '@plexo/database';
+import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
 import { InvoicingService } from '@plexo/invoicing';
 import { ReportsFinancialService, type CreateFinancialAccountDto } from '@plexo/reports-financial';
 import { CheckService } from '@plexo/treasury';
+import type { CardSettlementDto } from './dto/card-settlement.dto.js';
 import type { RecordMoneyMovementDto } from './dto/record-money-movement.dto.js';
 
 /**
@@ -119,6 +120,60 @@ export class TreasuryService {
       date: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
     });
     return transaction;
+  }
+
+  /** "Liquidación de tarjeta": la procesadora deposita las ventas con
+   * tarjeta menos sus descuentos. Sale el total de la cuenta de origen
+   * (normalmente "Cobranzas a depositar"), entra el neto al banco, y cada
+   * descuento se asienta donde va (ver postCardSettlementJournalEntry).
+   * Sólo cuentas en pesos: las liquidaciones de tarjeta son en pesos. */
+  async recordCardSettlement(dto: CardSettlementDto) {
+    if (dto.fromFinancialAccountId === dto.toFinancialAccountId) {
+      throw new BadRequestException('La cuenta de origen y la de acreditación no pueden ser la misma');
+    }
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const [from, to, settings] = await Promise.all([
+      db.financialAccount.findUnique({ where: { id: dto.fromFinancialAccountId } }),
+      db.financialAccount.findUnique({ where: { id: dto.toFinancialAccountId } }),
+      db.tenantSettings.findUnique({ where: { tenantId }, select: { ownTaxCondition: true } }),
+    ]);
+    if (!from || !to) {
+      throw new NotFoundException('Financial account not found');
+    }
+    if (from.currencyId || to.currencyId) {
+      throw new BadRequestException('La liquidación de tarjetas es entre cuentas en pesos');
+    }
+    const gross = new Prisma.Decimal(dto.grossAmount);
+    const net = dto.discounts.reduce((sum, d) => sum.sub(d.amount), gross);
+    if (net.lte(0)) {
+      throw new BadRequestException('Los descuentos no pueden ser iguales o mayores al total liquidado');
+    }
+
+    await this.accountingService.ensureMoneyAccounts();
+    const ref = `Liquidación de tarjeta${dto.reference ? ` ${dto.reference}` : ''}`;
+    await this.reportsFinancialService.recordFinancialTransaction({
+      financialAccountId: from.id,
+      amount: gross.neg().toNumber(),
+      occurredAt: dto.occurredAt,
+      externalRef: `${ref} - acreditada en ${to.name}`,
+    });
+    const credited = await this.reportsFinancialService.recordFinancialTransaction({
+      financialAccountId: to.id,
+      amount: net.toNumber(),
+      occurredAt: dto.occurredAt,
+      externalRef: ref,
+    });
+    await this.accountingService.postCardSettlementJournalEntry({
+      fromFinancialAccountId: from.id,
+      toFinancialAccountId: to.id,
+      grossAmount: gross,
+      discounts: dto.discounts,
+      vatRecoverable: settings?.ownTaxCondition === 'RESPONSABLE_INSCRIPTO',
+      description: `${ref} - de ${from.name} a ${to.name}`,
+      date: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
+    });
+    return credited;
   }
 
   listChecks(filters: Parameters<CheckService['listChecks']>[0]) {

@@ -497,3 +497,75 @@ describe('TreasuryService.recordManualMovement', () => {
     expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
   });
 });
+
+describe('TreasuryService.recordCardSettlement', () => {
+  const pending = { id: 'fa-pending', name: 'Cobranzas a depositar', currencyId: null };
+  const bank = { id: 'fa-bank', name: 'Banco Galicia CC', currencyId: null };
+  function dbFor(condition: string | null) {
+    return {
+      financialAccount: {
+        findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+          Promise.resolve(where.id === 'fa-pending' ? pending : where.id === 'fa-bank' ? bank : null),
+        ),
+      },
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: condition }) },
+    };
+  }
+  const dto = {
+    fromFinancialAccountId: 'fa-pending',
+    toFinancialAccountId: 'fa-bank',
+    grossAmount: 100000,
+    reference: 'Payway 0048213',
+    discounts: [
+      { type: 'FEE' as const, amount: 1800 },
+      { type: 'FEE_VAT' as const, amount: 378 },
+      { type: 'WITHHOLDING_IIBB' as const, amount: 1500 },
+    ],
+  };
+
+  it('sale el total de la cuenta puente, entra el neto al banco y se asienta', async () => {
+    const { service, reportsFinancialService, accountingService } = makeServices({
+      accountingService: { postCardSettlementJournalEntry: jest.fn().mockResolvedValue({}) },
+    });
+
+    await runInTenant(dbFor('MONOTRIBUTO'), () => service.recordCardSettlement(dto));
+
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-pending', amount: -100000 }),
+    );
+    expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ financialAccountId: 'fa-bank', amount: 96322, externalRef: 'Liquidación de tarjeta Payway 0048213' }),
+    );
+    expect(accountingService.postCardSettlementJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromFinancialAccountId: 'fa-pending',
+        toFinancialAccountId: 'fa-bank',
+        vatRecoverable: false,
+        discounts: dto.discounts,
+      }),
+    );
+  });
+
+  it('responsable inscripto recupera el IVA del arancel', async () => {
+    const { service, accountingService } = makeServices({
+      accountingService: { postCardSettlementJournalEntry: jest.fn().mockResolvedValue({}) },
+    });
+
+    await runInTenant(dbFor('RESPONSABLE_INSCRIPTO'), () => service.recordCardSettlement(dto));
+
+    expect(accountingService.postCardSettlementJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ vatRecoverable: true }),
+    );
+  });
+
+  it('descuentos que se comen todo el total no se registran', async () => {
+    const { service, reportsFinancialService } = makeServices();
+
+    await expect(
+      runInTenant(dbFor('MONOTRIBUTO'), () =>
+        service.recordCardSettlement({ ...dto, grossAmount: 3000 }),
+      ),
+    ).rejects.toThrow(/descuentos/);
+    expect(reportsFinancialService.recordFinancialTransaction).not.toHaveBeenCalled();
+  });
+});

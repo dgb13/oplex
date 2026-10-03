@@ -118,6 +118,24 @@ export interface RecordFinancialTransactionInput {
   externalRef?: string;
 }
 
+export type CardSettlementDiscountType =
+  | 'FEE'
+  | 'FEE_VAT'
+  | 'FINANCIAL_COST'
+  | 'WITHHOLDING_IIBB'
+  | 'WITHHOLDING_VAT'
+  | 'WITHHOLDING_INCOME_TAX'
+  | 'OTHER';
+
+export interface CardSettlementInput {
+  fromFinancialAccountId: string;
+  toFinancialAccountId: string;
+  grossAmount: number;
+  discounts: { type: CardSettlementDiscountType; amount: number }[];
+  occurredAt?: string;
+  reference?: string;
+}
+
 export interface TransferBetweenAccountsInput {
   fromFinancialAccountId: string;
   toFinancialAccountId: string;
@@ -143,6 +161,8 @@ export const reportsApi = {
     api.get<MovementConcepts>('/reports/financial/movement-concepts').then((r) => r.data),
   recordFinancialTransaction: (dto: RecordFinancialTransactionInput) =>
     api.post<FinancialTransaction>('/reports/financial/transactions', dto).then((r) => r.data),
+  recordCardSettlement: (dto: CardSettlementInput) =>
+    api.post<FinancialTransaction>('/reports/financial/card-settlements', dto).then((r) => r.data),
   transferBetweenAccounts: (dto: TransferBetweenAccountsInput) =>
     api
       .post<{ from: FinancialTransaction; to: FinancialTransaction }>('/reports/financial/transfers', dto)

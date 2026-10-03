@@ -12,6 +12,7 @@ import CreateTransactionFromLineModal from './CreateTransactionFromLineModal';
 import ImportBankStatementModal from './ImportBankStatementModal';
 import LinkStatementLineModal from './LinkStatementLineModal';
 import NewFinancialAccountModal from './NewFinancialAccountModal';
+import CardSettlementModal from './CardSettlementModal';
 import NewFinancialTransactionModal from './NewFinancialTransactionModal';
 import TransferBetweenAccountsModal from './TransferBetweenAccountsModal';
 
@@ -28,6 +29,7 @@ export default function FinancialTab() {
   const [newAccountOpen, setNewAccountOpen] = useState(false);
   const [newTxOpen, setNewTxOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [cardSettlementOpen, setCardSettlementOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [linkLine, setLinkLine] = useState<BankStatementLine | null>(null);
   const [createTxLine, setCreateTxLine] = useState<BankStatementLine | null>(null);
@@ -95,6 +97,11 @@ export default function FinancialTab() {
               {accounts.length >= 2 && (
                 <Button type="button" variant="outline" onClick={() => setTransferOpen(true)}>
                   Transferir entre cuentas
+                </Button>
+              )}
+              {accounts.length >= 2 && (
+                <Button type="button" variant="outline" onClick={() => setCardSettlementOpen(true)}>
+                  Liquidación de tarjeta
                 </Button>
               )}
               <Button type="button" onClick={() => setNewAccountOpen(true)}>
@@ -328,6 +335,9 @@ export default function FinancialTab() {
           defaultFromId={selectedId || accounts[0]?.id || ''}
           onClose={() => setTransferOpen(false)}
         />
+      )}
+      {cardSettlementOpen && (
+        <CardSettlementModal accounts={accounts} onClose={() => setCardSettlementOpen(false)} />
       )}
       {importOpen && (
         <ImportBankStatementModal financialAccountId={selectedId} onClose={() => setImportOpen(false)} />

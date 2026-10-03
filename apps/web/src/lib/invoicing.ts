@@ -32,6 +32,7 @@ export interface InvoiceLine {
 export interface Invoice {
   id: string;
   customerId: string;
+  currencyId: string;
   customerName: string;
   customerTaxId: string | null;
   documentLetter: string;

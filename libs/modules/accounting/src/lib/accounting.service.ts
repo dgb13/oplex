@@ -160,6 +160,31 @@ export const MONEY_CONCEPTS: { key: MoneyConcept; label: string; direction: 'OUT
 ];
 export const MONEY_CONCEPT_CODES: string[] = Object.values(MONEY_CONCEPT_ACCOUNTS).map((a) => a.code);
 
+// Liquidación de tarjetas (ver postCardSettlementJournalEntry): a dónde va
+// cada descuento que hace la procesadora. Las retenciones que NOS hacen son
+// un crédito a favor (activo), espejo de las que practicamos (2.1.06-08).
+const CARD_FEES_ACCOUNT = { code: '5.1.12', name: 'Comisiones de Tarjetas', type: 'EXPENSE' as const };
+const CARD_SETTLEMENT_DISCOUNT_ACCOUNTS = {
+  FEE: CARD_FEES_ACCOUNT,
+  FINANCIAL_COST: CARD_FEES_ACCOUNT,
+  WITHHOLDING_IIBB: { code: '1.1.08', name: 'Retenciones de IIBB sufridas', type: 'ASSET' as const },
+  WITHHOLDING_VAT: { code: '1.1.09', name: 'Retenciones de IVA sufridas', type: 'ASSET' as const },
+  WITHHOLDING_INCOME_TAX: { code: '1.1.10', name: 'Retenciones de Ganancias sufridas', type: 'ASSET' as const },
+  OTHER: MONEY_CONCEPT_ACCOUNTS.GENERAL_EXPENSES,
+};
+/** FEE_VAT (IVA sobre el arancel) no está arriba: depende de si el tenant
+ * recupera IVA - ver PostCardSettlementJournalEntryInput.vatRecoverable. */
+export type CardSettlementDiscountType = keyof typeof CARD_SETTLEMENT_DISCOUNT_ACCOUNTS | 'FEE_VAT';
+export const CARD_SETTLEMENT_DISCOUNT_TYPES: CardSettlementDiscountType[] = [
+  'FEE',
+  'FEE_VAT',
+  'FINANCIAL_COST',
+  'WITHHOLDING_IIBB',
+  'WITHHOLDING_VAT',
+  'WITHHOLDING_INCOME_TAX',
+  'OTHER',
+];
+
 // Ajuste por Inflación (RT6/NC39, ver postInflationAdjustmentJournalEntry) -
 // asiento neto de 2 líneas: Resultado (Pérdida o Ganancia, según el signo
 // del RECPAM) contra una cuenta de Patrimonio dedicada. No hay ninguna
@@ -408,6 +433,20 @@ export interface PostMoneyMovementJournalEntryInput {
   /** Contra qué: uno de los conceptos frecuentes, una cuenta del plan
    * elegida por el usuario, o el saldo inicial de una cuenta de dinero nueva. */
   counterpart: { concept: MoneyConcept } | { accountId: string } | { kind: 'OPENING_BALANCE' };
+  description: string;
+  date?: Date;
+}
+
+export interface PostCardSettlementJournalEntryInput {
+  /** De donde sale el total liquidado (normalmente "Cobranzas a depositar"). */
+  fromFinancialAccountId: string;
+  /** Donde se acredita el neto (el banco). */
+  toFinancialAccountId: string;
+  grossAmount: Prisma.Decimal | number | string;
+  discounts: { type: CardSettlementDiscountType; amount: Prisma.Decimal | number | string }[];
+  /** Responsable Inscripto: el IVA del arancel es crédito fiscal. Si no
+   * (Monotributo/Exento), es parte del costo de la comisión. */
+  vatRecoverable: boolean;
   description: string;
   date?: Date;
 }
@@ -1455,6 +1494,55 @@ export class AccountingService {
       [
         { accountId: to.id, direction: 'DEBIT', amount: amount.toNumber() },
         { accountId: from.id, direction: 'CREDIT', amount: amount.toNumber() },
+      ],
+      { date: input.date },
+    );
+  }
+
+  /**
+   * Liquidación de tarjetas (apps/api's TreasuryService.recordCardSettlement):
+   * sale el total de "Cobranzas a depositar", entra el neto al banco, y cada
+   * descuento de la procesadora va a su cuenta (comisiones, IVA del arancel,
+   * retenciones sufridas...). Varias líneas del mismo tipo se suman en una.
+   */
+  async postCardSettlementJournalEntry(input: PostCardSettlementJournalEntryInput): Promise<JournalEntryWithLines> {
+    const gross = new Prisma.Decimal(input.grossAmount);
+    const byAccount = new Map<string, Prisma.Decimal>();
+    let totalDiscounts = new Prisma.Decimal(0);
+    for (const discount of input.discounts) {
+      const amount = new Prisma.Decimal(discount.amount);
+      if (amount.isZero()) continue;
+      const spec =
+        discount.type === 'FEE_VAT'
+          ? input.vatRecoverable
+            ? VAT_CREDIT_ACCOUNT
+            : CARD_FEES_ACCOUNT
+          : CARD_SETTLEMENT_DISCOUNT_ACCOUNTS[discount.type];
+      if (!spec) {
+        throw new BadRequestException('Tipo de descuento desconocido');
+      }
+      const account = await this.getOrCreateAccount(spec);
+      byAccount.set(account.id, (byAccount.get(account.id) ?? new Prisma.Decimal(0)).add(amount));
+      totalDiscounts = totalDiscounts.add(amount);
+    }
+    const net = gross.sub(totalDiscounts);
+    if (net.lte(0)) {
+      throw new BadRequestException('Los descuentos no pueden ser iguales o mayores al total liquidado');
+    }
+    const [from, to] = await Promise.all([
+      this.moneyAccountFor(input.fromFinancialAccountId),
+      this.moneyAccountFor(input.toFinancialAccountId),
+    ]);
+    return this.createBalancedEntry(
+      input.description,
+      [
+        { accountId: to.id, direction: 'DEBIT', amount: net.toNumber() },
+        ...[...byAccount].map(([accountId, amount]) => ({
+          accountId,
+          direction: 'DEBIT' as const,
+          amount: amount.toNumber(),
+        })),
+        { accountId: from.id, direction: 'CREDIT', amount: gross.toNumber() },
       ],
       { date: input.date },
     );

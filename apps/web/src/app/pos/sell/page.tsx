@@ -495,7 +495,12 @@ function PosSellScreen() {
           sessionId={session.id}
           expectedAmount={Number(expectedAmount ?? session.openingAmount)}
           onClose={() => setClosingSession(false)}
-          onClosed={() => router.push('/pos')}
+          onClosed={() => {
+            // Si no, /pos muestra la caja con el turno abierto del caché.
+            void queryClient.invalidateQueries({ queryKey: ['pos-open-sessions'], refetchType: 'all' });
+            void queryClient.invalidateQueries({ queryKey: ['pos-dashboard'], refetchType: 'all' });
+            router.push('/pos');
+          }}
         />
       )}
     </div>

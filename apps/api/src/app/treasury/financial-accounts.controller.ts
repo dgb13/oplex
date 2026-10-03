@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { RequireModuleAccess } from '@plexo/auth';
 import { CreateFinancialAccountDto, TransferBetweenAccountsDto } from '@plexo/reports-financial';
+import { CardSettlementDto } from './dto/card-settlement.dto.js';
 import { RecordMoneyMovementDto } from './dto/record-money-movement.dto.js';
 import { TreasuryService } from './treasury.service.js';
 
@@ -30,6 +31,12 @@ export class FinancialAccountsController {
   @Post('transactions')
   recordManualMovement(@Body() dto: RecordMoneyMovementDto) {
     return this.treasuryService.recordManualMovement(dto);
+  }
+
+  @RequireModuleAccess('reports-financial', 'write')
+  @Post('card-settlements')
+  recordCardSettlement(@Body() dto: CardSettlementDto) {
+    return this.treasuryService.recordCardSettlement(dto);
   }
 
   @RequireModuleAccess('reports-financial', 'write')
