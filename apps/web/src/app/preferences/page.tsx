@@ -1,6 +1,5 @@
 'use client';
 
-import { activityLogApi, type TenantActivityEntry } from '@/lib/activityLog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -101,90 +100,7 @@ export default function PreferencesPage() {
           <ReplenishmentCard />
         </>
       )}
-      <ActivityLogCard />
     </div>
-  );
-}
-
-function formatChanges(changes: TenantActivityEntry['changes']): string {
-  if (!changes || Object.keys(changes).length === 0) return '—';
-  return Object.entries(changes)
-    .map(([field, { from, to }]) => `${field}: ${from ?? '—'} → ${to ?? '—'}`)
-    .join(', ');
-}
-
-function ActivityLogCard() {
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-  const { data, isLoading } = useQuery({
-    queryKey: ['activity-log', page],
-    queryFn: () => activityLogApi.getTenant({ page, pageSize }),
-  });
-
-  return (
-    <Card>
-      <CardContent>
-        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Actividad del tenant</h2>
-        {isLoading || !data ? (
-          <p className="text-sm text-muted-foreground">Cargando...</p>
-        ) : data.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay actividad registrada.</p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="pb-2 pr-4">Fecha/hora</th>
-                    <th className="pb-2 pr-4">Usuario</th>
-                    <th className="pb-2 pr-4">Entidad</th>
-                    <th className="pb-2 pr-4">Cambios</th>
-                    <th className="pb-2">IP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((entry) => (
-                    <tr key={entry.id} className="border-t">
-                      <td className="py-2 pr-4 whitespace-nowrap">
-                        {new Date(entry.occurredAt).toLocaleString('es-AR')}
-                      </td>
-                      <td className="py-2 pr-4">{entry.userName ?? entry.userEmail ?? '—'}</td>
-                      <td className="py-2 pr-4">
-                        {entry.entityTypeLabel ?? '—'}
-                        {entry.entityLabel ? ` ${entry.entityLabel}` : ''}
-                      </td>
-                      <td className="py-2 pr-4 font-mono break-all">{formatChanges(entry.changes)}</td>
-                      <td className="py-2">{entry.ip ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                Anterior
-              </Button>
-              <span className="text-xs text-muted-foreground">Página {page}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={data.items.length < pageSize}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
