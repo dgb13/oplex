@@ -24,9 +24,10 @@ function withNumberingDefaults(db: Record<string, unknown>): Record<string, unkn
   if (!db.$executeRaw) {
     db.$executeRaw = jest.fn().mockResolvedValue(0);
   }
-  // Sin condición frente al IVA cargada: no se valida la letra (como antes).
+  // Tenant Responsable Inscripto por defecto: los tests emiten A/B (ver
+  // assertDocumentLetterAllowed - sin condición no se factura).
   if (!db.tenantSettings) {
-    db.tenantSettings = { findUnique: jest.fn().mockResolvedValue(null) };
+    db.tenantSettings = { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: 'RESPONSABLE_INSCRIPTO' }) };
   }
   // resolveCurrentTaxDefinition: sin otra versión vigente, usa la del artículo.
   if (!db.taxDefinition) {
@@ -1652,7 +1653,8 @@ describe('InvoicingService - numeración con ARCA', () => {
   function makeNumberingDb(localLastNumber: string | null) {
     return {
       $executeRaw: jest.fn().mockResolvedValue(0),
-      tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      // Los tests de numeración emiten Factura C (monotributista).
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: 'MONOTRIBUTO' }) },
       taxDefinition: { findFirst: jest.fn().mockResolvedValue(null) },
       company: {
         findUnique: jest.fn().mockResolvedValue({
@@ -1786,7 +1788,9 @@ describe('InvoicingService - numeración con ARCA', () => {
     });
     const findFirst = jest.fn().mockResolvedValue(currentVersion);
 
-    await runInTenant({ ...db, taxDefinition: { findFirst } }, () =>
+    // Factura B de un Responsable Inscripto: la que sí suma IVA.
+    const tenantSettings = { findUnique: jest.fn().mockResolvedValue({ ownTaxCondition: 'RESPONSABLE_INSCRIPTO' }) };
+    await runInTenant({ ...db, tenantSettings, taxDefinition: { findFirst } }, () =>
       makeService(electronicInvoicing).createInvoice(baseDto),
     );
 
@@ -1808,7 +1812,7 @@ describe('InvoicingService - numeración con ARCA', () => {
       .mockResolvedValueOnce({ id: 'invoice-stub' });
 
     await expect(
-      runInTenant(db, () => makeService(electronicInvoicing).createInvoice(baseDto)),
+      runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' })),
     ).rejects.toThrow(/Oplex ya tiene registrado el 00000001/);
     expect(db.invoice.create).not.toHaveBeenCalled();
     expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
@@ -1821,7 +1825,7 @@ describe('InvoicingService - numeración con ARCA', () => {
 
     const invoice = await tenantContextStorage.run(
       { tenantId: 'tenant-1', userId: 'user-1', tx: db as never, beforeCommit: steps, afterCommit: [] },
-      () => makeService(electronicInvoicing).createInvoice(baseDto),
+      () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'C' }),
     );
 
     expect(electronicInvoicing.requestCae).not.toHaveBeenCalled();
@@ -2028,8 +2032,6 @@ describe('assertDocumentLetterAllowed (protección de la letra)', () => {
     ['RESPONSABLE_INSCRIPTO', 'A'],
     ['RESPONSABLE_INSCRIPTO', 'B'],
     ['RESPONSABLE_INSCRIPTO', 'M'],
-    [null, 'B'],
-    [null, 'C'],
   ] as const)('%s puede emitir %s', (condition, letter) => {
     expect(() => assertDocumentLetterAllowed(condition, letter)).not.toThrow();
   });
@@ -2039,6 +2041,8 @@ describe('assertDocumentLetterAllowed (protección de la letra)', () => {
     ['MONOTRIBUTO', 'B', /sólo puede emitir Factura C/],
     ['EXENTO', 'B', /Exenta: sólo puede emitir Factura C/],
     ['RESPONSABLE_INSCRIPTO', 'C', /no puede emitir Factura C/],
+    [null, 'B', /Cargá la condición frente al IVA/],
+    [null, 'C', /Cargá la condición frente al IVA/],
   ] as const)('%s no puede emitir %s', (condition, letter, message) => {
     expect(() => assertDocumentLetterAllowed(condition, letter)).toThrow(message);
   });
@@ -2159,6 +2163,17 @@ describe('InvoicingService.createInvoice - Factura C sin IVA', () => {
     const created = db.invoice.create.mock.calls[0][0].data as unknown as CreatedInvoice;
     expect(created.taxTotal.toNumber()).toBe(21);
     expect(created.total.toNumber()).toBe(121);
+  });
+
+  it('sin la condición frente al IVA cargada no se factura: corta antes de numerar o pedir CAE', async () => {
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = makeDb(null, iva21);
+
+    await expect(
+      runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'B' })),
+    ).rejects.toThrow(/Contabilidad → Conexión con ARCA/);
+    expect(electronicInvoicing.lastAuthorizedNumber).not.toHaveBeenCalled();
+    expect(db.invoice.create).not.toHaveBeenCalled();
   });
 
   it('un monotributista no puede emitir una B: corta antes de numerar o pedir CAE', async () => {

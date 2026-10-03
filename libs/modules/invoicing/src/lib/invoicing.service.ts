@@ -65,15 +65,17 @@ const AFIP_TRIBUTO_ID: Record<InvoiceTaxLineKind, number> = {
  * Monotributo/Exento sólo C; Responsable Inscripto A, B o M, nunca C. La
  * pantalla ya la fija (documentLetter.ts en el front), esto es para que
  * ningún otro camino emita una letra equivocada - ARCA la rechazaría, o peor,
- * la aceptaría. Sin condición cargada no se valida (el tenant todavía no la
- * configuró en Preferencias).
+ * la aceptaría. Sin condición cargada no se factura: sin ella no se sabe si
+ * corresponde IVA (un Monotributo sin condición facturaba B con IVA).
  */
 export function assertDocumentLetterAllowed(
   ownTaxCondition: TenantTaxCondition | null,
   documentLetter: DocumentLetter,
 ): void {
   if (!ownTaxCondition) {
-    return;
+    throw new BadRequestException(
+      'Cargá la condición frente al IVA de tu empresa en Contabilidad → Conexión con ARCA antes de facturar',
+    );
   }
   const noVatIssuer = ownTaxCondition === 'MONOTRIBUTO' || ownTaxCondition === 'EXENTO';
   if (noVatIssuer && documentLetter !== 'C') {
