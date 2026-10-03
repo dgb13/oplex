@@ -284,7 +284,8 @@ export class InvoicingService {
     const tenantSettings = await db.tenantSettings.findUnique({ where: { tenantId } });
     const resolvedFormat = format ?? (await this.resolveRequesterInvoicePdfFormat());
 
-    const data = await buildInvoicePdfData(invoice, customer, tenant, tenantSettings);
+    const otherTaxes = await db.invoiceTaxLine.findMany({ where: { invoiceId: id } });
+    const data = await buildInvoicePdfData(invoice, customer, tenant, tenantSettings, otherTaxes);
     const buffer = await this.invoicePdfService.generate(resolvedFormat, data);
     return { buffer, filename: `${invoice.documentLetter}-${invoice.pointOfSale}-${invoice.number}.pdf` };
   }
@@ -533,6 +534,8 @@ export class InvoicingService {
         customerId: dto.customerId,
         customerName: customer.name,
         customerTaxId: customer.taxId,
+        issuerTaxCondition: settings?.ownTaxCondition ?? null,
+        customerTaxCondition: customer.taxCondition,
         documentLetter: dto.documentLetter,
         concept,
         pointOfSale: dto.pointOfSale,

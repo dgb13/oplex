@@ -7,6 +7,8 @@ function makeLine(overrides: Record<string, unknown> = {}) {
     id: 'line-1',
     quantity: new Prisma.Decimal(1),
     unitPrice: new Prisma.Decimal(100),
+    discountType: 'PERCENTAGE',
+    discountValue: new Prisma.Decimal(0),
     netAmount: new Prisma.Decimal(100),
     taxRate: new Prisma.Decimal(21),
     taxKind: 'GRAVADO',
@@ -25,8 +27,11 @@ function makeLine(overrides: Record<string, unknown> = {}) {
 
 function makeInvoice(overrides: Record<string, unknown> = {}): InvoiceWithCurrencyAndLines {
   return {
-    documentLetter: 'B',
+    documentLetter: 'A',
     pointOfSale: '0001',
+    globalDiscountPercent: new Prisma.Decimal(0),
+    issuerTaxCondition: null,
+    customerTaxCondition: null,
     number: '00000005',
     concept: 'PRODUCTOS',
     issueDate: new Date('2026-08-28T00:00:00Z'),
@@ -53,13 +58,16 @@ const CUSTOMER = {
 const TENANT = { name: 'Mi Tenant SA', taxId: '30-12345678-9' } as unknown as Parameters<typeof buildInvoicePdfData>[2];
 
 describe('buildInvoicePdfData', () => {
-  it('buckets a GRAVADO-only invoice into netTaxed + one tax bucket, with exempt/untaxed as null', async () => {
+  it('Factura A: precios netos, Neto Gravado e IVA por alícuota', async () => {
     const data = await buildInvoicePdfData(makeInvoice(), CUSTOMER, TENANT, null);
 
-    expect(data.netTaxed).toBe('100,00');
-    expect(data.netExempt).toBeNull();
-    expect(data.netUntaxed).toBeNull();
-    expect(data.taxBuckets).toEqual([{ label: 'IVA 21%', net: '100,00', tax: '21,00' }]);
+    expect(data.vatMode).toBe('DISCRIMINATED');
+    expect(data.lines[0]).toMatchObject({ unitPrice: '100,00', lineTotal: '100,00', discount: null });
+    expect(data.totalRows).toEqual([
+      { label: 'Importe Neto Gravado', amount: '100,00' },
+      { label: 'IVA 21%', amount: '21,00' },
+    ]);
+    expect(data.vatContained).toBeNull();
   });
 
   it('splits EXENTO/NO_GRAVADO lines out of the taxed bucket entirely', async () => {
@@ -73,10 +81,12 @@ describe('buildInvoicePdfData', () => {
 
     const data = await buildInvoicePdfData(invoice, CUSTOMER, TENANT, null);
 
-    expect(data.netTaxed).toBe('100,00');
-    expect(data.netExempt).toBe('50,00');
-    expect(data.netUntaxed).toBe('30,00');
-    expect(data.taxBuckets).toEqual([{ label: 'IVA 21%', net: '100,00', tax: '21,00' }]);
+    expect(data.totalRows).toEqual([
+      { label: 'Importe Neto Gravado', amount: '100,00' },
+      { label: 'IVA 21%', amount: '21,00' },
+      { label: 'Importe Exento', amount: '50,00' },
+      { label: 'Importe No Gravado', amount: '30,00' },
+    ]);
   });
 
   it('labels Consumidor Final (no customerTaxId) distinctly from a CUIT', async () => {
@@ -103,15 +113,77 @@ describe('buildInvoicePdfData', () => {
     expect(generic.customerTaxIdLabel).toBeNull();
   });
 
-  it('Factura C does not discriminate VAT: only a subtotal, no Neto Gravado / IVA rows', async () => {
-    const factC = await buildInvoicePdfData(makeInvoice({ documentLetter: 'C' }), CUSTOMER, TENANT, null);
-    expect(factC.taxBuckets).toEqual([]);
-    expect(factC.netTaxed).toBeNull();
-    expect(factC.subtotalWithoutVat).toBe('100,00');
+  it('Factura C no discrimina IVA: sin Neto Gravado ni filas de IVA', async () => {
+    const line = makeLine({ taxRate: new Prisma.Decimal(0), lineTotal: new Prisma.Decimal(100) });
+    const factC = await buildInvoicePdfData(
+      makeInvoice({ documentLetter: 'C', lines: [line], taxTotal: new Prisma.Decimal(0), total: new Prisma.Decimal(100) }),
+      CUSTOMER,
+      TENANT,
+      null,
+    );
+    expect(factC.vatMode).toBe('NONE');
+    expect(factC.totalRows).toEqual([]);
+    expect(factC.vatContained).toBeNull();
+    expect(factC.total).toBe('100,00');
+  });
 
-    const factB = await buildInvoicePdfData(makeInvoice(), CUSTOMER, TENANT, null);
-    expect(factB.subtotalWithoutVat).toBeNull();
-    expect(factB.taxBuckets.length).toBeGreaterThan(0);
+  it('Factura B: precios finales y el IVA aparte como IVA contenido', async () => {
+    const factB = await buildInvoicePdfData(makeInvoice({ documentLetter: 'B' }), CUSTOMER, TENANT, null);
+    expect(factB.vatMode).toBe('INCLUDED');
+    expect(factB.lines[0]).toMatchObject({ unitPrice: '121,00', lineTotal: '121,00' });
+    expect(factB.totalRows).toEqual([]);
+    expect(factB.total).toBe('121,00');
+    expect(factB.vatContained).toBe('21,00');
+  });
+
+  it('con descuento general, el IVA por alícuota se calcula sobre el neto ya descontado', async () => {
+    // 2 x 100 con 10% de bonificación de línea = 180; 10% general = 162; IVA 21% = 34,02
+    const line = makeLine({
+      quantity: new Prisma.Decimal(2),
+      discountValue: new Prisma.Decimal(10),
+      netAmount: new Prisma.Decimal(180),
+      lineTotal: new Prisma.Decimal(196.02),
+    });
+    const data = await buildInvoicePdfData(
+      makeInvoice({ lines: [line], globalDiscountPercent: new Prisma.Decimal(10), total: new Prisma.Decimal(196.02) }),
+      CUSTOMER,
+      TENANT,
+      null,
+    );
+    expect(data.hasLineDiscounts).toBe(true);
+    expect(data.lines[0]).toMatchObject({ unitPrice: '100,00', discount: '10%', lineTotal: '180,00' });
+    expect(data.totalRows).toEqual([
+      { label: 'Subtotal', amount: '180,00' },
+      { label: 'Descuento 10%', amount: '-18,00' },
+      { label: 'Importe Neto Gravado', amount: '162,00' },
+      { label: 'IVA 21%', amount: '34,02' },
+    ]);
+  });
+
+  it('muestra las percepciones para que la suma llegue al total', async () => {
+    const data = await buildInvoicePdfData(
+      makeInvoice({ documentLetter: 'B', total: new Prisma.Decimal(124) }),
+      CUSTOMER,
+      TENANT,
+      null,
+      [{ kind: 'PROVINCIAL', concept: 'Percepción IIBB CABA', amount: new Prisma.Decimal(3) }],
+    );
+    expect(data.totalRows).toEqual([
+      { label: 'Subtotal', amount: '121,00' },
+      { label: 'Percepción IIBB CABA', amount: '3,00' },
+    ]);
+    expect(data.total).toBe('124,00');
+  });
+
+  it('usa la condición IVA guardada al emitir, no la actual', async () => {
+    const data = await buildInvoicePdfData(
+      makeInvoice({ issuerTaxCondition: 'RESPONSABLE_INSCRIPTO', customerTaxCondition: 'IVA Responsable Inscripto' }),
+      { ...CUSTOMER, taxCondition: 'Responsable Monotributo' } as typeof CUSTOMER,
+      TENANT,
+      { ownTaxCondition: 'MONOTRIBUTO' } as unknown as Parameters<typeof buildInvoicePdfData>[3],
+    );
+    expect(data.issuerTaxConditionLabel).toBe('Responsable Inscripto');
+    expect(data.customerTaxConditionLabel).toBe('IVA Responsable Inscripto');
   });
 
   it('maps ownTaxCondition and the fiscal fields from TenantSettings, or leaves them null without it', async () => {
@@ -124,7 +196,7 @@ describe('buildInvoicePdfData', () => {
     expect(withSettings.issuerTaxConditionLabel).toBe('Responsable Inscripto');
     expect(withSettings.issuerFiscalAddress).toBe('Av. Siempre Viva 123, CABA');
     expect(withSettings.issuerGrossIncomeNumber).toBe('30-12345678-9');
-    expect(withSettings.issuerActivityStartDate).not.toBeNull();
+    expect(withSettings.issuerActivityStartDate).toBe('01/01/2020');
 
     const withoutSettings = await buildInvoicePdfData(makeInvoice(), CUSTOMER, TENANT, null);
     expect(withoutSettings.issuerTaxConditionLabel).toBeNull();

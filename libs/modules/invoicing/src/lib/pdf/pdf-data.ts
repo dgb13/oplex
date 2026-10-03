@@ -3,19 +3,33 @@
  * or formatting logic, only layout. A diferencia de Compras/Cotizaciones
  * (5 estilos visuales libres), acá el diseño es uno solo fiel al formato
  * real de ARCA - lo que varía entre A4/A5/TICKET es el tamaño de papel, no
- * el contenido. */
+ * el contenido.
+ *
+ * Los importes de las líneas y las filas de totales ya vienen en los
+ * términos de la letra (ver InvoiceVatMode): las plantillas sólo dibujan. */
+
+/** - DISCRIMINATED (A, M): precios netos e IVA por alícuota.
+ *  - INCLUDED (B): precios finales; el IVA va aparte como "IVA contenido".
+ *  - NONE (C): emisor Monotributo/Exento, precios finales sin IVA. */
+export type InvoiceVatMode = 'DISCRIMINATED' | 'INCLUDED' | 'NONE';
+
 export interface InvoicePdfLine {
   description: string;
   sku: string;
   quantity: string;
+  /** Neto en DISCRIMINATED, final en INCLUDED/NONE. */
   unitPrice: string;
+  /** "10%" o un importe; null sin bonificación. */
+  discount: string | null;
+  /** Precio × cantidad menos la bonificación de la línea, en los mismos
+   * términos que unitPrice (antes del descuento general, que va en los
+   * totales). */
   lineTotal: string;
 }
 
-export interface InvoicePdfTaxBucket {
+export interface InvoicePdfTotalRow {
   label: string;
-  net: string;
-  tax: string;
+  amount: string;
 }
 
 export interface InvoicePdfData {
@@ -50,19 +64,18 @@ export interface InvoicePdfData {
   exchangeRate: string;
   isBaseCurrency: boolean;
 
+  vatMode: InvoiceVatMode;
   lines: InvoicePdfLine[];
+  /** true si alguna línea tiene bonificación (agrega la columna). */
+  hasLineDiscounts: boolean;
 
-  // Factura C (Monotributo/Exento): no discrimina IVA - netTaxed/
-  // netExempt/netUntaxed/taxBuckets vienen vacíos y se muestra sólo este
-  // subtotal (suma de las líneas). null en A/B/M.
-  subtotalWithoutVat: string | null;
-  // null = el importe es cero, la fila no se muestra en el PDF.
-  netTaxed: string | null;
-  netExempt: string | null;
-  netUntaxed: string | null;
-  taxBuckets: InvoicePdfTaxBucket[];
-  taxTotal: string;
+  /** Filas antes del total, ya en orden: subtotal y descuento general (si
+   * hay), neto gravado e IVA por alícuota (sólo A/M), exento, no gravado y
+   * percepciones/otros tributos. Sólo las que tienen importe. */
+  totalRows: InvoicePdfTotalRow[];
   total: string;
+  /** Sólo en B: el IVA que contiene el total. */
+  vatContained: string | null;
 
   cae: string;
   caeExpiry: string;

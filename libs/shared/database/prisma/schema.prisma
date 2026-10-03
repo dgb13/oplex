@@ -2059,6 +2059,11 @@ model Invoice {
   // change with it.
   customerName          String
   customerTaxId         String?
+  // Condiciones frente al IVA al momento de emitir: el PDF reimpreso tiene
+  // que decir lo mismo aunque el emisor o el cliente cambien de condición
+  // después. null en facturas C viejas (se cae a la condición actual).
+  issuerTaxCondition    TenantTaxCondition?
+  customerTaxCondition  String?
   documentLetter        DocumentLetter
   // AFIP Concepto (1/2/3, ver InvoiceConcept) - derivado de Article.isService
   // de cada línea al crear la factura (InvoicingService.createInvoice), no

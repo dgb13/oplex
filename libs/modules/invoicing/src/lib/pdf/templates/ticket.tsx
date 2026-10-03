@@ -16,9 +16,7 @@ function ticketHeight(data: InvoicePdfData): number {
     data.issuerGrossIncomeNumber,
     data.issuerActivityStartDate,
   ].filter(Boolean).length;
-  const totalsRows =
-    [data.subtotalWithoutVat, data.netTaxed, data.netExempt, data.netUntaxed].filter(Boolean).length +
-    data.taxBuckets.length;
+  const totalsRows = data.totalRows.length + (data.vatContained ? 1 : 0);
   // Cabecera/divisores/título/cliente ~150pt, CAE + QR ~130pt, márgenes 20pt.
   return Math.max(320, 300 + issuerRows * 9 + data.lines.length * 20 + totalsRows * 9);
 }
@@ -77,6 +75,7 @@ export function TicketTemplate({ data }: { data: InvoicePdfData }) {
             <View style={styles.lineDetail}>
               <Text>
                 {line.quantity} x {line.unitPrice}
+                {line.discount ? ` (bonif. ${line.discount})` : ''}
               </Text>
               <Text>{line.lineTotal}</Text>
             </View>
@@ -85,40 +84,22 @@ export function TicketTemplate({ data }: { data: InvoicePdfData }) {
 
         <View style={styles.divider} />
 
-        {data.subtotalWithoutVat && (
-          <View style={styles.totalsRow}>
-            <Text>Subtotal</Text>
-            <Text>{data.subtotalWithoutVat}</Text>
-          </View>
-        )}
-        {data.netTaxed && (
-          <View style={styles.totalsRow}>
-            <Text>Neto Gravado</Text>
-            <Text>{data.netTaxed}</Text>
-          </View>
-        )}
-        {data.taxBuckets.map((bucket, i) => (
+        {data.totalRows.map((row, i) => (
           <View style={styles.totalsRow} key={i}>
-            <Text>{bucket.label}</Text>
-            <Text>{bucket.tax}</Text>
+            <Text>{row.label}</Text>
+            <Text>{row.amount}</Text>
           </View>
         ))}
-        {data.netExempt && (
-          <View style={styles.totalsRow}>
-            <Text>Exento</Text>
-            <Text>{data.netExempt}</Text>
-          </View>
-        )}
-        {data.netUntaxed && (
-          <View style={styles.totalsRow}>
-            <Text>No Gravado</Text>
-            <Text>{data.netUntaxed}</Text>
-          </View>
-        )}
         <View style={styles.grandTotalRow}>
           <Text style={styles.bold}>TOTAL {data.currencyCode}</Text>
           <Text style={styles.bold}>{data.total}</Text>
         </View>
+        {data.vatContained && (
+          <View style={styles.totalsRow}>
+            <Text>IVA contenido</Text>
+            <Text>{data.vatContained}</Text>
+          </View>
+        )}
 
         <View style={styles.divider} />
 
