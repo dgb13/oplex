@@ -5,7 +5,10 @@ import type Anthropic from '@anthropic-ai/sdk';
 // la API real desde un test), igual que ANTHROPIC_CLIENT en ai-invoice-scan.
 export const IMPORT_ANTHROPIC_CLIENT = Symbol('IMPORT_ANTHROPIC_CLIENT');
 
-const DEFAULT_MODEL = 'claude-opus-5-5';
+// Clasificar nombres es una tarea simple: alcanza con el modelo más barato
+// (decisión del usuario, 2026-10-04). Variable propia para no mezclarlo con
+// ANTHROPIC_MODEL, que usa el escaneo de facturas.
+const DEFAULT_MODEL = 'claude-haiku-4-5';
 const BATCH_SIZE = 300;
 export const MAX_AI_ARTICLES = 3000;
 
@@ -80,13 +83,13 @@ export class CategoryAiService {
     const list = batch.map((a, index) => `${index + 1}. ${a.name}`).join('\n');
     const existing = categories.length ? categories.join(', ') : '(todavía no hay)';
     try {
-      // output_config no está tipado en la versión del SDK del repo (0.35).
-      const params = {
-        model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+      const response = await anthropic.messages.create({
+        model: process.env.ANTHROPIC_IMPORT_MODEL || DEFAULT_MODEL,
         max_tokens: 16000,
-        output_config: { effort: 'low' },
         system: SYSTEM,
         tools: [TOOL],
+        // "auto" (no forzar la herramienta): los modelos más nuevos rechazan
+        // tool_choice forzado, y así se puede cambiar de modelo por variable.
         tool_choice: { type: 'auto' },
         messages: [
           {
@@ -94,8 +97,7 @@ export class CategoryAiService {
             content: `Categorías existentes: ${existing}\n\nArtículos:\n${list}`,
           },
         ],
-      } as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming;
-      const response = await anthropic.messages.create(params);
+      });
       const toolUse = response.content.find(
         (block): block is Anthropic.Messages.ToolUseBlock => block.type === 'tool_use',
       );
