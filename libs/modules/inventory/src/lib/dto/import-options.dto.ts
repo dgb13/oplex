@@ -30,4 +30,19 @@ export class ImportOptionsDto {
   @IsOptional()
   @IsObject()
   unitValues?: Record<string, 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2'>;
+
+  // Unidad de las columnas de largo y ancho del archivo.
+  @IsOptional()
+  @IsIn(['m', 'cm', 'mm'])
+  lengthUnit?: 'm' | 'cm' | 'mm';
+
+  // true: en las barras, precio, costo y existencia vienen por metro.
+  @IsOptional()
+  @IsBoolean()
+  perMeter?: boolean;
+
+  // Categorías sugeridas con IA que el usuario aceptó: código (en minúscula) -> categoría.
+  @IsOptional()
+  @IsObject()
+  aiCategories?: Record<string, string>;
 }

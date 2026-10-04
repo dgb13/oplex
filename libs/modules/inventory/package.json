@@ -16,6 +16,7 @@
     }
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.35.0",
     "@fastify/multipart": "^10.1.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/event-emitter": "^3.1.0",

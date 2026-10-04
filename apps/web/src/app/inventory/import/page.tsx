@@ -3,12 +3,14 @@
 import { Button } from '@/components/ui/button';
 import {
   articleImportApi,
+  guessLengthUnit,
   IMPORT_FIELD_OPTIONS,
   UNIT_OPTIONS,
   type ImportAnalysis,
   type ImportFieldOrSkip,
   type ImportJobStatus,
   type ImportOptions,
+  type LengthUnit,
   type RowStatus,
   type UnitValue,
 } from '@/lib/articleImport';
@@ -43,9 +45,22 @@ export default function ImportArticlesPage() {
   const [warehouseId, setWarehouseId] = useState('');
   const [taxValues, setTaxValues] = useState<Record<string, string>>({});
   const [unitValues, setUnitValues] = useState<Record<string, UnitValue>>({});
+  const [lengthUnit, setLengthUnit] = useState<LengthUnit>('m');
+  const [perMeter, setPerMeter] = useState(false);
+  const [aiCategories, setAiCategories] = useState<Record<string, string> | undefined>(undefined);
   const [job, setJob] = useState<ImportJobStatus | null>(null);
 
-  const options: ImportOptions = { mapping, onExisting, pricesIncludeVat, warehouseId: warehouseId || undefined, taxValues, unitValues };
+  const options: ImportOptions = {
+    mapping,
+    onExisting,
+    pricesIncludeVat,
+    warehouseId: warehouseId || undefined,
+    taxValues,
+    unitValues,
+    lengthUnit,
+    perMeter,
+    aiCategories,
+  };
 
   function reset() {
     setStep(1);
@@ -53,6 +68,7 @@ export default function ImportArticlesPage() {
     setMapping([]);
     setTaxValues({});
     setUnitValues({});
+    setAiCategories(undefined);
     setJob(null);
   }
 
@@ -95,8 +111,16 @@ export default function ImportArticlesPage() {
           onAnalyzed={(a) => {
             setAnalysis(a);
             setMapping(a.columns.map((c) => c.suggested));
+            // Unidad de los largos según los valores de ejemplo (el usuario la confirma).
+            const lengths = a.columns
+              .filter((c) => ['barLength', 'sheetWidth', 'sheetLength'].includes(c.suggested))
+              .flatMap((c) => c.samples.map((v) => Number(v.replace(/\./g, '').replace(',', '.'))))
+              .filter((v) => Number.isFinite(v));
+            setLengthUnit(guessLengthUnit(lengths));
+            setPerMeter(false);
             setTaxValues({});
             setUnitValues({});
+            setAiCategories(undefined);
           }}
           onReset={reset}
           onNext={() => setStep(2)}
@@ -113,6 +137,10 @@ export default function ImportArticlesPage() {
           setPricesIncludeVat={setPricesIncludeVat}
           warehouseId={warehouseId}
           setWarehouseId={setWarehouseId}
+          lengthUnit={lengthUnit}
+          setLengthUnit={setLengthUnit}
+          perMeter={perMeter}
+          setPerMeter={setPerMeter}
           onBack={() => setStep(1)}
           onNext={() => setStep(3)}
         />
@@ -123,6 +151,7 @@ export default function ImportArticlesPage() {
           options={options}
           setTaxValue={(raw, id) => setTaxValues({ ...taxValues, [raw]: id })}
           setUnitValue={(raw, unit) => setUnitValues({ ...unitValues, [raw]: unit })}
+          setAiCategories={setAiCategories}
           onBack={() => setStep(2)}
           onStarted={(status) => {
             setJob(status);
@@ -247,6 +276,10 @@ function ColumnsStep(props: {
   setPricesIncludeVat: (v: boolean) => void;
   warehouseId: string;
   setWarehouseId: (v: string) => void;
+  lengthUnit: LengthUnit;
+  setLengthUnit: (v: LengthUnit) => void;
+  perMeter: boolean;
+  setPerMeter: (v: boolean) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -255,6 +288,8 @@ function ColumnsStep(props: {
   const recognized = analysis.columns.filter((c) => c.suggested !== 'skip').length;
   const missing = REQUIRED.filter((f) => !mapping.includes(f));
   const usesStock = mapping.includes('stock');
+  const usesBars = mapping.includes('barLength');
+  const usesLengths = usesBars || mapping.includes('sheetWidth') || mapping.includes('sheetLength');
 
   useEffect(() => {
     if (!props.warehouseId && warehouses?.length) props.setWarehouseId(warehouses[0].id);
@@ -365,6 +400,41 @@ function ColumnsStep(props: {
         </label>
       </section>
 
+      {usesLengths && (
+        <section className="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-3">
+          <Choice
+            label="Los largos y anchos del archivo están en"
+            hint="Lo sugerimos según los valores: revisalo."
+            value={props.lengthUnit}
+            onChange={(v) => props.setLengthUnit(v as LengthUnit)}
+            options={[
+              ['m', 'Metros'],
+              ['cm', 'Centímetros'],
+              ['mm', 'Milímetros'],
+            ]}
+          />
+          {usesBars && (
+            <Choice
+              label="En las barras, el precio y la existencia son"
+              hint={
+                props.perMeter
+                  ? 'Oplex los pasa a barras enteras: precio × largo y existencia ÷ largo.'
+                  : 'Según el largo comercial de cada artículo: acero 6 m a $45.000, plástico 2 m, etc.'
+              }
+              value={props.perMeter ? 'm' : 'bar'}
+              onChange={(v) => props.setPerMeter(v === 'm')}
+              options={[
+                ['bar', 'Por barra entera'],
+                ['m', 'Por metro'],
+              ]}
+            />
+          )}
+          <p className="text-xs text-muted-foreground sm:self-center">
+            Los artículos con largo quedan como barras (con piezas y recortes en Producción); con ancho y largo, como planchas.
+          </p>
+        </section>
+      )}
+
       <div className="flex justify-between">
         <Button variant="outline" onClick={props.onBack}>
           Volver
@@ -382,6 +452,7 @@ function ReviewStep({
   options,
   setTaxValue,
   setUnitValue,
+  setAiCategories,
   onBack,
   onStarted,
 }: {
@@ -389,6 +460,7 @@ function ReviewStep({
   options: ImportOptions;
   setTaxValue: (raw: string, id: string) => void;
   setUnitValue: (raw: string, unit: UnitValue) => void;
+  setAiCategories: (categories: Record<string, string> | undefined) => void;
   onBack: () => void;
   onStarted: (status: ImportJobStatus) => void;
 }) {
@@ -485,6 +557,13 @@ function ReviewStep({
         </section>
       )}
 
+      <AiCategoriesSection
+        importId={importId}
+        options={options}
+        uncategorized={preview.uncategorizedNew}
+        setAiCategories={setAiCategories}
+      />
+
       <div className="overflow-x-auto rounded-xl border bg-card">
         <table className="w-full text-sm">
           <thead>
@@ -509,8 +588,20 @@ function ReviewStep({
                       {m}
                     </div>
                   ))}
+                  {r.warnings.map((w) => (
+                    <div key={w} className="text-xs text-muted-foreground">
+                      {w}
+                    </div>
+                  ))}
                 </td>
-                <td className="px-3 py-2">{r.category ?? '—'}</td>
+                <td className="px-3 py-2">
+                  {r.category ?? '—'}
+                  {r.categoryFromAi && (
+                    <span className="ml-1.5 rounded bg-violet-100 px-1 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                      IA
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {r.status === 'update' && r.oldPrice !== null && r.price !== r.oldPrice && (
                     <span className="mr-1 text-muted-foreground line-through">{formatMoney(r.oldPrice)}</span>
@@ -551,6 +642,89 @@ function ReviewStep({
         </div>
       </div>
     </>
+  );
+}
+
+/** Sugerir categorías con IA para los artículos nuevos que vienen sin
+ * categoría. Nada se guarda hasta que el usuario las acepta e importa. */
+function AiCategoriesSection({
+  importId,
+  options,
+  uncategorized,
+  setAiCategories,
+}: {
+  importId: string;
+  options: ImportOptions;
+  uncategorized: number;
+  setAiCategories: (categories: Record<string, string> | undefined) => void;
+}) {
+  const suggest = useMutation({ mutationFn: () => articleImportApi.suggestCategories(importId, options) });
+  const accepted = options.aiCategories ? Object.keys(options.aiCategories).length : 0;
+
+  if (accepted > 0) {
+    return (
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 text-sm dark:border-violet-900 dark:bg-violet-950/30">
+        <span>
+          Se usan las categorías sugeridas con IA en <b>{formatInt(accepted)} artículos</b> (marcadas con IA en la tabla).
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setAiCategories(undefined);
+            suggest.reset();
+          }}
+        >
+          Quitar sugerencias
+        </Button>
+      </section>
+    );
+  }
+  if (uncategorized === 0) return null;
+
+  const result = suggest.data;
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">{formatInt(uncategorized)} artículos nuevos vienen sin categoría</h2>
+          <p className="text-sm text-muted-foreground">
+            La IA puede proponer categorías según el nombre, reusando las que ya tenés. Las revisás antes de importar.
+          </p>
+        </div>
+        {!result && (
+          <Button variant="outline" onClick={() => suggest.mutate()} disabled={suggest.isPending}>
+            {suggest.isPending ? 'Pensando categorías...' : '✨ Sugerir categorías con IA'}
+          </Button>
+        )}
+      </div>
+      {suggest.isError && <p className="text-sm text-destructive">{errorMessage(suggest.error, 'No se pudieron sugerir categorías')}</p>}
+      {result && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {result.summary.map((s) => (
+              <span key={s.category} className="rounded-full border px-2.5 py-1 text-sm">
+                {s.category} <span className="text-muted-foreground">· {formatInt(s.count)}</span>
+                {s.isNew && <span className="ml-1 text-xs text-violet-700 dark:text-violet-300">nueva</span>}
+              </span>
+            ))}
+          </div>
+          {result.leftOut > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {formatInt(result.leftOut)} artículos quedaron afuera por el límite de una sola vez; se importan sin categoría.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={() => setAiCategories(result.categories)} disabled={result.summary.length === 0}>
+              Usar estas categorías
+            </Button>
+            <Button variant="outline" onClick={() => suggest.reset()}>
+              Descartar
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -607,6 +781,8 @@ function ImportStep({
         {job.skipped ? ` · ${formatInt(job.skipped)} se dejaron como estaban` : ''}
         {job.newCategories ? ` · ${job.newCategories} categorías nuevas` : ''}
         {job.newSuppliers ? ` · ${job.newSuppliers} proveedores nuevos` : ''}
+        {job.photosSaved ? ` · ${formatInt(job.photosSaved)} fotos` : ''}
+        {job.photosFailed ? ` · ${formatInt(job.photosFailed)} fotos no se pudieron bajar (están en el Excel de errores)` : ''}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         <Link href="/inventory">

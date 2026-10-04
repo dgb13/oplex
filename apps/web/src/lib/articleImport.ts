@@ -15,9 +15,14 @@ export type ImportField =
   | 'unit'
   | 'description'
   | 'color'
-  | 'size';
+  | 'size'
+  | 'imageUrl'
+  | 'barLength'
+  | 'sheetWidth'
+  | 'sheetLength';
 export type ImportFieldOrSkip = ImportField | 'skip';
 export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2';
+export type LengthUnit = 'm' | 'cm' | 'mm';
 
 export const IMPORT_FIELD_OPTIONS: { value: ImportFieldOrSkip; label: string }[] = [
   { value: 'sku', label: 'Código (SKU) *' },
@@ -33,6 +38,10 @@ export const IMPORT_FIELD_OPTIONS: { value: ImportFieldOrSkip; label: string }[]
   { value: 'description', label: 'Descripción larga' },
   { value: 'color', label: 'Color' },
   { value: 'size', label: 'Talle' },
+  { value: 'imageUrl', label: 'Foto (link)' },
+  { value: 'barLength', label: 'Largo comercial (barra)' },
+  { value: 'sheetWidth', label: 'Ancho de la plancha' },
+  { value: 'sheetLength', label: 'Largo de la plancha' },
   { value: 'skip', label: 'No importar' },
 ];
 
@@ -66,6 +75,9 @@ export interface ImportOptions {
   warehouseId?: string;
   taxValues?: Record<string, string>;
   unitValues?: Record<string, UnitValue>;
+  lengthUnit?: LengthUnit;
+  perMeter?: boolean;
+  aiCategories?: Record<string, string>;
 }
 
 export type RowStatus = 'new' | 'update' | 'skip' | 'error';
@@ -80,6 +92,8 @@ export interface PlanRow {
   price: number | null;
   oldPrice: number | null;
   stock: number | null;
+  categoryFromAi: boolean;
+  warnings: string[];
 }
 
 export interface ValueChoice {
@@ -99,6 +113,14 @@ export interface ImportPreview {
   newSuppliers: string[];
   existingSuppliers: number;
   missingRequired: string[];
+  lengthUnitSuggested: LengthUnit | null;
+  uncategorizedNew: number;
+}
+
+export interface CategorySuggestion {
+  categories: Record<string, string>;
+  summary: { category: string; count: number; isNew: boolean }[];
+  leftOut: number;
 }
 
 export interface ImportJobStatus {
@@ -112,7 +134,18 @@ export interface ImportJobStatus {
   failed: number;
   newCategories: number;
   newSuppliers: number;
+  photosSaved: number;
+  photosFailed: number;
   error: string | null;
+}
+
+/** Igual que guessLengthUnit en el backend: "6" son metros, "600"
+ * centímetros, "6000" milímetros. */
+export function guessLengthUnit(values: number[]): LengthUnit {
+  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
+  if (positive.length === 0) return 'm';
+  const median = positive[Math.floor(positive.length / 2)];
+  return median <= 30 ? 'm' : median <= 1000 ? 'cm' : 'mm';
 }
 
 function saveBlob(data: Blob, fileName: string) {
@@ -134,6 +167,10 @@ export const articleImportApi = {
   },
   preview: (importId: string, options: ImportOptions) =>
     api.post<ImportPreview>(`/inventory/articles/import/${importId}/preview`, options).then((r) => r.data),
+  suggestCategories: (importId: string, options: ImportOptions) =>
+    api
+      .post<CategorySuggestion>(`/inventory/articles/import/${importId}/suggest-categories`, options)
+      .then((r) => r.data),
   start: (importId: string, options: ImportOptions) =>
     api.post<ImportJobStatus>(`/inventory/articles/import/${importId}/start`, options).then((r) => r.data),
   status: (importId: string) =>

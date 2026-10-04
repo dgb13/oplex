@@ -1,5 +1,7 @@
-import { buildPlan, detectHeaderRow, NO_TAX, parseCsv, type ImportOptions, type Refs } from '../article-import.service.js';
-import { guessTax, guessUnit, parseNumber, suggestMapping } from './import-fields.js';
+import { buildPlan, detectHeaderRow, isPrivateAddress, NO_TAX, parseCsv, type ImportOptions, type Refs } from '../article-import.service.js';
+import { directImageUrl, guessLengthUnit, guessTax, guessUnit, parseNumber, suggestMapping } from './import-fields.js';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { CategoryAiService } from './category-ai.service.js';
 
 const TAXES = [
   { id: 'iva21', name: 'IVA 21%', calculationType: 'PERCENTAGE', rate: 21 },
@@ -139,5 +141,155 @@ describe('buildPlan', () => {
     const noTaxes = { ...refs(), taxes: [] };
     const plan = buildPlan([header, grid[1]], 0, { ...base, taxValues: { '21': NO_TAX } }, noTaxes);
     expect(plan.rows[0]).toMatchObject({ status: 'new', taxId: null });
+  });
+});
+
+describe('barras, planchas y fotos', () => {
+  const header = ['Código', 'Nombre', 'Precio', 'Costo', 'Existencia', 'Largo', 'Foto'];
+  const mapping = suggestMapping(header);
+  const base: ImportOptions = { mapping, onExisting: 'update', pricesIncludeVat: false, lengthUnit: 'm' };
+
+  it('reconoce las columnas nuevas', () => {
+    expect(mapping).toEqual(['sku', 'name', 'price', 'cost', 'stock', 'barLength', 'imageUrl']);
+  });
+
+  it('una barra con largo en metros se guarda en milímetros, precio por barra', () => {
+    const grid = [header, ['CAN-20', 'Caño 20x20', 45000, 30000, 12, 6, 'https://ejemplo.com/cano.jpg']];
+    const row = buildPlan(grid, 0, base, refs()).rows[0];
+    expect(row).toMatchObject({ status: 'new', measurementType: 'LINEAL_1D', barLengthMm: 6000, price: 45000, stock: 12 });
+    expect(row.imageUrl).toBe('https://ejemplo.com/cano.jpg');
+  });
+
+  it('con precio y existencia por metro, los pasa a barras enteras', () => {
+    const grid = [header, ['CAN-20', 'Caño 20x20', 7500, 5000, 72, 6, null]];
+    expect(buildPlan(grid, 0, { ...base, perMeter: true }, refs()).rows[0]).toMatchObject({
+      status: 'new',
+      price: 45000,
+      cost: 30000,
+      stock: 12,
+    });
+  });
+
+  it('marca la existencia que no da barras enteras', () => {
+    const grid = [header, ['CAN-20', 'Caño 20x20', 7500, 5000, 70, 6, null]];
+    expect(buildPlan(grid, 0, { ...base, perMeter: true }, refs()).rows[0].messages).toEqual([
+      'La existencia (70 m) no da barras enteras de 6 m',
+    ]);
+  });
+
+  it('una plancha necesita ancho y largo', () => {
+    const h = ['Código', 'Nombre', 'Precio', 'Ancho plancha', 'Largo plancha'];
+    const opts = { ...base, mapping: suggestMapping(h) };
+    expect(buildPlan([h, ['CH-1', 'Chapa', 90000, 1.22, 2.44]], 0, opts, refs()).rows[0]).toMatchObject({
+      measurementType: 'SURFACE_2D',
+      sheetWidthMm: 1220,
+      sheetLengthMm: 2440,
+    });
+    expect(buildPlan([h, ['CH-1', 'Chapa', 90000, 1.22, null]], 0, opts, refs()).rows[0].messages).toEqual([
+      'Para una plancha hacen falta el ancho y el largo',
+    ]);
+  });
+
+  it('un link de foto inválido es un aviso, no un error', () => {
+    const row = buildPlan([header, ['X-1', 'Algo', 100, null, null, null, 'foto.jpg']], 0, base, refs()).rows[0];
+    expect(row.status).toBe('new');
+    expect(row.warnings).toEqual(['El link de la foto no empieza con http: se importa sin foto']);
+  });
+
+  it('sugiere la unidad de los largos', () => {
+    expect(guessLengthUnit([6, 6, 3.2])).toBe('m');
+    expect(guessLengthUnit([600, 300])).toBe('cm');
+    expect(guessLengthUnit([6000, 3000])).toBe('mm');
+  });
+
+  it('pasa los links compartidos de Drive y Dropbox a descarga directa', () => {
+    expect(directImageUrl('https://drive.google.com/file/d/1AbC-xyz/view?usp=sharing')).toBe(
+      'https://drive.google.com/uc?export=download&id=1AbC-xyz',
+    );
+    expect(directImageUrl('https://www.dropbox.com/s/abc/foto.jpg?dl=0')).toBe('https://www.dropbox.com/s/abc/foto.jpg?dl=1');
+  });
+
+  it('no deja bajar fotos de direcciones internas', () => {
+    for (const ip of ['127.0.0.1', '10.0.0.5', '192.168.1.10', '172.20.0.1', '169.254.169.254', '::1', 'fd00::1', '::ffff:127.0.0.1']) {
+      expect(isPrivateAddress(ip)).toBe(true);
+    }
+    expect(isPrivateAddress('8.8.8.8')).toBe(false);
+  });
+});
+
+describe('largo comercial distinto por artículo', () => {
+  const header = ['Código', 'Nombre', 'Precio', 'Costo', 'Existencia', 'Largo comercial'];
+  const base: ImportOptions = { mapping: suggestMapping(header), onExisting: 'update', pricesIncludeVat: false, lengthUnit: 'm', perMeter: true };
+
+  it('cada barra usa su propio largo: acero 6 m, plástico 2 m, eléctrico 1 m', () => {
+    const grid = [
+      header,
+      ['AC-1', 'Caño acero', 1000, 800, 12, 6],
+      ['PL-1', 'Perfil plástico', 1000, 800, 4, 2],
+      ['EL-1', 'Cablecanal', 1000, 800, 3, 1],
+    ];
+    const rows = buildPlan(grid, 0, base, refs()).rows;
+    expect(rows.map((r) => [r.sku, r.barLengthMm, r.price, r.cost, r.stock])).toEqual([
+      ['AC-1', 6000, 6000, 4800, 2],
+      ['PL-1', 2000, 2000, 1600, 2],
+      ['EL-1', 1000, 1000, 800, 3],
+    ]);
+  });
+});
+
+describe('categorías sugeridas con IA', () => {
+  const header = ['Código', 'Nombre', 'Precio', 'Rubro'];
+  const base: ImportOptions = { mapping: suggestMapping(header), onExisting: 'update', pricesIncludeVat: false };
+  const grid = [
+    header,
+    ['T-1', 'Tornillo', 100, null],
+    ['T-2', 'Tuerca', 100, 'Bulonería'],
+    ['TOR-0616', 'Tornillo existente', 100, null],
+  ];
+
+  it('sólo completan artículos nuevos que vienen sin categoría', () => {
+    const aiCategories = { 't-1': 'Tornillos', 't-2': 'Otra', 'tor-0616': 'Otra' };
+    const rows = buildPlan(grid, 0, { ...base, aiCategories }, refs()).rows;
+    expect(rows.map((r) => [r.sku, r.category, r.categoryFromAi])).toEqual([
+      ['T-1', 'Tornillos', true],
+      ['T-2', 'Bulonería', false],
+      ['TOR-0616', null, false],
+    ]);
+    expect(buildPlan(grid, 0, { ...base, aiCategories }, refs()).newCategories).toEqual(['Tornillos']);
+  });
+});
+
+describe('CategoryAiService', () => {
+  function client(items: unknown) {
+    return { messages: { create: jest.fn().mockResolvedValue({ stop_reason: 'tool_use', content: [{ type: 'tool_use', input: { items } }] }) } };
+  }
+
+  it('devuelve código -> categoría y unifica mayúsculas con las existentes', async () => {
+    const mock = client([
+      { n: 1, category: 'bulonería' },
+      { n: 2, category: 'Caños' },
+      { n: 3, category: 'caños' },
+    ]);
+    const service = new CategoryAiService(mock as never);
+    const result = await service.suggest(
+      [
+        { sku: 'T-1', name: 'Tornillo' },
+        { sku: 'C-1', name: 'Caño 20' },
+        { sku: 'C-2', name: 'Caño 30' },
+      ],
+      ['Bulonería'],
+    );
+    expect(result).toEqual({ 't-1': 'Bulonería', 'c-1': 'Caños', 'c-2': 'Caños' });
+  });
+
+  it('sin clave configurada responde 503', async () => {
+    await expect(new CategoryAiService(null).suggest([{ sku: 'A', name: 'a' }], [])).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('si la API falla responde 503', async () => {
+    const mock = { messages: { create: jest.fn().mockRejectedValue(new Error('boom')) } };
+    await expect(new CategoryAiService(mock as never).suggest([{ sku: 'A', name: 'a' }], [])).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
   });
 });

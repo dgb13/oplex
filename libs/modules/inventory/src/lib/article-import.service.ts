@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -13,6 +15,9 @@ import {
 } from '@plexo/database';
 import {
   cellText,
+  directImageUrl,
+  guessLengthUnit,
+  toMillimeters,
   FIELD_LABELS,
   guessTax,
   guessUnit,
@@ -22,9 +27,12 @@ import {
   suggestMapping,
   type ImportField,
   type ImportFieldOrSkip,
+  type LengthUnit,
   type TaxOption,
   type UnitValue,
 } from './import/import-fields.js';
+import { CategoryAiService, MAX_AI_ARTICLES } from './import/category-ai.service.js';
+import { ArticleImageService } from './article-image.service.js';
 import { InventoryService } from './inventory.service.js';
 
 const MAX_ROWS = 20_000;
@@ -32,6 +40,10 @@ const HEADER_SCAN_ROWS = 15;
 const SAMPLE_VALUES = 3;
 const PREVIEW_ROWS_PER_STATUS = 100;
 const CHUNK_SIZE = 50;
+const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+const PHOTO_TIMEOUT_MS = 10_000;
+const PHOTO_PARALLEL = 5;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 /** Elección del usuario para un valor de IVA: el artículo queda sin alícuota. */
 export const NO_TAX = '__none__';
 const UNIT_LABELS: Record<UnitValue, string> = { UNIT: 'Unidad', KG: 'Kilogramo', LTR: 'Litro', MM: 'Milímetro', M2: 'Metro cuadrado' };
@@ -64,6 +76,24 @@ export interface ImportOptions {
    * Oplex no pudo decidir solo o el usuario corrigió. */
   taxValues?: Record<string, string>;
   unitValues?: Record<string, UnitValue>;
+  /** Unidad de las columnas de largo y ancho (barras y planchas). */
+  lengthUnit?: LengthUnit;
+  /** Barras: el archivo trae precio, costo y existencia por metro y no por
+   * barra entera. Oplex guarda el precio por barra (decisión del usuario,
+   * 2026-10-04), así que se multiplica por el largo. */
+  perMeter?: boolean;
+  /** Categorías sugeridas con IA que el usuario aceptó, para artículos
+   * nuevos sin categoría en el archivo: código (en minúscula) -> categoría. */
+  aiCategories?: Record<string, string>;
+}
+
+export interface CategorySuggestion {
+  /** código (en minúscula) -> categoría. */
+  categories: Record<string, string>;
+  /** Cuántos artículos van a cada categoría, de mayor a menor. */
+  summary: { category: string; count: number; isNew: boolean }[];
+  /** Artículos nuevos sin categoría que quedaron afuera por el límite. */
+  leftOut: number;
 }
 
 type RowStatus = 'new' | 'update' | 'skip' | 'error';
@@ -75,6 +105,8 @@ export interface PlanRow {
   sku: string;
   name: string;
   category: string | null;
+  /** La categoría la sugirió la IA (el archivo no la traía). */
+  categoryFromAi: boolean;
   brand: string | null;
   description: string | null;
   color: string | null;
@@ -86,7 +118,15 @@ export interface PlanRow {
   price: number | null;
   oldPrice: number | null;
   cost: number | null;
+  /** Unidades; en barras, cantidad de barras enteras. */
   stock: number | null;
+  measurementType: 'DISCRETE' | 'LINEAL_1D' | 'SURFACE_2D';
+  barLengthMm: number | null;
+  sheetWidthMm: number | null;
+  sheetLengthMm: number | null;
+  imageUrl: string | null;
+  /** Avisos que no frenan la fila (por ejemplo, un link de foto inválido). */
+  warnings: string[];
 }
 
 export interface ValueChoice {
@@ -106,6 +146,10 @@ export interface ImportPreview {
   newSuppliers: string[];
   existingSuppliers: number;
   missingRequired: string[];
+  /** Unidad probable de los largos/anchos del archivo (si los trae). */
+  lengthUnitSuggested: LengthUnit | null;
+  /** Artículos nuevos que quedan sin categoría (candidatos a la IA). */
+  uncategorizedNew: number;
 }
 
 export interface ImportJobStatus {
@@ -119,6 +163,8 @@ export interface ImportJobStatus {
   failed: number;
   newCategories: number;
   newSuppliers: number;
+  photosSaved: number;
+  photosFailed: number;
   error: string | null;
 }
 
@@ -154,7 +200,9 @@ export class ArticleImportService {
 
   constructor(
     private readonly inventoryService: InventoryService,
+    private readonly articleImageService: ArticleImageService,
     private readonly prisma: PrismaService,
+    private readonly categoryAi: CategoryAiService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -195,6 +243,35 @@ export class ArticleImportService {
       newSuppliers: plan.newSuppliers,
       existingSuppliers: plan.existingSuppliers,
       missingRequired: REQUIRED_FIELDS.filter((f) => !options.mapping.includes(f)).map((f) => FIELD_LABELS[f]),
+      lengthUnitSuggested: plan.lengthUnitSuggested,
+      uncategorizedNew: plan.rows.filter((r) => r.status === 'new' && !r.category).length,
+    };
+  }
+
+  /** Categorías con IA para los artículos nuevos que vienen sin categoría.
+   * No se guarda nada: el usuario las revisa y, si las acepta, vuelven en
+   * options.aiCategories. */
+  async suggestCategories(importId: string, options: ImportOptions): Promise<CategorySuggestion> {
+    const { grid, headerRow } = await this.load(importId);
+    const refs = await this.loadRefs();
+    const plan = buildPlan(grid, headerRow, { ...options, aiCategories: undefined }, refs);
+    const pending = plan.rows.filter((r) => r.status === 'new' && !r.category && r.name);
+    const articles = pending.slice(0, MAX_AI_ARTICLES).map((r) => ({ sku: r.sku, name: r.name }));
+    // Las que ya existen y las que trae el archivo, para reusarlas.
+    const known = new Map<string, string>();
+    const existingNames = await getTenantDb().category.findMany({ where: { parentId: null }, select: { name: true } });
+    for (const c of existingNames) known.set(c.name.toLowerCase(), c.name);
+    for (const c of plan.newCategories) known.set(c.toLowerCase(), c);
+
+    const categories = articles.length ? await this.categoryAi.suggest(articles, [...known.values()]) : {};
+    const counts = new Map<string, number>();
+    for (const category of Object.values(categories)) counts.set(category, (counts.get(category) ?? 0) + 1);
+    return {
+      categories,
+      summary: [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, count]) => ({ category, count, isNew: !refs.categoryIdByName.has(category.toLowerCase()) })),
+      leftOut: pending.length - articles.length,
     };
   }
 
@@ -232,6 +309,8 @@ export class ArticleImportService {
       failed: plan.rows.filter((r) => r.status === 'error').length,
       newCategories: 0,
       newSuppliers: 0,
+      photosSaved: 0,
+      photosFailed: 0,
       error: null,
     };
     const job: Job = { status, tenantId: getTenantId(), errorRows: plan.rows.filter((r) => r.status === 'error') };
@@ -371,6 +450,9 @@ export class ArticleImportService {
     try {
       for (let i = 0; i < groups.length; i += CHUNK_SIZE) {
         const chunk = groups.slice(i, i + CHUNK_SIZE);
+        // Las fotos se bajan antes y fuera de la transacción: un link lento no
+        // puede dejar la tanda abierta en la base.
+        const photos = await this.downloadPhotos(chunk.flat(), job);
         await withTenantContext(
           this.prisma,
           context.tenantId,
@@ -378,10 +460,10 @@ export class ArticleImportService {
             for (const group of chunk) {
               try {
                 if (group[0].status === 'update') {
-                  await this.updateExisting(group[0], refs, job);
+                  await this.updateExisting(group[0], refs, job, photos);
                   job.status.updated++;
                 } else {
-                  await this.createGroup(group, options, refs, job);
+                  await this.createGroup(group, options, refs, job, photos);
                   job.status.created += group.length;
                 }
               } catch (err) {
@@ -407,7 +489,13 @@ export class ArticleImportService {
     }
   }
 
-  private async createGroup(group: PlanRow[], options: ImportOptions, refs: Refs, job: Job): Promise<void> {
+  private async createGroup(
+    group: PlanRow[],
+    options: ImportOptions,
+    refs: Refs,
+    job: Job,
+    photos: Map<PlanRow, Photo>,
+  ): Promise<void> {
     const first = group[0];
     const categoryId = await this.categoryId(first.category, refs, job);
     const article = await this.inventoryService.createArticle({
@@ -417,7 +505,12 @@ export class ArticleImportService {
       categoryId: categoryId ?? undefined,
       taxDefinitionId: first.taxId ?? undefined,
       hasVariants: group.length > 1,
+      measurementType: first.measurementType,
+      commercialLength: first.barLengthMm ?? undefined,
+      sheetWidth: first.sheetWidthMm ?? undefined,
+      sheetLength: first.sheetLengthMm ?? undefined,
     });
+    await this.applyPhoto(article.id, group.find((r) => photos.has(r)), photos, job);
     const supplierId = await this.supplierId(first.supplier, refs, job);
     if (supplierId) {
       await getTenantDb().article.update({ where: { id: article.id }, data: { preferredSupplierId: supplierId } });
@@ -433,21 +526,14 @@ export class ArticleImportService {
       });
       refs.variantsBySku.set(row.sku.toLowerCase(), { id: variant.id, articleId: article.id, unitPrice: row.price! });
       if (row.stock && row.stock > 0 && options.warehouseId) {
-        await this.inventoryService.recordMovement({
-          warehouseId: options.warehouseId,
-          articleVariantId: variant.id,
-          type: 'PURCHASE_IN',
-          quantity: row.stock,
-          unitCost: row.cost ?? 0,
-          sourceType: 'IMPORT',
-        });
+        await this.recordInitialStock(row, variant.id, options.warehouseId);
       }
     }
   }
 
   /** Actualiza un artículo existente. El stock nunca se toca acá: se cambia
    * con un ajuste de stock, para que quede el movimiento. */
-  private async updateExisting(row: PlanRow, refs: Refs, job: Job): Promise<void> {
+  private async updateExisting(row: PlanRow, refs: Refs, job: Job, photos: Map<PlanRow, Photo>): Promise<void> {
     const existing = refs.variantsBySku.get(row.sku.toLowerCase());
     if (!existing) throw new Error('el código ya no existe');
     const db = getTenantDb();
@@ -476,6 +562,91 @@ export class ArticleImportService {
     if (row.price !== null && Math.abs(row.price - existing.unitPrice) >= 0.005) {
       await this.inventoryService.updateArticleVariantPrice(existing.id, row.price);
     }
+    if (photos.has(row)) {
+      // No pisa una foto cargada a mano.
+      const article = await db.article.findUnique({ where: { id: existing.articleId }, select: { imageUrl: true } });
+      if (!article?.imageUrl) await this.applyPhoto(existing.articleId, row, photos, job);
+    }
+  }
+
+  /** Stock inicial. En barras: cada barra entra como pieza propia (para los
+   * recortes de Producción) y el stock se lleva en milímetros con el costo
+   * por milímetro, igual que GoodsReceiptsService al recibir una compra. */
+  private async recordInitialStock(row: PlanRow, variantId: string, warehouseId: string): Promise<void> {
+    const cost = row.cost ?? 0;
+    if (row.measurementType === 'LINEAL_1D' && row.barLengthMm) {
+      const bars = row.stock ?? 0;
+      const costPerMm = cost / row.barLengthMm;
+      await this.inventoryService.recordMovement({
+        warehouseId,
+        articleVariantId: variantId,
+        type: 'PURCHASE_IN',
+        quantity: bars * row.barLengthMm,
+        unitCost: costPerMm,
+        sourceType: 'IMPORT',
+      });
+      // Copia de StockPieceService.createFullStockPiece (@plexo/production):
+      // un módulo no importa el Service de otro.
+      const tenantId = getTenantId();
+      for (let i = 0; i < bars; i++) {
+        await getTenantDb().stockPiece.create({
+          data: {
+            tenantId,
+            articleVariantId: variantId,
+            warehouseId,
+            originalLength: row.barLengthMm,
+            currentLength: row.barLengthMm,
+            status: 'AVAILABLE',
+            sourceType: 'FULL_STOCK',
+            unitCost: costPerMm,
+          },
+        });
+      }
+      return;
+    }
+    await this.inventoryService.recordMovement({
+      warehouseId,
+      articleVariantId: variantId,
+      type: 'PURCHASE_IN',
+      quantity: row.stock ?? 0,
+      unitCost: cost,
+      sourceType: 'IMPORT',
+    });
+  }
+
+  private async applyPhoto(articleId: string, row: PlanRow | undefined, photos: Map<PlanRow, Photo>, job: Job): Promise<void> {
+    const photo = row ? photos.get(row) : undefined;
+    if (!row || !photo) return;
+    try {
+      await this.articleImageService.setImage(articleId, photo.mime, photo.buffer);
+      job.status.photosSaved++;
+    } catch (err) {
+      this.photoFailed(row, (err as Error).message, job);
+    }
+  }
+
+  /** Baja las fotos de una tanda, de a PHOTO_PARALLEL a la vez. Una foto que
+   * falla queda anotada y el artículo se importa igual, sin foto. */
+  private async downloadPhotos(rows: PlanRow[], job: Job): Promise<Map<PlanRow, Photo>> {
+    const result = new Map<PlanRow, Photo>();
+    const pending = rows.filter((r) => r.imageUrl);
+    for (let i = 0; i < pending.length; i += PHOTO_PARALLEL) {
+      await Promise.all(
+        pending.slice(i, i + PHOTO_PARALLEL).map(async (row) => {
+          try {
+            result.set(row, await downloadImage(row.imageUrl!));
+          } catch (err) {
+            this.photoFailed(row, (err as Error).message, job);
+          }
+        }),
+      );
+    }
+    return result;
+  }
+
+  private photoFailed(row: PlanRow, reason: string, job: Job): void {
+    job.status.photosFailed++;
+    job.errorRows.push({ ...row, messages: [`La foto no se pudo bajar (${reason}). El artículo se importó igual, sin foto.`] });
   }
 
   private async categoryId(name: string | null, refs: Refs, job: Job): Promise<string | null> {
@@ -744,14 +915,66 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       if (rate?.calculationType === 'PERCENTAGE' && rate.rate) price = Math.round((price / (1 + rate.rate / 100)) * 100) / 100;
     }
 
-    const cost = number(cells, 'cost');
-    const stock = number(cells, 'stock');
+    let cost = number(cells, 'cost');
+    let stock = number(cells, 'stock');
     const stockText = text(cells, 'stock');
     if (stockText && stock === null) messages.push(`Stock "${stockText}" no es un número`);
 
-    const category = text(cells, 'category');
+    // Barras y planchas (en milímetros, que es como las guarda Oplex).
+    const lengthUnit = options.lengthUnit ?? 'm';
+    const barLength = number(cells, 'barLength');
+    const sheetWidth = number(cells, 'sheetWidth');
+    const sheetLength = number(cells, 'sheetLength');
+    let measurementType: PlanRow['measurementType'] = 'DISCRETE';
+    let barLengthMm: number | null = null;
+    let sheetWidthMm: number | null = null;
+    let sheetLengthMm: number | null = null;
+    if (barLength !== null && (sheetWidth !== null || sheetLength !== null)) {
+      messages.push('Tiene largo de barra y medidas de plancha: es una cosa o la otra');
+    } else if (barLength !== null) {
+      if (barLength <= 0) messages.push('El largo de la barra tiene que ser mayor a 0');
+      else {
+        measurementType = 'LINEAL_1D';
+        barLengthMm = toMillimeters(barLength, lengthUnit);
+      }
+    } else if (sheetWidth !== null || sheetLength !== null) {
+      if (!sheetWidth || !sheetLength || sheetWidth <= 0 || sheetLength <= 0) {
+        messages.push('Para una plancha hacen falta el ancho y el largo');
+      } else {
+        measurementType = 'SURFACE_2D';
+        sheetWidthMm = toMillimeters(sheetWidth, lengthUnit);
+        sheetLengthMm = toMillimeters(sheetLength, lengthUnit);
+      }
+    }
+    if (measurementType === 'LINEAL_1D' && barLengthMm) {
+      const meters = barLengthMm / 1000;
+      if (options.perMeter) {
+        if (price !== null) price = Math.round(price * meters * 100) / 100;
+        if (cost !== null) cost = Math.round(cost * meters * 100) / 100;
+        if (stock !== null) {
+          const bars = stock / meters;
+          if (Math.abs(bars - Math.round(bars)) > 0.001) {
+            messages.push(`La existencia (${stock} m) no da barras enteras de ${meters.toLocaleString('es-AR')} m`);
+          } else stock = Math.round(bars);
+        }
+      } else if (stock !== null && !Number.isInteger(stock)) {
+        messages.push('La existencia de barras tiene que ser un número entero');
+      }
+    }
+
+    const warnings: string[] = [];
+    const photo = text(cells, 'imageUrl');
+    const imageUrl = photo && /^https?:\/\//i.test(photo) ? directImageUrl(photo) : null;
+    if (photo && !imageUrl) warnings.push('El link de la foto no empieza con http: se importa sin foto');
+
     const supplier = text(cells, 'supplier');
     const existing = sku ? refs.variantsBySku.get(sku.toLowerCase()) : undefined;
+    const fileCategory = text(cells, 'category');
+    const aiCategory = !fileCategory && !existing && sku ? (options.aiCategories?.[sku.toLowerCase()] ?? null) : null;
+    const category = fileCategory ?? aiCategory;
+    if (existing && measurementType !== 'DISCRETE') {
+      warnings.push('Ya existe: el largo o las medidas no se cambian al actualizar');
+    }
 
     const row: PlanRow = {
       rowNumber: headerRow + 2 + offset,
@@ -760,6 +983,7 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       sku,
       name,
       category,
+      categoryFromAi: aiCategory !== null,
       brand: text(cells, 'brand'),
       description: text(cells, 'description'),
       color: text(cells, 'color'),
@@ -771,6 +995,12 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       oldPrice: existing ? existing.unitPrice : null,
       cost,
       stock,
+      measurementType,
+      barLengthMm,
+      sheetWidthMm,
+      sheetLengthMm,
+      imageUrl,
+      warnings,
     };
 
     if (sku) {
@@ -808,8 +1038,14 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       .sort((a, b) => b[1] - a[1])
       .map(([raw, count]) => ({ raw, count, resolved: resolve(raw), resolvedLabel: null }));
 
+  const lengthValues = grid
+    .slice(headerRow + 1)
+    .flatMap((cells) => (['barLength', 'sheetWidth', 'sheetLength'] as ImportField[]).map((f) => number(cells, f)))
+    .filter((v): v is number => v !== null);
+
   return {
     rows,
+    lengthUnitSuggested: lengthValues.length ? guessLengthUnit(lengthValues) : null,
     taxValues: choices(taxCounts, (raw) => options.taxValues?.[raw] ?? guessTax(raw, refs.taxes)),
     unitValues: choices(unitCounts, (raw) => options.unitValues?.[raw] ?? guessUnit(raw)),
     newCategories: [...new Map([...newCategories].map((c) => [c.toLowerCase(), c])).values()].sort(),
@@ -818,3 +1054,63 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
   };
 }
 
+interface Photo {
+  mime: string;
+  buffer: Buffer;
+}
+
+/** Baja una foto de un link del archivo. Sólo http(s), sólo imágenes JPG,
+ * PNG o WEBP de hasta 3MB, y nunca de direcciones internas (la API no
+ * puede usarse para pedir cosas a la red privada del servidor). */
+export async function downloadImage(rawUrl: string): Promise<Photo> {
+  let current = rawUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    const url = new URL(current);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('el link no es http');
+    await assertPublicHost(url.hostname);
+    const res = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(PHOTO_TIMEOUT_MS),
+      // Varios servidores de imágenes rechazan pedidos sin User-Agent.
+      headers: { 'user-agent': 'Oplex/1.0 (importador de articulos)' },
+    });
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      current = new URL(location, url).toString();
+      continue;
+    }
+    if (!res.ok) throw new Error(`el link respondió ${res.status}`);
+    const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (!PHOTO_TYPES.includes(mime)) throw new Error('no es una imagen JPG, PNG o WEBP');
+    if (Number(res.headers.get('content-length') ?? 0) > PHOTO_MAX_BYTES) throw new Error('pesa más de 3MB');
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > PHOTO_MAX_BYTES) throw new Error('pesa más de 3MB');
+    return { mime, buffer };
+  }
+  throw new Error('demasiadas redirecciones');
+}
+
+async function assertPublicHost(hostname: string): Promise<void> {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) throw new Error('dirección interna');
+  const addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map((a) => a.address);
+  if (addresses.length === 0 || addresses.some(isPrivateAddress)) throw new Error('dirección interna');
+}
+
+export function isPrivateAddress(address: string): boolean {
+  if (isIP(address) === 6) {
+    const a = address.toLowerCase();
+    if (a === '::1' || a === '::') return true;
+    if (a.startsWith('::ffff:')) return isPrivateAddress(a.slice(7));
+    return /^(fc|fd|fe8|fe9|fea|feb)/.test(a);
+  }
+  const [a, b] = address.split('.').map(Number);
+  return (
+    a === 10 || a === 127 || a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    a >= 224
+  );
+}

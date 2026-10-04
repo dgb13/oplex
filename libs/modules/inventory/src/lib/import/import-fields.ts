@@ -17,6 +17,10 @@ export const IMPORT_FIELDS = [
   'description',
   'color',
   'size',
+  'imageUrl',
+  'barLength',
+  'sheetWidth',
+  'sheetLength',
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 export type ImportFieldOrSkip = ImportField | 'skip';
@@ -37,6 +41,10 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   description: 'Descripción larga',
   color: 'Color',
   size: 'Talle',
+  imageUrl: 'Foto (link)',
+  barLength: 'Largo comercial (barra)',
+  sheetWidth: 'Ancho de la plancha',
+  sheetLength: 'Largo de la plancha',
 };
 
 /** Encabezados habituales de cada campo, ya normalizados (sin acentos, en
@@ -55,6 +63,10 @@ const SYNONYMS: Record<ImportField, string[]> = {
   description: ['descripcion larga', 'observaciones', 'obs', 'notas', 'detalle largo', 'caracteristicas'],
   color: ['color', 'colour'],
   size: ['talle', 'talla', 'tamano', 'size', 'medida talle'],
+  imageUrl: ['foto', 'imagen', 'url imagen', 'url foto', 'link foto', 'link imagen', 'foto url', 'imagen url', 'image', 'picture', 'url'],
+  barLength: ['largo de la barra', 'largo barra', 'largo comercial', 'largo', 'longitud', 'largo m', 'largo mm', 'medida comercial'],
+  sheetWidth: ['ancho de la plancha', 'ancho plancha', 'ancho chapa', 'ancho'],
+  sheetLength: ['largo de la plancha', 'largo plancha', 'largo chapa', 'alto plancha', 'alto'],
 };
 
 const COMBINING_DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g');
@@ -156,6 +168,42 @@ export function valueKey(value: unknown): string {
 /** Unidad de Oplex para un valor del archivo, o null si no se reconoce. */
 export function guessUnit(raw: string): UnitValue | null {
   return UNIT_ALIASES[valueKey(raw).replace(/[./]/g, ' ').replace(/\s+/g, ' ').trim()] ?? null;
+}
+
+export type LengthUnit = 'm' | 'cm' | 'mm';
+
+/** Milímetros, que es como Oplex guarda largos y anchos. */
+export function toMillimeters(value: number, unit: LengthUnit): number {
+  return Math.round(value * (unit === 'm' ? 1000 : unit === 'cm' ? 10 : 1));
+}
+
+/** Unidad probable de una columna de largos: "6" o "3,2" son metros,
+ * "600" son centímetros y "6000" milímetros. El usuario la confirma. */
+export function guessLengthUnit(values: number[]): LengthUnit {
+  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
+  if (positive.length === 0) return 'm';
+  const median = positive[Math.floor(positive.length / 2)];
+  if (median <= 30) return 'm';
+  if (median <= 1000) return 'cm';
+  return 'mm';
+}
+
+/** Links compartidos de Drive y Dropbox apuntan a una página, no a la
+ * imagen: se pasan al link de descarga directa. */
+export function directImageUrl(raw: string): string {
+  const url = raw.trim();
+  const drive = /drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*id=)([\w-]+)/.exec(url);
+  if (drive) return `https://drive.google.com/uc?export=download&id=${drive[1]}`;
+  if (/^https?:\/\/(www\.)?dropbox\.com\//.test(url)) {
+    try {
+      const parsed = new URL(url);
+      parsed.searchParams.set('dl', '1');
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  }
+  return url;
 }
 
 export interface TaxOption {

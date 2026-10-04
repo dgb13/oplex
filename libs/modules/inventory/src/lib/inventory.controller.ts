@@ -132,6 +132,12 @@ export class InventoryController {
   }
 
   @Roles(...WRITE_ROLES)
+  @Post('articles/import/:id/suggest-categories')
+  suggestImportCategories(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ImportOptionsDto) {
+    return this.articleImportService.suggestCategories(id, dto);
+  }
+
+  @Roles(...WRITE_ROLES)
   @Post('articles/import/:id/start')
   startImport(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ImportOptionsDto) {
     return this.articleImportService.start(id, dto);
