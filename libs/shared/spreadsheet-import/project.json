@@ -1,0 +1,9 @@
+{
+  "name": "spreadsheet-import",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/spreadsheet-import/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"],
+  "// targets": "to see all targets run: nx show project spreadsheet-import --web",
+  "targets": {}
+}

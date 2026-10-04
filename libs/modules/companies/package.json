@@ -21,8 +21,10 @@
     "@plexo/afip-credentials": "^0.0.1",
     "@plexo/auth": "^0.0.1",
     "@plexo/database": "^0.0.1",
+    "@plexo/spreadsheet-import": "^0.0.1",
     "@plexo/subscriptions": "^0.0.1",
     "class-validator": "^0.15.1",
+    "exceljs": "^4.4.0",
     "fastify": "^5.10.0",
     "tslib": "^2.3.0"
   }

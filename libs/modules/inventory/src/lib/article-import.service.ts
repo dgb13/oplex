@@ -1,8 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import {
@@ -13,6 +10,16 @@ import {
   tenantContextStorage,
   withTenantContext,
 } from '@plexo/database';
+import {
+  describeFile,
+  detectHeaderRow as detectHeader,
+  isBlank,
+  loadUpload,
+  parseFile,
+  saveUpload,
+  type Cell,
+  type ImportAnalysis as FileAnalysis,
+} from '@plexo/spreadsheet-import';
 import {
   cellText,
   directImageUrl,
@@ -35,9 +42,6 @@ import { CategoryAiService, MAX_AI_ARTICLES } from './import/category-ai.service
 import { ArticleImageService } from './article-image.service.js';
 import { InventoryService } from './inventory.service.js';
 
-const MAX_ROWS = 20_000;
-const HEADER_SCAN_ROWS = 15;
-const SAMPLE_VALUES = 3;
 const PREVIEW_ROWS_PER_STATUS = 100;
 const CHUNK_SIZE = 50;
 const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
@@ -48,23 +52,7 @@ const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const NO_TAX = '__none__';
 const UNIT_LABELS: Record<UnitValue, string> = { UNIT: 'Unidad', KG: 'Kilogramo', LTR: 'Litro', MM: 'Milímetro', M2: 'Metro cuadrado' };
 
-type Cell = string | number | Date | null;
-
-export interface ImportColumn {
-  index: number;
-  header: string;
-  samples: string[];
-  suggested: ImportFieldOrSkip;
-}
-
-export interface ImportAnalysis {
-  importId: string;
-  fileName: string;
-  sheetName: string;
-  headerRow: number;
-  rowCount: number;
-  columns: ImportColumn[];
-}
+export type ImportAnalysis = FileAnalysis<ImportField>;
 
 /** Lo que el usuario elige en el paso "Columnas" y en "Revisión". */
 export interface ImportOptions {
@@ -195,7 +183,6 @@ interface Job {
 @Injectable()
 export class ArticleImportService {
   private readonly logger = new Logger(ArticleImportService.name);
-  private readonly storageDir = join(process.cwd(), 'storage', 'imports');
   private readonly jobs = new Map<string, Job>();
 
   constructor(
@@ -209,13 +196,9 @@ export class ArticleImportService {
   // Paso 1: subir y analizar
 
   async analyze(fileName: string, buffer: Buffer): Promise<ImportAnalysis> {
-    const grid = await parseFile(fileName, buffer);
-    const importId = randomUUID();
-    const dir = join(this.storageDir, getTenantId());
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, `${importId}${extensionOf(fileName)}`), buffer);
-    await writeFile(join(dir, `${importId}.name`), fileName);
-    return describe(importId, fileName, grid);
+    const grid = await parseFile(fileName, buffer, 'artículos');
+    const importId = await saveUpload(getTenantId(), fileName, buffer);
+    return describeFile(importId, fileName, grid, suggestMapping);
   }
 
   // ---------------------------------------------------------------------------
@@ -675,16 +658,8 @@ export class ArticleImportService {
   }
 
   private async load(importId: string): Promise<{ grid: Cell[][]; headerRow: number }> {
-    if (!/^[0-9a-f-]{36}$/.test(importId)) throw new NotFoundException('No hay una importación con ese número');
-    const dir = join(this.storageDir, getTenantId());
-    let fileName: string;
-    try {
-      fileName = await readFile(join(dir, `${importId}.name`), 'utf8');
-    } catch {
-      throw new NotFoundException('El archivo ya no está disponible: volvé a subirlo');
-    }
-    const buffer = await readFile(join(dir, `${importId}${extensionOf(fileName)}`));
-    const grid = await parseFile(fileName, buffer);
+    const { fileName, buffer } = await loadUpload(getTenantId(), importId);
+    const grid = await parseFile(fileName, buffer, 'artículos');
     return { grid, headerRow: detectHeaderRow(grid) };
   }
 
@@ -724,147 +699,9 @@ const EXPORT_COLUMNS = [
 
 const UNIT_EXPORT: Record<string, string> = { UNIT: 'UN', KG: 'KG', LTR: 'LT', MM: 'MM', M2: 'M2' };
 
-function extensionOf(fileName: string): string {
-  const match = /\.[a-z0-9]+$/i.exec(fileName);
-  return match ? match[0].toLowerCase() : '';
-}
-
-export async function parseFile(fileName: string, buffer: Buffer): Promise<Cell[][]> {
-  const ext = extensionOf(fileName);
-  if (ext === '.xls') {
-    throw new BadRequestException('Ese archivo es de Excel viejo (.xls). Abrilo en Excel y guardalo como .xlsx, o como CSV.');
-  }
-  let grid: Cell[][];
-  if (ext === '.csv' || ext === '.txt') {
-    grid = parseCsv(decodeText(buffer));
-  } else if (ext === '.xlsx') {
-    grid = await parseXlsx(buffer);
-  } else {
-    throw new BadRequestException('Subí un archivo de Excel (.xlsx) o CSV');
-  }
-  // Las filas vacías se dejan en su lugar: así los números de fila que ve el
-  // usuario son los mismos que en su Excel.
-  const filled = grid.filter((row) => !isBlank(row)).length;
-  if (filled < 2) throw new BadRequestException('El archivo no tiene artículos');
-  if (filled - 1 > MAX_ROWS) {
-    throw new BadRequestException(`El archivo tiene más de ${MAX_ROWS.toLocaleString('es-AR')} filas: dividilo en partes`);
-  }
-  return grid;
-}
-
-async function parseXlsx(buffer: Buffer): Promise<Cell[][]> {
-  const workbook = new ExcelJS.Workbook();
-  try {
-    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
-  } catch {
-    throw new BadRequestException('No se pudo leer el archivo de Excel. ¿Está dañado o protegido con contraseña?');
-  }
-  // La hoja con más filas: muchas exportaciones traen una carátula primero.
-  const sheet = [...workbook.worksheets].sort((a, b) => b.actualRowCount - a.actualRowCount)[0];
-  if (!sheet) throw new BadRequestException('El archivo no tiene hojas');
-  const grid: Cell[][] = [];
-  sheet.eachRow({ includeEmpty: false }, (row) => {
-    while (grid.length < row.number - 1) grid.push([]);
-    const values: Cell[] = [];
-    for (let c = 1; c <= sheet.columnCount; c++) {
-      const v = row.getCell(c).value;
-      if (v === null || v === undefined) values.push(null);
-      else if (typeof v === 'number' || typeof v === 'string' || v instanceof Date) values.push(v);
-      else {
-        const result = (v as { result?: unknown }).result;
-        values.push(typeof result === 'number' ? result : cellText(v));
-      }
-    }
-    grid.push(values);
-  });
-  return grid;
-}
-
-/** Excel en castellano guarda los CSV en Windows-1252, no en UTF-8. */
-// Caracter de reemplazo (aparece al leer como UTF-8 algo que no lo es) y BOM.
-const REPLACEMENT_CHAR = String.fromCharCode(0xfffd);
-const BOM = String.fromCharCode(0xfeff);
-
-function decodeText(buffer: Buffer): string {
-  const utf8 = buffer.toString('utf8');
-  if (utf8.includes(REPLACEMENT_CHAR)) return new TextDecoder('windows-1252').decode(buffer);
-  return utf8.startsWith(BOM) ? utf8.slice(1) : utf8;
-}
-
-export function parseCsv(text: string): Cell[][] {
-  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
-  const delimiter = [';', ',', '\t'].sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
-  const rows: Cell[][] = [];
-  let row: Cell[] = [];
-  let field = '';
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') {
-        field += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === delimiter) {
-      row.push(field.trim() || null);
-      field = '';
-    } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && text[i + 1] === '\n') i++;
-      row.push(field.trim() || null);
-      rows.push(row);
-      row = [];
-      field = '';
-    } else field += ch;
-  }
-  if (field || row.length) {
-    row.push(field.trim() || null);
-    rows.push(row);
-  }
-  return rows;
-}
-
-/** La fila de encabezados es, entre las primeras, la que más columnas
- * reconoce; si ninguna reconoce nada, la primera con texto. */
+/** Fila de encabezados según los campos de artículos. */
 export function detectHeaderRow(grid: Cell[][]): number {
-  let best = 0;
-  let bestScore = 0;
-  for (let i = 0; i < Math.min(HEADER_SCAN_ROWS, grid.length - 1); i++) {
-    const score = suggestMapping(grid[i].map((c) => cellText(c))).filter((f) => f !== 'skip').length;
-    if (score > bestScore) {
-      best = i;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-function isBlank(row: Cell[]): boolean {
-  return row.every((c) => cellText(c) === '');
-}
-
-function describe(importId: string, fileName: string, grid: Cell[][]): ImportAnalysis {
-  const headerRow = detectHeaderRow(grid);
-  const headers = grid[headerRow].map((c, i) => cellText(c) || `Columna ${i + 1}`);
-  const suggested = suggestMapping(headers);
-  const body = grid.slice(headerRow + 1).filter((row) => !isBlank(row));
-  return {
-    importId,
-    fileName,
-    sheetName: '',
-    headerRow: headerRow + 1,
-    rowCount: body.length,
-    columns: headers.map((header, index) => ({
-      index,
-      header,
-      suggested: suggested[index],
-      samples: body
-        .map((row) => cellText(row[index]))
-        .filter(Boolean)
-        .slice(0, SAMPLE_VALUES),
-    })),
-  };
+  return detectHeader(grid, suggestMapping);
 }
 
 export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOptions, refs: Refs) {

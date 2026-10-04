@@ -1,5 +1,5 @@
 {
-  "name": "@plexo/inventory",
+  "name": "@plexo/spreadsheet-import",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -16,17 +16,8 @@
     }
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.35.0",
-    "@fastify/multipart": "^10.1.0",
     "@nestjs/common": "^11.1.28",
-    "@nestjs/event-emitter": "^3.1.0",
-    "@plexo/auth": "^0.0.1",
-    "@plexo/database": "^0.0.1",
-    "@plexo/spreadsheet-import": "^0.0.1",
-    "@plexo/types": "^0.0.1",
-    "class-validator": "^0.15.1",
     "exceljs": "^4.4.0",
-    "fastify": "^5.10.0",
     "tslib": "^2.3.0"
   }
 }

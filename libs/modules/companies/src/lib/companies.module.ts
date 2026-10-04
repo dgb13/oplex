@@ -4,15 +4,18 @@ import { SubscriptionModule } from '@plexo/subscriptions';
 import { AFIP_PADRON, type AfipPadronPort } from './afip-padron.port.js';
 import { CompaniesController } from './companies.controller.js';
 import { CompaniesService } from './companies.service.js';
+import { CompanyImportController } from './import/company-import.controller.js';
+import { CompanyImportService } from './import/company-import.service.js';
 import { PersonAvatarService } from './person-avatar.service.js';
 import { RealAfipPadronService } from './real-afip-padron.js';
 import { StubAfipPadronService } from './stub-afip-padron.js';
 
 @Module({
   imports: [AfipCredentialsModule, SubscriptionModule],
-  controllers: [CompaniesController],
+  controllers: [CompanyImportController, CompaniesController],
   providers: [
     CompaniesService,
+    CompanyImportService,
     PersonAvatarService,
     RealAfipPadronService,
     StubAfipPadronService,

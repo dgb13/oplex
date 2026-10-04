@@ -1,4 +1,5 @@
-import { buildPlan, detectHeaderRow, isPrivateAddress, NO_TAX, parseCsv, type ImportOptions, type Refs } from '../article-import.service.js';
+import { buildPlan, detectHeaderRow, isPrivateAddress, NO_TAX, type ImportOptions, type Refs } from '../article-import.service.js';
+import { parseCsv } from '@plexo/spreadsheet-import';
 import { directImageUrl, guessLengthUnit, guessTax, guessUnit, parseNumber, suggestMapping } from './import-fields.js';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { CategoryAiService } from './category-ai.service.js';

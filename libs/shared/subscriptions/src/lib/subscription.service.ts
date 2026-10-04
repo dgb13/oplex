@@ -131,6 +131,18 @@ export class SubscriptionService {
     }
   }
 
+  /** Cuántos clientes más entran en el plan - para el importador de
+   * empresas, que da de alta muchos de una vez y marca con error los que
+   * superan el cupo en vez de cortar a mitad de camino. Mismo conteo que
+   * assertCanAddClient. */
+  async getClientQuota(): Promise<{ planName: string; max: number; used: number }> {
+    const { plan } = await this.assertSubscriptionActive();
+    const used = await getTenantDb().company.count({
+      where: { active: true, roles: { some: { role: 'CUSTOMER' } } },
+    });
+    return { planName: plan.name, max: plan.maxClients, used };
+  }
+
   async assertCanIssueInvoiceThisMonth(): Promise<void> {
     const { plan } = await this.assertSubscriptionActive();
     const { from, to } = defaultMonthRange();

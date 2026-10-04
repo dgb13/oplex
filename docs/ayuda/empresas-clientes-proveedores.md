@@ -6,4 +6,6 @@ Al dar de alta una empresa podés **buscarla por CUIT en ARCA** para completar r
 
 Quién puede tocar qué depende del rol: Ventas maneja clientes y sucursales, Compras e Inventario manejan proveedores, y Dueño/Administrador todo.
 
+Si ya tenés tus proveedores o clientes en una planilla, los podés importar de una vez (ver "Cómo importar proveedores y clientes desde Excel").
+
 Una empresa **no se borra**, se desactiva - así no se rompe el historial de facturas ya emitidas contra ella. Una empresa desactivada sigue apareciendo en reportes históricos, pero no se puede usar para operaciones nuevas hasta reactivarla.

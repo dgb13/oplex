@@ -70,6 +70,9 @@
       "path": "./libs/shared/encryption"
     },
     {
+      "path": "./libs/shared/spreadsheet-import"
+    },
+    {
       "path": "./libs/shared/afip-credentials"
     },
     {

@@ -1,11 +1,12 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { companiesApi, type Company, type CompanyRoleType } from '@/lib/companies';
 import { formatCuitInput } from '@/lib/cuit';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 import AddContactsModal from './AddContactsModal';
 import CompanyDetailModal from './CompanyDetailModal';
@@ -103,7 +104,16 @@ export default function CompanyListView({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         {heading}
-        {canWrite && <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>}
+        {canWrite && (
+          <div className="flex flex-wrap justify-end gap-2">
+            {variant === 'page' && (role === 'SUPPLIER' || role === 'CUSTOMER') && (
+              <Link href={`/companies/import?role=${role}`} className={buttonVariants({ variant: 'outline' })}>
+                {role === 'SUPPLIER' ? 'Importar proveedores' : 'Importar clientes'}
+              </Link>
+            )}
+            <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
