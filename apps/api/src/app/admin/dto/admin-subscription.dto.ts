@@ -39,3 +39,31 @@ export class ChangePlanDto {
   @IsString()
   planKey!: string;
 }
+
+/** Cuenta de Oplex donde transfieren los tenants. */
+export class OplexBankDetailsDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  holder!: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  cuit!: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  bankName!: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  cbu!: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  alias!: string | null;
+}

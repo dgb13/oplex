@@ -3,11 +3,12 @@ import { AdminPlansController } from './admin-plans.controller.js';
 import { PlansController } from './plans.controller.js';
 import { SubscriptionsController } from './subscriptions.controller.js';
 import { SubscriptionBillingService } from './subscription-billing.service.js';
+import { SubscriptionReceiptService } from './subscription-receipt.service.js';
 import { SubscriptionService } from './subscription.service.js';
 
 @Module({
   controllers: [PlansController, SubscriptionsController, AdminPlansController],
-  providers: [SubscriptionService, SubscriptionBillingService],
+  providers: [SubscriptionService, SubscriptionBillingService, SubscriptionReceiptService],
   exports: [SubscriptionService, SubscriptionBillingService],
 })
 export class SubscriptionModule {}

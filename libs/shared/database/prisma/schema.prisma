@@ -421,6 +421,13 @@ model PlatformSettings {
   // Consultas reales a ARCA en el mes (las que salen de la caché no cuentan).
   arcaPadronQueriesMonth      String?
   arcaPadronQueriesCount      Int @default(0)
+  // Cuenta de Oplex donde los tenants transfieren el pago del plan (ver
+  // SubscriptionBillingService.reportTransfer). Editable en /admin/subscriptions.
+  oplexBankHolder String?
+  oplexBankCuit   String?
+  oplexBankName   String?
+  oplexBankCbu    String?
+  oplexBankAlias  String?
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")

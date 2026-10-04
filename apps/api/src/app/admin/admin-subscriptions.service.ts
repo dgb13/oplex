@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
-import { SubscriptionBillingService, type SubscriptionPaymentWithPlan } from '@plexo/subscriptions';
+import {
+  SubscriptionBillingService,
+  type OplexBankDetails,
+  type SubscriptionPaymentWithPlan,
+} from '@plexo/subscriptions';
 import type { RecordSubscriptionPaymentDto } from './dto/admin-subscription.dto.js';
 
 export interface TenantSubscriptionRow {
@@ -77,5 +81,13 @@ export class AdminSubscriptionsService {
 
   changePlan(tenantId: string, planKey: string) {
     return withTenantContext(this.prisma, tenantId, () => this.billing.changePlan(planKey));
+  }
+
+  getOplexBank() {
+    return this.billing.getOplexBankDetails();
+  }
+
+  updateOplexBank(details: OplexBankDetails) {
+    return this.billing.updateOplexBankDetails(details);
   }
 }

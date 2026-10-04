@@ -30,6 +30,14 @@ export interface BillingOverview {
   payments: SubscriptionPaymentWithPlan[];
 }
 
+export interface OplexBankDetails {
+  holder: string | null;
+  cuit: string | null;
+  bankName: string | null;
+  cbu: string | null;
+  alias: string | null;
+}
+
 export interface ReportTransferInput {
   planKey: string;
   months: number;
@@ -210,6 +218,55 @@ export class SubscriptionBillingService {
       where: { tenantId: getTenantId() },
       data: { status: 'TRIALING', trialEndsAt: addDaysUtc(base, days), graceEndsAt: null },
     });
+  }
+
+  /** Cuenta de Oplex donde el tenant transfiere (PlatformSettings). */
+  async getOplexBankDetails(): Promise<OplexBankDetails> {
+    const settings = await this.prisma.platformSettings.findUnique({ where: { id: 'global' } });
+    return {
+      holder: settings?.oplexBankHolder ?? null,
+      cuit: settings?.oplexBankCuit ?? null,
+      bankName: settings?.oplexBankName ?? null,
+      cbu: settings?.oplexBankCbu ?? null,
+      alias: settings?.oplexBankAlias ?? null,
+    };
+  }
+
+  async updateOplexBankDetails(details: OplexBankDetails): Promise<OplexBankDetails> {
+    const data = {
+      oplexBankHolder: details.holder?.trim() || null,
+      oplexBankCuit: details.cuit?.trim() || null,
+      oplexBankName: details.bankName?.trim() || null,
+      oplexBankCbu: details.cbu?.replace(/\D/g, '') || null,
+      oplexBankAlias: details.alias?.trim() || null,
+    };
+    await this.prisma.platformSettings.upsert({ where: { id: 'global' }, create: { id: 'global', ...data }, update: data });
+    return this.getOplexBankDetails();
+  }
+
+  /** El propio tenant cambia de plan. Al bajar, primero tiene que entrar en
+   * los topes del plan nuevo (usuarios y clientes activos). */
+  async changeOwnPlan(planKey: string): Promise<void> {
+    const plan = await this.prisma.plan.findUnique({ where: { key: planKey } });
+    if (!plan || !plan.isActive) {
+      throw new NotFoundException('Ese plan no existe o no está a la venta');
+    }
+    const db = getTenantDb();
+    const [users, clients] = await Promise.all([
+      db.user.count({ where: { isExternalAccountant: { not: true } } }),
+      db.company.count({ where: { active: true, roles: { some: { role: 'CUSTOMER' } } } }),
+    ]);
+    if (users > plan.maxUsers) {
+      throw new BadRequestException(
+        `El plan ${plan.name} permite ${plan.maxUsers} usuario${plan.maxUsers === 1 ? '' : 's'} y hoy tenés ${users}. Desactivá los que sobran antes de cambiar.`,
+      );
+    }
+    if (clients > plan.maxClients) {
+      throw new BadRequestException(
+        `El plan ${plan.name} permite ${plan.maxClients} clientes y hoy tenés ${clients} activos. Desactivá los que sobran antes de cambiar.`,
+      );
+    }
+    await this.changePlan(planKey);
   }
 
   /** Cambia de plan sin tocar fechas: los topes nuevos aplican ya y el precio

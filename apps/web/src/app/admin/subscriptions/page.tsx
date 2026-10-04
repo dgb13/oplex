@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  adminOplexBankApi,
   adminPlansApi,
   adminSubscriptionsApi,
+  type OplexBankDetailsInput,
   type AdminPlan,
   type SubscriptionPaymentRow,
   type SubscriptionStatusValue,
@@ -82,6 +84,8 @@ export default function AdminSubscriptionsPage() {
   return (
     <div className="flex max-w-6xl flex-col gap-6">
       <h1 className="text-xl font-semibold text-white">Suscripciones</h1>
+
+      <OplexBankCard />
 
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div>
@@ -387,5 +391,65 @@ function PaymentsList({ payments }: { payments: SubscriptionPaymentRow[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Cuenta donde los tenants transfieren el pago del plan (se la muestra
+ * /settings/billing al elegir "Transferencia"). */
+function OplexBankCard() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ['admin-oplex-bank'], queryFn: adminOplexBankApi.get });
+  const [form, setForm] = useState<OplexBankDetailsInput | null>(null);
+  const values = form ?? data ?? { holder: null, cuit: null, bankName: null, cbu: null, alias: null };
+  const save = useMutation({
+    mutationFn: () => adminOplexBankApi.update(values),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['admin-oplex-bank'], saved);
+      setForm(null);
+    },
+  });
+  const fields: [keyof OplexBankDetailsInput, string][] = [
+    ['holder', 'Titular'],
+    ['cuit', 'CUIT'],
+    ['bankName', 'Banco'],
+    ['cbu', 'CBU / CVU'],
+    ['alias', 'Alias'],
+  ];
+  const missing = !values.cbu && !values.alias;
+  return (
+    <section
+      className={`flex flex-col gap-3 rounded-xl border bg-slate-900 p-4 ${missing ? 'border-amber-500/40' : 'border-slate-800'}`}
+    >
+      <div>
+        <h2 className="text-sm font-semibold text-slate-200">Cuenta de Oplex para transferencias</h2>
+        <p className="text-xs text-slate-500">
+          {missing ? 'Sin cargar: los tenants no ven a dónde transferir.' : 'Es lo que ven los tenants al pagar por transferencia.'}
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-5">
+        {fields.map(([key, label]) => (
+          <label key={key} className="flex flex-col gap-1 text-xs text-slate-400" htmlFor={`oplex-bank-${key}`}>
+            {label}
+            <input
+              id={`oplex-bank-${key}`}
+              value={values[key] ?? ''}
+              onChange={(e) => setForm({ ...values, [key]: e.target.value })}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={!form || save.isPending}
+          onClick={() => save.mutate()}
+          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+        >
+          {save.isPending ? 'Guardando...' : 'Guardar'}
+        </button>
+        {save.isError && <span className="text-xs text-red-400">{errorMessage(save.error, 'No se pudo guardar')}</span>}
+      </div>
+    </section>
   );
 }

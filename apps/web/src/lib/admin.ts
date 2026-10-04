@@ -429,3 +429,17 @@ export const adminSubscriptionsApi = {
   changePlan: (tenantId: string, planKey: string) =>
     api.post(`/admin/subscriptions/${tenantId}/plan`, { planKey }).then((r) => r.data),
 };
+
+export interface OplexBankDetailsInput {
+  holder: string | null;
+  cuit: string | null;
+  bankName: string | null;
+  cbu: string | null;
+  alias: string | null;
+}
+
+export const adminOplexBankApi = {
+  get: () => api.get<OplexBankDetailsInput>('/admin/subscriptions/oplex-bank').then((r) => r.data),
+  update: (dto: OplexBankDetailsInput) =>
+    api.patch<OplexBankDetailsInput>('/admin/subscriptions/oplex-bank', dto).then((r) => r.data),
+};

@@ -1,8 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, PlatformAdminGuard } from '@plexo/auth';
 import type { AuthenticatedUser } from '@plexo/types';
 import { AdminSubscriptionsService } from './admin-subscriptions.service.js';
-import { ChangePlanDto, ExtendTrialDto, RecordSubscriptionPaymentDto } from './dto/admin-subscription.dto.js';
+import {
+  ChangePlanDto,
+  ExtendTrialDto,
+  OplexBankDetailsDto,
+  RecordSubscriptionPaymentDto,
+} from './dto/admin-subscription.dto.js';
 
 @Controller('admin/subscriptions')
 @UseGuards(PlatformAdminGuard)
@@ -12,6 +17,16 @@ export class AdminSubscriptionsController {
   @Get()
   list() {
     return this.service.list();
+  }
+
+  @Get('oplex-bank')
+  getOplexBank() {
+    return this.service.getOplexBank();
+  }
+
+  @Patch('oplex-bank')
+  updateOplexBank(@Body() dto: OplexBankDetailsDto) {
+    return this.service.updateOplexBank(dto);
   }
 
   @Get(':tenantId/payments')

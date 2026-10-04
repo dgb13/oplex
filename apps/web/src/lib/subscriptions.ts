@@ -29,6 +29,7 @@ export interface TenantSubscription {
   status: SubscriptionStatus;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  graceEndsAt: string | null;
   paymentMethod: string | null;
   promoLabel: string | null;
   promoDiscountPercent: string | null;
@@ -90,3 +91,51 @@ export function computeSubscriptionCharge(
 export function formatPesos(value: number | string): string {
   return `$ ${Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+// ---------------------------------------------------------------------------
+// Cobro del plan (/settings/billing) - ver SubscriptionBillingService.
+
+export interface SubscriptionPayment {
+  id: string;
+  method: 'MP_DEBIT' | 'TRANSFER' | 'CASH' | 'OTHER';
+  status: 'PENDING' | 'PAID' | 'REJECTED' | 'REFUNDED';
+  months: number;
+  periodStart: string;
+  periodEnd: string;
+  listPrice: string;
+  discountAmount: string;
+  netAmount: string;
+  vatAmount: string;
+  total: string;
+  reference: string | null;
+  receiptUrl: string | null;
+  createdAt: string;
+  plan: Plan;
+}
+
+export interface OplexBankDetails {
+  holder: string | null;
+  cuit: string | null;
+  bankName: string | null;
+  cbu: string | null;
+  alias: string | null;
+}
+
+export interface BillingOverview {
+  subscription: TenantSubscription;
+  pendingPayment: SubscriptionPayment | null;
+  payments: SubscriptionPayment[];
+  oplexBank: OplexBankDetails;
+}
+
+export const billingApi = {
+  get: () => api.get<BillingOverview>('/subscriptions/me/billing').then((r) => r.data),
+  uploadReceipt: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ receiptUrl: string }>('/subscriptions/me/transfer-receipt', form).then((r) => r.data);
+  },
+  reportTransfer: (dto: { planKey: string; months: number; reference?: string; receiptUrl?: string }) =>
+    api.post<SubscriptionPayment>('/subscriptions/me/transfer', dto).then((r) => r.data),
+  changePlan: (planKey: string) => api.post<TenantSubscription>('/subscriptions/me/plan', { planKey }).then((r) => r.data),
+};
