@@ -10,7 +10,8 @@ import {
 } from '@/lib/inventory';
 import { getSocket } from '@/lib/socket';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
@@ -24,7 +25,6 @@ import ArticleDetailsModal from './ArticleDetailsModal';
 import ArticleImageModal from './ArticleImageModal';
 import ArticlePriceHistoryModal from './ArticlePriceHistoryModal';
 import ArticleSupplierModal from './ArticleSupplierModal';
-import ImportArticlesModal from './ImportArticlesModal';
 import StockAlertsPanel from './StockAlertsPanel';
 import StockMovementModal from './StockMovementModal';
 import WarehouseFormModal from './WarehouseFormModal';
@@ -153,7 +153,6 @@ export default function InventoryPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [view, setView] = useState<'table' | 'catalog' | 'alerts'>('table');
   const [modalOpen, setModalOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const [imageArticle, setImageArticle] = useState<{
     id: string;
     name: string;
@@ -284,9 +283,9 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
-            Importar desde Excel
-          </Button>
+          <Link href="/inventory/import" className={buttonVariants({ variant: 'outline' })}>
+            Importar artículos
+          </Link>
           <Button variant="outline" onClick={() => setCreatingWarehouse(true)}>
             + Nuevo depósito
           </Button>
@@ -599,9 +598,6 @@ export default function InventoryPage() {
         />
       )}
 
-      {importModalOpen && (
-        <ImportArticlesModal onClose={() => setImportModalOpen(false)} />
-      )}
 
       {imageArticle && (
         <ArticleImageModal

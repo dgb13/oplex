@@ -30,6 +30,7 @@ import { InventoryService } from './inventory.service.js';
 
 const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
 
+import { ImportOptionsDto } from './dto/import-options.dto.js';
 @Controller('inventory')
 export class InventoryController {
   constructor(
@@ -99,22 +100,57 @@ export class InventoryController {
   @Roles(...WRITE_ROLES)
   @Get('articles/import/template')
   async downloadImportTemplate() {
-    const buffer = await this.articleImportService.generateTemplate();
-    return new StreamableFile(buffer, {
+    return new StreamableFile(await this.articleImportService.generateTemplate(), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       disposition: 'attachment; filename="plantilla-articulos.xlsx"',
     });
   }
 
+  @Get('articles/export')
+  async exportArticles() {
+    return new StreamableFile(await this.articleImportService.exportArticles(), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="articulos.xlsx"',
+    });
+  }
+
+  /** Paso 1 del importador: sube el archivo y devuelve sus columnas. */
   @Roles(...WRITE_ROLES)
   @Post('articles/import')
-  async importArticles(@Req() req: FastifyRequest) {
+  async analyzeImport(@Req() req: FastifyRequest) {
     const data = await req.file();
     if (!data) {
       throw new BadRequestException('No se recibió ningún archivo');
     }
-    const buffer = await data.toBuffer();
-    return this.articleImportService.importFromBuffer(buffer);
+    return this.articleImportService.analyze(data.filename, await data.toBuffer());
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post('articles/import/:id/preview')
+  previewImport(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ImportOptionsDto) {
+    return this.articleImportService.preview(id, dto);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post('articles/import/:id/start')
+  startImport(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ImportOptionsDto) {
+    return this.articleImportService.start(id, dto);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Get('articles/import/:id/status')
+  importStatus(@Param('id', ParseUUIDPipe) id: string) {
+    return this.articleImportService.status(id);
+  }
+
+  /** Filas con error en Excel. Antes de importar, con las opciones elegidas. */
+  @Roles(...WRITE_ROLES)
+  @Post('articles/import/:id/errors')
+  async importErrors(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ImportOptionsDto) {
+    return new StreamableFile(await this.articleImportService.errorsWorkbook(id, dto), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="articulos-con-error.xlsx"',
+    });
   }
 
   @Roles(...WRITE_ROLES)

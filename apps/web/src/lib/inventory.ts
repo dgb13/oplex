@@ -347,16 +347,6 @@ export interface PriceHistoryEntry {
   purchaseOrderNumber: string | null;
 }
 
-export interface ImportRowError {
-  row: number;
-  sku?: string;
-  message: string;
-}
-
-export interface ImportResult {
-  created: number;
-  errors: ImportRowError[];
-}
 
 export interface ListArticlesFilters {
   search?: string;
@@ -423,24 +413,6 @@ export const inventoryApi = {
     api.post<Category>('/inventory/categories', dto).then((r) => r.data),
   recordMovement: (dto: RecordStockMovementInput) =>
     api.post('/inventory/movements', dto).then((r) => r.data),
-  downloadImportTemplate: async () => {
-    const res = await api.get('/inventory/articles/import/template', { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'plantilla-articulos.xlsx';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  },
-  importArticles: (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    return api
-      .post<ImportResult>('/inventory/articles/import', formData)
-      .then((r) => r.data);
-  },
   uploadArticleImage: (articleId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);

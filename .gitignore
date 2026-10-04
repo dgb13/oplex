@@ -75,3 +75,6 @@ out
 # Certificados y claves de ARCA - NUNCA al repo (la clave privada firma comprobantes fiscales)
 docs/arca/
 *.key
+
+# archivos subidos para importar (temporales, ver ArticleImportService)
+/storage
