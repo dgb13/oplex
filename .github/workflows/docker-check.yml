@@ -1,0 +1,46 @@
+name: Docker
+
+# Arma las imágenes de producción SIN publicarlas, para enterarse de un
+# Dockerfile roto antes del botón Deploy. Corre cuando cambia algo de Docker
+# o a mano (Actions → Docker → Run workflow).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - 'docker-compose.prod.yml'
+      - 'package-lock.json'
+      - '.github/workflows/docker-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Imagen de la API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Imagen de la web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: false
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://oplex.com.ar/api
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
