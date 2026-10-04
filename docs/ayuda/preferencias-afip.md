@@ -1,7 +1,9 @@
-# Cómo configuro AFIP y otras preferencias del tenant
+# Qué se configura en Preferencias
 
-En **Preferencias** (menú de usuario, solo Dueño/Administrador) se carga el certificado y clave de AFIP para poder emitir facturas electrónicas reales con CAE - es un dato por empresa, cifrado, nadie más lo puede ver. Sin certificado cargado, las facturas se siguen generando pero sin validez fiscal real.
+**Preferencias** está en el menú de usuario (arriba a la derecha) y solo lo ven el Dueño y los Administradores. Ahí se configura:
 
-Ahí mismo se configura la condición de IVA propia del tenant (afecta qué letra de factura corresponde), el remitente de los emails que manda el sistema, y el checklist de "primeros pasos" que ve un usuario nuevo.
+- **Tu empresa en los documentos**: logo (PNG o JPG), nombre de fantasía, teléfono, email, sitio web, color de marca, datos bancarios para que te transfieran y las condiciones comerciales con las que arranca cada cotización (forma de pago, plazo y lugar de entrega, garantía). Todo eso sale en el PDF de las cotizaciones.
+- **Remitente de los emails** que manda el sistema a tus clientes (dominio propio o el compartido de Oplex), el tono de los recordatorios de facturas vencidas y un email en copia.
+- **Monedas** y cotización, **Mercado Pago** (conectar tu cuenta para cobrar), el formato de papel por defecto del PDF de factura, si sos **agente de retención**, el **% de remarca** sugerido para Inventario y la **reposición automática** de stock.
 
-La búsqueda de datos fiscales por CUIT (padrón de AFIP) es una integración distinta a la de emitir facturas - tener una configurada no habilita automáticamente la otra.
+El certificado de ARCA, tu condición frente al IVA, el domicilio fiscal e Ingresos Brutos **ya no están acá**: se cargan en **Contabilidad → Conexión con ARCA** (ver el artículo sobre ARCA).

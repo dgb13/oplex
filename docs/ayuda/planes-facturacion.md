@@ -1,7 +1,9 @@
-# Cómo funcionan los planes y la suscripción
+# Cómo funcionan los planes y cómo pago la suscripción
 
-En el menú de usuario → **Planes y facturación** vas a ver tu plan actual (Basic, Bronze, Silver, Gold, Platinum o Diamond), sus límites (usuarios, clientes, facturas por mes, cupo de Carga con IA) y el estado de tu suscripción.
+En el menú de usuario → **Planes y facturación** ves tu plan (Basic Gratis, Bronze, Silver, Gold, Platinum o Diamond), sus límites (usuarios, clientes, facturas por mes, cupos de IA), el estado de tu suscripción y tus pagos. Los precios de los planes son **sin IVA**: al pagar se suma el 21%.
 
-Un signup nuevo arranca con una prueba gratuita antes de decidir si convertís a un plan pago o caés al plan gratuito. El cobro real todavía es informativo - no hay pasarela de pago integrada para que la plataforma te cobre a vos automáticamente.
+Para pagar (solo Dueño/Administrador) tocás **Pagar** o **Contratar** y elegís por transferencia 1, 3, 6 meses o 1 año. **Pagando el año entero tenés 20% de descuento.** Ves los datos de la cuenta de Oplex, transferís y avisás con el número de operación o el comprobante. Mientras lo confirmamos, la cuenta sigue funcionando 3 días. El débito automático con tarjeta todavía no está disponible.
 
-Si te falta cupo de algo (por ejemplo, se te acabó el cupo mensual de Carga con IA), vas a ver un aviso con un link directo a esta misma pantalla para subir de plan.
+Estados: **En prueba** (15 días gratis al registrarte), **Activo** (pago hasta una fecha), **Pago vencido** (seguís usando el sistema 5 días más) y **Sólo lectura** (podés ver tus datos pero no cargar nada nuevo hasta pagar). Arriba de la pantalla aparece un aviso cuando hace falta.
+
+Podés subir o bajar de plan desde la misma pantalla: los límites nuevos aplican enseguida y el precio nuevo desde tu próximo pago. Para bajar, tus usuarios y clientes activos tienen que entrar en el plan nuevo. La baja también se pide desde ahí y se aplica al final del período pago.
