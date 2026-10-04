@@ -43,3 +43,41 @@ jobs:
       # Sin format:check: el repo no sigue .prettierrc y formatear todo inflaría
       # cada diff. Sin e2e: api-e2e necesita la API levantada contra una base real.
       - run: npx nx affected -t lint test typecheck build --exclude=api-e2e
+
+  # Todas las migraciones sobre una base vacía, como en el primer deploy:
+  # una migración que depende de otra con fecha posterior en el nombre pasa
+  # en las bases de desarrollo (que las aplicaron en el orden en que se
+  # escribieron) y rompe una base nueva.
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: plexo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:ci@localhost:5432/plexo?schema=public
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Igual que docker/postgres-init-prod/01-init-roles.sh.
+      - name: Usuario de la API
+        run: |
+          psql "postgresql://postgres:ci@localhost:5432/plexo" -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE plexo_app LOGIN PASSWORD 'ci' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE" \
+            -c "GRANT ALL ON SCHEMA public TO plexo_app"
+
+      - run: npx prisma migrate deploy
