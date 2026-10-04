@@ -19,7 +19,7 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
 };
 
 /**
- * Detección automática de intención (docs/plan-asistente-ia-conversacional.md,
+ * Detección automática de intención (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 9, Fase 2) - un tercer llamado a Claude, barato y forzado a tool
  * use (mismo patrón que EXTRACT_INVOICE_TOOL en @plexo/ai-invoice-scan),
  * antes de decidir si la pregunta va a AssistantHelpService (Haiku, sin

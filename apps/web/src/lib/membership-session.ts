@@ -15,7 +15,7 @@ interface RouterLike {
  * distintos - un SuperAdmin operando como cualquier usuario de cualquier
  * tenant (impersonate) vs. un contador con su PROPIA identidad entrando a
  * un cliente de su cartera vía una membership ACCEPTED (activate) - ver
- * docs/plan_modulo_contadores.txt, punto 2. Mismo mecanismo de swap de
+ * docs/planesdemodulos/plan_modulo_contadores.txt, punto 2. Mismo mecanismo de swap de
  * token, pero nunca deben pisarse entre sí si algún día coinciden (ej. un
  * SuperAdmin que también es OWNER de un estudio contable). */
 export function isMembershipSession(): boolean {

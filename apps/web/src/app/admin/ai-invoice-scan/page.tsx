@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 /** Kill-switch global de "Carga de comprobantes IA" - calcado de
  * /admin/membership-settings/bna-sync, mismo patrón GET+PATCH sobre
- * PlatformSettings. Ver docs/plan-carga-comprobantes-ia.md. */
+ * PlatformSettings. Ver docs/planesdemodulos/plan-carga-comprobantes-ia.md. */
 export default function AdminAiInvoiceScanPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useQuery({

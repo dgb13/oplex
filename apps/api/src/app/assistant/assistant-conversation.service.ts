@@ -5,7 +5,7 @@ import { AssistantSettingsService } from './assistant-settings.service.js';
 
 // Cuántos mensajes previos (usuario+asistente combinados) se le vuelven a
 // dar de comer a Claude como contexto de la conversación - acota el costo
-// de tokens de un hilo que crece sin límite (docs/plan-asistente-ia-conversacional.md,
+// de tokens de un hilo que crece sin límite (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 8.2). Sólo se replaya el texto final de cada turno pasado, nunca
 // los tool_use/tool_result intermedios de una vuelta ya cerrada - si una
 // pregunta nueva necesita ese dato de nuevo, la herramienta se vuelve a
@@ -18,7 +18,7 @@ export interface HistoryMessage {
 }
 
 /**
- * Fase 3 (docs/plan-asistente-ia-conversacional.md, sección 9) - historial
+ * Fase 3 (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 9) - historial
  * persistente. Un usuario tiene una única conversación "activa" (la más
  * reciente) que crece indefinidamente hasta que pide una nueva - no hay UI
  * todavía para elegir entre varias conversaciones viejas, sólo continuar la

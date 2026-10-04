@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Verificación de `X-Hub-Signature-256` de Meta (docs/plan-asistente-ia-conversacional.md,
+ * Verificación de `X-Hub-Signature-256` de Meta (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 6.3) - HMAC-SHA256 del BODY CRUDO (bytes tal cual llegaron, antes
  * de parsear JSON) contra WHATSAPP_APP_SECRET. A diferencia de la firma de
  * Mercado Pago (que arma un manifest de texto a partir de headers/query, ver

@@ -261,7 +261,7 @@ export interface UnansweredQuestion {
 }
 
 // Nombre + rate limit del Asistente de IA conversacional - configurable
-// sin deploy (ver docs/plan-asistente-ia-conversacional.md, secciones 1 y
+// sin deploy (ver docs/planesdemodulos/plan-asistente-ia-conversacional.md, secciones 1 y
 // 8.2), mismo GET+PATCH que adminAiInvoiceScanApi de arriba.
 export const adminAssistantApi = {
   getSettings: () => api.get<AssistantSettings>('/admin/assistant-settings').then((r) => r.data),

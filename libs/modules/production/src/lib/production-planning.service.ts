@@ -25,7 +25,7 @@ export interface ProducibleResult {
 }
 
 /**
- * Lectura pura (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.6) -
+ * Lectura pura (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.6) -
  * reusa el MISMO helper de "disponible" (`getReservedQuantity`, de
  * `@plexo/inventory`) que usa `InventoryService.recordMovement` para el
  * chequeo de reservas al vender, para que "cuánto hay reservado" nunca

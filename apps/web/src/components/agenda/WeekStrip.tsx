@@ -59,7 +59,7 @@ interface Props {
   onSelectDate: (date: string) => void;
 }
 
-/** Vista semana (Fase 2, ver docs/plan-agenda.md) - no está en el
+/** Vista semana (Fase 2, ver docs/planesdemodulos/plan-agenda.md) - no está en el
  * prototipo aprobado (sus botones Semana/Día son decorativos, sin
  * comportamiento), así que sigue el mismo lenguaje visual de MonthGrid en
  * vez de inventar un patrón nuevo: misma paleta, mismos bordes de color por

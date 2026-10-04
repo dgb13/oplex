@@ -16,7 +16,7 @@ const PAYABLES_READ_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'INVENT
 const CASH_READ_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'SALES', 'ACCOUNTANT'];
 
 /**
- * Composition root de la Agenda (ver docs/plan-agenda.md) - el único lugar
+ * Composition root de la Agenda (ver docs/planesdemodulos/plan-agenda.md) - el único lugar
  * del backend que conoce taxes/receivables/payables/calendar/invoicing/
  * production/pos a la vez. Cada uno vive en su propia lib de negocio y
  * nunca se importan entre sí (ver eslint.config.mjs, scope:calendar/

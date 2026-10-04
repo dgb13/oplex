@@ -9,7 +9,7 @@ import { GoodsReceiptService, type CreateGoodsReceiptDto } from '@plexo/purchase
  * Composes GoodsReceiptService (libs/modules/purchases - creates the
  * remito itself, validated against the PurchaseOrder's pending quantity)
  * with InventoryService (moves stock), StockPieceService (crea las piezas
- * físicas 1D, ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.2) y
+ * físicas 1D, ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.2) y
  * AccountingService (posts the GRNI accrual - Dr Mercaderías / Cr
  * Mercadería Recibida No Facturada, see
  * AccountingService.postGoodsReceiptAccrual) - same shape as SalesService
@@ -39,7 +39,7 @@ export class GoodsReceiptsService {
     let accrualAmount = new Prisma.Decimal(0);
     for (const line of receipt.lines) {
       // Conversión de unidad de compra -> unidad de stock (ver
-      // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 3/4.2):
+      // docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 3/4.2):
       // PurchaseOrderLine.quantity/unitCost siguen significando "lo que se
       // le pide al proveedor" (ej. 3 bolsas, o 3 barras/rollos, a $X la
       // unidad) - la conversión a la unidad real de stock (gramos, o mm

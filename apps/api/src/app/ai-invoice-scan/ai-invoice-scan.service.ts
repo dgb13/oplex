@@ -34,7 +34,7 @@ export interface AiInvoiceScanSettings {
 
 /**
  * "Carga de comprobantes IA" - disponibilidad (semáforo) + kill-switch
- * global + registro de intentos (ver docs/plan-carga-comprobantes-ia.md,
+ * global + registro de intentos (ver docs/planesdemodulos/plan-carga-comprobantes-ia.md,
  * AiInvoiceScanAttempt en schema.prisma). El chequeo de cuota/plan en sí
  * NO se reimplementa acá - se delega 100% a
  * SubscriptionService.assertCanUseAiInvoiceScan(), la MISMA función que

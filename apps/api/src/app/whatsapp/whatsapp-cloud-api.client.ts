@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 const GRAPH_API_VERSION = 'v21.0';
 
 /**
- * Fase 5b (docs/plan-asistente-ia-conversacional.md, sección 6.3) - envío de
+ * Fase 5b (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 6.3) - envío de
  * la respuesta de vuelta al usuario vía la API de envío de WhatsApp Cloud
  * API. Solo texto (sección 5.3: "WhatsApp: solo texto - sin componentes"),
  * sin dependencia del SDK oficial de Meta (no existe uno first-party en

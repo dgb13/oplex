@@ -7,7 +7,7 @@ const HOUR_OPTIONS = [1, 2, 5, 8] as const;
 
 /** "Duración de sesión de membership" - calcado de /admin/bna-sync, mismo
  * patrón GET+PATCH sobre PlatformSettings. Ver
- * docs/plan_modulo_contadores.txt, "Duración del token de sesión". */
+ * docs/planesdemodulos/plan_modulo_contadores.txt, "Duración del token de sesión". */
 export default function AdminMembershipSettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useQuery({

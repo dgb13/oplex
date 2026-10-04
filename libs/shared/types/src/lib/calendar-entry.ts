@@ -1,5 +1,5 @@
 /**
- * DTO común que devuelve cada fuente de la Agenda (ver docs/plan-agenda.md).
+ * DTO común que devuelve cada fuente de la Agenda (ver docs/planesdemodulos/plan-agenda.md).
  * Vive en @plexo/types (scope:shared), no en ningún módulo de negocio ni en
  * la lib nueva @plexo/calendar - así taxes/receivables/payables/calendar
  * pueden implementar `getCalendarEntries(from, to): Promise<CalendarEntry[]>`

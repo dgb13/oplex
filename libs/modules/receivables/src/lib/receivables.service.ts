@@ -143,7 +143,7 @@ export class ReceivablesService {
     return [...byCustomer.values()].sort((a, b) => b.totalOutstanding.cmp(a.totalOutstanding));
   }
 
-  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+  /** Función pura de la Agenda (ver docs/planesdemodulos/plan-agenda.md) - sólo toca su
    * propia tabla, nunca importa otro módulo de negocio. Sólo facturas con
    * saldo pendiente (balanceDue > 0): una ya cobrada no es un "vencimiento
    * de cobro" real, aunque su dueDate caiga en el rango. */

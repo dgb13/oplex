@@ -361,7 +361,7 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
     recpamAmount: 100,
     createdByUserId: userId,
   });
-  // Agenda (ver docs/plan-agenda.md) - única tabla propia del módulo, sin
+  // Agenda (ver docs/planesdemodulos/plan-agenda.md) - única tabla propia del módulo, sin
   // FK a ninguna otra (linkType/linkId/assignedTo son strings sueltos a
   // propósito, ver el modelo en schema.prisma), así que no depende de nada
   // insertado arriba.

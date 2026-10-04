@@ -1,5 +1,5 @@
 /** Resuelve el `link` de un CalendarEntry derivado a una ruta real de la
- * app (Fase 2 de la Agenda, ver docs/plan-agenda.md). Sólo `production-
+ * app (Fase 2 de la Agenda, ver docs/planesdemodulos/plan-agenda.md). Sólo `production-
  * order` tiene una página de detalle propia (`/production/orders/[id]`) -
  * invoice/purchase-invoice/cash-session/tax-deadline no, así que navegan al
  * listado del módulo en vez de a un registro puntual. Sigue siendo

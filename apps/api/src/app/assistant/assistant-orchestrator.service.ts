@@ -10,7 +10,7 @@ import type { AssistantStreamChunk } from './assistant-stream.types.js';
 const DEFAULT_MODEL = 'claude-sonnet-5';
 const MAX_TOKENS = 1024;
 
-// Tope duro de vueltas del loop de tool use por turno (docs/plan-asistente-ia-conversacional.md,
+// Tope duro de vueltas del loop de tool use por turno (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 3.5 y 8.2) - acota el costo/latencia máximo de una sola pregunta
 // mal encaminada, sin depender de que el modelo decida parar solo.
 const MAX_TOOL_CALL_ROUNDS = 4;
@@ -26,7 +26,7 @@ function buildSystemPrompt(): string {
 
 /**
  * Orquestador del asistente - Fase 1
- * (docs/plan-asistente-ia-conversacional.md, sección 5): recibe un mensaje
+ * (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 5): recibe un mensaje
  * de un turno único (todavía sin historial persistente, ver sección 9 del
  * plan), llama a Claude con tool use, ejecuta las herramientas que pida
  * contra AssistantToolsService (que ya valida tenant/rol - este service
@@ -66,7 +66,7 @@ export class AssistantOrchestratorService {
     return { text: text.trim(), toolNames: [...toolNames] };
   }
 
-  /** Streaming token a token (docs/plan-asistente-ia-conversacional.md,
+  /** Streaming token a token (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
    * sección 7) - usado por `POST /assistant/message/stream`. Emite un
    * evento `tool_start` liviano por cada herramienta invocada y va
    * emitiendo `text` a medida que Claude lo genera, incluida cualquier
@@ -150,7 +150,7 @@ export class AssistantOrchestratorService {
         if (!result.isError) {
           // Mismo dato que se le manda a Claude en el tool_result de abajo,
           // pero sin stringificar - el widget lo usa para el mini-gráfico/tabla
-          // (docs/plan-asistente-ia-conversacional.md, sección 5.3).
+          // (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 5.3).
           yield { type: 'tool_result', tool: t.name, data: result.raw };
         }
         toolResults.push({

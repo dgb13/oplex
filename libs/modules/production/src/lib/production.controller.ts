@@ -15,7 +15,7 @@ import { StockPieceService } from './stock-piece.service.js';
 
 /**
  * Endpoints propios del módulo (BOM, órdenes, producible) - ver
- * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4/decisión 4:
+ * docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4/decisión 4:
  * `GET /production/producible` queda abierto en cualquier plan (gancho
  * comercial), todo lo demás exige `assertCanUseProduction()` (BRONZE+).
  * `POST /production/orders/:id/complete` (el consumo real, que sí necesita

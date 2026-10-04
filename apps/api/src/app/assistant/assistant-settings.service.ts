@@ -33,7 +33,7 @@ export interface UpdateAssistantSettingsInput {
 
 /**
  * Configuración de plataforma del asistente de IA - nombre mostrado +
- * rate limit (docs/plan-asistente-ia-conversacional.md, secciones 1 y
+ * rate limit (docs/planesdemodulos/plan-asistente-ia-conversacional.md, secciones 1 y
  * 8.2), ninguno de los dos hardcodeado en código. Mismo patrón
  * get-or-create defensivo que AiInvoiceScanService.getSettings - la
  * migración ya siembra la fila única vía el DEFAULT de las columnas.

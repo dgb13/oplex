@@ -103,7 +103,7 @@ export class PurchaseInvoiceService {
 
     // Dos modos: con OC (camino de siempre, GRNI real) o factura de compra
     // directa (sin OC - ver "Carga de comprobantes IA",
-    // docs/plan-carga-comprobantes-ia.md). Nunca ambos ni ninguno.
+    // docs/planesdemodulos/plan-carga-comprobantes-ia.md). Nunca ambos ni ninguno.
     let supplierId: string;
     let supplierName: string;
     let supplierTaxId: string | null;

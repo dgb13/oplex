@@ -2,7 +2,7 @@ import { Prisma } from '@plexo/database';
 
 /**
  * "Disponible = físico - reservado" (ver
- * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2/4.6) - un único lugar
+ * docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2/4.6) - un único lugar
  * para sumar reservas `ACTIVE`, reusado por `InventoryService.recordMovement`
  * (bajo el lock de la fila de `StockLedger`, para el chequeo de salida) y
  * por `ProductionPlanningService.computeProducible` (lectura exploratoria,

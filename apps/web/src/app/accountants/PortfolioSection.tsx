@@ -25,7 +25,7 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
 /** Lado "estudio": mi cartera de clientes ACCEPTED (con vencimientos), las
  * solicitudes pendientes que me llegaron/mandé, y el form para pedir acceso
  * a un cliente nuevo por email/CUIT - ver
- * docs/plan_modulo_contadores.txt, puntos 1/4/5. */
+ * docs/planesdemodulos/plan_modulo_contadores.txt, puntos 1/4/5. */
 export default function PortfolioSection() {
   const queryClient = useQueryClient();
   const router = useRouter();

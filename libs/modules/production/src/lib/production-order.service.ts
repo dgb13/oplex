@@ -24,7 +24,7 @@ const CREATED_BY_SELECT = { select: { id: true, name: true, email: true, avatarU
 
 /**
  * Ciclo de vida de la orden de producción (ver
- * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5) - escribe sus
+ * docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5) - escribe sus
  * propias tablas (`ProductionOrder`, `StockReservation`,
  * `ProductionConsumption`, `ProductionOutput`), nunca `StockLedger`/
  * `StockMovement` directamente: ese es el único trabajo de
@@ -540,7 +540,7 @@ export class ProductionOrderService {
     return orders.map((o) => ({ ...o, activeBomVersion: activeVersion.get(o.outputArticleVariantId) ?? null }));
   }
 
-  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). Proyecta
+  /** Función pura de la Agenda (Fase 2, ver docs/planesdemodulos/plan-agenda.md). Proyecta
    * el inicio programado (scheduledStartAt) de las órdenes que todavía no
    * arrancaron, y las fechas reales (startedAt/finishedAt) de las demás -
    * nunca una estimación inventada. Una orden con varias fechas dentro del

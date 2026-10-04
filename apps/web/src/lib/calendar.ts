@@ -45,7 +45,7 @@ export interface GetCalendarEntriesParams {
   kinds?: CalendarEntrySource[];
 }
 
-/** Cliente de la Agenda (ver docs/plan-agenda.md). GET /calendar es el
+/** Cliente de la Agenda (ver docs/planesdemodulos/plan-agenda.md). GET /calendar es el
  * endpoint compuesto (Fase 1: impuestos + cuentas a cobrar/pagar + eventos
  * propios) - la composición vive en apps/api, este cliente no sabe nada de
  * eso, sólo pega al endpoint final. */

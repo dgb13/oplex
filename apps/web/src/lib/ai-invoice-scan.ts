@@ -42,7 +42,7 @@ export interface AiInvoiceExtractionResult {
   taxLines: ExtractedTaxLine[];
 }
 
-// "Carga de comprobantes IA" (ver docs/plan-carga-comprobantes-ia.md) - la
+// "Carga de comprobantes IA" (ver docs/planesdemodulos/plan-carga-comprobantes-ia.md) - la
 // creación real del comprobante (purchaseInvoicesApi.create, ya soporta el
 // modo sin OC) y el adjuntado del archivo (purchaseInvoicesApi.uploadAttachment,
 // ya existente) NO viven acá - esta pantalla los llama directo después de

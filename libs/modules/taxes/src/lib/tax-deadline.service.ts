@@ -41,7 +41,7 @@ export class TaxDeadlineService {
     return db.taxDeadline.update({ where: { id }, data: { status: 'DONE' } });
   }
 
-  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+  /** Función pura de la Agenda (ver docs/planesdemodulos/plan-agenda.md) - sólo toca su
    * propia tabla, nunca importa otro módulo de negocio. Se muestran los
    * vencimientos pendientes y ya cumplidos por igual: la Agenda es una
    * vista de "qué vence cuándo", no un filtro de pendientes. */

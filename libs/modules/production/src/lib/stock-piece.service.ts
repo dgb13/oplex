@@ -11,7 +11,7 @@ export interface CutResult {
 }
 
 /**
- * Piezas físicas 1D (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase
+ * Piezas físicas 1D (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase
  * 4.2/4.3 y el flujo "cable canal" del diseño, §4). Cada corte NO achica la
  * fila existente in-place: la retira (DEPLETED) y crea una pieza HIJA
  * nueva para el remanente, encadenada por `parentPieceId` - así se

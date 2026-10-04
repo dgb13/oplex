@@ -7,7 +7,7 @@ export type BomDetail = BillOfMaterials & { lines: BomLine[]; byproducts: BomByp
 const DETAIL_INCLUDE = { lines: true, byproducts: true } as const;
 
 /**
- * Recetas versionadas (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase
+ * Recetas versionadas (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase
  * 4.4) - editar una receta activa nunca la pisa: crea una fila nueva
  * (version = anterior+1, isActive=true) y desactiva la vieja, mismo
  * criterio "append-only" que PriceHistory/ExchangeRateHistory. Sólo una

@@ -53,7 +53,7 @@ export class AssistantController {
   }
 
   // Fase 3 - el widget carga esto al montar para no arrancar en blanco
-  // cada vez que se abre la página (docs/plan-asistente-ia-conversacional.md,
+  // cada vez que se abre la página (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
   // sección 9).
   @Get('conversation')
   async getConversation(@CurrentUser() user: AuthenticatedUser) {
@@ -118,7 +118,7 @@ export class AssistantController {
   // primero, esos SIGUEN pudiendo devolver un 403/JSON normal porque
   // corren antes de escribir cualquier header de streaming), pero la
   // respuesta de Claude se reenvía como Server-Sent Events a medida que
-  // llega (docs/plan-asistente-ia-conversacional.md, sección 7: "streaming
+  // llega (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 7: "streaming
   // token a token" + indicador liviano de qué herramienta está corriendo).
   // @Res({passthrough:false}) porque Nest no tiene una forma nativa de
   // devolver SSE sobre un POST sin asumir el shape de @Sse() (pensado para

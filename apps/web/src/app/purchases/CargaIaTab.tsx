@@ -75,7 +75,7 @@ const CONFIDENCE_BANNER: Record<ConfidenceLevel, { label: string; detail: string
 };
 
 /** Badge de origen del campo - QR (candado, verdad absoluta) vs IA
- * (editable, con su confianza). Ver docs/plan-carga-comprobantes-ia.md,
+ * (editable, con su confianza). Ver docs/planesdemodulos/plan-carga-comprobantes-ia.md,
  * punto 5. */
 function SourceBadge({ field }: { field: ExtractedField<unknown> }) {
   if (field.source === 'qr') {
@@ -230,7 +230,7 @@ function wasFormEdited(form: ReviewForm, extraction: AiInvoiceExtractionResult):
  * Claude, ver @plexo/ai-invoice-scan) y la deja lista para confirmar. Nunca
  * bloquea el resto de Compras: si no está disponible, el usuario sigue
  * teniendo "Nueva factura" (NewPurchaseInvoiceModal) para cargar a mano, tal
- * cual siempre existió. Ver docs/plan-carga-comprobantes-ia.md.
+ * cual siempre existió. Ver docs/planesdemodulos/plan-carga-comprobantes-ia.md.
  */
 export default function CargaIaTab() {
   const queryClient = useQueryClient();

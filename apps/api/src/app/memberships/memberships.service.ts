@@ -22,7 +22,7 @@ function currentMonthRangeUtc(): { from: Date; to: Date } {
 const PLATFORM_SETTINGS_ID = 'global';
 
 /**
- * Alcance por defecto de un contador externo (ver docs/plan_modulo_contadores.txt,
+ * Alcance por defecto de un contador externo (ver docs/planesdemodulos/plan_modulo_contadores.txt,
  * punto 3) - sólo lectura, salvo `taxes` (único precedente real ya
  * existente en el código: `managedByAccountant` en
  * libs/modules/taxes/src/lib/taxes.service.ts, que ya distingue "esto se
@@ -79,7 +79,7 @@ export interface StudioMembershipSummary {
   createdAt: Date;
   respondedAt: Date | null;
   // Vacío = visible para todo el estudio (comportamiento por defecto) - ver
-  // docs/plan_modulo_contadores.txt, Fase 2 punto 4.
+  // docs/planesdemodulos/plan_modulo_contadores.txt, Fase 2 punto 4.
   assignedStudioUserIds: string[];
 }
 
@@ -114,7 +114,7 @@ export interface ClientMembershipSummary {
 /**
  * Vive en apps/api (no en una lib) por el mismo motivo que AdminTenantsService:
  * inyecta PrismaService crudo (no getTenantDb()) para poder cruzar tenants -
- * ver docs/plan_modulo_contadores.txt, punto 1. La única forma de leer "mis"
+ * ver docs/planesdemodulos/plan_modulo_contadores.txt, punto 1. La única forma de leer "mis"
  * TenantMembership (scoped al tenant CLIENTE, no al estudio) desde el lado
  * del estudio es list_studio_memberships(), SECURITY DEFINER, mismo patrón
  * ya probado por list_tenant_ids()/find_tenants_by_email() - ver la
@@ -131,7 +131,7 @@ export class MembershipsService {
   ) {}
 
   /** Avisa por email a los OWNER/ADMIN activos de `tenantId` (ver
-   * docs/plan_modulo_contadores.txt, Fase 2 punto 3) - primer lugar del
+   * docs/planesdemodulos/plan_modulo_contadores.txt, Fase 2 punto 3) - primer lugar del
    * repo que le manda un email a "los admins de un tenant" en vez de a un
    * destinatario puntual ya conocido. Nunca relanza: un email caído no
    * debe tumbar la invitación/solicitud/respuesta real que ya se
@@ -437,7 +437,7 @@ export class MembershipsService {
     // El nombre propio (del CLIENTE que llama) - StudioMembershipSummary
     // siempre etiqueta clientTenantId/clientTenantName con la identidad del
     // tenant cliente de la relación, sin importar desde qué lado se arma el
-    // objeto (ver docs/plan_modulo_contadores.txt, Fase 3 - antes se pasaba
+    // objeto (ver docs/planesdemodulos/plan_modulo_contadores.txt, Fase 3 - antes se pasaba
     // por error resolved.tenantName acá, que es el nombre del ESTUDIO
     // invitado, no el propio). Se busca fuera del try/catch de abajo porque
     // hace falta para el valor de retorno incluso si notificar falla.
@@ -583,7 +583,7 @@ export class MembershipsService {
    *   original). Suspende (no borra) todas las filas espejo ya creadas
    *   para esta membership, para que ninguna reactivación futura las
    *   reutilice - activate() ya rechaza un User con status SUSPENDED.
-   * - `PENDING` (ver docs/plan_modulo_contadores.txt, Fase 2 punto 2):
+   * - `PENDING` (ver docs/planesdemodulos/plan_modulo_contadores.txt, Fase 2 punto 2):
    *   "cancelar" - sólo el lado que INICIÓ la relación puede hacerlo
    *   (quien tiene que responder ya tiene su propio camino: `respond()`
    *   con `DECLINED`). Mismo cálculo que `expectedResponderTenantId` de
@@ -639,7 +639,7 @@ export class MembershipsService {
 
     // Avisa a la CONTRAPARTE (no a quien acaba de revocar/cancelar, que ya
     // lo sabe) - mismo espíritu que respond(), ver
-    // docs/plan_modulo_contadores.txt Fase 3. callerTenantId es siempre uno
+    // docs/planesdemodulos/plan_modulo_contadores.txt Fase 3. callerTenantId es siempre uno
     // de los dos lados (clientTenantId o homeTenantId, ya validado arriba);
     // la contraparte es el otro.
     try {
@@ -662,7 +662,7 @@ export class MembershipsService {
 
   /**
    * Reemplaza el conjunto completo de contadores asignados a una membership
-   * (reparto de cartera, ver docs/plan_modulo_contadores.txt Fase 2 punto
+   * (reparto de cartera, ver docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto
    * 4) - semántica PUT, no altas/bajas individuales: más simple de razonar
    * y mapea directo a un multi-select que manda todo lo tildado de una.
    * `studioUserIds` vacío = "todo el estudio" (default). Cada id se valida

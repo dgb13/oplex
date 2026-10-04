@@ -112,7 +112,7 @@ export function parseAfipQrPayload(rawQrContent: string): DecodedAfipQr | null {
 
 /** Decodifica el QR de AFIP (RG 4892) de una imagen (JPEG/PNG/WebP) - PDF no
  * soportado todavía (necesita rasterizar la página primero, ver
- * docs/plan-carga-comprobantes-ia.md, fuera de alcance de esta Fase 1).
+ * docs/planesdemodulos/plan-carga-comprobantes-ia.md, fuera de alcance de esta Fase 1).
  * Devuelve null si no hay QR legible - camino normal (foto sin QR nítido, o
  * un comprobante que de verdad no tiene QR), no un error: en ese caso todo
  * el resto del comprobante sale de la IA (ver AiInvoiceExtractionService). */

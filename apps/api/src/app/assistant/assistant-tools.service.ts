@@ -39,7 +39,7 @@ function assertRole(user: AuthenticatedUser, allowedRoles: readonly string[], to
 
 /**
  * Catálogo de herramientas del asistente de IA - Fase 0
- * (docs/plan-asistente-ia-conversacional.md, sección 5). Cada método:
+ * (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 5). Cada método:
  * 1) valida el permiso de `user` con el MISMO criterio que ya usa el
  *    controller HTTP del módulo que envuelve (nunca confía en que el
  *    catálogo ofrecido al modelo ya viene filtrado - defensa en profundidad,

@@ -30,7 +30,7 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** "Vencimientos de esta semana" (Fase 2, ver docs/plan-agenda.md) - franja
+/** "Vencimientos de esta semana" (Fase 2, ver docs/planesdemodulos/plan-agenda.md) - franja
  * fija arriba del calendario, siempre sobre HOY→+6 días sin importar qué
  * mes/semana/día se esté navegando abajo (gancho explícito del plan para un
  * futuro panel de estudio contable vía `assignedTo`, sin ese filtro

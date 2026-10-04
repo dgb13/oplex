@@ -3,7 +3,7 @@ import type { AuthenticatedUser } from '@plexo/types';
 import type { AssistantToolsService, VentasPorArticuloParams } from './assistant-tools.service.js';
 
 /**
- * Catálogo de herramientas ofrecido a Claude (docs/plan-asistente-ia-conversacional.md,
+ * Catálogo de herramientas ofrecido a Claude (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 5.1) - un `Tool` de Anthropic por método de AssistantToolsService.
  * A propósito, ninguna herramienta define `tenantId` ni `userId` en su
  * `input_schema`: esos valores nunca los provee el modelo, siempre vienen
@@ -50,7 +50,7 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
 ];
 
 // Etiqueta liviana en español que el widget muestra mientras la
-// herramienta corre (docs/plan-asistente-ia-conversacional.md, sección 7:
+// herramienta corre (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 7:
 // "mostrar de forma liviana 'consultando ventas…'"), en vez del nombre
 // técnico de la tool. Un fallback genérico cubre cualquier tool nueva que
 // se agregue al catálogo sin agregarla acá.
@@ -70,7 +70,7 @@ export interface ToolExecutionResult {
   isError: boolean;
   // El objeto devuelto por el Service ANTES de stringificarlo para el
   // tool_result de Claude - el orquestador lo reenvía tal cual al frontend
-  // como evento `tool_result` (docs/plan-asistente-ia-conversacional.md,
+  // como evento `tool_result` (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
   // sección 5.3: tabla/mini-gráfico embebido) para no tener que
   // parsear de nuevo el JSON del lado del cliente. `undefined` en error.
   raw?: unknown;

@@ -1,7 +1,7 @@
 import type { MembershipNoticeKind } from './auth-email-sender.port.js';
 
 /** Texto de aviso para las 4 transiciones de una TenantMembership que
- * generan notificación (ver docs/plan_modulo_contadores.txt, Fase 2 punto
+ * generan notificación (ver docs/planesdemodulos/plan_modulo_contadores.txt, Fase 2 punto
  * 3) - centralizado acá para que Resend/Console compartan exactamente la
  * misma redacción, mismo criterio que buildVerificationEmailCopy. */
 export function buildMembershipNoticeCopy(payload: {

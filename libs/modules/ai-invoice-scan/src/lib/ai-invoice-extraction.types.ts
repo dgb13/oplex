@@ -1,7 +1,7 @@
 export type ExtractionSource = 'qr' | 'ai';
 
 // confidence sólo tiene sentido para source:'ai' (un dato del QR es
-// verdad absoluta, validada por ARCA - ver docs/plan-carga-comprobantes-ia.md,
+// verdad absoluta, validada por ARCA - ver docs/planesdemodulos/plan-carga-comprobantes-ia.md,
 // sección 2). undefined en un campo source:'qr'.
 export interface ExtractedField<T> {
   value: T;

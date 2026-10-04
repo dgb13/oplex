@@ -699,7 +699,7 @@ export class InventoryService {
       }
 
       // "Disponible = físico - reservado" (ver
-      // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2/4): cualquier
+      // docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2/4): cualquier
       // salida de stock que no sea un ADJUSTMENT manual (un ajuste es una
       // corrección de la realidad física, no debe verse bloqueado por una
       // reserva de producción) respeta lo que otra orden ya tiene

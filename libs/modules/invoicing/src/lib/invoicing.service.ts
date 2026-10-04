@@ -1308,7 +1308,7 @@ export class InvoicingService {
     });
   }
 
-  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md) - fuente
+  /** Función pura de la Agenda (Fase 2, ver docs/planesdemodulos/plan-agenda.md) - fuente
    * "Ventas/Facturación": la fecha del PRÓXIMO recordatorio recurrente de
    * cobranza (TenantSettings.arReminderIntervalDays), no el vencimiento
    * original de la factura (eso ya lo cubre ReceivablesService.

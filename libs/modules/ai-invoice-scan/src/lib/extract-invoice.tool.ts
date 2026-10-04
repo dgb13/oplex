@@ -2,7 +2,7 @@
 // estructurada en vez de parsear texto libre. Cada campo lleva su propia
 // "confidence" (0-1) porque, a diferencia del QR, todo lo que sale de acá
 // es una lectura de la IA, nunca un dato validado por ARCA - ver
-// docs/plan-carga-comprobantes-ia.md, sección 2.
+// docs/planesdemodulos/plan-carga-comprobantes-ia.md, sección 2.
 const CONFIDENT_FIELD_SCHEMA = (valueSchema: Record<string, unknown>) => ({
   type: 'object',
   properties: {

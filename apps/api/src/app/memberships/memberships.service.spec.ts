@@ -381,7 +381,7 @@ describe('MembershipsService.inviteFromClient', () => {
     });
     // clientTenantName es el nombre PROPIO (del cliente que llama), nunca el
     // del estudio invitado ("Estudio Contable SRL") - bug real corregido en
-    // la Fase 3, ver docs/plan_modulo_contadores.txt.
+    // la Fase 3, ver docs/planesdemodulos/plan_modulo_contadores.txt.
     expect(result.clientTenantName).toBe('Cliente Demo SA');
   });
 
@@ -435,7 +435,7 @@ describe('MembershipsService.inviteFromClient', () => {
     ).rejects.toThrow('más de una cuenta');
   });
 
-  it('notifica por email a los OWNER/ADMIN del estudio invitado (ver docs/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
+  it('notifica por email a los OWNER/ADMIN del estudio invitado (ver docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
     const queryRaw = jest.fn().mockResolvedValueOnce([{ tenant_id: 'studio-1', tenant_name: 'Estudio Contable SRL' }]);
     const fakeStudioTx = {
       user: {
@@ -526,7 +526,7 @@ describe('MembershipsService.requestFromStudio', () => {
     ).rejects.toThrow('email o un CUIT válido');
   });
 
-  it('notifica por email a los OWNER/ADMIN del cliente pedido (ver docs/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
+  it('notifica por email a los OWNER/ADMIN del cliente pedido (ver docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
     // 3 llamadas a $transaction en este flujo: crear la fila (contexto
     // cliente), leer el nombre del estudio (contexto estudio, para el
     // payload), notificar (contexto cliente otra vez, adentro de
@@ -605,7 +605,7 @@ describe('MembershipsService.respond', () => {
     expect(result.status).toBe('ACCEPTED');
   });
 
-  it('notifica por email a los admins del lado que INICIO la relacion, no a quien acaba de responder (ver docs/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
+  it('notifica por email a los admins del lado que INICIO la relacion, no a quien acaba de responder (ver docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto 3)', async () => {
     // ACCOUNTANT_REQUESTED: el estudio inicio, el cliente responde - el
     // aviso tiene que ir al estudio (homeTenantId), con el nombre del
     // CLIENTE (quien acaba de responder) como counterpart.
@@ -747,7 +747,7 @@ describe('MembershipsService.revoke', () => {
     expect(result.status).toBe('REVOKED');
   });
 
-  it('notifica a la CONTRAPARTE (no a quien revoca) cuando corta una relacion ACCEPTED (ver docs/plan_modulo_contadores.txt Fase 3)', async () => {
+  it('notifica a la CONTRAPARTE (no a quien revoca) cuando corta una relacion ACCEPTED (ver docs/planesdemodulos/plan_modulo_contadores.txt Fase 3)', async () => {
     const fakeTx = {
       tenantMembership: {
         findUnique: jest

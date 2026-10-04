@@ -8,7 +8,7 @@ const FALLBACK_NAME = 'Asistente Oplex';
 
 /** Nombre + rate limit del asistente de IA conversacional - configuración
  * de plataforma, nunca un texto/número fijo en el código (ver
- * docs/plan-asistente-ia-conversacional.md, secciones 1 y 8.2). Mismo
+ * docs/planesdemodulos/plan-asistente-ia-conversacional.md, secciones 1 y 8.2). Mismo
  * patrón GET+PATCH que /admin/ai-invoice-scan, pero con inputs de texto/
  * número en vez de un toggle. */
 export default function AdminAssistantPage() {

@@ -14,7 +14,7 @@ const MAX_TOKENS = 512;
 // siempre corren con cwd = raíz del workspace en este proyecto.
 const HELP_DOCS_DIR = join(process.cwd(), 'docs', 'ayuda');
 
-/** Contexto fijo, no RAG (docs/plan-asistente-ia-conversacional.md, sección 4):
+/** Contexto fijo, no RAG (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 4):
  * el corpus completo entra cómodo en un system prompt cacheado, así que no
  * hace falta vectorizar/recuperar chunks para la cantidad de artículos que
  * hay hoy. Se lee una sola vez al arrancar el proceso - un artículo nuevo
@@ -27,7 +27,7 @@ function loadHelpCorpus(): string {
 }
 
 /**
- * Capacidad 1 - Chat de ayuda (docs/plan-asistente-ia-conversacional.md,
+ * Capacidad 1 - Chat de ayuda (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 4): Q&A sobre CÓMO USAR el sistema, nunca sobre datos de negocio
  * del tenant (para eso está AssistantOrchestratorService). Modelo Haiku
  * 4.5 a propósito - tarea barata de lectura de texto estático, sin tool
@@ -55,7 +55,7 @@ export class AssistantHelpService {
     return text.trim();
   }
 
-  /** Streaming token a token (docs/plan-asistente-ia-conversacional.md,
+  /** Streaming token a token (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
    * sección 7) - usado por `POST /assistant/message/stream`. Sin tool use
    * acá, así que no hay eventos `tool_start` posibles - sólo `text`. */
   async *answerStream(history: HistoryMessage[], question: string): AsyncGenerator<AssistantStreamChunk> {

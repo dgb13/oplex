@@ -15,7 +15,7 @@ export interface StudioMembershipSummary {
   createdAt: string;
   respondedAt: string | null;
   // Vacío = visible para todo el estudio (default) - ver reparto de
-  // cartera, docs/plan_modulo_contadores.txt Fase 2 punto 4.
+  // cartera, docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto 4.
   assignedStudioUserIds: string[];
 }
 

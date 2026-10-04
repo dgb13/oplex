@@ -50,7 +50,7 @@ enum UnitOfMeasure {
   UNIT
 }
 
-// Ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1 - discriminador
+// Ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1 - discriminador
 // de comportamiento de stock/consumo por artículo, capa nueva encima de
 // UnitOfMeasure (que se mantiene tal cual, sin tocar su significado).
 enum MeasurementType {
@@ -217,7 +217,7 @@ enum MembershipStatus {
 // corregida) y ambos IDs se resuelven siempre vía las funciones SECURITY
 // DEFINER (list_studio_memberships, mismo patrón que list_tenant_ids()/
 // find_tenants_by_email en tenant-context/auth), nunca vía RLS directa
-// desde el lado del estudio - ver plan en docs/plan_modulo_contadores.txt.
+// desde el lado del estudio - ver plan en docs/planesdemodulos/plan_modulo_contadores.txt.
 model TenantMembership {
   id                String              @id @default(uuid())
   tenantId          String
@@ -277,7 +277,7 @@ model TenantMembershipLink {
   @@map("tenant_membership_links")
 }
 
-// Reparto de cartera dentro del estudio (ver docs/plan_modulo_contadores.txt,
+// Reparto de cartera dentro del estudio (ver docs/planesdemodulos/plan_modulo_contadores.txt,
 // Fase 2 punto 4) - conjunto vacío (sin filas para una membership) =
 // visible para cualquier OWNER/ADMIN/ACCOUNTANT del estudio (comportamiento
 // original, sin cambios); con filas = sólo esos contadores puntuales
@@ -339,18 +339,18 @@ model Plan {
   slaMarkdown   String?   @db.Text
   slaUpdatedAt  DateTime?
   // Cupo mensual de "Carga de comprobantes IA" (ver
-  // docs/plan-carga-comprobantes-ia.md) - null significa que este plan NO
+  // docs/planesdemodulos/plan-carga-comprobantes-ia.md) - null significa que este plan NO
   // incluye la función (mismo criterio de "null = afuera" que
   // slaMarkdown), un entero es el tope mensual real - ver
   // SubscriptionService.assertCanUseAiInvoiceScan().
   aiInvoiceScanMonthlyQuota Int?
   // Cupo mensual de preguntas al Asistente de IA conversacional (ver
-  // docs/plan-asistente-ia-conversacional.md, sección 8) - mismo criterio
+  // docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 8) - mismo criterio
   // "null = el plan no incluye la función" que aiInvoiceScanMonthlyQuota.
   // Cuenta AssistantMessage con role USER del tenant en el mes, ver
   // SubscriptionService.assertCanUseAssistant().
   aiAssistantMonthlyQueryQuota Int?
-  // Módulo de Producción (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md,
+  // Módulo de Producción (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md,
   // Fase 1) - a diferencia de los cupos de arriba, on/off puro sin límite
   // de uso (decisión con el usuario, 2026-09-14): un plan lo incluye o no,
   // sin tope mensual. Backfill: true desde BRONZE (sortOrder >= 2) en
@@ -387,17 +387,17 @@ model PlatformSettings {
   // de fijo.
   membershipSessionDurationHours Int @default(2)
   // Kill-switch global de "Carga de comprobantes IA" (ver
-  // docs/plan-carga-comprobantes-ia.md) - mismo criterio que bnaSyncEnabled:
+  // docs/planesdemodulos/plan-carga-comprobantes-ia.md) - mismo criterio que bnaSyncEnabled:
   // apaga el escaneo para TODA la plataforma (ej. incidente del proveedor de
   // IA), independiente de la cuota por tenant/plan (Plan.aiInvoiceScanMonthlyQuota).
   aiInvoiceScanEnabled Boolean @default(true)
   // Nombre mostrado del asistente de IA conversacional (botón del widget,
   // saludo/firma de WhatsApp cuando exista) - ver
-  // docs/plan-asistente-ia-conversacional.md, sección 1. Deliberadamente NO
+  // docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 1. Deliberadamente NO
   // hardcodeado en ningún componente: null/vacío cae a un genérico en el
   // frontend ("Asistente Oplex"), nunca a un string vacío visible.
   assistantDisplayName String?
-  // Rate limit del Asistente de IA (docs/plan-asistente-ia-conversacional.md,
+  // Rate limit del Asistente de IA (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
   // sección 8.2) - configurable por el SuperAdmin en vez de fijo en código,
   // mismo criterio que bnaSyncHour/membershipSessionDurationHours arriba.
   // Ver AssistantConversationService.assertNotRateLimited.
@@ -922,7 +922,7 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-// Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+// Fase 5a del asistente de IA (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 3.3) - código de un solo uso que el usuario YA logueado en la
 // web genera y confirma mandándolo por WhatsApp al número de Oplex
 // (nunca al revés: WhatsApp por sí solo no prueba identidad). Mismo
@@ -1263,7 +1263,7 @@ model Article {
   description         String?
   unitOfMeasure       UnitOfMeasure  @default(UNIT)
   // Discriminador de cómo se mide/consume el stock de este artículo (ver
-  // docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1) - se mantiene
+  // docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1) - se mantiene
   // aparte de `unitOfMeasure` de arriba (compatibilidad, sin tocar su
   // significado actual). @default(DISCRETE) hace que ningún artículo
   // existente cambie de comportamiento con esta migración - el usuario
@@ -1497,7 +1497,7 @@ model Warehouse {
 }
 
 // Reserva de insumos comprometidos a una orden de producción - ver
-// docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2 (modelo de stock en 3
+// docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 2 (modelo de stock en 3
 // capas: físico total / reservado / disponible = físico - reservado).
 // Creada en esta fase por sí sola, antes de que ProductionOrder exista
 // (llega en la Fase 4), porque InventoryService.recordMovement ya necesita
@@ -1547,7 +1547,7 @@ enum ReservationStatus {
 }
 
 // --- Producción (@plexo/production) ---
-// Ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4. StockReservation
+// Ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4. StockReservation
 // ya existe desde la Fase 2 (arriba); acá van el resto de las entidades:
 // piezas físicas (1D), recetas (BOM) y órdenes de producción.
 
@@ -2756,7 +2756,7 @@ enum TaxDeadlineStatus {
 // Entidad chica a propósito, sin motor de recurrencia ni integración con
 // ningún calendario oficial de ARCA - carga 100% manual, igual criterio que
 // TaxDefinition/WithholdingRegime arriba (data mantenida a mano por el
-// contador, no calculada). Ver docs/plan_modulo_contadores.txt, punto 5 -
+// contador, no calculada). Ver docs/planesdemodulos/plan_modulo_contadores.txt, punto 5 -
 // el consolidado de MembershipsService.getPortfolio() suma "próximos N
 // vencimientos" por tenant leyendo esta tabla dentro del mismo loop.
 model TaxDeadline {
@@ -3423,7 +3423,7 @@ model SupplierReturnLine {
 // linked (PurchaseInvoiceReceipt) to clear their GRNI accrual - zero is
 // valid for a pure-services PurchaseOrder (Article.isService never gets a
 // remito); (2) a direct expense with no PurchaseOrder at all (see "Carga de
-// comprobantes IA", docs/plan-carga-comprobantes-ia.md) - grniClearedAmount
+// comprobantes IA", docs/planesdemodulos/plan-carga-comprobantes-ia.md) - grniClearedAmount
 // is always 0 for these, the whole subtotal posts as nonGrniAmount
 // (AccountingService.postPurchaseInvoiceJournalEntry is already agnostic to
 // which mode produced these two numbers). Deliberately header-level, not
@@ -3580,7 +3580,7 @@ enum AiInvoiceScanStatus {
 }
 
 // Registro de cada intento de "Carga de comprobantes IA" (ver
-// docs/plan-carga-comprobantes-ia.md), RLS estándar. Cumple doble
+// docs/planesdemodulos/plan-carga-comprobantes-ia.md), RLS estándar. Cumple doble
 // propósito, a propósito - no hay dos tablas separadas para lo mismo:
 // (1) contador de cupo mensual (SubscriptionService.assertCanUseAiInvoiceScan,
 // .count() sobre el mes vía defaultMonthRange(), mismo patrón que
@@ -3913,7 +3913,7 @@ model WebhookEvent {
   @@map("webhook_events")
 }
 
-// Asistente de IA conversacional (ver docs/plan-asistente-ia-conversacional.md).
+// Asistente de IA conversacional (ver docs/planesdemodulos/plan-asistente-ia-conversacional.md).
 // Fase 0: sólo el canal web existe todavía - deliberadamente sin ningún
 // campo de canal/teléfono acá (agregar recién en la Fase 5, cuando WhatsApp
 // exista de verdad, mismo criterio que el resto del proyecto de no
@@ -3984,7 +3984,7 @@ enum AssistantMessageFeedback {
   DOWN
 }
 
-// Agenda (ver docs/plan-agenda.md) - la ÚNICA tabla propia del módulo. El
+// Agenda (ver docs/planesdemodulos/plan-agenda.md) - la ÚNICA tabla propia del módulo. El
 // resto de lo que se ve en el calendario (vencimientos de Impuestos, Cuentas
 // a Cobrar/Pagar) se proyecta en caliente desde las tablas de esos módulos
 // vía getCalendarEntries(from,to) de cada uno - no se duplica acá. id simple

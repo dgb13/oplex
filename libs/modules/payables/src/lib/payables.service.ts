@@ -140,7 +140,7 @@ export class PayablesService {
     return [...bySupplier.values()].sort((a, b) => b.totalOutstanding.cmp(a.totalOutstanding));
   }
 
-  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+  /** Función pura de la Agenda (ver docs/planesdemodulos/plan-agenda.md) - sólo toca su
    * propia tabla, nunca importa otro módulo de negocio. Sólo facturas con
    * saldo pendiente y dueDate cargado (PurchaseInvoice.dueDate es opcional -
    * sin fecha de vencimiento no hay nada que agendar, mismo criterio que

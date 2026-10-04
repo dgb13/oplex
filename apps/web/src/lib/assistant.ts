@@ -9,7 +9,7 @@ export const FALLBACK_ASSISTANT_NAME = 'Asistente Oplex';
 export type AssistantMessageRole = 'USER' | 'ASSISTANT';
 export type AssistantMessageFeedback = 'UP' | 'DOWN';
 
-// Dato crudo que devolvió una herramienta durante ese turno (docs/plan-asistente-ia-conversacional.md,
+// Dato crudo que devolvió una herramienta durante ese turno (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 5.3) - el widget lo usa para el mini-gráfico/tabla embebido en
 // la burbuja de respuesta, ver AssistantChart.tsx.
 export interface AssistantToolCall {
@@ -34,7 +34,7 @@ export interface AssistantUsage {
   used: number;
 }
 
-// Widget de chat (docs/plan-asistente-ia-conversacional.md) - Fase 3 suma
+// Widget de chat (docs/planesdemodulos/plan-asistente-ia-conversacional.md) - Fase 3 suma
 // historial persistente (la conversación activa se carga al montar el
 // widget, ver AssistantConversationService en el backend) y feedback
 // 👍/👎 por respuesta.
@@ -56,7 +56,7 @@ export type AssistantStreamEvent =
   | { type: 'done'; messageId: string }
   | { type: 'error'; message: string };
 
-/** Streaming token a token (Fase 3.5, docs/plan-asistente-ia-conversacional.md,
+/** Streaming token a token (Fase 3.5, docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 7) - `fetch` en vez de `axios` (no soporta leer el body como
  * stream en el browser) y sin `EventSource` nativo (GET-only, sin headers
  * custom - el auth acá va por `Authorization`, no por cookie). El token se

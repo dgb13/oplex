@@ -27,7 +27,7 @@ export interface AiInvoiceScanUsage {
 }
 
 /** Mismo significado que AiInvoiceScanUsage - ver
- * docs/plan-asistente-ia-conversacional.md, sección 8. */
+ * docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 8. */
 export interface AssistantUsage {
   planName: string;
   quota: number | null;
@@ -107,7 +107,7 @@ export class SubscriptionService {
     // Un contador externo (fila espejo creada por MembershipsService,
     // isExternalAccountant: true) no es un asiento del tenant - no debe
     // hacer que un plan chico se quede sin cupo por darle acceso a su
-    // estudio contable, ver docs/plan_modulo_contadores.txt.
+    // estudio contable, ver docs/planesdemodulos/plan_modulo_contadores.txt.
     const count = await getTenantDb().user.count({ where: { isExternalAccountant: { not: true } } });
     if (count >= plan.maxUsers) {
       throw new ForbiddenException(
@@ -146,7 +146,7 @@ export class SubscriptionService {
     }
   }
 
-  /** "Carga de comprobantes IA" (ver docs/plan-carga-comprobantes-ia.md) -
+  /** "Carga de comprobantes IA" (ver docs/planesdemodulos/plan-carga-comprobantes-ia.md) -
    * mismo recipe que assertCanIssueInvoiceThisMonth (gateado detrás de
    * assertSubscriptionActive, .count() sobre defaultMonthRange()), salvo
    * que acá el cupo mismo puede no estar incluido en el plan
@@ -172,7 +172,7 @@ export class SubscriptionService {
     }
   }
 
-  /** Módulo de Producción (ver docs/OPLEX-Produccion-Plan-Tecnico-14-9.md,
+  /** Módulo de Producción (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md,
    * Fase 1) - a diferencia de assertCanUseAiInvoiceScan/assertCanUseAssistant
    * de arriba, on/off puro sin cupo mensual que contar (decisión con el
    * usuario, 2026-09-14): no hay "usado este mes", sólo "el plan lo

@@ -13,7 +13,7 @@ import {
 
 /**
  * Composición del "completar orden" (ver
- * docs/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5 y Fase 5): decide
+ * docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.5 y Fase 5): decide
  * CUÁNTO se consume de cada insumo reservado (cortando `StockPiece` para
  * 1D, o directo para el resto), llama a `InventoryService.recordMovement`
  * y posta el asiento de traspaso de "Mercaderías"

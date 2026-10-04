@@ -59,7 +59,7 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
- * Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+ * Fase 5a del asistente de IA (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 3.3) - vinculación de un número de WhatsApp a la cuenta YA
  * logueada. Sólo la mitad "web" del flujo: pedir un código y mostrárselo al
  * usuario, y la lógica de confirmarlo. Todavía NO recibe mensajes reales de

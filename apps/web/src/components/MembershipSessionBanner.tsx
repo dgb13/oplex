@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 /** Montado en AppShell junto a ImpersonationBanner, con color propio
  * (indigo, no rojo) - a diferencia de una impersonación, esto es la
  * identidad REAL del contador operando con alcance acotado en un cliente de
- * su cartera (ver docs/plan_modulo_contadores.txt, punto 2), no un usuario
+ * su cartera (ver docs/planesdemodulos/plan_modulo_contadores.txt, punto 2), no un usuario
  * prestado. Visible mientras exista `membershipHomeToken` en localStorage.
  *
  * El estado arranca en `false`/`null` (igual que el server, que no tiene

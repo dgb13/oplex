@@ -6,7 +6,7 @@ import { RespondMembershipDto } from './dto/respond-membership.dto.js';
 import { SetAssignmentsDto } from './dto/set-assignments.dto.js';
 import { filterVisibleForCaller, MembershipsService } from './memberships.service.js';
 
-// Quién dentro del estudio puede hacer qué (ver docs/plan_modulo_contadores.txt,
+// Quién dentro del estudio puede hacer qué (ver docs/planesdemodulos/plan_modulo_contadores.txt,
 // punto 1): activar una sesión en un cliente ya-aceptado es trabajo del día
 // a día, no una decisión administrativa - por eso ACCOUNTANT entra ahí.
 // Invitar/pedir acceso/responder/revocar SÍ son decisiones administrativas

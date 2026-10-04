@@ -33,7 +33,7 @@ const DEFAULT_QUESTIONS = [
   '¿Cuánto tengo en caja ahora?',
 ];
 
-// Sugerencias contextuales por pantalla (docs/plan-asistente-ia-conversacional.md,
+// Sugerencias contextuales por pantalla (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 7) - primer prefijo de ruta que matchea gana, DEFAULT_QUESTIONS
 // si ninguno matchea.
 const CONTEXTUAL_QUESTIONS: Array<{ prefix: string; questions: string[] }> = [
@@ -66,7 +66,7 @@ function getContextualQuestions(pathname: string | null): string[] {
 }
 
 /** Widget flotante del asistente de IA - Fase 3
- * (docs/plan-asistente-ia-conversacional.md, sección 9): historial
+ * (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 9): historial
  * persistente (carga la conversación activa al montar), feedback 👍/👎 por
  * respuesta, sugerencias contextuales por pantalla. Todavía sin streaming
  * (respuesta completa de una vez). El nombre nunca está hardcodeado, se lee
@@ -76,7 +76,7 @@ export default function AssistantWidget() {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  // Estado de la respuesta en curso (docs/plan-asistente-ia-conversacional.md,
+  // Estado de la respuesta en curso (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
   // sección 7): streamingTool es la etiqueta liviana ("Consultando
   // ventas…") mientras corre una tool call, streamingText es el texto de
   // la respuesta final acumulado a medida que llega. Ninguno de los dos
@@ -85,7 +85,7 @@ export default function AssistantWidget() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingTool, setStreamingTool] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState('');
-  // Datos crudos de las tools ya resueltas en esta vuelta (docs/plan-asistente-ia-conversacional.md,
+  // Datos crudos de las tools ya resueltas en esta vuelta (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
   // sección 5.3) - alimenta AssistantToolChart mientras la respuesta sigue
   // en curso, para que el mini-gráfico aparezca apenas la tool termina, sin
   // esperar a que Claude termine de redactar el texto.

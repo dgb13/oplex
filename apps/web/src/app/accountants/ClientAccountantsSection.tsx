@@ -15,7 +15,7 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
 
 /** Lado "cliente": mis relaciones con estudios contables (los que invité,
  * los que me pidieron acceso), y el form para invitar uno nuevo por
- * email/CUIT - ver docs/plan_modulo_contadores.txt, punto 1. */
+ * email/CUIT - ver docs/planesdemodulos/plan_modulo_contadores.txt, punto 1. */
 export default function ClientAccountantsSection() {
   const queryClient = useQueryClient();
 

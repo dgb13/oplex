@@ -12,7 +12,7 @@ import { AiInvoiceScanService } from './ai-invoice-scan.service.js';
 const AI_EXTRACT_TIMEOUT_MS = 30_000;
 
 // Semáforo + extracción, consumidos por la pantalla "Carga con IA" de
-// Compras (ver docs/plan-carga-comprobantes-ia.md). Requiere sesión (no
+// Compras (ver docs/planesdemodulos/plan-carga-comprobantes-ia.md). Requiere sesión (no
 // @Public()) - la disponibilidad y el resultado dependen del tenant que
 // llama. La creación real del comprobante (POST /purchases/purchase-invoices,
 // ya soporta el modo sin OC desde 1a) y el adjuntado del archivo original

@@ -160,10 +160,10 @@ export class AdminSystemStatusService {
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
       // API key propia del asistente de IA conversacional, separada de
       // ANTHROPIC_API_KEY (Carga de Comprobantes IA) - ver
-      // docs/plan-asistente-ia-conversacional.md, sección 2: son dos
+      // docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 2: son dos
       // consumos de facturación de Anthropic distintos a propósito.
       this.checkGroup('assistant', 'Asistente de IA (Anthropic)', ['ANTHROPIC_ASSISTANT_API_KEY']),
-      // Fase 5b del asistente (docs/plan-asistente-ia-conversacional.md,
+      // Fase 5b del asistente (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
       // sección 6.3) - "Configurado" acá sólo dice que las 4 credenciales
       // de la app de Meta están cargadas, NO que el token siga siendo
       // válido (el de la pantalla "Test API" vence a las 24hs y a veces

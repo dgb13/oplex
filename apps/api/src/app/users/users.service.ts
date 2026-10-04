@@ -222,7 +222,7 @@ export class UsersService {
 
   /** Defensa en profundidad para la fila espejo de un contador externo
    * (creada por MembershipsService.activate(), ver
-   * docs/plan_modulo_contadores.txt Fase 2 punto 1) - su rol/estado real
+   * docs/planesdemodulos/plan_modulo_contadores.txt Fase 2 punto 1) - su rol/estado real
    * lo gobierna la membership, no la gestión de equipo normal. El
    * frontend ya oculta estos controles para esta fila; esto es la
    * garantía server-side de que no se puede esquivar pegándole directo a

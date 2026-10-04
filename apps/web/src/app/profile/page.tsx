@@ -261,7 +261,7 @@ function PasswordCard() {
   );
 }
 
-/** Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+/** Fase 5a del asistente de IA (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
  * sección 3.3) - genera un código, lo muestra en pantalla para que el
  * usuario lo mande por WhatsApp al número de Oplex. Todavía no hay
  * ningún lado que reciba ese mensaje (Fase 5b, pendiente de credenciales

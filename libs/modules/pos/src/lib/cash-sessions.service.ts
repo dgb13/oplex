@@ -363,7 +363,7 @@ export class CashSessionsService {
     return { session: await this.getSessionDetail(id), expectedAmount: summary.expectedAmount };
   }
 
-  /** Función pura de la Agenda (Fase 2, ver docs/plan-agenda.md). El plan
+  /** Función pura de la Agenda (Fase 2, ver docs/planesdemodulos/plan-agenda.md). El plan
    * habla de "cierre de turno PROGRAMADO", pero CashSession no tiene ningún
    * campo de cierre planificado a futuro (el turno se abre/cierra a mano,
    * en el momento) - se proyecta el cierre REAL (closedAt) como lo que

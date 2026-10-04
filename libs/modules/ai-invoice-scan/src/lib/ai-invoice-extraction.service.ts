@@ -20,7 +20,7 @@ function qrField<T>(qr: DecodedAfipQr | null, pick: (qr: DecodedAfipQr) => T): T
 
 /** Combina QR (verdad absoluta si está presente) + la lectura de Claude
  * (siempre presente, con su propio confidence) en un único resultado por
- * campo - ver docs/plan-carga-comprobantes-ia.md, sección 2 y 5. El QR
+ * campo - ver docs/planesdemodulos/plan-carga-comprobantes-ia.md, sección 2 y 5. El QR
  * nunca trae el detalle de impuestos (taxLines) ni subtotal (su "importe"
  * es el TOTAL con impuestos, no el neto) - esos dos siempre vienen de la
  * IA, con o sin QR presente. */
@@ -50,7 +50,7 @@ export class AiInvoiceExtractionService {
     } catch {
       // Imagen corrupta/formato no soportado por Jimp - degrada a "sin QR",
       // no debe tumbar la extracción entera (ver "la IA acelera, nunca
-      // bloquea", docs/plan-carga-comprobantes-ia.md sección 3).
+      // bloquea", docs/planesdemodulos/plan-carga-comprobantes-ia.md sección 3).
       return null;
     }
   }

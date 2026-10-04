@@ -14,7 +14,7 @@ export interface WhatsAppLinkRequestResult {
   businessPhoneDisplay: string | null;
 }
 
-// Fase 5a del asistente de IA (docs/plan-asistente-ia-conversacional.md,
+// Fase 5a del asistente de IA (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
 // sección 3.3) - todavía sin recepción real de WhatsApp (Fase 5b), esto
 // sólo pide/muestra el código y consulta el estado del link.
 export const whatsAppLinkApi = {

@@ -16,7 +16,7 @@ function truncate(label: string): string {
 }
 
 /** Mini-gráfico embebido en una respuesta del asistente
- * (docs/plan-asistente-ia-conversacional.md, sección 5.3: "el widget
+ * (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 5.3: "el widget
  * decide cómo mostrar el payload de datos según su forma" - Claude nunca
  * decide el layout, sólo produce el resumen textual). Por ahora sólo
  * `ventas_por_articulo` tiene un gráfico - el resto de las herramientas

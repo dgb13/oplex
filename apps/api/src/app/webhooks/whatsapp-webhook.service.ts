@@ -55,7 +55,7 @@ const CONFIRM_OUTCOME_MESSAGE: Record<WhatsAppLinkConfirmOutcome, string> = {
 };
 
 /**
- * Fase 5b (docs/plan-asistente-ia-conversacional.md, sección 6.3) -
+ * Fase 5b (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 6.3) -
  * composition root del webhook real de WhatsApp Cloud API: verifica firma,
  * resuelve identidad por teléfono (find_whatsapp_link_by_phone/
  * find_whatsapp_link_requests_by_phone, ver la migración

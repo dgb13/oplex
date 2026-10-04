@@ -146,7 +146,7 @@ export class CalendarEventService {
     await getTenantDb().calendarEvent.delete({ where: { id } });
   }
 
-  /** Función pura de la Agenda (ver docs/plan-agenda.md) - sólo toca su
+  /** Función pura de la Agenda (ver docs/planesdemodulos/plan-agenda.md) - sólo toca su
    * propia tabla, nunca importa otro módulo de negocio. */
   async getCalendarEntries(from: Date, to: Date): Promise<CalendarEntry[]> {
     const events = await getTenantDb().calendarEvent.findMany({

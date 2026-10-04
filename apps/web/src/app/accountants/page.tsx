@@ -13,7 +13,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 // Un mismo tenant puede ser, al mismo tiempo, estudio contable de otros
 // clientes Y cliente de su propio estudio - por eso una sola pantalla con
-// las dos vistas, no dos rutas separadas (ver docs/plan_modulo_contadores.txt,
+// las dos vistas, no dos rutas separadas (ver docs/planesdemodulos/plan_modulo_contadores.txt,
 // "el estudio contable ES un Tenant más de este sistema").
 export default function AccountantsPage() {
   const [tab, setTab] = useState<TabId>('cartera');

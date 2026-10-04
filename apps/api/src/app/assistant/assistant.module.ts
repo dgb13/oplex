@@ -34,7 +34,7 @@ import { AssistantToolsService } from './assistant-tools.service.js';
   // otro módulo, dejado como estaba). Los 4 de abajo se agregan para
   // WhatsAppWebhookModule (Fase 5b) - el mismo pipeline de
   // AssistantController.sendMessage, reusado tal cual desde el canal
-  // WhatsApp (docs/plan-asistente-ia-conversacional.md, sección 3.1: "a
+  // WhatsApp (docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 3.1: "a
   // partir de ahí, el resto del pipeline no distingue de qué canal vino la
   // pregunta").
   exports: [
