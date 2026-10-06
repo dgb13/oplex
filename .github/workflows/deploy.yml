@@ -94,9 +94,9 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
-      - name: Copiar compose, Caddyfile y scripts de la base
+      - name: Copiar compose, Caddyfile y scripts
         run: |
-          tar czf deploy-files.tgz docker-compose.prod.yml docker/Caddyfile docker/postgres-init-prod
+          tar czf deploy-files.tgz docker-compose.prod.yml docker/Caddyfile docker/postgres-init-prod docker/offsite-backup.sh
           scp -i ~/.ssh/id_deploy deploy-files.tgz "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/oplex-deploy-files.tgz"
 
       - name: Levantar la versión ${{ env.TAG }}

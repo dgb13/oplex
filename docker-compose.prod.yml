@@ -84,6 +84,18 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  # Copia de backups y uploads a Cloudflare R2. No queda corriendo: lo lanza
+  # el cron del servidor (ver docker/offsite-backup.sh y docs/DEPLOY.md).
+  offsite-backup:
+    image: rclone/rclone:1.68.2
+    profiles: ['tools']
+    entrypoint: ['sh', '/offsite-backup.sh']
+    volumes:
+      - ./docker/offsite-backup.sh:/offsite-backup.sh:ro
+      - ./rclone:/config/rclone
+      - backups:/backups:ro
+      - uploads:/uploads:ro
+
 volumes:
   postgres_data:
   uploads:

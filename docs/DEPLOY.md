@@ -121,6 +121,64 @@ tablas.
 - Registrar las URLs nuevas en cada proveedor (están en `.env.production.example`):
   Google, Microsoft, Mercado Pago (redirect OAuth y webhooks) y WhatsApp (webhook).
 - Verificar `oplex.com.ar` en Resend para que salgan los emails.
-- Backups: el cron diario deja los `pg_dump` en el volumen `backups` del mismo
-  servidor. **Falta copiarlos afuera** (otro proveedor o almacenamiento de
-  archivos); hasta entonces, si se pierde el servidor se pierden los backups.
+- Backups fuera del servidor: ver la sección siguiente.
+
+## Backups
+
+- **En el servidor:** la API hace un `pg_dump` de toda la base todos los días a
+  las 2 AM (UTC) y guarda los últimos 5 en el volumen `backups`. Se ven en
+  `/admin/backups`.
+- **Fuera del servidor:** `docker/offsite-backup.sh` (servicio `offsite-backup`
+  del compose, que no queda corriendo) sube a Cloudflare R2, **cifrado**, los
+  `.dump` y un espejo del volumen `uploads` (fotos, PDFs, avatares). Guarda
+  30 días. Lo lanza el cron del servidor.
+
+### Armarlo (una sola vez)
+
+1. **Cloudflare → R2 Object Storage**: activarlo y crear el bucket
+   `oplex-backups`. Después, **Manage API tokens → Create API token** con
+   permiso *Object Read & Write* sólo sobre ese bucket. Anotar *Access Key ID*,
+   *Secret Access Key* y el endpoint (`https://<id de cuenta>.r2.cloudflarestorage.com`).
+2. En el servidor (después de un deploy que incluya este script):
+
+   ```bash
+   cd /opt/oplex && mkdir -p rclone
+   docker compose -f docker-compose.prod.yml run --rm --entrypoint rclone offsite-backup \
+     config create r2 s3 provider=Cloudflare acl=private no_check_bucket=true \
+     access_key_id=<ACCESS_KEY_ID> secret_access_key=<SECRET> \
+     endpoint=https://<ID_DE_CUENTA>.r2.cloudflarestorage.com
+   docker compose -f docker-compose.prod.yml run --rm --entrypoint rclone offsite-backup \
+     config create oplex-cifrado crypt remote=r2:oplex-backups \
+     password=$(openssl rand -hex 32) password2=$(openssl rand -hex 32)
+   ```
+
+3. Probarlo a mano: `docker compose -f docker-compose.prod.yml run --rm offsite-backup`
+   (tiene que terminar en `OK`).
+4. **Guardar `/opt/oplex/rclone/rclone.conf` fuera del servidor.** Tiene las
+   claves de cifrado: sin ese archivo las copias de R2 no se pueden leer.
+5. El cron, a las 3:30 (después del `pg_dump`):
+
+   ```bash
+   ( crontab -l 2>/dev/null; echo '30 3 * * * cd /opt/oplex && docker compose -f docker-compose.prod.yml run --rm offsite-backup >> /opt/oplex/offsite-backup.log 2>&1' ) | crontab -
+   ```
+
+   El resultado de cada noche queda en `/opt/oplex/offsite-backup.log`.
+
+### Restaurar
+
+Con Docker y el `rclone.conf` guardado, desde cualquier máquina:
+
+```bash
+mkdir -p rclone restaurar && cp <copia de rclone.conf> rclone/
+# ver qué hay
+docker run --rm -v "$PWD/rclone:/config/rclone" rclone/rclone:1.68.2 ls oplex-cifrado:base
+# bajar un dump y los archivos
+docker run --rm -v "$PWD/rclone:/config/rclone" -v "$PWD/restaurar:/data" rclone/rclone:1.68.2 \
+  copy oplex-cifrado:base/<archivo>.dump /data
+docker run --rm -v "$PWD/rclone:/config/rclone" -v "$PWD/restaurar:/data" rclone/rclone:1.68.2 \
+  copy oplex-cifrado:archivos /data/uploads
+```
+
+El `.dump` se carga con `pg_restore` (formato custom) sobre una base vacía, y
+`restaurar/uploads` va al volumen `uploads`. Para leer los certificados de ARCA
+y tokens guardados hace falta la misma `ENCRYPTION_MASTER_KEY` del `.env`.
