@@ -173,6 +173,24 @@ tablas.
    El resultado de cada corrida queda en `/opt/oplex/offsite-backup.log` y en
    el panel. Para forzar una subida: `docker compose -f docker-compose.prod.yml run --rm offsite-backup --force`.
 
+### Visitas (Cloudflare Web Analytics)
+
+La web pública (inicio, login/registro, legales) lleva el contador de
+Cloudflare Web Analytics (`PublicWebAnalytics`, sin cookies). `/admin/visits`
+muestra esas visitas cruzadas con registros, empresas activas y pagos.
+
+Para que el panel lea las visitas: en Cloudflare, **My Profile → API Tokens →
+Create Token → Custom token**, con un solo permiso, **Account → Account
+Analytics → Read**. En el `.env` del servidor:
+
+```bash
+CLOUDFLARE_ACCOUNT_ID="<id de la cuenta>"
+CLOUDFLARE_ANALYTICS_TOKEN="<token>"
+```
+
+y `docker compose -f docker-compose.prod.yml up -d --force-recreate api`. Sin
+esas variables la pantalla igual muestra los números de Oplex.
+
 ### Vigilante externo
 
 Si el servidor entero se cae, el panel y los avisos se caen con él. Para eso,

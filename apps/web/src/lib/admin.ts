@@ -212,6 +212,36 @@ export interface ServerMetricPoint {
   memPercent: number;
 }
 
+export type VisitRange = 1 | 7 | 30 | 90;
+
+export interface VisitsRankRow {
+  key: string;
+  value: number;
+}
+
+export interface VisitsReport {
+  range: VisitRange;
+  cloudflareConfigured: boolean;
+  cloudflareError: string | null;
+  generatedAt: string;
+  visits: number | null;
+  pageViews: number | null;
+  previousVisits: number | null;
+  signups: number;
+  previousSignups: number;
+  activeCompanies: number;
+  payingCompanies: number;
+  days: Array<{ date: string; visits: number; pageViews: number; signups: number }>;
+  countries: VisitsRankRow[];
+  referers: VisitsRankRow[];
+  pages: VisitsRankRow[];
+  devices: VisitsRankRow[];
+}
+
+export const adminVisitsApi = {
+  report: (range: VisitRange) => api.get<VisitsReport>('/admin/visits', { params: { range } }).then((r) => r.data),
+};
+
 export const adminServerApi = {
   snapshot: () => api.get<ServerSnapshot>('/admin/server').then((r) => r.data),
   history: (range: '24h' | '7d') =>

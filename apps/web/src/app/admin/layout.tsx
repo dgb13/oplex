@@ -9,6 +9,7 @@ const NAV_ENTRIES = [
   { href: '/admin', label: 'Tenants' },
   { href: '/admin/plans', label: 'Planes' },
   { href: '/admin/subscriptions', label: 'Suscripciones' },
+  { href: '/admin/visits', label: 'Visitas' },
   { href: '/admin/activity', label: 'Actividad' },
   { href: '/admin/errors', label: 'Errores' },
   { href: '/admin/mercadopago', label: 'Mercado Pago' },

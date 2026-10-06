@@ -31,6 +31,7 @@ import { ArcaPadronModule } from './arca-padron/arca-padron.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
 import { OpsModule } from './ops/ops.module.js';
+import { VisitsModule } from './visits/visits.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AgendaModule } from './agenda/agenda.module.js';
@@ -82,6 +83,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     AgendaModule,
     SchedulerModule,
     OpsModule,
+    VisitsModule,
     TenantSettingsModule,
     ActivityLogModule,
     PurchasesModule,
