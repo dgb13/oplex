@@ -13,6 +13,7 @@ const NAV_ENTRIES = [
   { href: '/admin/errors', label: 'Errores' },
   { href: '/admin/mercadopago', label: 'Mercado Pago' },
   { href: '/admin/backups', label: 'Backups' },
+  { href: '/admin/server', label: 'Servidor' },
   { href: '/admin/bna-sync', label: 'Cotizaciones USD' },
   { href: '/admin/price-index-sync', label: 'Índices de Inflación' },
   { href: '/admin/membership-settings', label: 'Sesión de contadores' },

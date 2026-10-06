@@ -25,7 +25,7 @@ COPY --from=build /workspace/apps/api/dist ./apps/api/dist
 COPY --from=build /workspace/docs/ayuda ./docs/ayuda
 # Para `prisma migrate deploy` (servicio migrate del compose).
 COPY --from=build /workspace/prisma.config.ts ./prisma.config.ts
-RUN mkdir -p /workspace/uploads /backups && chown -R node:node /workspace/uploads /backups
+RUN mkdir -p /workspace/uploads /backups /offsite && chown -R node:node /workspace/uploads /backups /offsite
 USER node
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]

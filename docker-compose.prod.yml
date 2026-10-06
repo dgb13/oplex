@@ -50,12 +50,18 @@ services:
       # Sólo para pg_dump del backup diario.
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/plexo?schema=public
       BACKUP_STORAGE_DIR: /backups
+      # Estado de la copia a R2 (lo escribe offsite-backup) y su config.
+      OFFSITE_DIR: /offsite
       FRONTEND_URL: https://${DOMAIN}
       OAUTH_CALLBACK_BASE_URL: https://${DOMAIN}/api
       MP_OAUTH_REDIRECT_URI: https://${DOMAIN}/api/connectors/mercadopago/callback
     volumes:
       - uploads:/workspace/uploads
       - backups:/backups
+      - offsite:/offsite
+      # Nombre y sistema del servidor para /admin/server (sólo lectura).
+      - /etc/hostname:/host/hostname:ro
+      - /etc/os-release:/host/os-release:ro
 
   web:
     image: ${OPLEX_IMAGE_PREFIX:-ghcr.io/dgb13/oplex}-web:${IMAGE_TAG:-latest}
@@ -95,10 +101,12 @@ services:
       - ./rclone:/config/rclone
       - backups:/backups:ro
       - uploads:/uploads:ro
+      - offsite:/offsite
 
 volumes:
   postgres_data:
   uploads:
   backups:
+  offsite:
   caddy_data:
   caddy_config:

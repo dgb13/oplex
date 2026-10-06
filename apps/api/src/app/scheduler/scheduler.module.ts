@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '@plexo/accounting';
+import { AuthEmailModule } from '@plexo/auth-email';
 import { ConnectorsModule } from '@plexo/connectors';
 import { InventoryModule } from '@plexo/inventory';
 import { InvoicingModule } from '@plexo/invoicing';
@@ -16,6 +17,8 @@ import { ExchangeRateSchedulerService } from './exchange-rate-scheduler.service.
 import { InventoryReplenishmentController } from './inventory-replenishment.controller.js';
 import { InventoryReplenishmentSchedulerService } from './inventory-replenishment-scheduler.service.js';
 import { MercadoPagoRefreshSchedulerService } from './mercadopago-refresh-scheduler.service.js';
+import { OpsAlertsService } from './ops-alerts.service.js';
+import { OpsModule } from '../ops/ops.module.js';
 import { PriceIndexSchedulerService } from './price-index-scheduler.service.js';
 import { ReceivablesSchedulerService } from './receivables-scheduler.service.js';
 import { RemindersController } from './reminders.controller.js';
@@ -32,6 +35,8 @@ import { SubscriptionsSchedulerService } from './subscriptions-scheduler.service
     MercadoPagoModule,
     ConnectorsModule,
     AccountingModule,
+    AuthEmailModule,
+    OpsModule,
   ],
   controllers: [
     RemindersController,
@@ -48,6 +53,7 @@ import { SubscriptionsSchedulerService } from './subscriptions-scheduler.service
     ExchangeRateSchedulerService,
     MercadoPagoRefreshSchedulerService,
     PriceIndexSchedulerService,
+    OpsAlertsService,
   ],
 })
 export class SchedulerModule {}

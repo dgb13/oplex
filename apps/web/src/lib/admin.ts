@@ -109,8 +109,113 @@ export interface DatabaseBackup {
   errorMessage: string | null;
 }
 
+export interface BackupSettings {
+  frequencyHours: number;
+  hour: number;
+  keepLocal: number;
+  keepOffsiteDays: number;
+}
+
+export interface DiskUsage {
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  usedPercent: number;
+}
+
+export interface OffsiteRun {
+  at: string;
+  ok: boolean;
+  error: string | null;
+  durationSec: number;
+  dump: string;
+  uploadedDumps: number;
+  uploadedFiles: number;
+  movedFiles: number;
+}
+
+export interface OffsiteStatus {
+  configured: boolean;
+  ok: boolean | null;
+  error: string | null;
+  finishedAt: string | null;
+  durationSec: number | null;
+  keepDays: number | null;
+  lastSuccessAt: string | null;
+  dumps: Array<{ name: string; sizeBytes: number; modifiedAt: string }> | null;
+  files: { count: number; bytes: number } | null;
+  deletedFiles: { count: number; bytes: number } | null;
+  bucketBytes: number | null;
+  runs: OffsiteRun[];
+}
+
+export interface OpsAlert {
+  id: string;
+  kind: string;
+  subject: string;
+  message: string;
+  sentAt: string;
+}
+
+export interface BackupsOverview {
+  settings: BackupSettings;
+  offsite: OffsiteStatus;
+  disk: DiskUsage;
+  localBackupsBytes: number;
+  databaseBytes: number | null;
+  alerts: OpsAlert[];
+  recipients: string[];
+  thresholds: {
+    diskPercent: number;
+    r2AlertBytes: number;
+    r2FreeTierBytes: number;
+    cpuPercent: number;
+    memoryPercent: number;
+  };
+}
+
 export const adminBackupsApi = {
   list: (limit = 30) => api.get<DatabaseBackup[]>('/admin/backups', { params: { limit } }).then((r) => r.data),
+  overview: () => api.get<BackupsOverview>('/admin/backups/overview').then((r) => r.data),
+  updateSettings: (patch: Partial<BackupSettings>) =>
+    api.patch<BackupSettings>('/admin/backups/settings', patch).then((r) => r.data),
+};
+
+export interface ServerSnapshot {
+  takenAt: string;
+  cpu: { percent: number; cores: number; load1: number; load5: number; load15: number };
+  memory: {
+    totalBytes: number;
+    usedBytes: number;
+    availableBytes: number;
+    usedPercent: number;
+    swapTotalBytes: number;
+    swapUsedBytes: number;
+  };
+  disk: DiskUsage;
+  uptime: { serverSince: string; appSince: string };
+  facts: {
+    publicIp: string | null;
+    location: string | null;
+    os: string | null;
+    kernel: string;
+    hostname: string | null;
+    version: string | null;
+    databaseBytes: number | null;
+    timeZone: string;
+  };
+}
+
+export interface ServerMetricPoint {
+  takenAt: string;
+  cpuPercent: number;
+  memPercent: number;
+}
+
+export const adminServerApi = {
+  snapshot: () => api.get<ServerSnapshot>('/admin/server').then((r) => r.data),
+  history: (range: '24h' | '7d') =>
+    api.get<ServerMetricPoint[]>('/admin/server/history', { params: { range } }).then((r) => r.data),
 };
 
 export interface MercadoPagoMetrics {

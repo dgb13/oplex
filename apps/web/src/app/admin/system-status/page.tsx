@@ -1,8 +1,9 @@
 'use client';
 
-import { adminSystemStatusApi, type LiveTokenCheckResult, type SystemStatusItem } from '@/lib/admin';
+import { adminBackupsApi, adminSystemStatusApi, type LiveTokenCheckResult, type SystemStatusItem } from '@/lib/admin';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { diskTone, formatBytes, formatWhen, type Tone } from '../OpsUi';
 import { ArcaPadronRow } from './ArcaPadronRow';
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' });
@@ -49,6 +50,11 @@ export default function AdminSystemStatusPage() {
                 <WhatsAppStatusRow key={item.key} item={item} />
               ) : item.key === 'arcaPadron' ? (
                 <ArcaPadronRow key={item.key} item={item} />
+              ) : item.key === 'backups' ? (
+                <div key={item.key} className="contents">
+                  <StatusRow item={item} />
+                  <OffsiteAndDiskRows />
+                </div>
               ) : (
                 <StatusRow key={item.key} item={item} />
               ),
@@ -56,6 +62,63 @@ export default function AdminSystemStatusPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Copia externa (R2) y disco del servidor - mismos datos que /admin/backups. */
+function OffsiteAndDiskRows() {
+  const { data } = useQuery({
+    queryKey: ['admin-backups-overview'],
+    queryFn: adminBackupsApi.overview,
+    refetchInterval: 60_000,
+  });
+  if (!data) return null;
+  const { offsite, disk, thresholds, settings } = data;
+  const staleMs = Math.max(26, settings.frequencyHours + 2) * 3_600_000;
+  const stale = !offsite.lastSuccessAt || Date.now() - new Date(offsite.lastSuccessAt).getTime() > staleMs;
+  const r2Tone: Tone = !offsite.configured ? 'warn' : offsite.ok === false ? 'bad' : stale ? 'warn' : 'ok';
+  const r2Pill = !offsite.configured ? 'Sin armar' : offsite.ok === false ? 'Falló' : stale ? 'Sin noticias' : 'Activo';
+  const r2Detail = !offsite.configured
+    ? 'Este servidor todavía no informó ninguna subida (ver docs/DEPLOY.md)'
+    : offsite.ok === false
+      ? `Falló ${formatWhen(offsite.finishedAt).toLowerCase()}: ${offsite.error ?? 'sin detalle'} · última OK: ${formatWhen(offsite.lastSuccessAt).toLowerCase()}`
+      : `Última subida OK: ${formatWhen(offsite.lastSuccessAt).toLowerCase()} · ${formatBytes(offsite.bucketBytes)} usados`;
+  const dTone = diskTone(disk.usedPercent, thresholds.diskPercent);
+  return (
+    <>
+      <OpsRow
+        tone={r2Tone}
+        label="Copia externa (Cloudflare R2)"
+        detail={r2Detail}
+        pill={r2Pill}
+      />
+      <OpsRow
+        tone={dTone}
+        label="Disco del servidor"
+        detail={`${formatBytes(disk.freeBytes)} libres de ${formatBytes(disk.totalBytes)} (${disk.usedPercent} % usado)`}
+        pill={dTone === 'ok' ? 'Sobra lugar' : 'Casi lleno'}
+      />
+    </>
+  );
+}
+
+function OpsRow({ tone, label, detail, pill }: { tone: Tone; label: string; detail: string; pill: string }) {
+  const styles = {
+    ok: { row: 'border-slate-800 bg-slate-900', dot: 'bg-green-500', pill: 'bg-green-900/50 text-green-300', detail: 'text-slate-500' },
+    warn: { row: 'border-amber-900 bg-amber-950/30', dot: 'bg-amber-500', pill: 'bg-amber-900/50 text-amber-300', detail: 'text-amber-300' },
+    bad: { row: 'border-red-900 bg-red-950/30', dot: 'bg-red-500', pill: 'bg-red-900/50 text-red-300', detail: 'text-red-300' },
+  }[tone];
+  return (
+    <div className={`flex items-center justify-between gap-4 rounded-xl border p-4 ${styles.row}`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${styles.dot}`} aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-200">{label}</p>
+          <p className={`mt-0.5 text-xs ${styles.detail}`}>{detail}</p>
+        </div>
+      </div>
+      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${styles.pill}`}>{pill}</span>
     </div>
   );
 }

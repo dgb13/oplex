@@ -30,6 +30,7 @@ import { AiInvoiceScanModule } from './ai-invoice-scan/ai-invoice-scan.module.js
 import { ArcaPadronModule } from './arca-padron/arca-padron.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
+import { OpsModule } from './ops/ops.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AgendaModule } from './agenda/agenda.module.js';
@@ -80,6 +81,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     CalendarModule,
     AgendaModule,
     SchedulerModule,
+    OpsModule,
     TenantSettingsModule,
     ActivityLogModule,
     PurchasesModule,

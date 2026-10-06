@@ -428,9 +428,47 @@ model PlatformSettings {
   oplexBankName   String?
   oplexBankCbu    String?
   oplexBankAlias  String?
+  // Programación de backups, editable en /admin/backups (ver
+  // BackupSchedulerService). La hora es de Argentina; frecuencia en horas
+  // (12, 24, 48 o 168). backupKeepOffsiteDays lo lee docker/offsite-backup.sh
+  // desde el config.json que escribe la API en OFFSITE_DIR.
+  backupFrequencyHours  Int @default(24)
+  backupHour            Int @default(23)
+  backupKeepLocal       Int @default(5)
+  backupKeepOffsiteDays Int @default(30)
   updatedAt      DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+// Una medición del servidor cada 5 minutos (ver ServerMetricsService) para
+// los gráficos de /admin/server - global, sin tenantId/RLS. Se guardan 7 días.
+model ServerMetricSample {
+  id             String   @id @default(uuid())
+  takenAt        DateTime @default(now())
+  cpuPercent     Float
+  memUsedBytes   BigInt
+  memTotalBytes  BigInt
+  swapUsedBytes  BigInt
+  diskUsedBytes  BigInt
+  diskTotalBytes BigInt
+
+  @@index([takenAt])
+  @@map("server_metric_samples")
+}
+
+// Avisos por email a los admins de la plataforma (backups, R2, disco,
+// procesador/memoria) - ver OpsAlertsService. Sirve para no repetir el mismo
+// aviso y para mostrar en el panel cuándo se mandó.
+model OpsAlert {
+  id      String   @id @default(uuid())
+  kind    String
+  subject String
+  message String
+  sentAt  DateTime @default(now())
+
+  @@index([kind, sentAt])
+  @@map("ops_alerts")
 }
 
 // Caché de consultas al padrón de ARCA por CUIT - global (sin tenantId/RLS,

@@ -125,13 +125,21 @@ tablas.
 
 ## Backups
 
-- **En el servidor:** la API hace un `pg_dump` de toda la base todos los días a
-  las 2 AM (UTC) y guarda los últimos 5 en el volumen `backups`. Se ven en
-  `/admin/backups`.
+- **En el servidor:** la API hace un `pg_dump` de toda la base y lo guarda en
+  el volumen `backups`. Frecuencia, hora (de Argentina) y cuántas copias
+  guardar se eligen en `/admin/backups` → Programación (por defecto: todos los
+  días a las 23 h, 5 copias).
 - **Fuera del servidor:** `docker/offsite-backup.sh` (servicio `offsite-backup`
   del compose, que no queda corriendo) sube a Cloudflare R2, **cifrado**, los
-  `.dump` y un espejo del volumen `uploads` (fotos, PDFs, avatares). Guarda
-  30 días. Lo lanza el cron del servidor.
+  `.dump` y un espejo del volumen `uploads` (fotos, PDFs, avatares). Lo lanza
+  el cron del servidor **cada hora**, pero sólo sube algo cuando hay una copia
+  nueva (o pasó un día). Los días a guardar en R2 también se eligen en el panel.
+- **Panel:** `/admin/backups` muestra las dos copias, el espacio en R2 y el
+  disco; `/admin/server`, procesador, memoria y disco. El script deja su
+  resultado en el volumen `offsite`, que lee la API.
+- **Avisos por email** a `PLATFORM_ADMIN_EMAILS`: copia de la base o subida a
+  R2 fallida o atrasada, disco por encima del 80 %, R2 por encima de 8 GB y
+  procesador o memoria altos media hora seguida.
 
 ### Armarlo (una sola vez)
 
@@ -156,13 +164,21 @@ tablas.
    (tiene que terminar en `OK`).
 4. **Guardar `/opt/oplex/rclone/rclone.conf` fuera del servidor.** Tiene las
    claves de cifrado: sin ese archivo las copias de R2 no se pueden leer.
-5. El cron, a las 3:30 (después del `pg_dump`):
+5. El cron, cada hora (a los 15 minutos):
 
    ```bash
-   ( crontab -l 2>/dev/null; echo '30 3 * * * cd /opt/oplex && docker compose -f docker-compose.prod.yml run --rm offsite-backup >> /opt/oplex/offsite-backup.log 2>&1' ) | crontab -
+   ( crontab -l 2>/dev/null | grep -v offsite-backup; echo '15 * * * * cd /opt/oplex && docker compose -f docker-compose.prod.yml run --rm offsite-backup >> /opt/oplex/offsite-backup.log 2>&1' ) | crontab -
    ```
 
-   El resultado de cada noche queda en `/opt/oplex/offsite-backup.log`.
+   El resultado de cada corrida queda en `/opt/oplex/offsite-backup.log` y en
+   el panel. Para forzar una subida: `docker compose -f docker-compose.prod.yml run --rm offsite-backup --force`.
+
+### Vigilante externo
+
+Si el servidor entero se cae, el panel y los avisos se caen con él. Para eso,
+un servicio de afuera (UptimeRobot o Better Stack, tienen plan gratis) que
+revise `https://oplex.com.ar/api/plans` cada pocos minutos y avise por mail o
+WhatsApp si no responde.
 
 ### Restaurar
 
