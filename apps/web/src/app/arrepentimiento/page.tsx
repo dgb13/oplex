@@ -1,5 +1,6 @@
 'use client';
 
+import { PublicWebAnalytics } from '@/components/analytics/PublicWebAnalytics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,6 +44,7 @@ export default function WithdrawalPage() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-10 text-foreground">
+      <PublicWebAnalytics />
       <div className="mx-auto flex max-w-xl flex-col gap-5">
         <Link href="/" className="text-sm font-semibold text-primary">
           ← Oplex

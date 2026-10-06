@@ -1,3 +1,4 @@
+import { PublicWebAnalytics } from '@/components/analytics/PublicWebAnalytics';
 import { LEGAL_DOCS } from '@/lib/legal';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,6 +36,7 @@ export default async function LegalPage({ params }: { params: Promise<{ doc: str
 
   return (
     <div className="min-h-screen bg-background px-4 py-10 text-foreground">
+      <PublicWebAnalytics />
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label="Documentos legales">
           <Link href="/" className="font-semibold text-primary">

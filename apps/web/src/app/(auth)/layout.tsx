@@ -1,5 +1,6 @@
 'use client';
 
+import { PublicWebAnalytics } from '@/components/analytics/PublicWebAnalytics';
 import { ParticleCanvasBackground } from '@/components/auth/ParticleCanvasBackground';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -24,6 +25,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 lg:grid lg:grid-cols-2">
+      <PublicWebAnalytics />
       {/* Mobile: dimmed full-page background */}
       <div className="absolute inset-0 opacity-30 lg:hidden">
         <ParticleCanvasBackground />

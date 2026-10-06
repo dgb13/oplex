@@ -1,3 +1,4 @@
+import { PublicWebAnalytics } from '@/components/analytics/PublicWebAnalytics';
 import Landing from '@/components/landing/Landing';
 import type { PublicPlan } from '@/components/landing/data';
 import { Bricolage_Grotesque, JetBrains_Mono, Onest } from 'next/font/google';
@@ -34,6 +35,7 @@ export default async function Home() {
   return (
     <div className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <Landing plans={plans} />
+      <PublicWebAnalytics />
     </div>
   );
 }
