@@ -8,6 +8,7 @@ import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Tr
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState } from 'react';
 import CashMovementModal from './CashMovementModal';
+import Link from 'next/link';
 import CheckoutModal from './CheckoutModal';
 import CloseSessionModal from './CloseSessionModal';
 import { computeTotals, type TicketLine } from './types';
@@ -126,6 +127,10 @@ function PosSellScreen() {
   const withoutVat =
     tenantSettingsQuery.data?.ownTaxCondition === 'MONOTRIBUTO' ||
     tenantSettingsQuery.data?.ownTaxCondition === 'EXENTO';
+  // Sin condición frente al IVA no se sabe si corresponde Factura A/B o C
+  // (antes salía B por defecto, mal para un monotributista): se puede armar
+  // la venta pero no cobrar hasta cargarla.
+  const missingTaxCondition = tenantSettingsQuery.isSuccess && !tenantSettingsQuery.data?.ownTaxCondition;
   const totals = computeTotals(lines, withoutVat);
 
   function addProduct(product: ProductOption) {
@@ -262,6 +267,20 @@ function PosSellScreen() {
           </button>
         </div>
       </header>
+      {missingTaxCondition && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-amber-300 bg-amber-50 px-5 py-2.5 text-sm text-amber-900 pos-dark:border-amber-900 pos-dark:bg-amber-950 pos-dark:text-amber-200 pos-contrast:bg-amber-400 pos-contrast:text-black">
+          <span className="flex-1">
+            <b>Antes de vender, cargá tu condición frente al IVA.</b> Sin ella Oplex no sabe si te corresponde Factura A,
+            B o C. Podés armar la venta, pero no cobrarla.
+          </span>
+          <Link
+            href="/accounting/arca"
+            className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+          >
+            Cargarla ahora
+          </Link>
+        </div>
+      )}
 
       {unclaimed.length > 0 && (
         <div
@@ -445,7 +464,8 @@ function PosSellScreen() {
             </div>
             <button
               onClick={() => setCheckingOut(true)}
-              disabled={lines.length === 0}
+              disabled={lines.length === 0 || missingTaxCondition}
+              title={missingTaxCondition ? 'Cargá tu condición frente al IVA en Contabilidad → ARCA' : undefined}
               className="mt-4 w-full rounded-lg bg-indigo-600 py-3 text-base font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-40 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
             >
               Cobrar

@@ -37,7 +37,7 @@ export function suggestDocumentLetter(
       letter: null,
       locked: false,
       reason:
-        'Configurá la condición IVA de tu empresa en Preferencias para que el sistema sugiera la letra automáticamente.',
+        'Cargá la condición frente al IVA de tu empresa en Contabilidad → ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).',
     };
   }
 

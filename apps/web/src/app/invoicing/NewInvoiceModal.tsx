@@ -135,6 +135,9 @@ export default function NewInvoiceModal({ onClose }: Props) {
   // configurado" - más seguro bloquear el submit un instante de más que
   // dejarlo habilitado y que el POST falle recién en el backend.
   const afipConfigured = tenantSettingsQuery.data?.afipConfigured ?? false;
+  // Sin condición frente al IVA no se sabe qué letra corresponde (antes
+  // quedaba B por defecto, mal para un monotributista).
+  const missingTaxCondition = tenantSettingsQuery.isSuccess && !tenantSettingsQuery.data?.ownTaxCondition;
   // Clientes/sucursales se pueden crear desde acá mismo; lo único sin
   // atajo inline es el depósito.
   const missingWarehouse = ready && warehouses.length === 0;
@@ -162,6 +165,10 @@ export default function NewInvoiceModal({ onClose }: Props) {
     // NewManufacturedProductModal) - no dejar facturarlo así por descuido.
     if (lines.some((l) => !(l.unitPrice > 0))) {
       setError('Hay líneas sin precio: cargalo en la línea marcada.');
+      return;
+    }
+    if (missingTaxCondition) {
+      setError('Cargá tu condición frente al IVA en Contabilidad → ARCA → Datos de la empresa antes de emitir.');
       return;
     }
     if (!afipConfigured) {
@@ -293,6 +300,15 @@ export default function NewInvoiceModal({ onClose }: Props) {
 
             <div className="mt-auto flex flex-col gap-3">
               <SalesTotalsPanel totals={totals} currencyCode={selectedCurrency?.code} withoutVat={withoutVat} />
+              {missingTaxCondition && (
+                <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Antes de emitir, cargá tu condición frente al IVA en{' '}
+                  <Link href="/accounting/arca" className="font-medium underline">
+                    Contabilidad → ARCA → Datos de la empresa
+                  </Link>
+                  : sin ella no se puede saber si corresponde Factura A, B o C.
+                </p>
+              )}
               {!afipConfigured && (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}
@@ -307,7 +323,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={mutation.isPending || !ready || missingWarehouse || !afipConfigured}
+                disabled={mutation.isPending || !ready || missingWarehouse || !afipConfigured || missingTaxCondition}
                 title={!afipConfigured ? 'Configurá el certificado ARCA en Contabilidad → Conexión con ARCA primero' : undefined}
               >
                 {mutation.isPending ? 'Emitiendo...' : 'Emitir factura'}

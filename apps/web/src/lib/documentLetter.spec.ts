@@ -6,7 +6,7 @@ describe('suggestDocumentLetter', () => {
     expect(result).toEqual({
       letter: null,
       locked: false,
-      reason: expect.stringContaining('Configurá la condición IVA'),
+      reason: expect.stringContaining('Contabilidad → ARCA → Datos de la empresa'),
     });
   });
 
