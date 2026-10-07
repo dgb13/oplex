@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   ArrayMinSize,
   ArrayUnique,
   IsArray,
@@ -44,6 +45,12 @@ export class CreateQuoteRequestGroupDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Si los costos de las líneas se escribieron con IVA incluido (como los
+  // pasó el proveedor) - ver PurchaseOrder.costsIncludeVat.
+  @IsOptional()
+  @IsBoolean()
+  costsIncludeVat?: boolean;
 
   @IsArray()
   @ArrayMinSize(1)

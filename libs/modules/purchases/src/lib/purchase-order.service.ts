@@ -142,6 +142,7 @@ export class PurchaseOrderService {
         paymentTermId: dto.paymentTermId,
         deliveryTimeId: dto.deliveryTimeId,
         notes: dto.notes,
+        costsIncludeVat: dto.costsIncludeVat ?? false,
         total,
         createdByUserId: userId,
         lines: {
@@ -201,6 +202,7 @@ export class PurchaseOrderService {
         paymentTermId: dto.paymentTermId,
         deliveryTimeId: dto.deliveryTimeId,
         notes: dto.notes,
+        costsIncludeVat: dto.costsIncludeVat,
         total,
       },
       include: DETAIL_INCLUDE,

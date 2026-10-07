@@ -15,16 +15,9 @@ function makePurchaseOrder(overrides: Record<string, unknown> = {}) {
       {
         id: 'receipt-1',
         lines: [
-          {
-            id: 'rline-1',
-            quantity: new Prisma.Decimal(120),
-            purchaseOrderLine: { id: 'line-1', unitCost: new Prisma.Decimal(150) },
-          },
-          {
-            id: 'rline-2',
-            quantity: new Prisma.Decimal(5),
-            purchaseOrderLine: { id: 'line-2', unitCost: new Prisma.Decimal(30) },
-          },
+          // unitCost = costo real con que se provisionó al recibir.
+          { id: 'rline-1', purchaseOrderLineId: 'line-1', quantity: new Prisma.Decimal(120), unitCost: new Prisma.Decimal(150) },
+          { id: 'rline-2', purchaseOrderLineId: 'line-2', quantity: new Prisma.Decimal(5), unitCost: new Prisma.Decimal(30) },
         ],
       },
     ],
@@ -37,6 +30,8 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     purchaseOrder: { findUnique: jest.fn().mockResolvedValue(makePurchaseOrder()) },
     purchaseInvoiceReceipt: { findMany: jest.fn().mockResolvedValue([]) },
     supplierReturnLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    // Sin condición frente al IVA cargada, por defecto (como antes).
+    tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
     purchaseInvoice: {
       create: jest.fn((args) =>
         Promise.resolve({ id: 'pinv-1', ...args.data, taxLines: [], receiptLinks: [] }),
@@ -322,6 +317,45 @@ describe('PurchaseInvoiceService.create', () => {
     const data = db.purchaseInvoice.create.mock.calls[0][0].data;
     expect(data.aiScanConfidence).toBeUndefined();
     expect(data.aiScanEdited).toBeUndefined();
+  });
+
+  describe('IVA según la condición del tenant (vatRecoverable)', () => {
+    function invoiceWithIva(condition: string) {
+      const db = makeDb({
+        tenantSettings: { findFirst: jest.fn().mockResolvedValue({ ownTaxCondition: condition }) },
+      });
+      // Provisión de los remitos = 18150; subtotal facturado 20000 → 1850 sin remito.
+      return runAsUser(db, () =>
+        new PurchaseInvoiceService().create({
+          purchaseOrderId: 'po-1',
+          supplierInvoiceNumber: '0001-1',
+          supplierInvoiceDate: '2026-07-29',
+          subtotal: 20000,
+          goodsReceiptIds: ['receipt-1'],
+          taxLines: [
+            { type: 'IVA_CREDITO', concept: 'IVA 21%', amount: 4200, netAmount: 20000, taxRate: 21 },
+            { type: 'PERCEPCION', concept: 'Percepción IIBB', amount: 300 },
+          ],
+        }),
+      );
+    }
+
+    it('Monotributo: el IVA Crédito va al costo (nonGrniAmount lo incluye) y vatRecoverable=false', async () => {
+      const result = await invoiceWithIva('MONOTRIBUTO');
+
+      expect(result.vatRecoverable).toBe(false);
+      expect(result.grniClearedAmount.toNumber()).toBe(18150);
+      // 20000 + 4200 (sólo IVA_CREDITO, no la percepción) - 18150
+      expect(result.nonGrniAmount.toNumber()).toBe(6050);
+    });
+
+    it('Responsable Inscripto: sin cambios, el IVA queda como crédito fiscal y vatRecoverable=true', async () => {
+      const result = await invoiceWithIva('RESPONSABLE_INSCRIPTO');
+
+      expect(result.vatRecoverable).toBe(true);
+      expect(result.grniClearedAmount.toNumber()).toBe(18150);
+      expect(result.nonGrniAmount.toNumber()).toBe(1850);
+    });
   });
 });
 

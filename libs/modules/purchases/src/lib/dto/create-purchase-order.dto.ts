@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
 import { PurchaseOrderLineDto } from './purchase-order-line.dto.js';
 
 /** Standalone creation - no QuoteRequest involved (see
@@ -26,6 +26,12 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Si los costos de las líneas se escribieron con IVA incluido (como los
+  // pasó el proveedor) - ver PurchaseOrder.costsIncludeVat.
+  @IsOptional()
+  @IsBoolean()
+  costsIncludeVat?: boolean;
 
   @IsArray()
   @ArrayMinSize(1)

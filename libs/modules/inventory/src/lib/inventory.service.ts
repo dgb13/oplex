@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  getOwnTaxCondition,
   getTenantDb,
   getTenantId,
   getUserId,
   Prisma,
+  realUnitCost,
+  resolveCurrentTaxDefinition,
+  vatRatePercent,
   ProductionStatus,
   ReservationStatus,
   resolveCurrentTaxDefinitions,
@@ -161,6 +165,22 @@ export interface PriceHistoryEntry {
 @Injectable()
 export class InventoryService {
   constructor(private readonly eventEmitter: EventEmitter2) {}
+
+  /** Costo escrito por una persona (con o sin IVA) -> costo real del
+   * tenant, con la alícuota vigente del artículo (vat-cost.ts). */
+  async toRealCost(articleId: string, amount: number, includesVat: boolean): Promise<Prisma.Decimal> {
+    const db = getTenantDb();
+    const article = await db.article.findUniqueOrThrow({
+      where: { id: articleId },
+      select: { taxDefinition: true },
+    });
+    return realUnitCost({
+      amount,
+      includesVat,
+      vatRate: vatRatePercent(await resolveCurrentTaxDefinition(db, article.taxDefinition)),
+      condition: await getOwnTaxCondition(db),
+    });
+  }
 
   createWarehouse(dto: CreateWarehouseDto): Promise<Warehouse> {
     return getTenantDb().warehouse.create({
@@ -466,6 +486,11 @@ export class InventoryService {
       throw new BadRequestException(`Ya existe una variante con el SKU "${dto.sku}"`);
     }
 
+    const costPrice =
+      dto.costPrice != null && dto.costIncludesVat !== undefined
+        ? (await this.toRealCost(dto.articleId, dto.costPrice, dto.costIncludesVat)).toNumber()
+        : dto.costPrice;
+
     const variant = await db.articleVariant.create({
       data: {
         tenantId,
@@ -484,7 +509,7 @@ export class InventoryService {
         tenantId,
         articleVariantId: variant.id,
         unitPrice: dto.unitPrice,
-        costPrice: dto.costPrice,
+        costPrice,
         changedById: getUserId(),
       },
     });
@@ -596,6 +621,16 @@ export class InventoryService {
     }
     if ((dto.type === 'PURCHASE_IN' || dto.type === 'PRODUCTION_IN') && dto.unitCost == null) {
       throw new BadRequestException(`${dto.type} requires unitCost`);
+    }
+    if (dto.unitCost != null && dto.costIncludesVat !== undefined) {
+      const variantRow = await getTenantDb().articleVariant.findUniqueOrThrow({
+        where: { id: dto.articleVariantId },
+        select: { articleId: true },
+      });
+      dto = {
+        ...dto,
+        unitCost: (await this.toRealCost(variantRow.articleId, dto.unitCost, dto.costIncludesVat)).toNumber(),
+      };
     }
 
     const db = getTenantDb();

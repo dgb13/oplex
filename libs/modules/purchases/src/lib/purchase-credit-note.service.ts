@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
+import { getOwnTaxCondition, getTenantDb, getTenantId, getUserId, isVatRecoverable, Prisma } from '@plexo/database';
 import type { CreatePurchaseCreditNoteDto } from './dto/create-purchase-credit-note.dto.js';
 
 const CREDIT_NOTE_DETAIL_INCLUDE = {
@@ -127,7 +127,11 @@ export class PurchaseCreditNoteService {
       data: { balanceDue, status: balanceDue.isZero() ? 'PAID' : undefined },
     });
 
-    return creditNote;
+    // false = Monotributo/Exento: el IVA de esta nota vuelve contra
+    // mercaderías, no contra IVA Crédito Fiscal (ver
+    // PurchaseCreditNotesService en apps/api y vat-cost.ts).
+    const vatRecoverable = isVatRecoverable(await getOwnTaxCondition(db)) !== false;
+    return { ...creditNote, vatRecoverable };
   }
 }
 

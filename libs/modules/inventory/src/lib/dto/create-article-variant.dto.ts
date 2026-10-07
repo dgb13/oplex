@@ -1,4 +1,4 @@
-import { IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, Min, MinLength } from 'class-validator';
 
 export class CreateArticleVariantDto {
   @IsUUID()
@@ -38,6 +38,12 @@ export class CreateArticleVariantDto {
   @IsNumber()
   @IsPositive()
   costPrice?: number;
+
+  // Si costPrice se escribió con IVA - se guarda como costo real del tenant
+  // (ver RecordStockMovementDto.costIncludesVat).
+  @IsOptional()
+  @IsBoolean()
+  costIncludesVat?: boolean;
 
   // Pares clave/valor libres ("Color": "Rojo", "Talle": "M") para el
   // creador de atributos/matriz de ArticleFormModal - class-validator sólo

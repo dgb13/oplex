@@ -1,5 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { currentActorName, getTenantDb, getTenantId, getUserId, notify, Prisma } from '@plexo/database';
+import {
+  currentActorName,
+  getOwnTaxCondition,
+  getTenantDb,
+  getTenantId,
+  getUserId,
+  notify,
+  Prisma,
+  realUnitCost,
+  resolveCurrentTaxDefinitions,
+  vatRatePercent,
+} from '@plexo/database';
 import type { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto.js';
 import { getReturnedQuantitiesByGoodsReceiptLine } from './supplier-return.service.js';
 
@@ -68,9 +79,10 @@ export async function getReceivedQuantitiesByLine(
 
 /**
  * Recepción de mercadería (remito) against an already-SENT PurchaseOrder -
- * quantity-only, no price (the cost already lives on PurchaseOrderLine.
- * unitCost, read back by GoodsReceiptsService in apps/api to drive the
- * actual PURCHASE_IN stock movements - this service never touches
+ * quantity-only, no price typed here (the cost comes from PurchaseOrderLine.
+ * unitCost, converted to the tenant's real cost and stored on each
+ * GoodsReceiptLine.unitCost, read back by GoodsReceiptsService in apps/api
+ * to drive the actual PURCHASE_IN stock movements - this service never touches
  * Inventory itself, see the module-boundary rule this repo already
  * follows for InvoicingService.createCreditNote/SalesService.voidSale).
  *
@@ -89,7 +101,7 @@ export class GoodsReceiptService {
 
     const purchaseOrder = await db.purchaseOrder.findUnique({
       where: { id: dto.purchaseOrderId },
-      include: { lines: true },
+      include: { lines: { include: { articleVariant: { select: { article: { select: { taxDefinition: true } } } } } } },
     });
     if (!purchaseOrder) {
       throw new NotFoundException('Purchase order not found');
@@ -121,7 +133,28 @@ export class GoodsReceiptService {
     // against OTHER requests, not duplicate entries within this one).
     const runningReceived = new Map(alreadyReceivedByLine);
 
-    const linesToCreate: { purchaseOrderLineId: string; quantity: Prisma.Decimal }[] = [];
+    // Costo real por unidad de compra (vat-cost.ts): la orden guarda el
+    // costo como lo escribió el usuario (con o sin IVA, costsIncludeVat);
+    // acá se lleva a lo que la empresa efectivamente pierde, con la
+    // alícuota vigente del artículo y su condición frente al IVA. Queda
+    // guardado en la línea del remito para que la provisión, la factura y
+    // las devoluciones usen exactamente el mismo número.
+    const condition = await getOwnTaxCondition(db);
+    const currentTaxes = await resolveCurrentTaxDefinitions(
+      db,
+      purchaseOrder.lines.map((l) => l.articleVariant.article.taxDefinition),
+    );
+    const realCostOf = (poLine: (typeof purchaseOrder.lines)[number]) => {
+      const linked = poLine.articleVariant.article.taxDefinition;
+      return realUnitCost({
+        amount: poLine.unitCost,
+        includesVat: purchaseOrder.costsIncludeVat,
+        vatRate: vatRatePercent(linked ? (currentTaxes.get(linked.id) ?? linked) : null),
+        condition,
+      });
+    };
+
+    const linesToCreate: { purchaseOrderLineId: string; quantity: Prisma.Decimal; unitCost: Prisma.Decimal }[] = [];
     for (const requested of dto.lines) {
       const poLine = poLinesById.get(requested.purchaseOrderLineId);
       if (!poLine) {
@@ -138,7 +171,7 @@ export class GoodsReceiptService {
         );
       }
       runningReceived.set(poLine.id, totalReceived);
-      linesToCreate.push({ purchaseOrderLineId: poLine.id, quantity });
+      linesToCreate.push({ purchaseOrderLineId: poLine.id, quantity, unitCost: realCostOf(poLine) });
     }
 
     const receipt = await db.goodsReceipt.create({

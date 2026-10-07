@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsOptional,
   IsString,
@@ -36,6 +37,12 @@ export class CreateQuoteRequestDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Si los costos de las líneas se escribieron con IVA incluido (como los
+  // pasó el proveedor) - ver PurchaseOrder.costsIncludeVat.
+  @IsOptional()
+  @IsBoolean()
+  costsIncludeVat?: boolean;
 
   @IsArray()
   @ArrayMinSize(1)

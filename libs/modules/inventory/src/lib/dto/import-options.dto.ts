@@ -18,6 +18,10 @@ export class ImportOptionsDto {
   pricesIncludeVat!: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  costsIncludeVat?: boolean;
+
+  @IsOptional()
   @IsUUID()
   warehouseId?: string;
 

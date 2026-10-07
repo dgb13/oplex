@@ -126,7 +126,7 @@ export class SupplierReturnsService {
         });
       }
 
-      reversalAmount = reversalAmount.add(line.quantity.mul(line.goodsReceiptLine.purchaseOrderLine.unitCost));
+      reversalAmount = reversalAmount.add(line.quantity.mul(line.goodsReceiptLine.unitCost));
     }
 
     const invoiceLink = await db.purchaseInvoiceReceipt.findFirst({

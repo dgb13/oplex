@@ -5,12 +5,26 @@ function runAsUser<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
 }
 
-function makeSentOrder(lines: { id: string; quantity: number }[]) {
+function makeSentOrder(
+  lines: { id: string; quantity: number; unitCost?: number; taxDefinition?: Record<string, unknown> | null }[],
+  costsIncludeVat = false,
+) {
   return {
     id: 'po-1',
     status: 'SENT',
-    lines: lines.map((l) => ({ id: l.id, quantity: new Prisma.Decimal(l.quantity) })),
+    costsIncludeVat,
+    lines: lines.map((l) => ({
+      id: l.id,
+      quantity: new Prisma.Decimal(l.quantity),
+      unitCost: new Prisma.Decimal(l.unitCost ?? 150),
+      articleVariant: { article: { taxDefinition: l.taxDefinition ?? null } },
+    })),
   };
+}
+
+/** IVA 21% como lo devuelve Prisma (TaxDefinition). */
+function makeIva21() {
+  return { id: 'tax-iva-21', code: 'IVA_21', calculationType: 'PERCENTAGE', rate: new Prisma.Decimal(21) };
 }
 
 function makeDb(overrides: Record<string, unknown> = {}) {
@@ -23,6 +37,10 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     // goodsReceiptLine.findMany above returns rows (see the empty-array
     // guard in getReturnedQuantitiesByGoodsReceiptLine).
     supplierReturnLine: { groupBy: jest.fn().mockResolvedValue([]) },
+    // Sin condición frente al IVA cargada, por defecto: el costo real queda
+    // igual al de la orden (comportamiento de antes, ver vat-cost.ts).
+    tenantSettings: { findFirst: jest.fn().mockResolvedValue(null) },
+    taxDefinition: { findMany: jest.fn().mockResolvedValue([]) },
     goodsReceipt: {
       create: jest.fn((args) =>
         Promise.resolve({
@@ -223,5 +241,47 @@ describe('GoodsReceiptService.create', () => {
         }),
       ),
     ).rejects.toThrow('does not belong to this order');
+  });
+
+  describe('costo real por línea del remito (unitCost)', () => {
+    async function createdUnitCost(condition: string | null, costsIncludeVat: boolean) {
+      const db = makeDb({
+        purchaseOrder: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue(
+              makeSentOrder([{ id: 'line-1', quantity: 200, unitCost: 121, taxDefinition: makeIva21() }], costsIncludeVat),
+            ),
+        },
+        tenantSettings: {
+          findFirst: jest.fn().mockResolvedValue(condition ? { ownTaxCondition: condition } : null),
+        },
+        taxDefinition: { findMany: jest.fn().mockResolvedValue([makeIva21()]) },
+      });
+
+      await runAsUser(db, () =>
+        new GoodsReceiptService().create({
+          purchaseOrderId: 'po-1',
+          warehouseId: 'warehouse-1',
+          lines: [{ purchaseOrderLineId: 'line-1', quantity: 200 }],
+        }),
+      );
+
+      const createArgs = (db.goodsReceipt.create as jest.Mock).mock.calls[0][0];
+      return createArgs.data.lines.createMany.data[0].unitCost as Prisma.Decimal;
+    }
+
+    it('Monotributo con costos sin IVA en la orden: le suma el IVA del artículo (121 × 1,21)', async () => {
+      expect((await createdUnitCost('MONOTRIBUTO', false)).toFixed(2)).toBe('146.41');
+    });
+
+    it('Responsable Inscripto con costos con IVA en la orden: se lo saca (121 / 1,21)', async () => {
+      expect((await createdUnitCost('RESPONSABLE_INSCRIPTO', true)).toFixed(2)).toBe('100.00');
+    });
+
+    it('sin condición cargada: guarda el costo de la orden tal cual', async () => {
+      expect((await createdUnitCost(null, false)).toFixed(2)).toBe('121.00');
+      expect((await createdUnitCost(null, true)).toFixed(2)).toBe('121.00');
+    });
   });
 });

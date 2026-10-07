@@ -3,10 +3,13 @@ import { isIP } from 'node:net';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import {
+  getOwnTaxCondition,
   getTenantDb,
   getTenantId,
   getUserId,
   PrismaService,
+  realUnitCost,
+  type TenantTaxCondition,
   tenantContextStorage,
   withTenantContext,
 } from '@plexo/database';
@@ -59,6 +62,9 @@ export interface ImportOptions {
   mapping: ImportFieldOrSkip[];
   onExisting: 'update' | 'skip';
   pricesIncludeVat: boolean;
+  /** Los costos del archivo, ¿con o sin IVA? Se guardan como costo real del
+   * tenant (vat-cost.ts). Sin el campo: sin IVA. */
+  costsIncludeVat?: boolean;
   warehouseId?: string;
   /** Valor del archivo (normalizado) -> id de impuesto / unidad, para los que
    * Oplex no pudo decidir solo o el usuario corrigió. */
@@ -161,6 +167,9 @@ export interface Refs {
   categoryIdByName: Map<string, string>;
   supplierIdByName: Map<string, string>;
   taxes: TaxOption[];
+  /** Condición frente al IVA del tenant: decide si el costo real es con o
+   * sin IVA. null = sin cargar, el costo queda como viene. */
+  taxCondition?: TenantTaxCondition | null;
 }
 
 interface Job {
@@ -665,17 +674,19 @@ export class ArticleImportService {
 
   private async loadRefs(): Promise<Refs> {
     const db = getTenantDb();
-    const [variants, categories, suppliers, taxes] = await Promise.all([
+    const [variants, categories, suppliers, taxes, taxCondition] = await Promise.all([
       db.articleVariant.findMany({ select: { id: true, sku: true, articleId: true, unitPrice: true } }),
       db.category.findMany({ where: { parentId: null }, select: { id: true, name: true } }),
       db.company.findMany({ where: { roles: { some: { role: 'SUPPLIER' } } }, select: { id: true, name: true } }),
       db.taxDefinition.findMany({ where: { validTo: null }, select: { id: true, name: true, calculationType: true, rate: true } }),
+      getOwnTaxCondition(db),
     ]);
     return {
       variantsBySku: new Map(variants.map((v) => [v.sku.toLowerCase(), { id: v.id, articleId: v.articleId, unitPrice: Number(v.unitPrice) }])),
       categoryIdByName: new Map(categories.map((c) => [c.name.toLowerCase(), c.id])),
       supplierIdByName: new Map(suppliers.map((s) => [s.name.toLowerCase(), s.id])),
       taxes: taxes.map((t) => ({ id: t.id, name: t.name, calculationType: t.calculationType, rate: t.rate === null ? null : Number(t.rate) })),
+      taxCondition,
     };
   }
 }
@@ -753,6 +764,13 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
     }
 
     let cost = number(cells, 'cost');
+    if (cost !== null && refs.taxCondition) {
+      const tax = taxId ? refs.taxes.find((t) => t.id === taxId) : undefined;
+      const vatRate = tax?.calculationType === 'PERCENTAGE' && tax.rate ? tax.rate : 0;
+      cost = realUnitCost({ amount: cost, includesVat: options.costsIncludeVat ?? false, vatRate, condition: refs.taxCondition })
+        .toDecimalPlaces(2)
+        .toNumber();
+    }
     let stock = number(cells, 'stock');
     const stockText = text(cells, 'stock');
     if (stockText && stock === null) messages.push(`Stock "${stockText}" no es un número`);

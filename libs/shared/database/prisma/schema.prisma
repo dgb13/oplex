@@ -3200,6 +3200,9 @@ model QuoteRequest {
   // Cached sum of quantity*estimatedUnitCost - null if any line is missing
   // a cost estimate (there's nothing meaningful to sum in that case).
   estimatedTotal Decimal?  @db.Decimal(14, 2)
+  // Si los costos estimados se escribieron con IVA incluido (ver
+  // PurchaseOrder.costsIncludeVat - pasa a la orden al convertir).
+  costsIncludeVat Boolean @default(false)
 
   // Shared tag across N QuoteRequest rows (one per supplier) created
   // together via QuoteRequestService.createGroup, to compare quotes for the
@@ -3273,6 +3276,10 @@ model PurchaseOrder {
   // Sum of quantity*unitCost - always set (unlike QuoteRequest.
   // estimatedTotal), a PurchaseOrder line always has a real unitCost.
   total Decimal @db.Decimal(14, 2)
+  // Si los unitCost de las líneas se escribieron con IVA incluido (como los
+  // pasó el proveedor). La orden y su PDF muestran el costo tal cual; al
+  // recibir, el stock entra al "costo real" (realUnitCost, vat-cost.ts).
+  costsIncludeVat Boolean @default(false)
 
   // Both null until PurchaseOrderService.sendEmail()/markSentWhatsapp()
   // runs - "solo guardar" in the send dialog leaves the order DRAFT with
@@ -3395,6 +3402,12 @@ model GoodsReceiptLine {
   purchaseOrderLineId String
   purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
   quantity            Decimal           @db.Decimal(14, 3)
+  // Costo real por unidad de compra al recibir (sin IVA para Responsable
+  // Inscripto, con IVA para Monotributo/Exento - realUnitCost en
+  // vat-cost.ts). De acá salen el stock, la provisión (GRNI), lo que cancela
+  // la factura y las devoluciones. Las líneas viejas se completaron con el
+  // unitCost de la orden (migración purchase_real_cost).
+  unitCost            Decimal           @db.Decimal(14, 4)
 
   stockMovements      StockMovement[]
   supplierReturnLines SupplierReturnLine[]

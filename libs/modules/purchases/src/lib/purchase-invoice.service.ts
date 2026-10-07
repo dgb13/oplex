@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
+import { getOwnTaxCondition, getTenantDb, getTenantId, getUserId, isVatRecoverable, Prisma } from '@plexo/database';
 import type { CreatePurchaseInvoiceDto } from './dto/create-purchase-invoice.dto.js';
 import type { ListPurchaseInvoicesQueryDto } from './dto/list-purchase-invoices-query.dto.js';
 import type { RecordSupplierPaymentDto } from './dto/record-supplier-payment.dto.js';
@@ -31,6 +31,9 @@ export interface CreatedPurchaseInvoice {
   invoice: Prisma.PurchaseInvoiceGetPayload<{ include: typeof INVOICE_DETAIL_INCLUDE }>;
   grniClearedAmount: Prisma.Decimal;
   nonGrniAmount: Prisma.Decimal;
+  /** false = Monotributo/Exento: el IVA de la factura ya va en grni + nonGrni,
+   * no se registra como crédito fiscal (ver create). */
+  vatRecoverable: boolean;
 }
 
 /**
@@ -117,7 +120,7 @@ export class PurchaseInvoiceService {
           supplier: true,
           receipts: {
             include: {
-              lines: { include: { purchaseOrderLine: { select: { id: true, unitCost: true } } } },
+              lines: true,
             },
           },
         },
@@ -160,7 +163,8 @@ export class PurchaseInvoiceService {
         for (const line of receipt.lines) {
           const returned = returnedByLine.get(line.id) ?? new Prisma.Decimal(0);
           const netQuantity = line.quantity.sub(returned);
-          grniClearedAmount = grniClearedAmount.add(netQuantity.mul(line.purchaseOrderLine.unitCost));
+          // line.unitCost = costo real con que se provisionó al recibir.
+          grniClearedAmount = grniClearedAmount.add(netQuantity.mul(line.unitCost));
         }
       }
 
@@ -190,19 +194,29 @@ export class PurchaseInvoiceService {
     }
 
     const subtotal = new Prisma.Decimal(dto.subtotal);
-    const nonGrniAmount = subtotal.sub(grniClearedAmount);
-    if (nonGrniAmount.lt(0)) {
-      throw new BadRequestException(
-        `El subtotal facturado ($${subtotal.toFixed(2)}) es menor al monto acumulado por los remitos seleccionados ($${grniClearedAmount.toFixed(2)})`,
-      );
-    }
-
     const taxLines = dto.taxLines ?? [];
     const taxTotal = taxLines.reduce(
       (sum, line) => sum.add(new Prisma.Decimal(line.amount)),
       new Prisma.Decimal(0),
     );
     const total = subtotal.add(taxTotal);
+
+    // Monotributo/Exento no recupera el IVA de la factura: va al costo (lo
+    // que cancela la provisión + compras sin remito) en vez de a crédito
+    // fiscal - ver vat-cost.ts. Responsable Inscripto o sin condición
+    // cargada: como siempre. El IVA igual queda en taxLines para el Libro
+    // IVA Digital.
+    const vatRecoverable = isVatRecoverable(await getOwnTaxCondition(db)) !== false;
+    const ivaCredito = taxLines
+      .filter((line) => line.type === 'IVA_CREDITO')
+      .reduce((sum, line) => sum.add(new Prisma.Decimal(line.amount)), new Prisma.Decimal(0));
+    const costBase = vatRecoverable ? subtotal : subtotal.add(ivaCredito);
+    const nonGrniAmount = costBase.sub(grniClearedAmount);
+    if (nonGrniAmount.lt(0)) {
+      throw new BadRequestException(
+        `El ${vatRecoverable ? 'subtotal facturado' : 'subtotal más IVA facturado'} (${costBase.toFixed(2)}) es menor al monto acumulado por los remitos seleccionados (${grniClearedAmount.toFixed(2)})`,
+      );
+    }
 
     const invoice = await db.purchaseInvoice.create({
       data: {
@@ -245,7 +259,7 @@ export class PurchaseInvoiceService {
       include: INVOICE_DETAIL_INCLUDE,
     });
 
-    return { invoice, grniClearedAmount, nonGrniAmount };
+    return { invoice, grniClearedAmount, nonGrniAmount, vatRecoverable };
   }
 
   /** Creates the SupplierPayment row (plus any withholding lines) and

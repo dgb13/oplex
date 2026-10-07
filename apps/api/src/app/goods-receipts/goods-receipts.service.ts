@@ -54,7 +54,9 @@ export class GoodsReceiptsService {
         (article.measurementType === 'LINEAL_1D' && article.commercialLength) ||
         new Prisma.Decimal(1);
 
-      const stockUnitCost = line.purchaseOrderLine.unitCost.div(factor);
+      // line.unitCost = costo real por unidad de compra (con o sin IVA según
+      // la condición del tenant, ver GoodsReceiptService.create).
+      const stockUnitCost = line.unitCost.div(factor);
 
       await this.inventoryService.recordMovement({
         warehouseId: receipt.warehouseId,
@@ -87,7 +89,7 @@ export class GoodsReceiptsService {
       // El accrual (GRNI) sigue siendo "cantidad pedida × costo por unidad
       // de compra" tal cual - la conversión de arriba es puramente de
       // unidad de stock, no cambia cuánto se le debe al proveedor.
-      accrualAmount = accrualAmount.add(line.quantity.mul(line.purchaseOrderLine.unitCost));
+      accrualAmount = accrualAmount.add(line.quantity.mul(line.unitCost));
     }
     await this.accountingService.postGoodsReceiptAccrual({
       goodsReceiptId: receipt.id,

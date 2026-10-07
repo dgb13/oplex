@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
 import { PurchaseOrderLineDto } from './purchase-order-line.dto.js';
 
 /** Only allowed while the PurchaseOrder is still DRAFT (see
@@ -28,6 +28,12 @@ export class UpdatePurchaseOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Si los costos de las líneas se escribieron con IVA incluido (como los
+  // pasó el proveedor) - ver PurchaseOrder.costsIncludeVat.
+  @IsOptional()
+  @IsBoolean()
+  costsIncludeVat?: boolean;
 
   @IsOptional()
   @IsArray()

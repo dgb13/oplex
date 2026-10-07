@@ -27,10 +27,14 @@ export class PurchaseCreditNotesService {
   async createCreditNote(dto: CreatePurchaseCreditNoteDto) {
     const creditNote = await this.purchaseCreditNoteService.create(dto);
 
+    // Monotributo/Exento: el IVA nunca fue crédito fiscal (ver
+    // PurchaseInvoiceService.create), así que la nota de crédito lo devuelve
+    // todo contra mercaderías en vez de contra IVA Crédito Fiscal.
+    const vatRecoverable = creditNote.vatRecoverable !== false;
     await this.accountingService.postPurchaseCreditNoteJournalEntry({
       purchaseCreditNoteId: creditNote.id,
-      subtotal: creditNote.subtotal,
-      taxTotal: creditNote.taxTotal,
+      subtotal: vatRecoverable ? creditNote.subtotal : creditNote.subtotal.add(creditNote.taxTotal),
+      taxTotal: vatRecoverable ? creditNote.taxTotal : 0,
       total: creditNote.total,
       // The supplier's own credit note date, not "now" - same criterion as
       // PurchaseInvoicesService.createInvoice's supplierInvoiceDate.

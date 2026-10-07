@@ -49,11 +49,16 @@ export class PurchaseInvoicesService {
    * reads its `.id`/label off whatever this method returns, same lesson
    * already learned the hard way for QuoteRequestService.convert(). */
   async createInvoice(dto: CreatePurchaseInvoiceDto) {
-    const { invoice, grniClearedAmount, nonGrniAmount } = await this.purchaseInvoiceService.create(dto);
+    const { invoice, grniClearedAmount, nonGrniAmount, vatRecoverable } =
+      await this.purchaseInvoiceService.create(dto);
 
-    const ivaCredito = invoice.taxLines
-      .filter((line) => line.type === 'IVA_CREDITO')
-      .reduce((sum, line) => sum.add(line.amount), new Prisma.Decimal(0));
+    // Sin crédito fiscal para Monotributo/Exento: su IVA ya va dentro de
+    // grniClearedAmount + nonGrniAmount (ver PurchaseInvoiceService.create).
+    const ivaCredito = vatRecoverable === false
+      ? new Prisma.Decimal(0)
+      : invoice.taxLines
+          .filter((line) => line.type === 'IVA_CREDITO')
+          .reduce((sum, line) => sum.add(line.amount), new Prisma.Decimal(0));
     const percepciones = invoice.taxLines
       .filter((line) => line.type === 'PERCEPCION')
       .map((line) => ({ concept: line.concept, amount: line.amount }));

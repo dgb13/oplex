@@ -1,5 +1,5 @@
 import { MovementType } from '@plexo/database';
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class RecordStockMovementDto {
   @IsUUID()
@@ -23,6 +23,15 @@ export class RecordStockMovementDto {
   @IsOptional()
   @IsNumber()
   unitCost?: number;
+
+  // Sólo cuando una persona escribe el costo (Nuevo movimiento, stock
+  // inicial del artículo): si lo escribió con IVA o sin IVA. Con esto el
+  // costo se lleva al "costo real" del tenant (ver realUnitCost en
+  // vat-cost.ts). Sin el campo (compras, producción, importación - que ya
+  // traen el costo real calculado) se usa unitCost tal cual.
+  @IsOptional()
+  @IsBoolean()
+  costIncludesVat?: boolean;
 
   @IsOptional()
   @IsString()
