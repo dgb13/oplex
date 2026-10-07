@@ -7,6 +7,7 @@ function makePrisma() {
     tenant: { create: jest.fn().mockResolvedValue({}) },
     currency: { create: jest.fn().mockResolvedValue({}) },
     warehouse: { create: jest.fn().mockResolvedValue({}) },
+    taxDefinition: { createMany: jest.fn().mockResolvedValue({ count: 7 }) },
     user: { create: jest.fn().mockResolvedValue({ id: 'user-1' }) },
     $executeRaw: jest.fn().mockResolvedValue(undefined),
   };
@@ -92,6 +93,34 @@ describe('TenantProvisioningService.provision', () => {
     expect(fakeTx.warehouse.create).toHaveBeenCalledWith({
       data: { tenantId: 'tenant-1', name: 'Depósito principal' },
     });
+  });
+
+  it('creates the Argentine VAT rates (21%, 10,5%, 27%, 5%, 2,5%, Exento, No gravado)', async () => {
+    const { prisma, fakeTx } = makePrisma();
+    const subscriptionService = { startTrial: jest.fn().mockResolvedValue({}) } as unknown as SubscriptionService;
+    const service = new TenantProvisioningService(prisma, subscriptionService);
+
+    await service.provision({
+      tenantId: 'tenant-1',
+      name: 'Acme',
+      ownerEmail: 'o@acme.com',
+      passwordHash: 'hashed',
+      mustChangePassword: true,
+      autoVerifyEmail: false,
+      planKey: 'GOLD',
+    });
+
+    const { data } = fakeTx.taxDefinition.createMany.mock.calls[0][0];
+    expect(data.map((d: { code: string }) => d.code)).toEqual([
+      'IVA21',
+      'IVA10_5',
+      'IVA27',
+      'IVA5',
+      'IVA2_5',
+      'IVA_EXENTO',
+      'IVA_NO_GRAVADO',
+    ]);
+    expect(data[0]).toEqual({ tenantId: 'tenant-1', code: 'IVA21', name: 'IVA 21%', calculationType: 'PERCENTAGE', rate: 21 });
   });
 
   it('sets emailVerifiedAt to null when autoVerifyEmail is false (signup público)', async () => {

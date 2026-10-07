@@ -72,6 +72,8 @@ export interface ImportOptions {
   mapping: ImportFieldOrSkip[];
   onExisting: 'update' | 'skip';
   pricesIncludeVat: boolean;
+  /** Los costos del archivo, ¿con o sin IVA? Se guardan como costo real. */
+  costsIncludeVat?: boolean;
   warehouseId?: string;
   taxValues?: Record<string, string>;
   unitValues?: Record<string, UnitValue>;

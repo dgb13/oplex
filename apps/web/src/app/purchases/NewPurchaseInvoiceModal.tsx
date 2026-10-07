@@ -9,6 +9,7 @@ import {
   type PurchaseInvoiceTaxLineType,
 } from '@/lib/purchases';
 import { WITHHOLDING_TAX_TYPE_LABELS, type WithholdingTaxType } from '@/lib/taxes';
+import { CONDITION_WORD, useTaxCondition, vatRecoverable } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
@@ -105,6 +106,12 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
 
   const taxTotal = taxLines.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   const total = effectiveSubtotal + taxTotal;
+  // Cómo registra Oplex el IVA de esta factura según la condición del tenant
+  // (PurchaseInvoiceService.create): crédito fiscal o parte del costo.
+  const { condition: taxCondition } = useTaxCondition();
+  const ivaCreditoTotal = taxLines
+    .filter((t) => t.type === 'IVA_CREDITO')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -458,6 +465,21 @@ export default function NewPurchaseInvoiceModal({ onClose }: Props) {
           <p className="text-right text-sm font-semibold">
             Total: ${total.toFixed(2)}
           </p>
+          {ivaCreditoTotal > 0 && vatRecoverable(taxCondition) !== null && (
+            <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
+              {vatRecoverable(taxCondition) ? (
+                <>
+                  El IVA (${ivaCreditoTotal.toFixed(2)}) va a <b>crédito fiscal</b>: lo descontás de lo que pagás de IVA.
+                </>
+              ) : (
+                <>
+                  Como {taxCondition ? CONDITION_WORD[taxCondition] : ''} el IVA (${ivaCreditoTotal.toFixed(2)}){' '}
+                  <b>no es un crédito</b>: Oplex lo suma al costo de la compra. Igual queda informado para el Libro IVA
+                  Digital.
+                </>
+              )}
+            </p>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -51,6 +51,14 @@ export class InventoryController {
     return this.inventoryService.listWarehouses();
   }
 
+  // Alícuotas vigentes para el campo "IVA del artículo" - acá y no en
+  // /taxes/definitions porque esa ruta pide acceso al módulo Impuestos y
+  // quien carga artículos no necesariamente lo tiene.
+  @Get('tax-options')
+  listTaxOptions() {
+    return this.inventoryService.listTaxOptions();
+  }
+
   @Roles(...WRITE_ROLES)
   @Post('categories')
   createCategory(@Body() dto: CreateCategoryDto) {

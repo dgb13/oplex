@@ -16,6 +16,7 @@ import {
   type UnitValue,
 } from '@/lib/articleImport';
 import { inventoryApi } from '@/lib/inventory';
+import { useTaxCondition, vatRecoverable } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -33,6 +34,7 @@ export default function ImportArticlesPage() {
   const [mapping, setMapping] = useState<ImportFieldOrSkip[]>([]);
   const [onExisting, setOnExisting] = useState<'update' | 'skip'>('update');
   const [pricesIncludeVat, setPricesIncludeVat] = useState(false);
+  const [costsIncludeVat, setCostsIncludeVat] = useState(false);
   const [warehouseId, setWarehouseId] = useState('');
   const [taxValues, setTaxValues] = useState<Record<string, string>>({});
   const [unitValues, setUnitValues] = useState<Record<string, UnitValue>>({});
@@ -45,6 +47,7 @@ export default function ImportArticlesPage() {
     mapping,
     onExisting,
     pricesIncludeVat,
+    costsIncludeVat,
     warehouseId: warehouseId || undefined,
     taxValues,
     unitValues,
@@ -104,6 +107,8 @@ export default function ImportArticlesPage() {
           setOnExisting={setOnExisting}
           pricesIncludeVat={pricesIncludeVat}
           setPricesIncludeVat={setPricesIncludeVat}
+          costsIncludeVat={costsIncludeVat}
+          setCostsIncludeVat={setCostsIncludeVat}
           warehouseId={warehouseId}
           setWarehouseId={setWarehouseId}
           lengthUnit={lengthUnit}
@@ -243,6 +248,8 @@ function ColumnsStep(props: {
   setOnExisting: (v: 'update' | 'skip') => void;
   pricesIncludeVat: boolean;
   setPricesIncludeVat: (v: boolean) => void;
+  costsIncludeVat: boolean;
+  setCostsIncludeVat: (v: boolean) => void;
   warehouseId: string;
   setWarehouseId: (v: string) => void;
   lengthUnit: LengthUnit;
@@ -257,6 +264,8 @@ function ColumnsStep(props: {
   const recognized = analysis.columns.filter((c) => c.suggested !== 'skip').length;
   const missing = REQUIRED.filter((f) => !mapping.includes(f));
   const usesStock = mapping.includes('stock');
+  const usesCost = mapping.includes('cost');
+  const { condition: taxCondition } = useTaxCondition();
   const usesBars = mapping.includes('barLength');
   const usesLengths = usesBars || mapping.includes('sheetWidth') || mapping.includes('sheetLength');
 
@@ -334,16 +343,42 @@ function ColumnsStep(props: {
             ['skip', 'Dejarlo como está'],
           ]}
         />
-        <Choice
-          label="Los precios de venta del archivo"
-          hint="Si incluyen IVA, se guardan netos según la alícuota de cada artículo."
-          value={props.pricesIncludeVat ? 'yes' : 'no'}
-          onChange={(v) => props.setPricesIncludeVat(v === 'yes')}
-          options={[
-            ['no', 'Son sin IVA'],
-            ['yes', 'Incluyen IVA'],
-          ]}
-        />
+        {vatRecoverable(taxCondition) === false ? (
+          <div className="flex flex-col gap-1.5 text-sm">
+            <span className="font-semibold">Los precios de venta del archivo</span>
+            <span className="text-xs text-muted-foreground">
+              Se guardan tal cual: como {taxCondition === 'MONOTRIBUTO' ? 'monotributista' : 'exento'} facturás con
+              comprobante C y tu precio de venta es el final.
+            </span>
+          </div>
+        ) : (
+          <Choice
+            label="Los precios de venta del archivo"
+            hint="Si incluyen IVA, se guardan netos según la alícuota de cada artículo."
+            value={props.pricesIncludeVat ? 'yes' : 'no'}
+            onChange={(v) => props.setPricesIncludeVat(v === 'yes')}
+            options={[
+              ['no', 'Son sin IVA'],
+              ['yes', 'Incluyen IVA'],
+            ]}
+          />
+        )}
+        {usesCost && (
+          <Choice
+            label="Los costos del archivo"
+            hint={
+              taxCondition
+                ? `Se guardan como costo real ${vatRecoverable(taxCondition) ? 'sin IVA (lo recuperás)' : 'con IVA (no lo recuperás)'}, con la alícuota de cada artículo.`
+                : 'Falta tu condición frente al IVA: los costos se guardan tal cual.'
+            }
+            value={props.costsIncludeVat ? 'yes' : 'no'}
+            onChange={(v) => props.setCostsIncludeVat(v === 'yes')}
+            options={[
+              ['no', 'Son sin IVA'],
+              ['yes', 'Incluyen IVA'],
+            ]}
+          />
+        )}
         <label className="flex flex-col gap-1.5 text-sm" htmlFor="import-warehouse">
           <span className="font-semibold">Depósito para el stock</span>
           <select

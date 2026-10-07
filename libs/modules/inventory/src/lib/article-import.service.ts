@@ -8,6 +8,7 @@ import {
   getTenantId,
   getUserId,
   PrismaService,
+  isVatRecoverable,
   realUnitCost,
   type TenantTaxCondition,
   tenantContextStorage,
@@ -758,7 +759,9 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
     let price = rawPrice;
     if (rawPrice === null) messages.push('Falta el precio de venta');
     else if (rawPrice <= 0) messages.push('El precio de venta tiene que ser mayor a 0');
-    if (price !== null && options.pricesIncludeVat && taxId) {
+    // Monotributo/Exento facturan C: su precio de venta ya es el final, no
+    // se le saca IVA aunque el archivo diga que lo incluye.
+    if (price !== null && options.pricesIncludeVat && taxId && isVatRecoverable(refs.taxCondition) !== false) {
       const rate = refs.taxes.find((t) => t.id === taxId);
       if (rate?.calculationType === 'PERCENTAGE' && rate.rate) price = Math.round((price / (1 + rate.rate / 100)) * 100) / 100;
     }

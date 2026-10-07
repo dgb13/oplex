@@ -188,6 +188,14 @@ export class InventoryService {
     });
   }
 
+  listTaxOptions(): Promise<Pick<TaxDefinition, 'id' | 'code' | 'name' | 'calculationType' | 'rate'>[]> {
+    return getTenantDb().taxDefinition.findMany({
+      where: { validTo: null },
+      select: { id: true, code: true, name: true, calculationType: true, rate: true },
+      orderBy: { code: 'asc' },
+    });
+  }
+
   listWarehouses(): Promise<Warehouse[]> {
     return getTenantDb().warehouse.findMany({ orderBy: { name: 'asc' } });
   }

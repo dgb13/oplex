@@ -52,6 +52,8 @@ function makeSupplierReturn(overrides: Record<string, unknown> = {}) {
         goodsReceiptLineId: 'receipt-line-1',
         quantity: new Prisma.Decimal(2),
         goodsReceiptLine: {
+          // Costo real con que se provisionó al recibir (GoodsReceiptLine.unitCost).
+          unitCost: new Prisma.Decimal(150),
           purchaseOrderLine: { articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
         },
       },
@@ -318,6 +320,7 @@ describe('SupplierReturnsService.createReturn', () => {
           quantity: new Prisma.Decimal(2),
           goodsReceiptLine: {
             quantity: new Prisma.Decimal(5),
+            unitCost: new Prisma.Decimal(150),
             purchaseOrderLine: { articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
           },
         },
@@ -375,6 +378,7 @@ describe('SupplierReturnsService.createReturn', () => {
           quantity: new Prisma.Decimal(2),
           goodsReceiptLine: {
             quantity: new Prisma.Decimal(5),
+            unitCost: new Prisma.Decimal(150),
             purchaseOrderLine: { articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(150) },
           },
         },

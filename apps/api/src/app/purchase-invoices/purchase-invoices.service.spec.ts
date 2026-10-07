@@ -118,6 +118,40 @@ describe('PurchaseInvoicesService.createInvoice', () => {
       { concept: 'Percepción IVA', amount: invoice.taxLines[2].amount },
     ]);
   });
+
+  it('Monotributo/Exento (vatRecoverable=false): no registra crédito fiscal, ivaCredito 0 (el IVA ya va en grni + nonGrni)', async () => {
+    const invoice = {
+      id: 'pinv-3',
+      total: new Prisma.Decimal(1240),
+      supplierInvoiceDate: new Date('2026-07-15'),
+      taxLines: [
+        { type: 'IVA_CREDITO', amount: new Prisma.Decimal(210) },
+        { type: 'PERCEPCION', concept: 'IIBB', amount: new Prisma.Decimal(30) },
+      ],
+    };
+    const purchaseInvoiceService = {
+      create: jest.fn().mockResolvedValue({
+        invoice,
+        // 1000 subtotal + 210 IVA = 1210 de costo
+        grniClearedAmount: new Prisma.Decimal(968),
+        nonGrniAmount: new Prisma.Decimal(242),
+        vatRecoverable: false,
+      }),
+    } as unknown as PurchaseInvoiceService;
+    const accountingService = {
+      postPurchaseInvoiceJournalEntry: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const service = new PurchaseInvoicesService(purchaseInvoiceService, accountingService, makeReportsFinancialService(), makeCheckService());
+
+    await service.createInvoice({ purchaseOrderId: 'po-3' } as never);
+
+    const journalArg = (accountingService.postPurchaseInvoiceJournalEntry as jest.Mock).mock.calls[0][0];
+    expect(journalArg.ivaCredito.toNumber()).toBe(0);
+    expect(journalArg.grniClearedAmount.toNumber()).toBe(968);
+    expect(journalArg.nonGrniAmount.toNumber()).toBe(242);
+    // Las percepciones no cambian con la condición frente al IVA.
+    expect(journalArg.percepciones).toEqual([{ concept: 'IIBB', amount: invoice.taxLines[1].amount }]);
+  });
 });
 
 describe('PurchaseInvoicesService.recordPayment', () => {

@@ -35,6 +35,8 @@ function makeReceipt(overrides: Record<string, unknown> = {}) {
       {
         id: 'receipt-line-1',
         quantity: new Prisma.Decimal(120),
+        // Costo real por unidad de compra, fijado al recibir (GoodsReceiptService.create).
+        unitCost: new Prisma.Decimal(150),
         purchaseOrderLine: {
           id: 'line-1',
           articleVariantId: 'variant-1',
@@ -45,6 +47,7 @@ function makeReceipt(overrides: Record<string, unknown> = {}) {
       {
         id: 'receipt-line-2',
         quantity: new Prisma.Decimal(5),
+        unitCost: new Prisma.Decimal(30),
         purchaseOrderLine: {
           id: 'line-2',
           articleVariantId: 'variant-2',
@@ -135,6 +138,7 @@ describe('GoodsReceiptsService.createReceipt', () => {
         {
           id: 'receipt-line-1',
           quantity: new Prisma.Decimal(2), // 2 bolsas pedidas/recibidas
+          unitCost: new Prisma.Decimal(50000), // costo real $/bolsa (GoodsReceiptLine.unitCost)
           purchaseOrderLine: {
             id: 'line-1',
             articleVariantId: 'variant-1',
@@ -180,6 +184,7 @@ describe('GoodsReceiptsService.createReceipt', () => {
         {
           id: 'receipt-line-1',
           quantity: new Prisma.Decimal(10),
+          unitCost: new Prisma.Decimal(5),
           purchaseOrderLine: {
             id: 'line-1',
             articleVariantId: 'variant-1',
@@ -214,6 +219,7 @@ describe('GoodsReceiptsService.createReceipt', () => {
         {
           id: 'receipt-line-1',
           quantity: new Prisma.Decimal(3), // 3 barras pedidas/recibidas
+          unitCost: new Prisma.Decimal(10000), // costo real $/barra (GoodsReceiptLine.unitCost)
           purchaseOrderLine: {
             id: 'line-1',
             articleVariantId: 'variant-cable',

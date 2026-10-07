@@ -137,6 +137,7 @@ export interface QuoteRequestDetail {
   status: PurchaseDocumentStatus;
   estimatedTotal: string | null;
   notes: string | null;
+  costsIncludeVat?: boolean;
   validUntil: string | null;
   createdAt: string;
   supplier: SupplierRef;
@@ -304,6 +305,8 @@ export interface CreateQuoteRequestInput {
   deliveryTimeId?: string;
   validUntil?: string;
   notes?: string;
+  // Si los costos estimados se escribieron con IVA (pasa a la orden al convertir).
+  costsIncludeVat?: boolean;
   lines: QuoteRequestLineInput[];
 }
 
@@ -314,6 +317,9 @@ export interface CreatePurchaseOrderInput {
   paymentTermId?: string;
   deliveryTimeId?: string;
   notes?: string;
+  // Si los costos de las líneas se escribieron con IVA (como los pasó el
+  // proveedor) - al recibir, el stock entra al costo real (vatCost.ts).
+  costsIncludeVat?: boolean;
   lines: PurchaseOrderLineInput[];
 }
 

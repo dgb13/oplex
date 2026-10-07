@@ -49,3 +49,24 @@ export async function getOwnTaxCondition(db: Prisma.TransactionClient): Promise<
   const settings = await db.tenantSettings.findFirst({ select: { ownTaxCondition: true } });
   return settings?.ownTaxCondition ?? null;
 }
+
+/**
+ * Alícuotas de IVA de Argentina con las que arranca toda empresa (ver
+ * TenantProvisioningService y la migración default_vat_definitions para
+ * las que ya existían). El tenant las puede revisar en Impuestos; los
+ * códigos son los que usan Facturación y la importación de artículos.
+ */
+export const DEFAULT_VAT_DEFINITIONS: ReadonlyArray<{
+  code: string;
+  name: string;
+  calculationType: 'PERCENTAGE' | 'EXENTO' | 'NO_GRAVADO';
+  rate: number | null;
+}> = [
+  { code: 'IVA21', name: 'IVA 21%', calculationType: 'PERCENTAGE', rate: 21 },
+  { code: 'IVA10_5', name: 'IVA 10,5%', calculationType: 'PERCENTAGE', rate: 10.5 },
+  { code: 'IVA27', name: 'IVA 27%', calculationType: 'PERCENTAGE', rate: 27 },
+  { code: 'IVA5', name: 'IVA 5%', calculationType: 'PERCENTAGE', rate: 5 },
+  { code: 'IVA2_5', name: 'IVA 2,5%', calculationType: 'PERCENTAGE', rate: 2.5 },
+  { code: 'IVA_EXENTO', name: 'Exento', calculationType: 'EXENTO', rate: null },
+  { code: 'IVA_NO_GRAVADO', name: 'No gravado', calculationType: 'NO_GRAVADO', rate: null },
+];

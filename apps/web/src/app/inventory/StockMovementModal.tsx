@@ -1,12 +1,14 @@
 'use client';
 
 import ArticlePicker from '@/components/ArticlePicker';
+import { CostVatToggle, RealCostNote } from '@/components/CostVat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { inventoryApi, MOVEMENT_TYPES, type MovementType, type Warehouse } from '@/lib/inventory';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { useCostIncludesVat, useTaxCondition } from '@/lib/vatCost';
 import { useState } from 'react';
 
 interface Props {
@@ -37,6 +39,11 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
     unitCost: '',
   });
   const [error, setError] = useState('');
+  // Costo con o sin IVA -> costo real del tenant (lo convierte la API, ver
+  // RecordStockMovementDto.costIncludesVat); acá sólo se muestra el resultado.
+  const [costIncludesVat, setCostIncludesVat] = useCostIncludesVat();
+  const [vatRate, setVatRate] = useState(0);
+  const { condition } = useTaxCondition();
 
   const needsCost = form.type === 'PURCHASE_IN' || form.type === 'PRODUCTION_IN';
 
@@ -48,6 +55,7 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
         type: form.type,
         quantity: Number(form.quantity),
         unitCost: needsCost ? Number(form.unitCost) : undefined,
+        costIncludesVat: needsCost ? costIncludesVat : undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inventory-articles'] });
@@ -94,7 +102,10 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
           <Field label="Artículo / variante">
             <ArticlePicker
               value={form.articleVariantId}
-              onChange={(variantId) => setForm({ ...form, articleVariantId: variantId })}
+              onChange={(variantId, option) => {
+                setForm({ ...form, articleVariantId: variantId });
+                setVatRate(option?.taxRate ?? 0);
+              }}
               // LINEAL_1D (barras/recortes) no puede entrar por acá - el
               // backend lo rechaza igual (InventoryController.recordMovement),
               // esto sólo evita que el usuario llegue a intentarlo. Ver
@@ -137,7 +148,11 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
           </Field>
 
           {needsCost && (
-            <Field label="Costo unitario">
+            <div className="flex flex-col gap-1">
+              <span className="flex flex-wrap items-center justify-between gap-1.5 text-sm text-muted-foreground">
+                Costo unitario
+                <CostVatToggle includesVat={costIncludesVat} onChange={setCostIncludesVat} />
+              </span>
               <Input
                 type="number"
                 step="any"
@@ -145,8 +160,17 @@ export default function StockMovementModal({ warehouses, onClose }: Props) {
                 value={form.unitCost}
                 onChange={(e) => setForm({ ...form, unitCost: e.target.value })}
                 placeholder="p. ej. 100.50"
+                aria-label="Costo unitario"
               />
-            </Field>
+              {form.articleVariantId && Number(form.unitCost) > 0 && (
+                <RealCostNote
+                  amount={Number(form.unitCost)}
+                  includesVat={costIncludesVat}
+                  vatRate={vatRate}
+                  condition={condition}
+                />
+              )}
+            </div>
           )}
 
           {isPurchase && (

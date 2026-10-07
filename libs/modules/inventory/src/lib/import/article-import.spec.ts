@@ -129,6 +129,33 @@ describe('buildPlan', () => {
   });
 
 
+  describe('costo real según la condición frente al IVA', () => {
+    const withCondition = (taxCondition: Refs['taxCondition']) => ({ ...refs(), taxCondition });
+    const costOf = (sku: string, options: ImportOptions, r: Refs) =>
+      buildPlan(grid, 0, options, r).rows.find((row) => row.sku === sku)?.cost;
+
+    it('sin condición cargada, el costo queda como viene', () => {
+      expect(costOf('TOR-0612', { ...base, costsIncludeVat: true }, refs())).toBe(1850);
+    });
+
+    it('monotributista con costos sin IVA: le suma el IVA del artículo', () => {
+      expect(costOf('TOR-0612', base, withCondition('MONOTRIBUTO'))).toBe(2238.5);
+    });
+
+    it('Responsable Inscripto con costos con IVA: se lo saca', () => {
+      expect(costOf('TOR-0612', { ...base, costsIncludeVat: true }, withCondition('RESPONSABLE_INSCRIPTO'))).toBe(1528.93);
+    });
+
+    it('un artículo exento no cambia', () => {
+      expect(costOf('ALA-17', { ...base, unitValues: { rollo: 'UNIT' } }, withCondition('MONOTRIBUTO'))).toBe(2000);
+    });
+
+    it('monotributista: el precio de venta es final, no se le saca IVA aunque el archivo diga que lo incluye', () => {
+      const plan = buildPlan(grid, 0, { ...base, pricesIncludeVat: true }, withCondition('MONOTRIBUTO'));
+      expect(plan.rows.find((r) => r.sku === 'TOR-0612')?.price).toBe(3237.5);
+    });
+  });
+
   it('respeta los números de fila del Excel aunque haya filas vacías en el medio', () => {
     const withBlanks = [header, [], grid[1], [null, null], grid[2]];
     const plan = buildPlan(withBlanks, 0, base, refs());

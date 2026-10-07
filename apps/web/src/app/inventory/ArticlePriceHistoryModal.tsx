@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { inventoryApi } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { vatRecoverable } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
@@ -36,6 +37,7 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
     queryFn: () => inventoryApi.getPriceHistory(variant.id),
   });
   const settingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
+  const taxCondition = settingsQuery.data?.ownTaxCondition ?? null;
   const entries = historyQuery.data ?? [];
   const latestCost = entries.find((e) => e.costPrice !== null)?.costPrice ?? null;
 
@@ -160,8 +162,12 @@ export default function ArticlePriceHistoryModal({ variant, onClose }: Props) {
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-4">Fecha</th>
-                  <th className="pb-2 pr-4 text-right">Precio venta</th>
-                  <th className="pb-2 pr-4 text-right">Costo</th>
+                  <th className="pb-2 pr-4 text-right">
+                    Precio venta{vatRecoverable(taxCondition) === null ? '' : vatRecoverable(taxCondition) ? ' (sin IVA)' : ' (final)'}
+                  </th>
+                  <th className="pb-2 pr-4 text-right">
+                    Costo{vatRecoverable(taxCondition) === null ? '' : vatRecoverable(taxCondition) ? ' (sin IVA)' : ' (con IVA)'}
+                  </th>
                   <th className="pb-2">Comprobante</th>
                 </tr>
               </thead>

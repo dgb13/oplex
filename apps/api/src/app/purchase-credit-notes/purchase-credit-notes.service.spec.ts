@@ -88,4 +88,30 @@ describe('PurchaseCreditNotesService.createCreditNote', () => {
     ).rejects.toThrow(failure);
     expect(accountingService.postPurchaseCreditNoteJournalEntry).not.toHaveBeenCalled();
   });
+
+  it('Monotributo/Exento (vatRecoverable=false): devuelve el IVA contra mercaderías - subtotal+taxTotal y taxTotal 0', async () => {
+    const creditNote = {
+      id: 'pcn-4',
+      subtotal: new Prisma.Decimal(100),
+      taxTotal: new Prisma.Decimal(21),
+      total: new Prisma.Decimal(121),
+      supplierCreditNoteDate: new Date('2026-07-20'),
+      vatRecoverable: false,
+    };
+    const purchaseCreditNoteService = {
+      create: jest.fn().mockResolvedValue(creditNote),
+    } as unknown as PurchaseCreditNoteService;
+    const accountingService = {
+      postPurchaseCreditNoteJournalEntry: jest.fn().mockResolvedValue({}),
+    } as unknown as AccountingService;
+    const service = new PurchaseCreditNotesService(purchaseCreditNoteService, accountingService);
+
+    await service.createCreditNote({ purchaseInvoiceId: 'pinv-4' } as never);
+
+    const journalArg = (accountingService.postPurchaseCreditNoteJournalEntry as jest.Mock).mock
+      .calls[0][0];
+    expect(new Prisma.Decimal(journalArg.subtotal).toNumber()).toBe(121);
+    expect(new Prisma.Decimal(journalArg.taxTotal).toNumber()).toBe(0);
+    expect(journalArg.total).toBe(creditNote.total);
+  });
 });

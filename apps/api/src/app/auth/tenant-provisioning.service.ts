@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
+import { DEFAULT_VAT_DEFINITIONS, getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 
 export interface ProvisionTenantInput {
@@ -65,6 +65,12 @@ export class TenantProvisioningService {
       // selector aparece vacío). El tenant lo puede renombrar o sumar más.
       // Los tenants viejos lo reciben en la migración default_warehouse_backfill.
       await db.warehouse.create({ data: { tenantId: input.tenantId, name: 'Depósito principal' } });
+      // Y las alícuotas de IVA: sin ellas un artículo no tiene IVA (factura
+      // al 0%) ni se puede calcular el costo real (vat-cost.ts). Los tenants
+      // viejos las reciben en la migración default_vat_definitions.
+      await db.taxDefinition.createMany({
+        data: DEFAULT_VAT_DEFINITIONS.map((d) => ({ tenantId: input.tenantId, ...d })),
+      });
       const user = await db.user.create({
         data: {
           tenantId: input.tenantId,

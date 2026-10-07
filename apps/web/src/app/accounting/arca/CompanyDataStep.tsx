@@ -121,6 +121,10 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  // Cambiar la condición frente al IVA cambia cómo se toman los costos (con
+  // o sin IVA, ver vat-cost.ts) y los precios de venta: se confirma antes.
+  const [confirmConditionChange, setConfirmConditionChange] = useState(false);
+  const conditionChanged = !!settings.ownTaxCondition && !!condition && condition !== settings.ownTaxCondition;
   const lastLookup = useRef<string>('');
 
   const touch = () => setSaved(false);
@@ -385,12 +389,46 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
       />
 
       <div className="flex flex-wrap items-center gap-2.5">
-        <Button type="button" onClick={() => save.mutate()} disabled={save.isPending || !hasCuit}>
+        <Button
+          type="button"
+          onClick={() => (conditionChanged ? setConfirmConditionChange(true) : save.mutate())}
+          disabled={save.isPending || !hasCuit}
+        >
           {save.isPending ? 'Guardando...' : 'Guardar datos'}
         </Button>
         {saved && <span className="text-[12.5px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Guardado</span>}
         {error && <span className="text-sm text-destructive">{error}</span>}
       </div>
+      {confirmConditionChange && conditionChanged && (
+        <div role="alertdialog" className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <b>
+            ¿Cambiar de {settings.ownTaxCondition && TAX_CONDITION_LABELS[settings.ownTaxCondition]} a {TAX_CONDITION_LABELS[condition as TenantTaxCondition]}?
+          </b>
+          <p className="text-muted-foreground">
+            {condition === 'RESPONSABLE_INSCRIPTO'
+              ? 'Desde ahora los costos nuevos se toman sin IVA (lo vas a recuperar), tus precios de venta pasan a ser sin IVA y vas a facturar A o B.'
+              : 'Desde ahora los costos nuevos se toman con IVA (no lo vas a recuperar), tus precios de venta pasan a ser finales y vas a facturar C.'}
+          </p>
+          <p className="text-muted-foreground">
+            El stock que ya tenés conserva su costo: era el correcto cuando lo compraste. Las ventas y las ganancias de
+            antes no cambian.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmConditionChange(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmConditionChange(false);
+                save.mutate();
+              }}
+            >
+              Cambiar condición
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

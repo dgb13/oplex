@@ -1,6 +1,7 @@
 'use client';
 
 import ArticlePicker from '@/components/ArticlePicker';
+import { CostVatToggle, MissingTaxConditionBanner } from '@/components/CostVat';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
@@ -8,6 +9,7 @@ import { invoicingApi } from '@/lib/invoicing';
 import { purchaseOrdersApi, type PurchaseOrderLineInput } from '@/lib/purchases';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { formatMoney, realUnitCost, useCostIncludesVat, useTaxCondition, vatRecoverable } from '@/lib/vatCost';
 import { useState } from 'react';
 import CatalogSelectField from './CatalogSelectField';
 
@@ -48,6 +50,12 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
   ]);
   const [error, setError] = useState('');
   const [creatingSupplier, setCreatingSupplier] = useState(false);
+  // Los costos de la orden, ¿con o sin IVA? (una vez para toda la orden: el
+  // proveedor cotiza todo igual). Al recibir, el stock entra al costo real.
+  const [costsIncludeVat, setCostsIncludeVat] = useCostIncludesVat();
+  const { condition, loaded: conditionLoaded } = useTaxCondition();
+  // Alícuota de cada línea (del artículo elegido), para mostrar el costo real.
+  const [lineVatRates, setLineVatRates] = useState<Record<number, number>>({});
 
   const ready = !suppliersQuery.isLoading && !currenciesQuery.isLoading;
   const firstSupplier = suppliers[0];
@@ -64,6 +72,7 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
         paymentTermId: paymentTermId || undefined,
         deliveryTimeId: deliveryTimeId || undefined,
         notes: notes || undefined,
+        costsIncludeVat,
         lines,
       }),
     onSuccess: () => {
@@ -86,6 +95,15 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
 
   function removeLine(index: number) {
     setLines((prev) => prev.filter((_, i) => i !== index));
+    // Las alícuotas van por posición: se corren igual que las líneas.
+    setLineVatRates((prev) => {
+      const next: Record<number, number> = {};
+      for (const [key, rate] of Object.entries(prev)) {
+        const i = Number(key);
+        if (i !== index) next[i > index ? i - 1 : i] = rate;
+      }
+      return next;
+    });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -167,13 +185,21 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Líneas</label>
+              {conditionLoaded && !condition && <MissingTaxConditionBanner />}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm text-muted-foreground">Líneas · los costos de esta orden están</label>
+                <CostVatToggle includesVat={costsIncludeVat} onChange={setCostsIncludeVat} />
+                <span className="text-xs text-muted-foreground">(como te los pasó el proveedor)</span>
+              </div>
               {lines.map((line, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <ArticlePicker
                     className="flex-1"
                     value={line.articleVariantId}
-                    onChange={(variantId) => updateLine(index, { articleVariantId: variantId })}
+                    onChange={(variantId, option) => {
+                      updateLine(index, { articleVariantId: variantId });
+                      setLineVatRates((prev) => ({ ...prev, [index]: option?.taxRate ?? 0 }));
+                    }}
                   />
                   <input
                     type="number"
@@ -194,6 +220,14 @@ export default function PurchaseOrderFormModal({ onClose }: Props) {
                     onChange={(e) => updateLine(index, { unitCost: Number(e.target.value) })}
                     title="Costo unitario"
                   />
+                  {vatRecoverable(condition) !== null && line.unitCost > 0 && (
+                    <span className="w-28 text-right text-xs tabular-nums text-muted-foreground" title="Costo real con que entra al stock">
+                      real{' '}
+                      <b className="text-foreground">
+                        {formatMoney(realUnitCost(line.unitCost, costsIncludeVat, lineVatRates[index] ?? 0, condition))}
+                      </b>
+                    </span>
+                  )}
                   {lines.length > 1 && (
                     <button
                       type="button"

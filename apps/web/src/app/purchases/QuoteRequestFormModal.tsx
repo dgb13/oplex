@@ -1,6 +1,7 @@
 'use client';
 
 import ArticlePicker from '@/components/ArticlePicker';
+import { CostVatToggle } from '@/components/CostVat';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
@@ -13,6 +14,7 @@ import {
 } from '@/lib/purchases';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import { useCostIncludesVat } from '@/lib/vatCost';
 import { useState } from 'react';
 import CatalogSelectField from './CatalogSelectField';
 
@@ -62,6 +64,14 @@ export default function QuoteRequestFormModal({
     quoteRequest?.validUntil ? quoteRequest.validUntil.slice(0, 10) : '',
   );
   const [notes, setNotes] = useState(quoteRequest?.notes ?? '');
+  // Al editar, lo que tenía el pedido; al crear, lo último elegido.
+  const [rememberedIncludesVat, setRememberedIncludesVat] = useCostIncludesVat();
+  const [editedIncludesVat, setEditedIncludesVat] = useState<boolean | undefined>(quoteRequest?.costsIncludeVat);
+  const costsIncludeVat = editedIncludesVat ?? rememberedIncludesVat;
+  const setCostsIncludeVat = (value: boolean) => {
+    setEditedIncludesVat(value);
+    setRememberedIncludesVat(value);
+  };
   const [lines, setLines] = useState<QuoteRequestLineInput[]>(
     quoteRequest?.lines.map((l) => ({
       articleVariantId: '', // resolved below once el catálogo cargó - ver fallback sin efectos
@@ -117,6 +127,7 @@ export default function QuoteRequestFormModal({
         deliveryTimeId: deliveryTimeId || undefined,
         validUntil: validUntil || undefined,
         notes: notes || undefined,
+        costsIncludeVat,
         lines,
       };
       return quoteRequest ? quoteRequestsApi.update(quoteRequest.id, dto) : quoteRequestsApi.create(dto);
@@ -237,7 +248,10 @@ export default function QuoteRequestFormModal({
             </Field>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-muted-foreground">Líneas</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm text-muted-foreground">Líneas · los costos estimados están</label>
+                <CostVatToggle includesVat={costsIncludeVat} onChange={setCostsIncludeVat} />
+              </div>
               {lines.map((line, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <ArticlePicker

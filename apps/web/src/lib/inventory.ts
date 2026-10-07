@@ -275,6 +275,8 @@ export interface CreateArticleInput {
   minUsableLength?: number;
   sheetWidth?: number;
   sheetLength?: number;
+  // Alícuota de IVA del artículo (GET /inventory/tax-options).
+  taxDefinitionId?: string;
 }
 
 export interface CreateArticleVariantInput {
@@ -289,6 +291,8 @@ export interface CreateArticleVariantInput {
   // creada (sin ninguna compra real todavía) - ver el comentario del DTO
   // en el backend.
   costPrice?: number;
+  // Si costPrice se escribió con IVA - la API lo guarda como costo real.
+  costIncludesVat?: boolean;
 }
 
 /** Article images (and goods-receipt attachments, and Person avatars) are
@@ -336,6 +340,8 @@ export interface RecordStockMovementInput {
   type: MovementType;
   quantity: number;
   unitCost?: number;
+  // Sólo cuando lo escribe una persona: con o sin IVA (ver vatCost.ts).
+  costIncludesVat?: boolean;
 }
 
 export interface PriceHistoryEntry {

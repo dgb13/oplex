@@ -2,11 +2,13 @@
 
 import AttachmentSlot from '@/components/AttachmentSlot';
 import CompanyFormModal from '@/components/CompanyFormModal';
+import { CostVatToggle, MissingTaxConditionBanner, priceTag, RealCostNote } from '@/components/CostVat';
 import ImageCropper from '@/components/ImageCropper';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { inventoryApi, UNIT_OF_MEASURE_OPTIONS } from '@/lib/inventory';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { formatMoney, realUnitCost, taxOptionRate, useCostIncludesVat, useTaxOptions } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Archive, FileText, Image as ImageIcon } from 'lucide-react';
@@ -183,8 +185,20 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   const [preferredSupplierId, setPreferredSupplierId] = useState('');
   const [creatingSupplier, setCreatingSupplier] = useState(false);
   const [costInput, setCostInput] = useState('');
+  const [costIncludesVat, setCostIncludesVat] = useCostIncludesVat();
   const [markupInput, setMarkupInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
+  // IVA del artículo: arranca en IVA 21% (la alícuota general) apenas
+  // cargan las opciones.
+  const taxOptionsQuery = useTaxOptions();
+  const taxOptions = taxOptionsQuery.data ?? [];
+  const [taxDefinitionId, setTaxDefinitionId] = useState('');
+  useEffect(() => {
+    if (taxDefinitionId === '' && taxOptions.length > 0) {
+      setTaxDefinitionId(taxOptions.find((t) => t.code === 'IVA21')?.id ?? taxOptions[0].id);
+    }
+  }, [taxOptions, taxDefinitionId]);
+  const vatRate = taxOptionRate(taxOptions.find((t) => t.id === taxDefinitionId));
 
   // Variante / identificación - modo simple (hasVariants=false)
   const [sku, setSku] = useState('');
@@ -259,11 +273,17 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   }, [isService, tab]);
 
   const defaultMarkup = settingsQuery.data?.defaultMarkupPercent;
+  const taxCondition = settingsQuery.data?.ownTaxCondition ?? null;
   const effectiveMarkup = markupInput.trim() !== '' ? Number(markupInput) : defaultMarkup;
+  // El precio sugerido sale del costo REAL (sin IVA para RI, con IVA para
+  // Monotributo/Exento): así queda en la misma base que el precio de venta
+  // (neto para RI, final para quien factura C).
+  const realCost = costInput.trim() !== '' ? realUnitCost(Number(costInput), costIncludesVat, vatRate, taxCondition) : null;
   const suggestedPrice =
-    costInput.trim() !== '' && effectiveMarkup != null && !Number.isNaN(effectiveMarkup)
-      ? Number(costInput) * (1 + effectiveMarkup / 100)
+    realCost !== null && effectiveMarkup != null && !Number.isNaN(effectiveMarkup)
+      ? realCost * (1 + effectiveMarkup / 100)
       : null;
+  const salePriceTag = priceTag(taxCondition);
 
   const categories = categoriesQuery.data ?? [];
   const warehouses = warehousesQuery.data ?? [];
@@ -389,6 +409,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           hasVariants,
           isManufactured,
           measurementType,
+          taxDefinitionId: taxDefinitionId || undefined,
           // Sólo se mandan los campos del tipo elegido - el resto queda
           // undefined (el backend los deja en null, no hay ambigüedad con
           // "0" o "vacío" para un tipo que no los usa).
@@ -420,6 +441,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
           sku: sku.trim(),
           unitPrice: Number(priceInput),
           costPrice: costInput.trim() === '' ? undefined : Number(costInput),
+          costIncludesVat,
         });
 
         if (!isService && warehouseId) {
@@ -439,6 +461,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               type: 'PURCHASE_IN',
               quantity: stockQuantity,
               unitCost: Number(costInput),
+              costIncludesVat,
             });
           }
         }
@@ -471,6 +494,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             sku: row.sku.trim(),
             unitPrice: Number(row.price),
             costPrice: costInput.trim() === '' ? undefined : Number(costInput),
+          costIncludesVat,
             attributes: row.values,
           });
 
@@ -487,6 +511,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 type: 'PURCHASE_IN',
                 quantity: stockQ,
                 unitCost: Number(costInput),
+              costIncludesVat,
               });
             }
           }
@@ -904,6 +929,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
           {tab === 'pricing' && (
             <div className="flex flex-col gap-4">
+              {settingsQuery.isSuccess && !taxCondition && <MissingTaxConditionBanner />}
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Proveedor preferido</span>
@@ -925,9 +951,22 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 />
               </div>
 
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-muted-foreground">IVA del artículo</span>
+                <Select
+                  value={taxDefinitionId}
+                  onChange={setTaxDefinitionId}
+                  placeholder={taxOptionsQuery.isLoading ? 'Cargando...' : '— Sin IVA cargado —'}
+                  options={taxOptions.map((t) => ({ value: t.id, label: t.name }))}
+                />
+              </label>
+
               <div className={`grid ${hasVariants ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-muted-foreground">Costo inicial</span>
+                  <span className="flex flex-wrap items-center justify-between gap-1.5 text-sm text-muted-foreground">
+                    Costo inicial
+                    <CostVatToggle includesVat={costIncludesVat} onChange={setCostIncludesVat} />
+                  </span>
                   <input
                     type="number"
                     min={0}
@@ -952,7 +991,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 </label>
                 {!hasVariants && (
                   <label className="flex flex-col gap-1">
-                    <span className="text-sm text-muted-foreground">Precio de venta</span>
+                    <span className="text-sm text-muted-foreground">
+                      Precio de venta{' '}
+                      {salePriceTag && (
+                        <span className="rounded-full bg-primary/10 px-1.5 py-px text-[11px] font-semibold text-primary">
+                          {salePriceTag}
+                        </span>
+                      )}
+                    </span>
                     <input
                       type="number"
                       min={0}
@@ -964,6 +1010,26 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   </label>
                 )}
               </div>
+
+              {costInput.trim() !== '' && Number(costInput) > 0 && (
+                <RealCostNote
+                  amount={Number(costInput)}
+                  includesVat={costIncludesVat}
+                  vatRate={vatRate}
+                  condition={taxCondition}
+                />
+              )}
+              {!hasVariants && salePriceTag && (
+                <p className="text-xs text-muted-foreground">
+                  {salePriceTag === 'sin IVA'
+                    ? `Al facturar se suma el IVA${
+                        priceInput.trim() !== '' && vatRate > 0
+                          ? `: el cliente paga ${formatMoney(Number(priceInput) * (1 + vatRate / 100))}`
+                          : ''
+                      }.`
+                    : 'Es lo que paga el cliente: facturás con comprobante C, sin IVA discriminado.'}
+                </p>
+              )}
 
               {hasVariants ? (
                 <p className="text-xs text-muted-foreground">
