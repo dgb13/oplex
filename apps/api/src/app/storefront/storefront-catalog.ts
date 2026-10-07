@@ -99,7 +99,7 @@ function variantLabel(variant: {
 export async function buildStorefrontCatalog(
   db: Prisma.TransactionClient,
   settings: Pick<StorefrontSettings, 'warehouseId' | 'stockDisplay'>,
-): Promise<{ catalog: StorefrontCatalog; coverage: StorefrontCoverage; variantsById: Map<string, VariantInternal & { articleName: string }> }> {
+): Promise<{ catalog: StorefrontCatalog; coverage: StorefrontCoverage; variantsById: Map<string, VariantInternal & { articleName: string; showLabel: boolean }> }> {
   const taxCondition = await getOwnTaxCondition(db);
   const warehouseFilter = settings.warehouseId ? { warehouseId: settings.warehouseId } : {};
 
@@ -128,7 +128,7 @@ export async function buildStorefrontCatalog(
   const coverage: StorefrontCoverage = { visible: 0, total: articles.length, notPublished: 0, noStock: 0, noCategory: 0, noPrice: 0 };
   const products: StorefrontProduct[] = [];
   const categories = new Set<string>();
-  const variantsById = new Map<string, VariantInternal & { articleName: string }>();
+  const variantsById = new Map<string, VariantInternal & { articleName: string; showLabel: boolean }>();
 
   for (const article of articles) {
     const vatRate = vatRatePercent(article.taxDefinition);
@@ -147,7 +147,10 @@ export async function buildStorefrontCatalog(
 
     coverage.visible++;
     categories.add(article.category.name);
-    for (const variant of sellable) variantsById.set(variant.id, { ...variant, articleName: article.name });
+    // Talle/color sólo cuando el artículo de verdad tiene variantes; si no, el
+    // "nombre" de la variante es el SKU y no aporta en el pedido.
+    const showLabel = sellable.length > 1 || article.hasVariants;
+    for (const variant of sellable) variantsById.set(variant.id, { ...variant, articleName: article.name, showLabel });
 
     const cheapest = sellable.reduce((min, v) => (v.price.lessThan(min.price) ? v : min));
     const totalStock = sellable.reduce((sum, v) => sum + v.stock, 0);

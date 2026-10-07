@@ -238,7 +238,7 @@ export class StorefrontService {
             `De "${variant.articleName}" quedan ${variant.stock}. Ajustá la cantidad y probá de nuevo`,
           );
         }
-        const description = variant.label && variant.label !== variant.articleName ? `${variant.articleName} (${variant.label})` : variant.articleName;
+        const description = variant.showLabel ? `${variant.articleName} (${variant.label})` : variant.articleName;
         return { variantId, quantity, description, unitPrice: variant.price };
       });
       const total = lines.reduce((sum, l) => sum.add(l.unitPrice.mul(l.quantity)), new Prisma.Decimal(0));
