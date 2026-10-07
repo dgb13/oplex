@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { resolveUploadUrl } from '@/lib/inventory';
 import { cartApi, CART_QUERY_KEY } from '@/lib/inventoryCart';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Info, ShoppingBasket } from 'lucide-react';
+import { Pencil, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
 
 export interface CatalogCardRow {
@@ -95,10 +95,10 @@ function ArticleCard({
         <button
           type="button"
           onClick={() => onDetails(row.articleId)}
-          title="Detalles (editar, activar/desactivar, descripción, folleto, adjunto)"
+          title="Editar artículo"
           className="absolute right-1.5 top-1.5 rounded-full bg-background/80 p-1 text-muted-foreground shadow hover:text-primary"
         >
-          <Info className="h-3.5 w-3.5" />
+          <Pencil className="h-3.5 w-3.5" />
         </button>
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">

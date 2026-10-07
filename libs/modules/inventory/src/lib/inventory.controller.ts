@@ -22,6 +22,8 @@ import { ArticleImportService } from './article-import.service.js';
 import { CreateArticleDto } from './dto/create-article.dto.js';
 import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { CreateArticleVariantDto } from './dto/create-article-variant.dto.js';
+import { UpdateArticleVariantDto } from './dto/update-article-variant.dto.js';
+import { AssignTaxToArticlesDto } from './dto/assign-tax-to-articles.dto.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
 import { RecordStockMovementDto } from './dto/record-stock-movement.dto.js';
@@ -171,6 +173,26 @@ export class InventoryController {
   @Post('article-variants')
   createArticleVariant(@Body() dto: CreateArticleVariantDto) {
     return this.inventoryService.createArticleVariant(dto);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Patch('article-variants/:id')
+  updateArticleVariant(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateArticleVariantDto) {
+    return this.inventoryService.updateArticleVariantSku(id, dto.sku);
+  }
+
+  // Ficha del artículo (IVA, proveedor, remarca, stock y mínimo por
+  // depósito, costo de sólo lectura) - ver InventoryService.getArticleSheet.
+  @Get('articles/:id/sheet')
+  getArticleSheet(@Param('id', ParseUUIDPipe) id: string) {
+    return this.inventoryService.getArticleSheet(id);
+  }
+
+  // "N artículos no tienen IVA cargado -> asignar a todos".
+  @Roles(...WRITE_ROLES)
+  @Post('articles/assign-tax')
+  assignTaxToArticles(@Body() dto: AssignTaxToArticlesDto) {
+    return this.inventoryService.assignTaxToArticlesWithoutTax(dto.taxDefinitionId);
   }
 
   @Roles(...WRITE_ROLES)

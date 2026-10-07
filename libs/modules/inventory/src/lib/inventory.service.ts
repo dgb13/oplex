@@ -294,6 +294,13 @@ export class InventoryService {
       }
     }
 
+    if (dto.taxDefinitionId) {
+      const tax = await db.taxDefinition.findUnique({ where: { id: dto.taxDefinitionId }, select: { id: true } });
+      if (!tax) {
+        throw new BadRequestException('Tax definition not found');
+      }
+    }
+
     if (dto.commercialLength !== undefined) {
       const current = await db.article.findUniqueOrThrow({ where: { id }, select: { measurementType: true } });
       if (current.measurementType !== 'LINEAL_1D') {
@@ -311,6 +318,7 @@ export class InventoryService {
         isPublished: dto.isPublished,
         isManufactured: dto.isManufactured,
         preferredSupplierId: dto.preferredSupplierId,
+        taxDefinitionId: dto.taxDefinitionId,
         markupPercent: dto.markupPercent,
         description: dto.description,
         active: dto.active,
@@ -416,9 +424,10 @@ export class InventoryService {
     );
 
     return articles.map((article) => {
-      const { rate: taxRate, kind: taxKind } = resolveArticleTax(
-        article.taxDefinition ? (currentTaxes.get(article.taxDefinition.id) ?? article.taxDefinition) : null,
-      );
+      const currentTax = article.taxDefinition
+        ? (currentTaxes.get(article.taxDefinition.id) ?? article.taxDefinition)
+        : null;
+      const { rate: taxRate, kind: taxKind } = resolveArticleTax(currentTax);
       return {
         id: article.id,
         name: article.name,
@@ -446,6 +455,10 @@ export class InventoryService {
         sheetLength: article.sheetLength?.toNumber() ?? null,
         taxRate,
         taxKind,
+        // Para la ficha y el aviso "artículos sin IVA" de Inventario: sin
+        // alícuota cargada, taxRate igual da 0 (se factura al 0%).
+        taxDefinitionId: article.taxDefinitionId,
+        taxName: currentTax?.name ?? null,
         variants: article.variants.map((variant) => {
         const stockByWarehouse: WarehouseStockRow[] = variant.stockLedger.map((sl) => ({
           warehouseId: sl.warehouseId,
@@ -523,6 +536,98 @@ export class InventoryService {
     });
 
     return variant;
+  }
+
+  /** Todo lo que muestra la ficha del artículo (ArticleDetailsModal) además
+   * de los datos del listado: IVA, proveedor y remarca del artículo, y por
+   * variante el stock y mínimo por depósito, el costo promedio del stock y
+   * el último costo registrado. El costo es de sólo lectura acá: sale de
+   * compras, producción y movimientos (recordMovement). */
+  async getArticleSheet(articleId: string) {
+    const db = getTenantDb();
+    const article = await db.article.findUniqueOrThrow({
+      where: { id: articleId },
+      select: { id: true, taxDefinitionId: true, preferredSupplierId: true, markupPercent: true },
+    });
+    const [warehouses, variants] = await Promise.all([
+      db.warehouse.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      db.articleVariant.findMany({
+        where: { articleId },
+        orderBy: { sku: 'asc' },
+        select: {
+          id: true,
+          sku: true,
+          color: true,
+          size: true,
+          brand: true,
+          attributes: true,
+          unitPrice: true,
+          stockLedger: { select: { warehouseId: true, quantity: true, avgUnitCost: true } },
+          minimumStocks: { select: { warehouseId: true, minimumQuantity: true } },
+          priceHistory: {
+            where: { costPrice: { not: null } },
+            orderBy: { effectiveAt: 'desc' },
+            take: 1,
+            select: { costPrice: true, effectiveAt: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      article: { ...article, markupPercent: article.markupPercent === null ? null : Number(article.markupPercent) },
+      warehouses,
+      variants: variants.map((v) => {
+        const totalQty = v.stockLedger.reduce((sum, l) => sum + Number(l.quantity), 0);
+        const totalValue = v.stockLedger.reduce((sum, l) => sum + Number(l.quantity) * Number(l.avgUnitCost ?? 0), 0);
+        const last = v.priceHistory[0];
+        return {
+          id: v.id,
+          sku: v.sku,
+          label: buildVariantLabel(v),
+          unitPrice: Number(v.unitPrice),
+          avgUnitCost: totalQty > 0 ? totalValue / totalQty : null,
+          lastCost: last ? { amount: Number(last.costPrice), at: last.effectiveAt } : null,
+          stocks: warehouses.map((w) => ({
+            warehouseId: w.id,
+            quantity: Number(v.stockLedger.find((l) => l.warehouseId === w.id)?.quantity ?? 0),
+            minimumQuantity: (() => {
+              const m = v.minimumStocks.find((x) => x.warehouseId === w.id);
+              return m ? Number(m.minimumQuantity) : null;
+            })(),
+          })),
+        };
+      }),
+    };
+  }
+
+  /** Corregir el SKU de una variante (mismo chequeo de duplicado que el alta). */
+  async updateArticleVariantSku(articleVariantId: string, sku: string) {
+    const db = getTenantDb();
+    const trimmed = sku.trim();
+    const existing = await db.articleVariant.findFirst({
+      where: { sku: trimmed, NOT: { id: articleVariantId } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(`Ya existe una variante con el SKU "${trimmed}"`);
+    }
+    return db.articleVariant.update({ where: { id: articleVariantId }, data: { sku: trimmed } });
+  }
+
+  /** Asigna una alícuota a todos los artículos que no tienen ninguna
+   * (aviso de la lista de Inventario). Devuelve cuántos cambió. */
+  async assignTaxToArticlesWithoutTax(taxDefinitionId: string): Promise<{ updated: number }> {
+    const db = getTenantDb();
+    const tax = await db.taxDefinition.findUnique({ where: { id: taxDefinitionId }, select: { id: true } });
+    if (!tax) {
+      throw new BadRequestException('Tax definition not found');
+    }
+    const { count } = await db.article.updateMany({
+      where: { taxDefinitionId: null },
+      data: { taxDefinitionId },
+    });
+    return { updated: count };
   }
 
   async updateArticleVariantPrice(articleVariantId: string, unitPrice: number) {

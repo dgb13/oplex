@@ -17,6 +17,13 @@ export class UpdateArticleDto {
   @IsUUID()
   preferredSupplierId?: string | null;
 
+  // Alícuota de IVA (TaxDefinition). null la quita; omitido no la toca -
+  // misma convención que preferredSupplierId. Afecta a los comprobantes
+  // nuevos: los ya emitidos guardan su propia alícuota.
+  @IsOptional()
+  @IsUUID()
+  taxDefinitionId?: string | null;
+
   // null vuelve a "sin override" (usa TenantSettings.defaultMarkupPercent);
   // omitido deja el valor guardado sin tocar - misma convención que
   // preferredSupplierId de arriba.

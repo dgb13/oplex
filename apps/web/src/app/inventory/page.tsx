@@ -15,8 +15,9 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Info, LayoutGrid, List } from 'lucide-react';
+import { useTaxOptions } from '@/lib/vatCost';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, LayoutGrid, List, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ArticleFormModal from '@/components/ArticleFormModal';
 import ArticleCatalogGrid from './ArticleCatalogGrid';
@@ -48,6 +49,8 @@ interface VariantRow {
   description: string | null;
   brochureUrl: string | null;
   attachmentZipUrl: string | null;
+  // null = sin alícuota de IVA cargada (aviso "artículos sin IVA").
+  taxDefinitionId: string | null;
   variantId: string;
   sku: string;
   variantLabel: string | null;
@@ -130,6 +133,7 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       description: article.description,
       brochureUrl: article.brochureUrl,
       attachmentZipUrl: article.attachmentZipUrl,
+      taxDefinitionId: article.taxDefinitionId,
       variantId: variant.id,
       sku: variant.sku,
       variantLabel: buildVariantLabel(variant),
@@ -151,6 +155,9 @@ export default function InventoryPage() {
   const [onlyServices, setOnlyServices] = useState(false);
   const [onlyPublished, setOnlyPublished] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  // "N artículos no tienen IVA cargado" (boceto aprobado "Edición de
+  // artículos"): filtro y asignación en lote.
+  const [onlyMissingTax, setOnlyMissingTax] = useState(false);
   const [view, setView] = useState<'table' | 'catalog' | 'alerts'>('table');
   const [modalOpen, setModalOpen] = useState(false);
   const [imageArticle, setImageArticle] = useState<{
@@ -222,6 +229,7 @@ export default function InventoryPage() {
   }, [queryClient]);
 
   const articles = articlesQuery.data ?? [];
+  const missingTaxCount = articles.filter((a) => a.active && a.taxDefinitionId === null).length;
   const warehouses = warehousesQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
 
@@ -244,7 +252,9 @@ export default function InventoryPage() {
       const matchesService = !onlyServices || row.isService;
       const matchesPublished = !onlyPublished || row.isPublished;
       const matchesActive = showInactive || row.active;
+      const matchesMissingTax = !onlyMissingTax || row.taxDefinitionId === null;
       return (
+        matchesMissingTax &&
         matchesSearch &&
         matchesCategory &&
         matchesService &&
@@ -261,6 +271,7 @@ export default function InventoryPage() {
     onlyServices,
     onlyPublished,
     showInactive,
+    onlyMissingTax,
     sort,
   ]);
 
@@ -295,6 +306,18 @@ export default function InventoryPage() {
           <Button onClick={() => setModalOpen(true)}>+ Nuevo movimiento</Button>
         </div>
       </div>
+
+      {(missingTaxCount > 0 || onlyMissingTax) && (
+        <MissingTaxBanner
+          count={missingTaxCount}
+          onlyMissing={onlyMissingTax}
+          onToggleFilter={() => setOnlyMissingTax((v) => !v)}
+          onAssigned={() => {
+            setOnlyMissingTax(false);
+            void queryClient.invalidateQueries({ queryKey: ['inventory-articles'] });
+          }}
+        />
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
@@ -525,10 +548,11 @@ export default function InventoryPage() {
                             <button
                               type="button"
                               onClick={() => setDetailsArticleId(row.articleId)}
-                              title="Detalles (editar, activar/desactivar, descripción, folleto, adjunto)"
+                              title="Editar artículo"
+                              aria-label={`Editar ${row.articleName}`}
                               className="text-muted-foreground hover:text-primary"
                             >
-                              <Info className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </button>
                             {!row.isService && !row.isManufactured && (
                               <AddToCartIconButton variantId={row.variantId} />
@@ -649,6 +673,78 @@ export default function InventoryPage() {
           onClose={() => setDetailsArticleId(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** Aviso arriba de la lista: artículos sin IVA (se facturan al 0% y no se
+ * puede calcular su costo real) con "asignar a todos" (sólo toca los que no
+ * tienen ninguna alícuota - POST /inventory/articles/assign-tax). */
+function MissingTaxBanner({
+  count,
+  onlyMissing,
+  onToggleFilter,
+  onAssigned,
+}: {
+  count: number;
+  onlyMissing: boolean;
+  onToggleFilter: () => void;
+  onAssigned: () => void;
+}) {
+  const taxOptionsQuery = useTaxOptions();
+  const taxOptions = taxOptionsQuery.data ?? [];
+  const [taxId, setTaxId] = useState('');
+  const effectiveTaxId = taxId || (taxOptions.find((t) => t.code === 'IVA21') ?? taxOptions[0])?.id || '';
+  const [result, setResult] = useState<string | null>(null);
+  const assign = useMutation({
+    mutationFn: () => inventoryApi.assignTaxToArticles(effectiveTaxId),
+    onSuccess: ({ updated }) => {
+      setResult(`Listo: ${updated} ${updated === 1 ? 'artículo quedó' : 'artículos quedaron'} con ${
+        taxOptions.find((t) => t.id === effectiveTaxId)?.name ?? 'IVA'
+      }.`);
+      onAssigned();
+    },
+  });
+
+  if (count === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm">
+        <span className="flex-1">{result ?? 'Todos los artículos tienen IVA cargado.'}</span>
+        {onlyMissing && (
+          <button type="button" onClick={onToggleFilter} className="text-xs text-primary underline">
+            Ver todos
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+      <span className="min-w-[220px] flex-1">
+        <b>
+          {count} {count === 1 ? 'artículo no tiene' : 'artículos no tienen'} IVA cargado.
+        </b>{' '}
+        Se facturan con IVA 0 % y no se puede calcular su costo real. La mayoría lleva 21 %.
+      </span>
+      <select
+        value={effectiveTaxId}
+        onChange={(e) => setTaxId(e.target.value)}
+        className="h-8 rounded-md border bg-card px-2 text-sm"
+        aria-label="Alícuota a asignar"
+      >
+        {taxOptions.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <Button size="sm" onClick={() => assign.mutate()} disabled={!effectiveTaxId || assign.isPending}>
+        {assign.isPending ? 'Asignando...' : `Asignar a ${count === 1 ? 'ese artículo' : `los ${count}`}`}
+      </Button>
+      <button type="button" onClick={onToggleFilter} className="text-xs text-primary underline">
+        {onlyMissing ? 'Ver todos' : 'Ver cuáles son'}
+      </button>
+      {assign.isError && <span className="w-full text-xs text-destructive">No se pudo asignar. Probá de nuevo.</span>}
     </div>
   );
 }

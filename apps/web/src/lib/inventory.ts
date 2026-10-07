@@ -173,6 +173,9 @@ export interface Article {
   // antes de cualquier override manual del usuario en esa línea.
   taxRate: number | null;
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
+  // null = el artículo no tiene IVA cargado (se factura al 0%).
+  taxDefinitionId: string | null;
+  taxName: string | null;
   variants: ArticleVariant[];
 }
 
@@ -242,6 +245,8 @@ export function formatStock(article: Article, variant: ArticleVariant): StockDis
 }
 
 export interface UpdateArticleInput {
+  // Alícuota de IVA; null la quita, omitido no la toca.
+  taxDefinitionId?: string | null;
   isService?: boolean;
   isPublished?: boolean;
   isManufactured?: boolean;
@@ -377,6 +382,22 @@ export interface ReorderSuggestion {
   autoReplenish: boolean;
 }
 
+/** GET /inventory/articles/:id/sheet - lo que la ficha muestra además del
+ * listado (ver InventoryService.getArticleSheet). */
+export interface ArticleSheet {
+  article: { id: string; taxDefinitionId: string | null; preferredSupplierId: string | null; markupPercent: number | null };
+  warehouses: { id: string; name: string }[];
+  variants: {
+    id: string;
+    sku: string;
+    label: string | null;
+    unitPrice: number;
+    avgUnitCost: number | null;
+    lastCost: { amount: number; at: string } | null;
+    stocks: { warehouseId: string; quantity: number; minimumQuantity: number | null }[];
+  }[];
+}
+
 export interface SetMinimumStockInput {
   warehouseId: string;
   articleVariantId: string;
@@ -448,6 +469,11 @@ export const inventoryApi = {
     api.delete<Article>(`/inventory/articles/${articleId}/attachment-zip`).then((r) => r.data),
   updateArticle: (id: string, dto: UpdateArticleInput) =>
     api.patch<Article>(`/inventory/articles/${id}`, dto).then((r) => r.data),
+  getArticleSheet: (id: string) => api.get<ArticleSheet>(`/inventory/articles/${id}/sheet`).then((r) => r.data),
+  updateArticleVariantSku: (variantId: string, sku: string) =>
+    api.patch(`/inventory/article-variants/${variantId}`, { sku }).then((r) => r.data),
+  assignTaxToArticles: (taxDefinitionId: string) =>
+    api.post<{ updated: number }>('/inventory/articles/assign-tax', { taxDefinitionId }).then((r) => r.data),
   // reasons vacío = la unidad de medida se puede cambiar (ver
   // InventoryService.getUnitOfMeasureLockReasons en el backend).
   getUnitOfMeasureLock: (id: string) =>

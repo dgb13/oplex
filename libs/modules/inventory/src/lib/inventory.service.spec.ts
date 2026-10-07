@@ -1115,3 +1115,98 @@ describe('InventoryService.getStockValueByCategory', () => {
     expect(result).toEqual([]);
   });
 });
+
+describe('InventoryService - ficha del artículo', () => {
+  it('asigna la alícuota sólo a los artículos que no tienen ninguna', async () => {
+    const db = {
+      taxDefinition: { findUnique: jest.fn().mockResolvedValue({ id: 'iva21' }) },
+      article: { updateMany: jest.fn().mockResolvedValue({ count: 5 }) },
+    };
+    const service = new InventoryService(makeEventEmitter());
+
+    const result = await runInTenant(db, () => service.assignTaxToArticlesWithoutTax('iva21'));
+
+    expect(db.article.updateMany).toHaveBeenCalledWith({
+      where: { taxDefinitionId: null },
+      data: { taxDefinitionId: 'iva21' },
+    });
+    expect(result).toEqual({ updated: 5 });
+  });
+
+  it('rechaza asignar una alícuota que no existe', async () => {
+    const db = { taxDefinition: { findUnique: jest.fn().mockResolvedValue(null) }, article: { updateMany: jest.fn() } };
+    const service = new InventoryService(makeEventEmitter());
+
+    await expect(runInTenant(db, () => service.assignTaxToArticlesWithoutTax('nope'))).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(db.article.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('no deja poner un SKU que ya usa otra variante', async () => {
+    const db = {
+      articleVariant: { findFirst: jest.fn().mockResolvedValue({ id: 'otra' }), update: jest.fn() },
+    };
+    const service = new InventoryService(makeEventEmitter());
+
+    await expect(runInTenant(db, () => service.updateArticleVariantSku('v1', ' TOR-01 '))).rejects.toThrow(
+      'Ya existe una variante con el SKU "TOR-01"',
+    );
+    expect(db.articleVariant.findFirst).toHaveBeenCalledWith({
+      where: { sku: 'TOR-01', NOT: { id: 'v1' } },
+      select: { id: true },
+    });
+    expect(db.articleVariant.update).not.toHaveBeenCalled();
+  });
+
+  it('la ficha trae stock y mínimo por depósito, costo promedio ponderado y último costo', async () => {
+    const db = {
+      article: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'a1',
+          taxDefinitionId: 'iva21',
+          preferredSupplierId: null,
+          markupPercent: new Prisma.Decimal(40),
+        }),
+      },
+      warehouse: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'w1', name: 'Depósito principal' },
+          { id: 'w2', name: 'Sucursal' },
+        ]),
+      },
+      articleVariant: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'v1',
+            sku: 'TOR-01',
+            color: null,
+            size: null,
+            brand: null,
+            attributes: null,
+            unitPrice: new Prisma.Decimal(3000),
+            stockLedger: [
+              { warehouseId: 'w1', quantity: new Prisma.Decimal(10), avgUnitCost: new Prisma.Decimal(1000) },
+              { warehouseId: 'w2', quantity: new Prisma.Decimal(30), avgUnitCost: new Prisma.Decimal(1200) },
+            ],
+            minimumStocks: [{ warehouseId: 'w1', minimumQuantity: new Prisma.Decimal(5) }],
+            priceHistory: [{ costPrice: new Prisma.Decimal(1210), effectiveAt: new Date('2026-10-02T12:00:00Z') }],
+          },
+        ]),
+      },
+    };
+    const service = new InventoryService(makeEventEmitter());
+
+    const sheet = await runInTenant(db, () => service.getArticleSheet('a1'));
+
+    expect(sheet.article.markupPercent).toBe(40);
+    const [variant] = sheet.variants;
+    // (10 × 1000 + 30 × 1200) / 40
+    expect(variant.avgUnitCost).toBe(1150);
+    expect(variant.lastCost).toEqual({ amount: 1210, at: new Date('2026-10-02T12:00:00Z') });
+    expect(variant.stocks).toEqual([
+      { warehouseId: 'w1', quantity: 10, minimumQuantity: 5 },
+      { warehouseId: 'w2', quantity: 30, minimumQuantity: null },
+    ]);
+  });
+});
