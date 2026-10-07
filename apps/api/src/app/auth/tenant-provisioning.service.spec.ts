@@ -6,6 +6,7 @@ function makePrisma() {
   const fakeTx = {
     tenant: { create: jest.fn().mockResolvedValue({}) },
     currency: { create: jest.fn().mockResolvedValue({}) },
+    warehouse: { create: jest.fn().mockResolvedValue({}) },
     user: { create: jest.fn().mockResolvedValue({ id: 'user-1' }) },
     $executeRaw: jest.fn().mockResolvedValue(undefined),
   };
@@ -70,6 +71,26 @@ describe('TenantProvisioningService.provision', () => {
 
     expect(fakeTx.currency.create).toHaveBeenCalledWith({
       data: { tenantId: 'tenant-1', code: 'ARS', name: 'Peso argentino', isBase: true },
+    });
+  });
+
+  it('creates a "Depósito principal" so a new tenant can load stock right away', async () => {
+    const { prisma, fakeTx } = makePrisma();
+    const subscriptionService = { startTrial: jest.fn().mockResolvedValue({}) } as unknown as SubscriptionService;
+    const service = new TenantProvisioningService(prisma, subscriptionService);
+
+    await service.provision({
+      tenantId: 'tenant-1',
+      name: 'Acme',
+      ownerEmail: 'o@acme.com',
+      passwordHash: 'hashed',
+      mustChangePassword: true,
+      autoVerifyEmail: false,
+      planKey: 'GOLD',
+    });
+
+    expect(fakeTx.warehouse.create).toHaveBeenCalledWith({
+      data: { tenantId: 'tenant-1', name: 'Depósito principal' },
     });
   });
 

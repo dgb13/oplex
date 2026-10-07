@@ -267,6 +267,30 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
 
   const categories = categoriesQuery.data ?? [];
   const warehouses = warehousesQuery.data ?? [];
+  // Sin ningún depósito (el alta de la empresa crea uno, pero se puede
+  // borrar): en vez de un selector vacío, se ofrece crear uno acá mismo.
+  const noWarehouses = warehousesQuery.isSuccess && warehouses.length === 0;
+  const createDefaultWarehouseMutation = useMutation({
+    mutationFn: () => inventoryApi.createWarehouse({ name: 'Depósito principal' }),
+    onSuccess: (created) => {
+      setWarehouseId(created.id);
+      void queryClient.invalidateQueries({ queryKey: ['inventory-warehouses'] });
+    },
+  });
+  const noWarehousesHint = noWarehouses ? (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+      <span>Todavía no tenés depósitos. Para cargar stock hace falta uno.</span>
+      <button
+        type="button"
+        onClick={() => createDefaultWarehouseMutation.mutate()}
+        disabled={createDefaultWarehouseMutation.isPending}
+        className="rounded-md bg-amber-500 px-2.5 py-1 font-medium text-slate-900 hover:bg-amber-400 disabled:opacity-50"
+      >
+        {createDefaultWarehouseMutation.isPending ? 'Creando...' : 'Crear "Depósito principal"'}
+      </button>
+      {createDefaultWarehouseMutation.isError && <span>No se pudo crear. Probá de nuevo.</span>}
+    </div>
+  ) : null;
   const suppliers = suppliersQuery.data ?? [];
 
   const stockQuantity = stockInput.trim() === '' ? 0 : Number(stockInput);
@@ -1185,6 +1209,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
                 />
               </label>
+              {noWarehousesHint}
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-sm text-muted-foreground">Stock inicial</span>
@@ -1231,6 +1256,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
                 />
               </label>
+              {noWarehousesHint}
               <p className="text-xs text-muted-foreground">
                 La cantidad y el mínimo de cada variante se cargan por fila en la pestaña &quot;Variantes&quot; - este
                 depósito se usa para todas.

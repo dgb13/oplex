@@ -60,6 +60,11 @@ export class TenantProvisioningService {
       await db.currency.create({
         data: { tenantId: input.tenantId, code: 'ARS', name: 'Peso argentino', isBase: true },
       });
+      // Mismo criterio para el depósito: sin ninguno, cargar stock inicial
+      // en un artículo, recibir mercadería o abrir una caja se traba (el
+      // selector aparece vacío). El tenant lo puede renombrar o sumar más.
+      // Los tenants viejos lo reciben en la migración default_warehouse_backfill.
+      await db.warehouse.create({ data: { tenantId: input.tenantId, name: 'Depósito principal' } });
       const user = await db.user.create({
         data: {
           tenantId: input.tenantId,
