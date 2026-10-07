@@ -4,7 +4,17 @@
 #
 # Caddy saca y renueva solo el certificado HTTPS de Let's Encrypt.
 
-{$DOMAIN} {
+{
+	# Tiendas online (<subdominio>.oplex.com.ar): el certificado de cada
+	# subdominio se saca recién con la primera visita, y sólo si la API
+	# confirma que esa tienda existe (así nadie puede hacernos pedir
+	# certificados para direcciones inventadas).
+	on_demand_tls {
+		ask http://api:3000/api/public/storefront/domain-check
+	}
+}
+
+(oplex_routes) {
 	encode zstd gzip
 
 	handle /api/* {
@@ -20,6 +30,19 @@
 	}
 }
 
+{$DOMAIN} {
+	import oplex_routes
+}
+
 www.{$DOMAIN} {
 	redir https://{$DOMAIN}{uri} permanent
+}
+
+# Tiendas online. La web reconoce el subdominio y muestra esa tienda
+# (apps/web/src/proxy.ts).
+*.{$DOMAIN} {
+	tls {
+		on_demand
+	}
+	import oplex_routes
 }

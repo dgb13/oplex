@@ -14,6 +14,7 @@ export interface PublicPlan {
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
   productionModuleEnabled: boolean;
+  storefrontEnabled?: boolean;
 }
 
 export const COMPETITORS = ['Xubio', 'Colppy', 'Tango', 'Alegra', 'Contabilium'] as const;

@@ -105,13 +105,20 @@ jobs:
             TAG="$TAG" APP_DIR="$APP_DIR" GHCR_USER="${{ github.actor }}" GHCR_TOKEN="${{ secrets.GITHUB_TOKEN }}" 'bash -s' <<'REMOTE'
           set -euo pipefail
           cd "$APP_DIR"
+          CADDY_BEFORE="$(sha256sum docker/Caddyfile 2>/dev/null || true)"
           tar xzf /tmp/oplex-deploy-files.tgz && rm /tmp/oplex-deploy-files.tgz
+          CADDY_AFTER="$(sha256sum docker/Caddyfile)"
           # Las imágenes en ghcr.io son privadas: el token del job sirve
           # mientras dura el deploy.
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=\"$TAG\"/" .env
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          # El Caddyfile se monta como archivo: tar lo reemplaza por uno nuevo
+          # y el contenedor sigue viendo el viejo hasta reiniciarlo.
+          if [ "$CADDY_BEFORE" != "$CADDY_AFTER" ]; then
+            docker compose -f docker-compose.prod.yml restart caddy
+          fi
           docker logout ghcr.io
           docker image prune -f
           docker compose -f docker-compose.prod.yml ps

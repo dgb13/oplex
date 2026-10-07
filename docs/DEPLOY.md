@@ -93,6 +93,12 @@ En Cloudflare, zona `oplex.com.ar` → DNS:
 
 - `A  oplex.com.ar      → IP del servidor`
 - `A  www               → IP del servidor`
+- `A  *                 → IP del servidor` (tiendas online: `<tienda>.oplex.com.ar`)
+
+El registro `*` tiene que quedar en **gris (DNS only)**: Caddy saca el
+certificado HTTPS de cada tienda con su primera visita (`on_demand_tls`,
+ver `docker/Caddyfile`), y sólo para direcciones que la API confirma que
+existen (`/api/public/storefront/domain-check`).
 
 Arrancar con la nube en **gris (DNS only)** para que Caddy saque el
 certificado. Una vez que `https://oplex.com.ar` anda, se puede pasar a

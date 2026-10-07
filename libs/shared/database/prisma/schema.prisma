@@ -356,6 +356,12 @@ model Plan {
   // sin tope mensual. Backfill: true desde BRONZE (sortOrder >= 2) en
   // adelante, false en BASIC - ver SubscriptionService.assertCanUseProduction().
   productionModuleEnabled Boolean @default(false)
+  // Tienda online (catálogo público en <subdominio>.oplex.com.ar, ver
+  // StorefrontService) - on/off puro, mismo criterio que
+  // productionModuleEnabled. Backfill: true desde SILVER (sortOrder >= 3),
+  // decisión con el usuario 2026-10-07. Sin el módulo la tienda deja de
+  // verse aunque esté publicada.
+  storefrontEnabled Boolean @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -1405,10 +1411,29 @@ model Article {
   createdAt           DateTime       @default(now())
 
   variants ArticleVariant[]
+  // Fotos del artículo (hasta 8, ver ArticleImageService). La primera
+  // (sortOrder más bajo) es la principal y se copia en imageUrl de arriba,
+  // que es lo que siguen leyendo el catálogo, el POS y la importación.
+  images   ArticleImage[]
 
   @@index([tenantId])
   @@index([tenantId, active])
   @@map("articles")
+}
+
+// Una foto de un artículo. Mismo criterio de archivo que Article.imageUrl
+// (disco local, nombre random-uuid, servido sin autenticación).
+model ArticleImage {
+  id        String   @id @default(uuid())
+  tenantId  String
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, articleId])
+  @@map("article_images")
 }
 
 // The actual SKU-bearing, priced, stocked unit. An Article with no real
@@ -4139,6 +4164,7 @@ model LegalRequest {
 }
 
 enum NotificationCategory {
+  SALES
   PRODUCTION
   PURCHASES
   STOCK
@@ -4187,4 +4213,90 @@ model DocumentComment {
 
   @@index([tenantId, entityType, entityId, createdAt])
   @@map("document_comments")
+}
+
+// ---------------------------------------------------------------------------
+// Tienda online (etapa A: catálogo + pedido por WhatsApp, sin cobro).
+// ---------------------------------------------------------------------------
+
+enum StorefrontStockDisplay {
+  // "Quedan 3" sólo con 5 o menos (sugerido)
+  LOW
+  ALWAYS
+  NEVER
+}
+
+// Una por tenant. `subdomain` es ÚNICO GLOBAL (índice único en la base, no
+// sólo un chequeo en el service): dos empresas nunca pueden quedarse con la
+// misma dirección, ni aunque la pidan en el mismo instante. Llega ya
+// normalizado (minúsculas, sin acentos, sólo a-z 0-9 y guiones) - ver
+// normalizeSubdomain en StorefrontService. La API pública resuelve el
+// tenant con find_storefront_by_subdomain() (SECURITY DEFINER), antes de
+// que exista contexto de tenant.
+model StorefrontSettings {
+  id             String                 @id @default(uuid())
+  tenantId       String                 @unique
+  subdomain      String                 @unique
+  published      Boolean                @default(false)
+  template       String                 @default("aire")
+  // #rrggbb; null = el color propio de la plantilla.
+  accentColor    String?
+  // null = stock de todos los depósitos.
+  warehouseId    String?
+  stockDisplay   StorefrontStockDisplay @default(LOW)
+  whatsappNumber String?
+  notifyEmail    String?
+  // Textos de la portada; null = los de la plantilla.
+  heroTitle      String?
+  heroSubtitle   String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@map("storefront_settings")
+}
+
+enum StorefrontOrderStatus {
+  NEW
+  CONFIRMED
+  DONE
+  CANCELLED
+}
+
+// Pedido armado por un visitante de la tienda. No mueve stock ni genera
+// comprobante: el negocio lo confirma por WhatsApp y lo factura como
+// siempre (la etapa B sumará cobro online). Los precios quedan congelados
+// al momento del pedido, recalculados en el servidor (nunca los que manda
+// el navegador).
+model StorefrontOrder {
+  id            String                @id @default(uuid())
+  tenantId      String
+  number        Int
+  customerName  String
+  customerPhone String?
+  note          String?
+  total         Decimal               @db.Decimal(14, 2)
+  status        StorefrontOrderStatus @default(NEW)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  lines StorefrontOrderLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, createdAt])
+  @@map("storefront_orders")
+}
+
+model StorefrontOrderLine {
+  id               String          @id @default(uuid())
+  tenantId         String
+  orderId          String
+  order            StorefrontOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  articleVariantId String
+  description      String
+  quantity         Decimal         @db.Decimal(14, 3)
+  // Precio final unitario (con IVA si corresponde), tal como lo vio el cliente.
+  unitPrice        Decimal         @db.Decimal(14, 2)
+
+  @@index([tenantId, orderId])
+  @@map("storefront_order_lines")
 }
