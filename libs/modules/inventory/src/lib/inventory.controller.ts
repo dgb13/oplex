@@ -24,6 +24,7 @@ import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { CreateArticleVariantDto } from './dto/create-article-variant.dto.js';
 import { UpdateArticleVariantDto } from './dto/update-article-variant.dto.js';
 import { AssignTaxToArticlesDto } from './dto/assign-tax-to-articles.dto.js';
+import { ReorderArticleImagesDto } from './dto/reorder-article-images.dto.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
 import { RecordStockMovementDto } from './dto/record-stock-movement.dto.js';
@@ -276,6 +277,35 @@ export class InventoryController {
   @Delete('articles/:id/image')
   removeArticleImage(@Param('id', ParseUUIDPipe) id: string) {
     return this.articleImageService.removeImage(id);
+  }
+
+  // Fotos múltiples (galería de la tienda online). La primera es la principal.
+  @Get('articles/:id/images')
+  listArticleImages(@Param('id', ParseUUIDPipe) id: string) {
+    return this.articleImageService.listImages(id);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post('articles/:id/images')
+  async addArticleImage(@Param('id', ParseUUIDPipe) id: string, @Req() req: FastifyRequest) {
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No se recibió ningún archivo');
+    }
+    const buffer = await data.toBuffer();
+    return this.articleImageService.addImage(id, data.mimetype, buffer);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Patch('articles/:id/images/order')
+  reorderArticleImages(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReorderArticleImagesDto) {
+    return this.articleImageService.reorder(id, dto.imageIds);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Delete('article-images/:imageId')
+  removeArticleImageById(@Param('imageId', ParseUUIDPipe) imageId: string) {
+    return this.articleImageService.removeImageById(imageId);
   }
 
   @AuditEntity('article', { labelFields: ['name'] })

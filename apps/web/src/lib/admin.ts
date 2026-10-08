@@ -337,6 +337,8 @@ export interface AdminPlan {
   aiAssistantMonthlyQueryQuota: number | null;
   // Módulo de Producción - on/off puro, sin cupo mensual.
   productionModuleEnabled: boolean;
+  // Tienda online - on/off puro.
+  storefrontEnabled: boolean;
 }
 
 export interface CreatePlanInput {
@@ -357,6 +359,8 @@ export interface CreatePlanInput {
   aiAssistantMonthlyQueryQuota?: number | null;
   // Módulo de Producción - on/off puro, sin cupo mensual.
   productionModuleEnabled?: boolean;
+  // Tienda online - on/off puro.
+  storefrontEnabled?: boolean;
 }
 
 export type UpdatePlanInput = Partial<Omit<CreatePlanInput, 'key'>>;

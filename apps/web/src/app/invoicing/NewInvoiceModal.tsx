@@ -23,12 +23,17 @@ import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 
 interface Props {
   onClose: () => void;
+  // Factura armada desde otro lado (ej. un pedido de la tienda online):
+  // líneas ya cargadas, con precios finales (IVA incluido).
+  initialLines?: SalesLine[];
+  initialPricesIncludeTax?: boolean;
+  onCreated?: () => void;
 }
 
 const DOCUMENT_LETTERS = ['A', 'B', 'C', 'M'] as const;
 type Letter = (typeof DOCUMENT_LETTERS)[number];
 
-export default function NewInvoiceModal({ onClose }: Props) {
+export default function NewInvoiceModal({ onClose, initialLines, initialPricesIncludeTax, onCreated }: Props) {
   const perms = useCompanyPermissions();
   const queryClient = useQueryClient();
 
@@ -53,8 +58,8 @@ export default function NewInvoiceModal({ onClose }: Props) {
   const [documentLetter, setDocumentLetter] = useState<Letter>('B');
   const [currencyId, setCurrencyId] = useState('');
   const [exchangeRateOverride, setExchangeRateOverride] = useState('');
-  const [pricesIncludeTax, setPricesIncludeTax] = useState(false);
-  const [lines, setLines] = useState<SalesLine[]>([]);
+  const [pricesIncludeTax, setPricesIncludeTax] = useState(initialPricesIncludeTax ?? false);
+  const [lines, setLines] = useState<SalesLine[]>(initialLines ?? []);
   const [otherTaxLines, setOtherTaxLines] = useState<InvoiceTaxLineInput[]>([]);
   const [showOtherTaxes, setShowOtherTaxes] = useState(false);
   const [error, setError] = useState('');
@@ -123,6 +128,7 @@ export default function NewInvoiceModal({ onClose }: Props) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      onCreated?.();
       onClose();
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {

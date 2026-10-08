@@ -33,6 +33,7 @@ const EMPTY_FORM: CreatePlanInput = {
   isActive: true,
   slaMarkdown: '',
   productionModuleEnabled: false,
+  storefrontEnabled: false,
 };
 
 export default function AdminPlansPage() {
@@ -235,6 +236,7 @@ function PlanForm({
     annualDiscountPercent: Number(initial.annualDiscountPercent ?? 0),
     isActive: initial.isActive ?? true,
     productionModuleEnabled: initial.productionModuleEnabled ?? false,
+    storefrontEnabled: initial.storefrontEnabled ?? false,
     slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
     // Texto, no número: "" representa null (función no incluida en este
     // plan) - un <input type="number"> no distingue "vacío" de "0" con la
@@ -330,6 +332,17 @@ function PlanForm({
             ]}
           />
         </Field>
+        <Field label="Tienda online">
+          <AdminSelect
+            buttonClassName={PLAN_FORM_SELECT_LOOK}
+            value={form.storefrontEnabled ? '1' : '0'}
+            onChange={(v) => setForm({ ...form, storefrontEnabled: v === '1' })}
+            options={[
+              { value: '1', label: 'Incluida' },
+              { value: '0', label: 'No incluida' },
+            ]}
+          />
+        </Field>
       </div>
 
       <div className="mt-4">
@@ -392,6 +405,7 @@ function PlanForm({
                     annualDiscountPercent: form.annualDiscountPercent,
                     isActive: form.isActive,
                     productionModuleEnabled: form.productionModuleEnabled,
+                    storefrontEnabled: form.storefrontEnabled,
                     slaMarkdown: form.slaMarkdown,
                     aiInvoiceScanMonthlyQuota,
                     aiAssistantMonthlyQueryQuota,

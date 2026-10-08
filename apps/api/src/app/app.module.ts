@@ -32,6 +32,7 @@ import { AssistantModule } from './assistant/assistant.module.js';
 import { MembershipsModule } from './memberships/memberships.module.js';
 import { OpsModule } from './ops/ops.module.js';
 import { VisitsModule } from './visits/visits.module.js';
+import { StorefrontModule } from './storefront/storefront.module.js';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AgendaModule } from './agenda/agenda.module.js';
@@ -84,6 +85,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     SchedulerModule,
     OpsModule,
     VisitsModule,
+    StorefrontModule,
     TenantSettingsModule,
     ActivityLogModule,
     PurchasesModule,

@@ -65,6 +65,7 @@ function planFeatures(plan: PublicPlan): { text: string; off?: boolean }[] {
     { text: `${n(plan.maxMonthlyInvoices, 'comprobante', 'comprobantes')} por mes` },
     { text: 'Facturación ARCA, Caja, stock, compras y contabilidad' },
     plan.productionModuleEnabled ? { text: 'Producción con recetas' } : { text: 'Producción', off: true },
+    plan.storefrontEnabled ? { text: 'Tienda online con tu dirección' } : { text: 'Tienda online', off: true },
     plan.aiAssistantMonthlyQueryQuota != null
       ? { text: `Asistente de IA: ${ars.format(plan.aiAssistantMonthlyQueryQuota)} consultas por mes` }
       : { text: 'Asistente de IA', off: true },

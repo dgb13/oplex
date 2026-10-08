@@ -14,6 +14,7 @@ export const NOTIFICATION_PREFERENCES = {
   'purchases.goods_received': 'Llega la mercadería de tu orden de compra',
   'stock.below_minimum': 'Un artículo queda bajo el mínimo',
   'task.completed': 'Completan una tarea que asignaste',
+  'storefront.new_order': 'Entra un pedido de la tienda online',
 } as const;
 export type NotificationPreferenceKey = keyof typeof NOTIFICATION_PREFERENCES;
 

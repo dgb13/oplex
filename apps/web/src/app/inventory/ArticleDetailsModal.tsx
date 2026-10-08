@@ -12,7 +12,9 @@ import { inventoryApi, resolveUploadUrl, UNIT_OF_MEASURE_OPTIONS } from '@/lib/i
 import { formatMoney, useTaxCondition, useTaxOptions } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { FileArchive, FileText } from 'lucide-react';
+import { Check, FileArchive, FileText, X } from 'lucide-react';
+import Link from 'next/link';
+import ArticlePhotosTab from './ArticlePhotosTab';
 import { useEffect, useMemo, useState } from 'react';
 
 interface Props {
@@ -35,13 +37,15 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'general' | 'precios' | 'variantes' | 'stock' | 'adjuntos';
+type Tab = 'general' | 'precios' | 'variantes' | 'stock' | 'fotos' | 'tienda' | 'adjuntos';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'general', label: 'Datos generales' },
   { key: 'precios', label: 'Precios e IVA' },
   { key: 'variantes', label: 'Variantes' },
   { key: 'stock', label: 'Stock' },
+  { key: 'fotos', label: 'Fotos' },
+  { key: 'tienda', label: 'Tienda online' },
   { key: 'adjuntos', label: 'Adjuntos' },
 ];
 
@@ -412,10 +416,6 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
                   Es servicio
                 </label>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="h-4 w-4 accent-primary" />
-                  Publicado
-                </label>
-                <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={isManufactured} onChange={(e) => setIsManufactured(e.target.checked)} className="h-4 w-4 accent-primary" />
                   Se fabrica
                 </label>
@@ -423,7 +423,35 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
             </div>
           )}
 
-          {tab !== 'general' && tab !== 'adjuntos' && !loadedSheet && (
+          {tab === 'fotos' && <ArticlePhotosTab articleId={article.id} />}
+
+          {tab === 'tienda' && (
+            <div className="flex flex-col gap-4">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="h-4 w-4 accent-primary" />
+                Publicado en la tienda online
+              </label>
+              <div className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+                <span className="text-xs font-semibold text-muted-foreground">Para que se vea en la tienda tiene que cumplir las cuatro:</span>
+                <StoreRule ok={isPublished} label="Publicado en la tienda online" />
+                <StoreRule ok={!!categoryId} label="Tiene categoría (pestaña Datos generales)" />
+                <StoreRule ok={Object.values(prices).some((p) => Number(p) > 0)} label="Tiene precio de venta (pestaña Precios e IVA)" />
+                <StoreRule
+                  ok={!article.isService && totalStock > 0}
+                  label={article.isService ? 'Es un servicio: los servicios no se muestran en la tienda' : 'Tiene stock'}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                El tilde se guarda con “Guardar cambios”. Las fotos de la galería se cargan en la pestaña Fotos. La tienda se configura en{' '}
+                <Link href="/storefront" className="font-semibold text-primary">
+                  Ventas → Tienda online
+                </Link>
+                .
+              </p>
+            </div>
+          )}
+
+          {tab !== 'general' && tab !== 'adjuntos' && tab !== 'fotos' && tab !== 'tienda' && !loadedSheet && (
             <p className="text-sm text-muted-foreground">{sheetQuery.isError ? 'No se pudo cargar la ficha.' : 'Cargando...'}</p>
           )}
 
@@ -783,6 +811,19 @@ function AttachmentBlock(props: {
           {props.uploading ? 'Subiendo...' : props.uploadLabel}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function StoreRule({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`grid h-5 w-5 flex-none place-items-center rounded-md ${ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}
+      >
+        {ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+      </span>
+      {label}
     </div>
   );
 }

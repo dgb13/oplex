@@ -426,6 +426,13 @@ export interface AutoReplenishmentResult {
   skippedAlreadyToday: number;
 }
 
+export interface ArticleImage {
+  id: string;
+  articleId: string;
+  url: string;
+  sortOrder: number;
+}
+
 export const inventoryApi = {
   listArticles: (filters?: ListArticlesFilters) =>
     api.get<Article[]>('/inventory/articles', { params: filters }).then((r) => r.data),
@@ -449,6 +456,18 @@ export const inventoryApi = {
   },
   removeArticleImage: (articleId: string) =>
     api.delete<Article>(`/inventory/articles/${articleId}/image`).then((r) => r.data),
+  // Fotos múltiples (hasta 8). La primera es la principal.
+  listArticleImages: (articleId: string) =>
+    api.get<ArticleImage[]>(`/inventory/articles/${articleId}/images`).then((r) => r.data),
+  addArticleImage: (articleId: string, file: Blob, filename: string) => {
+    const formData = new FormData();
+    formData.append('file', file, filename);
+    return api.post<ArticleImage[]>(`/inventory/articles/${articleId}/images`, formData).then((r) => r.data);
+  },
+  reorderArticleImages: (articleId: string, imageIds: string[]) =>
+    api.patch<ArticleImage[]>(`/inventory/articles/${articleId}/images/order`, { imageIds }).then((r) => r.data),
+  removeArticleImageById: (imageId: string) =>
+    api.delete<ArticleImage[]>(`/inventory/article-images/${imageId}`).then((r) => r.data),
   uploadArticleBrochure: (articleId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);

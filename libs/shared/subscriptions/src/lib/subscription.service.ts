@@ -199,6 +199,26 @@ export class SubscriptionService {
     }
   }
 
+  /** Tienda online - on/off puro, mismo criterio que assertCanUseProduction.
+   * Lo usan las escrituras de la configuración de la tienda. */
+  async assertCanUseStorefront(): Promise<void> {
+    const { plan } = await this.assertSubscriptionActive();
+    if (!plan.storefrontEnabled) {
+      throw new ForbiddenException(`Tu plan actual (${plan.name}) no incluye la tienda online`);
+    }
+  }
+
+  /** Para la tienda pública: nunca lanza. Una suscripción vencida o un plan
+   * sin el módulo apagan la tienda (devuelve false) en vez de dar error. */
+  async isStorefrontAvailable(): Promise<boolean> {
+    try {
+      await this.assertCanUseStorefront();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Usado por AiInvoiceScanService.getAvailability() (apps/api) para
    * mostrarle al usuario cuánto cupo mensual lleva usado, no sólo si
    * todavía puede o no - a diferencia de assertCanUseAiInvoiceScan() de
@@ -302,6 +322,7 @@ export class SubscriptionService {
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
         productionModuleEnabled: dto.productionModuleEnabled ?? false,
+        storefrontEnabled: dto.storefrontEnabled ?? false,
       },
     });
   }
@@ -333,6 +354,7 @@ export class SubscriptionService {
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
         productionModuleEnabled: dto.productionModuleEnabled,
+        storefrontEnabled: dto.storefrontEnabled,
       },
     });
   }

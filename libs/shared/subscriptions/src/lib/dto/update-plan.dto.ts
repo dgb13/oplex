@@ -73,4 +73,9 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   productionModuleEnabled?: boolean;
+
+  // Tienda online - on/off puro. Ver SubscriptionService.assertCanUseStorefront().
+  @IsOptional()
+  @IsBoolean()
+  storefrontEnabled?: boolean;
 }

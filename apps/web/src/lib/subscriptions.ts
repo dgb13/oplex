@@ -19,6 +19,8 @@ export interface Plan {
   // Módulo de Producción - on/off puro, sin cupo mensual. Ver
   // SubscriptionService.assertCanUseProduction() en el backend.
   productionModuleEnabled: boolean;
+  // Tienda online (desde Silver). Ver SubscriptionService.assertCanUseStorefront().
+  storefrontEnabled: boolean;
 }
 
 export interface TenantSubscription {

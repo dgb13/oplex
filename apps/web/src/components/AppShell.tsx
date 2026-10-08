@@ -80,6 +80,8 @@ const NAV_ENTRIES: NavEntry[] = [
       { href: '/quotes', label: 'Cotizaciones', roles: ['SALES', 'VIEWER'] },
       { href: '/receivables', label: 'Cuentas a Cobrar', roles: ['SALES', 'ACCOUNTANT'] },
       { href: '/clients', label: 'Clientes', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
+      { href: '/storefront', label: 'Tienda online', roles: [] },
+      { href: '/storefront/orders', label: 'Pedidos de la tienda', roles: ['SALES'] },
     ],
   },
   {
@@ -208,13 +210,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     queryFn: subscriptionsApi.getCurrent,
   });
   const comprasIndex = NAV_ENTRIES.findIndex((e) => e.kind === 'group' && e.label === 'Compras');
-  const planEntries = subscription?.plan.productionModuleEnabled
+  const withProduction = subscription?.plan.productionModuleEnabled
     ? [
         ...NAV_ENTRIES.slice(0, comprasIndex + 1),
         PRODUCTION_NAV_GROUP,
         ...NAV_ENTRIES.slice(comprasIndex + 1),
       ]
     : NAV_ENTRIES;
+  // "Tienda online" se ve siempre (en un plan sin el módulo muestra qué
+  // incluye); "Pedidos de la tienda" sólo con el módulo.
+  const planEntries = subscription?.plan.storefrontEnabled
+    ? withProduction
+    : withProduction.map((entry) =>
+        entry.kind === 'group' ? { ...entry, items: entry.items.filter((i) => i.href !== '/storefront/orders') } : entry,
+      );
   // Leído en un effect (no en el render): localStorage no existe en el
   // render del servidor - mismo cuidado que el bug de hidratación de arriba.
   const [grants, setGrants] = useState<ModuleGrant[]>([]);

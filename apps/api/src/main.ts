@@ -66,8 +66,15 @@ async function bootstrap() {
   // permitido igual por si se sirven en dominios distintos.
   const corsOrigins = ['http://localhost:4200', 'http://localhost:3000'];
   if (process.env['FRONTEND_URL']) corsOrigins.push(process.env['FRONTEND_URL']);
+  // Las tiendas online viven en <subdominio>.oplex.com.ar (y en desarrollo
+  // <subdominio>.localhost:4200) y piden su catálogo a esta API.
+  const storefrontRoot = (process.env['STOREFRONT_ROOT_DOMAIN'] ?? 'oplex.com.ar').replace(/\./g, '\\.');
+  const storefrontOrigins = [
+    new RegExp(`^https://[a-z0-9-]+\\.${storefrontRoot}$`),
+    /^http:\/\/[a-z0-9-]+\.localhost(:\d+)?$/,
+  ];
   app.enableCors({
-    origin: corsOrigins,
+    origin: [...corsOrigins, ...storefrontOrigins],
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
