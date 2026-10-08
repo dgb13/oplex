@@ -19,6 +19,10 @@ import {
 } from '@plexo/database';
 import type { StorefrontOrder, StorefrontOrderStatus, StorefrontSettings } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Resend } from 'resend';
 import { buildStorefrontCatalog, type StorefrontCatalog, type StorefrontCoverage } from './storefront-catalog.js';
 import {
@@ -43,6 +47,7 @@ export interface StorefrontStoreInfo {
   accentColor: string | null;
   heroTitle: string | null;
   heroSubtitle: string | null;
+  coverUrl: string | null;
   logoUrl: string | null;
   whatsappNumber: string | null;
   address: string | null;
@@ -72,6 +77,11 @@ export interface SubdomainCheck {
   message: string | null;
 }
 
+// La web la achica a 2000px en JPG antes de subirla (ver storefront/page.tsx).
+const COVER_MIME_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const COVER_MAX_BYTES = 6 * 1024 * 1024;
+const COVER_URL_PREFIX = '/uploads/storefront-covers/';
+
 const ORDER_LIMIT_PER_WINDOW = 8;
 const ORDER_WINDOW_MS = 10 * 60 * 1000;
 
@@ -81,11 +91,14 @@ export class StorefrontService {
   // Freno simple contra el envío masivo de pedidos falsos desde una misma
   // IP (en memoria: alcanza con una sola instancia de la API).
   private readonly recentOrders = new Map<string, number[]>();
+  private readonly coversDir = join(process.cwd(), 'uploads', 'storefront-covers');
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
-  ) {}
+  ) {
+    mkdirSync(this.coversDir, { recursive: true });
+  }
 
   // ------------------------------------------------------------ dentro de Oplex
 
@@ -168,6 +181,36 @@ export class StorefrontService {
       }
       throw err;
     }
+  }
+
+  /** Foto de portada: mismo patrón que el logo (archivo con nombre uuid en
+   * uploads/, servido sin login por /uploads/). */
+  async setCover(mimeType: string, buffer: Buffer): Promise<StorefrontSettings> {
+    await this.subscriptionService.assertCanUseStorefront();
+    const extension = COVER_MIME_TYPES[mimeType];
+    if (!extension) throw new BadRequestException('La portada tiene que ser una imagen JPG, PNG o WEBP');
+    if (buffer.length > COVER_MAX_BYTES) throw new BadRequestException('La portada tiene que pesar menos de 6MB');
+    const db = getTenantDb();
+    const settings = await db.storefrontSettings.findFirst();
+    if (!settings) throw new BadRequestException('Guardá la tienda una vez antes de subir la portada');
+
+    const filename = `${randomUUID()}.${extension}`;
+    await writeFile(join(this.coversDir, filename), buffer);
+    const updated = await db.storefrontSettings.update({
+      where: { id: settings.id },
+      data: { coverImageUrl: `${COVER_URL_PREFIX}${filename}` },
+    });
+    if (settings.coverImageUrl) await this.deleteCoverFile(settings.coverImageUrl);
+    return updated;
+  }
+
+  async removeCover(): Promise<StorefrontSettings | null> {
+    const db = getTenantDb();
+    const settings = await db.storefrontSettings.findFirst();
+    if (!settings?.coverImageUrl) return settings;
+    const updated = await db.storefrontSettings.update({ where: { id: settings.id }, data: { coverImageUrl: null } });
+    await this.deleteCoverFile(settings.coverImageUrl);
+    return updated;
   }
 
   /** Lo mismo que ve un visitante, aunque la tienda no esté publicada (vista previa). */
@@ -364,6 +407,7 @@ export class StorefrontService {
       accentColor: settings.accentColor,
       heroTitle: settings.heroTitle ?? null,
       heroSubtitle: settings.heroSubtitle ?? null,
+      coverUrl: settings.coverImageUrl ?? null,
       logoUrl: ts?.logoUrl ?? null,
       whatsappNumber: settings.whatsappNumber,
       address: ts?.fiscalAddress ?? null,
@@ -371,6 +415,18 @@ export class StorefrontService {
       email: ts?.contactEmail ?? null,
       published: settings.published,
     };
+  }
+
+  /** Un archivo viejo que queda en disco nunca hace fallar el pedido (mismo criterio que el logo). */
+  private async deleteCoverFile(url: string): Promise<void> {
+    if (!url.startsWith(COVER_URL_PREFIX)) return;
+    const filename = url.slice(COVER_URL_PREFIX.length);
+    if (!filename || filename.includes('/')) return;
+    try {
+      await unlink(join(this.coversDir, filename));
+    } catch (error) {
+      this.logger.warn(`No se pudo borrar la portada anterior ${filename}: ${error}`);
+    }
   }
 
   private throttle(key: string): void {

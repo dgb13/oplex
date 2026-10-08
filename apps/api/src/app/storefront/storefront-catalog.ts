@@ -4,6 +4,9 @@ import type { StorefrontSettings, StorefrontStockDisplay, TenantTaxCondition } f
 /** Con 5 o menos, la tienda avisa "Quedan N" (modo LOW). */
 export const LOW_STOCK_THRESHOLD = 5;
 
+/** Un artículo cargado hace menos de esto lleva la etiqueta "Nuevo". */
+export const NEW_ARTICLE_DAYS = 30;
+
 export interface StorefrontVariant {
   id: string;
   label: string;
@@ -24,6 +27,7 @@ export interface StorefrontProduct {
   price: number;
   netPrice: number | null;
   stockShown: number | null;
+  isNew: boolean;
   variants: StorefrontVariant[];
 }
 
@@ -127,6 +131,7 @@ export async function buildStorefrontCatalog(
 
   const coverage: StorefrontCoverage = { visible: 0, total: articles.length, notPublished: 0, noStock: 0, noCategory: 0, noPrice: 0 };
   const products: StorefrontProduct[] = [];
+  const newSince = Date.now() - NEW_ARTICLE_DAYS * 24 * 60 * 60 * 1000;
   const categories = new Set<string>();
   const variantsById = new Map<string, VariantInternal & { articleName: string; showLabel: boolean }>();
 
@@ -167,6 +172,7 @@ export async function buildStorefrontCatalog(
       price: cheapest.price.toNumber(),
       netPrice: cheapest.netPrice?.toNumber() ?? null,
       stockShown: stockShown(totalStock, settings.stockDisplay),
+      isNew: article.createdAt.getTime() >= newSince,
       variants:
         sellable.length > 1 || article.hasVariants
           ? sellable.map((v) => ({

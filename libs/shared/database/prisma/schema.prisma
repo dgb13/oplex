@@ -4249,6 +4249,8 @@ model StorefrontSettings {
   // Textos de la portada; null = los de la plantilla.
   heroTitle      String?
   heroSubtitle   String?
+  // Foto de portada (/uploads/storefront-covers/...); null = la primera foto del catálogo.
+  coverImageUrl  String?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 

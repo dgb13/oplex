@@ -3,17 +3,17 @@
 import Storefront from '@/components/storefront/Storefront';
 import { inventoryApi } from '@/lib/inventory';
 import {
-  allStorefrontFontsHref,
   STOREFRONT_TEMPLATES,
   storefrontApi,
   type StorefrontSettingsInput,
   type StorefrontTemplate,
 } from '@/lib/storefront';
 import { resolveUploadUrl } from '@/lib/inventory';
+import { shrinkImage } from '@/lib/shrinkImage';
 import { tenantLogoApi, tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { Check, ExternalLink, Eye, X } from 'lucide-react';
+import { Check, ExternalLink, Eye, Monitor, Smartphone, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -44,8 +44,10 @@ export default function StorefrontSettingsPage() {
   const [form, setForm] = useState<StorefrontSettingsInput>(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPhone, setPreviewPhone] = useState(false);
   const [check, setCheck] = useState<{ subdomain: string; available: boolean; message: string | null } | null>(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!view || loaded) return;
@@ -110,6 +112,23 @@ export default function StorefrontSettingsPage() {
     onError: () => toast.error('No se pudo subir el logo (PNG o JPG)'),
   });
 
+  const cover = useMutation({
+    mutationFn: async (file: File | null) => {
+      if (!file) return storefrontApi.removeCover();
+      const { blob } = await shrinkImage(file, 2000);
+      return storefrontApi.uploadCover(blob);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['storefront-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-preview'] });
+      toast.success('Portada actualizada');
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      const m = err.response?.data?.message ?? 'No se pudo subir la portada (JPG, PNG o WEBP)';
+      toast.error(Array.isArray(m) ? m[0] : m);
+    },
+  });
+
   if (viewQuery.isLoading || !view) {
     return <div className="py-16 text-center text-muted-foreground">Cargando...</div>;
   }
@@ -121,10 +140,10 @@ export default function StorefrontSettingsPage() {
   const address = `${check?.subdomain || form.subdomain || 'tutienda'}.${view.rootDomain}`;
   const logoUrl = resolveUploadUrl(tenantQuery.data?.logoUrl ?? null);
   const savedPublished = view.settings?.published ?? false;
+  const coverUrl = resolveUploadUrl(view.settings?.coverImageUrl ?? null);
 
   return (
     <div className="flex flex-col gap-5">
-      <link rel="stylesheet" href={allStorefrontFontsHref()} precedence="default" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Tienda online</h1>
@@ -205,19 +224,17 @@ export default function StorefrontSettingsPage() {
                   aria-pressed={form.template === tpl.id}
                   className={`flex flex-col gap-2 rounded-xl border p-2 text-left transition hover:border-primary ${form.template === tpl.id ? 'border-primary ring-3 ring-primary/20' : ''}`}
                 >
-                  <div className="flex aspect-[16/11] flex-col gap-1.5 overflow-hidden rounded-lg p-2" style={{ background: tpl.swatch[0], color: tpl.swatch[1] }}>
-                    <span style={{ fontFamily: tpl.font, fontWeight: tpl.weight, fontSize: 15, lineHeight: 1 }}>{tenantQuery.data?.tradeName || 'Tu tienda'}</span>
-                    <div className="grid flex-1 grid-cols-3 gap-1">
-                      {[1, 0.18, 0.18, 0.18, 0.6, 0.18].map((o, k) => (
-                        <i key={k} className="rounded-sm" style={{ background: k === 0 || k === 4 ? tpl.swatch[2] : tpl.swatch[1], opacity: k === 0 ? 1 : o }} />
-                      ))}
-                    </div>
-                  </div>
+                  <img
+                    src={`/storefront/templates/${tpl.id}.jpg`}
+                    alt={`Plantilla ${tpl.name}`}
+                    loading="lazy"
+                    className="aspect-[16/10] w-full rounded-lg border object-cover object-top"
+                  />
                   <strong className="text-sm">
                     {i + 1}. {tpl.name}
                   </strong>
                   <small className="text-xs leading-snug text-muted-foreground">
-                    {tpl.vibe} · {tpl.fx.split(',')[0]}
+                    <b className="font-semibold">{tpl.vibe}.</b> {tpl.what}
                   </small>
                 </button>
               ))}
@@ -250,6 +267,43 @@ export default function StorefrontSettingsPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) logo.mutate(file);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="grid aspect-[16/9] w-40 place-items-center overflow-hidden rounded-xl border border-dashed bg-muted text-center text-xs font-semibold text-muted-foreground">
+                {coverUrl ? <img src={coverUrl} alt="Portada" className="h-full w-full object-cover" /> : 'Foto de portada'}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => coverInput.current?.click()}
+                    disabled={disabled || cover.isPending || !view.settings}
+                    className="self-start rounded-lg border px-3 py-1.5 text-sm font-semibold transition hover:bg-muted disabled:opacity-50"
+                  >
+                    {cover.isPending ? 'Subiendo...' : coverUrl ? 'Cambiar portada' : 'Subir portada'}
+                  </button>
+                  {coverUrl && (
+                    <button onClick={() => cover.mutate(null)} disabled={cover.isPending} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:bg-muted">
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {view.settings
+                    ? 'La foto grande de la portada (horizontal, idealmente de 2000 px de ancho). Sin portada, va la primera foto del catálogo.'
+                    : 'Guardá la tienda una vez y después subís la foto de portada.'}
+                </span>
+                <input
+                  ref={coverInput}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) cover.mutate(file);
                     e.target.value = '';
                   }}
                 />
@@ -419,11 +473,29 @@ export default function StorefrontSettingsPage() {
             <span>
               <b>Vista previa</b> · {address} · <span className="text-muted-foreground">con los cambios sin guardar; los pedidos no se envían</span>
             </span>
-            <button onClick={() => setPreviewOpen(false)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold">
-              <X className="h-4 w-4" /> Cerrar
-            </button>
+            <div className="flex gap-2">
+              <div className="flex overflow-hidden rounded-lg border" role="group" aria-label="Equipo">
+                <button
+                  onClick={() => setPreviewPhone(false)}
+                  aria-pressed={!previewPhone}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 font-semibold ${!previewPhone ? 'bg-muted' : ''}`}
+                >
+                  <Monitor className="h-4 w-4" /> Computadora
+                </button>
+                <button
+                  onClick={() => setPreviewPhone(true)}
+                  aria-pressed={previewPhone}
+                  className={`inline-flex items-center gap-1 border-l px-3 py-1.5 font-semibold ${previewPhone ? 'bg-muted' : ''}`}
+                >
+                  <Smartphone className="h-4 w-4" /> Celular
+                </button>
+              </div>
+              <button onClick={() => setPreviewOpen(false)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold">
+                <X className="h-4 w-4" /> Cerrar
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-auto">
+          <div className={`relative flex-1 overflow-hidden ${previewPhone ? 'mx-auto my-3 w-[390px] max-w-full rounded-[28px] border-[8px] border-neutral-900' : 'w-full'}`}>
             {previewQuery.data ? (
               <Storefront
                 preview

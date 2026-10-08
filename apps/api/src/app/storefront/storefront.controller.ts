@@ -1,4 +1,20 @@
-import { Body, Controller, Get, Headers, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { Public, Roles } from '@plexo/auth';
 import { CreateStorefrontOrderDto, UpdateStorefrontOrderStatusDto, UpdateStorefrontSettingsDto } from './storefront.dto.js';
@@ -22,6 +38,20 @@ export class StorefrontController {
   @Put('settings')
   saveSettings(@Body() dto: UpdateStorefrontSettingsDto) {
     return this.storefrontService.saveSettings(dto);
+  }
+
+  @Roles(...MANAGE_ROLES)
+  @Post('cover')
+  async uploadCover(@Req() req: FastifyRequest) {
+    const data = await req.file();
+    if (!data) throw new BadRequestException('No se recibió ningún archivo');
+    return this.storefrontService.setCover(data.mimetype, await data.toBuffer());
+  }
+
+  @Roles(...MANAGE_ROLES)
+  @Delete('cover')
+  removeCover() {
+    return this.storefrontService.removeCover();
   }
 
   @Roles(...MANAGE_ROLES)

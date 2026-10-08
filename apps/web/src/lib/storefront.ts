@@ -22,6 +22,8 @@ export interface StorefrontProduct {
   price: number;
   netPrice: number | null;
   stockShown: number | null;
+  // Cargado hace menos de 30 días (etiqueta "Nuevo").
+  isNew: boolean;
   variants: StorefrontVariant[];
 }
 
@@ -33,6 +35,7 @@ export interface StorefrontStore {
   accentColor: string | null;
   heroTitle: string | null;
   heroSubtitle: string | null;
+  coverUrl: string | null;
   logoUrl: string | null;
   whatsappNumber: string | null;
   address: string | null;
@@ -60,6 +63,7 @@ export interface StorefrontSettings {
   notifyEmail: string | null;
   heroTitle: string | null;
   heroSubtitle: string | null;
+  coverImageUrl: string | null;
 }
 
 export interface StorefrontCoverage {
@@ -82,7 +86,7 @@ export interface StorefrontAdminView {
   newOrders: number;
 }
 
-export type StorefrontSettingsInput = Omit<StorefrontSettings, 'id'>;
+export type StorefrontSettingsInput = Omit<StorefrontSettings, 'id' | 'coverImageUrl'>;
 
 export interface StorefrontOrder {
   id: string;
@@ -111,6 +115,12 @@ export const storefrontApi = {
       .then((r) => r.data),
   preview: () => api.get<StorefrontPayload>('/storefront/preview').then((r) => r.data),
   listOrders: () => api.get<StorefrontOrder[]>('/storefront/orders').then((r) => r.data),
+  uploadCover: (file: Blob) => {
+    const form = new FormData();
+    form.append('file', file, 'portada.jpg');
+    return api.post<StorefrontSettings>('/storefront/cover', form).then((r) => r.data);
+  },
+  removeCover: () => api.delete<StorefrontSettings | null>('/storefront/cover').then((r) => r.data),
   updateOrderStatus: (id: string, status: StorefrontOrderStatus) =>
     api.patch<StorefrontOrder>(`/storefront/orders/${id}`, { status }).then((r) => r.data),
 };
@@ -134,43 +144,31 @@ export async function sendStorefrontOrder(
   return data as StorefrontOrderResult;
 }
 
-export const STOREFRONT_TEMPLATES: {
-  id: StorefrontTemplate;
-  name: string;
-  vibe: string;
-  fx: string;
-  swatch: [string, string, string];
-  font: string;
-  weight: number;
-}[] = [
-  { id: 'aire', name: 'Aire', vibe: 'Minimalista', fx: 'aparición suave, zoom lento en las fotos', swatch: ['#fbfbf9', '#1d1d1b', '#c9c4b9'], font: "'Jost',sans-serif", weight: 300 },
-  { id: 'atelier', name: 'Atelier', vibe: 'Boutique elegante', fx: 'títulos que se revelan, fotos en arco', swatch: ['#ece6dd', '#2a2420', '#6e2a2a'], font: "'Cormorant Garamond',serif", weight: 500 },
-  { id: 'pop', name: 'Pop', vibe: 'Moderna y colorida', fx: 'tarjetas que rebotan, confeti al agregar', swatch: ['#fff1cf', '#161616', '#ff4f2e'], font: "'Bricolage Grotesque',sans-serif", weight: 800 },
-  { id: 'taller', name: 'Taller', vibe: 'Industrial', fx: 'título que se escribe solo, lista con stock', swatch: ['#1b1c1e', '#ffc21a', '#ecebe6'], font: "'Archivo Black',sans-serif", weight: 400 },
-  { id: 'mercado', name: 'Mercado', vibe: 'Natural', fx: 'formas que flotan, onda animada', swatch: ['#f2f1e6', '#4b5d23', '#e0a526'], font: "'Fraunces',serif", weight: 700 },
-  { id: 'neon', name: 'Neón', vibe: 'Tecnología', fx: 'luz que sigue al mouse, bordes que brillan', swatch: ['#07080d', '#7cf7ff', '#b56bff'], font: "'Chakra Petch',sans-serif", weight: 700 },
-  { id: 'revista', name: 'Revista', vibe: 'Editorial', fx: 'fotos del gris al color, nota de tapa', swatch: ['#ffffff', '#121212', '#1f4fd1'], font: "'DM Serif Display',serif", weight: 400 },
-  { id: 'vitrina', name: 'Vitrina', vibe: 'Lujo', fx: 'carrusel 3D, título dorado', swatch: ['#0f0e0c', '#c9a45c', '#f1ead9'], font: "'Italiana',serif", weight: 400 },
+/** Las 8 plantillas del boceto v2. `preview` es la miniatura de
+ * public/storefront/templates (captura de la tienda de ejemplo). */
+export const STOREFRONT_TEMPLATES: { id: StorefrontTemplate; name: string; vibe: string; what: string }[] = [
+  { id: 'aire', name: 'Aire', vibe: 'Galería minimal', what: 'Foto de portada a pantalla completa, grilla con recuadros de tamaños distintos y ficha con las fotos grandes apiladas.' },
+  { id: 'atelier', name: 'Atelier', vibe: 'Revista de lujo', what: 'Menú a pantalla completa, título que se revela, productos en zigzag y fotos en una tira que se arrastra.' },
+  { id: 'pop', name: 'Pop', vibe: 'Stickers y color', what: 'Título que cae letra por letra, stickers, cintas cruzadas, muro de tarjetas y el pedido en una burbuja.' },
+  { id: 'taller', name: 'Taller', vibe: 'Catálogo técnico', what: 'Buscador, filtros al costado, lista o grilla con cantidad en cada fila y el pedido siempre a la vista.' },
+  { id: 'mercado', name: 'Mercado', vibe: 'App de delivery', what: 'Datos del local, pestañas por categoría, + y − en cada producto y la barra de pedido fija abajo.' },
+  { id: 'neon', name: 'Neón', vibe: 'Tecnología oscura', what: 'Portada que se enciende con el mouse, destacados que cambian al bajar y grilla de vidrio con brillo.' },
+  { id: 'revista', name: 'Revista', vibe: 'Editorial', what: 'Cabezal gigante, tapa en collage, índice y cada categoría diagramada como una sección distinta.' },
+  { id: 'vitrina', name: 'Vitrina', vibe: 'Pantalla completa', what: 'Un producto por pantalla, a todo color, que se pasa con flechas, la rueda o deslizando.' },
 ];
 
 // Sólo las fuentes de la plantilla elegida (no las 8 juntas).
 export const STOREFRONT_FONTS: Record<StorefrontTemplate, string> = {
-  aire: 'family=Jost:wght@300;400;500',
-  atelier: 'family=Cormorant+Garamond:ital,wght@0,500;1,400;1,500&family=Manrope:wght@400;500;700',
-  pop: 'family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800',
-  taller: 'family=Archivo+Black&family=Archivo:wght@400;600&family=JetBrains+Mono:wght@400;600',
-  mercado: 'family=Fraunces:opsz,wght@9..144,400;9..144,700&family=Nunito:wght@400;700',
-  neon: 'family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600',
-  revista: 'family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;700',
-  vitrina: 'family=Italiana&family=Manrope:wght@400;500;700',
+  aire: 'family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500',
+  atelier: 'family=Cormorant:ital,wght@0,500;0,600;1,400;1,500&family=Hanken+Grotesk:wght@400;500;600',
+  pop: 'family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800',
+  taller: 'family=Archivo:wdth,wght@62..125,400;62..125,600;62..125,800;62..125,900&family=IBM+Plex+Mono:wght@400;500;600',
+  mercado: 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
+  neon: 'family=Unbounded:wght@400;600;800&family=Sora:wght@300;400;600',
+  revista: 'family=Big+Shoulders+Display:wght@700;900&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=Libre+Franklin:wght@400;500;700',
+  vitrina: 'family=Syne:wght@500;700;800&family=DM+Sans:wght@400;500;700',
 };
 
 export function storefrontFontsHref(template: StorefrontTemplate): string {
-  return `https://fonts.googleapis.com/css2?${STOREFRONT_FONTS[template]}&display=swap`;
-}
-
-/** Todas las fuentes, para la grilla de miniaturas de Configurar tienda. */
-export function allStorefrontFontsHref(): string {
-  const families = [...new Set(Object.values(STOREFRONT_FONTS).flatMap((f) => f.split('&')))];
-  return `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap`;
+  return `https://fonts.googleapis.com/css2?${STOREFRONT_FONTS[template] ?? STOREFRONT_FONTS.aire}&display=swap`;
 }

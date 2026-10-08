@@ -4,34 +4,10 @@ import { inventoryApi, resolveUploadUrl, type ArticleImage } from '@/lib/invento
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Star, X } from 'lucide-react';
+import { shrinkImage } from '@/lib/shrinkImage';
 import { useRef, useState } from 'react';
 
 const MAX_PHOTOS = 8;
-const MAX_SIDE = 1600;
-
-/** Achica la foto en el navegador (lado mayor 1600 px, JPEG 85%) antes de
- * subirla: la tienda carga rápido y el servidor no necesita procesar nada.
- * Si el navegador no puede (formato raro), sube el archivo tal cual. */
-async function shrink(file: File): Promise<{ blob: Blob; name: string }> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 900_000) return { blob: file, name: file.name };
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return { blob: file, name: file.name };
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-    return blob ? { blob, name: file.name.replace(/\.[^.]+$/, '') + '.jpg' } : { blob: file, name: file.name };
-  } catch {
-    return { blob: file, name: file.name };
-  }
-}
-
 function apiMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }>).response?.data?.message ?? fallback;
   return Array.isArray(message) ? message.join(', ') : message;
@@ -87,7 +63,7 @@ export default function ArticlePhotosTab({ articleId }: { articleId: string }) {
     for (const file of list.slice(0, Math.max(0, free))) {
       setUploading((n) => n + 1);
       try {
-        const { blob, name } = await shrink(file);
+        const { blob, name } = await shrinkImage(file);
         applied(await inventoryApi.addArticleImage(articleId, blob, name));
       } catch (err) {
         setError(apiMessage(err, `No se pudo subir ${file.name}`));
