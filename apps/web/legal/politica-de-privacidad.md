@@ -13,13 +13,22 @@ Esta Política se aplica a los datos de las personas que usan Oplex (titulares d
 ## 2. Qué datos recolectamos
 
 - **Datos de la cuenta**: nombre, correo electrónico, contraseña (guardada de forma irreversible), rol, foto de perfil opcional, y los datos que devuelva el proveedor si ingresás con Google, Microsoft o Apple.
-- **Ingreso con Google o Microsoft**: si elegís ingresar con tu cuenta de Google o Microsoft, recibimos únicamente tu nombre, tu dirección de correo electrónico y el identificador de tu cuenta en ese proveedor. Los usamos sólo para crear tu cuenta en Oplex e identificarte cuando ingresás. No accedemos a tus correos, contactos, archivos ni calendario. No vendemos ni compartimos esos datos con terceros, ni los usamos para publicidad. Podés pedir que los eliminemos escribiendo a belvederegerman79@gmail.com, y podés revocar el acceso de Oplex en cualquier momento desde la configuración de seguridad de tu cuenta de Google o Microsoft.
 - **Datos de la empresa y facturación**: razón social, CUIT, domicilio fiscal, condición frente al IVA, plan contratado y datos de los pagos.
 - **Datos de uso y técnicos**: fechas de ingreso, acciones realizadas en el sistema (registro de actividad), dirección IP, tipo de navegador y dispositivo, y registros de errores.
 - **Vinculación de WhatsApp** (opcional): número de teléfono y mensajes que envíes al asistente.
 - **Almacenamiento local**: el sitio guarda en tu navegador datos técnicos necesarios para funcionar (por ejemplo, tu sesión y preferencias de tema). No usamos cookies de publicidad.
 
-## 3. Para qué los usamos
+## 3. Datos de usuario de Google y Microsoft
+
+Si elegís ingresar a Oplex con tu cuenta de Google o de Microsoft:
+
+- **Qué datos accedemos:** únicamente tu nombre, tu dirección de correo electrónico y el identificador de tu cuenta en ese proveedor. No accedemos a tus correos, contactos, archivos, calendario, foto de perfil ni a ningún otro dato de tu cuenta.
+- **Para qué los usamos:** sólo para crear tu cuenta en Oplex, identificarte cuando ingresás y mostrar tu nombre dentro del sistema. No los usamos para publicidad ni para elaborar perfiles, y no los usamos para entrenar modelos de inteligencia artificial.
+- **Cómo los almacenamos y protegemos:** se guardan en nuestra base de datos junto con tu cuenta, con conexiones cifradas, acceso restringido y las medidas descriptas en la sección "Cómo los protegemos". No guardamos tu contraseña de Google ni de Microsoft, ni los permisos de acceso (tokens) que esos proveedores nos entregan al ingresar: los usamos sólo en ese momento para leer los datos indicados y los descartamos.
+- **Con quién los compartimos:** no vendemos, transferimos ni divulgamos estos datos a terceros, salvo a los proveedores de infraestructura que alojan el Servicio, al proveedor de envío de correos electrónicos para mandarte los avisos del Servicio a tu dirección, y cuando una obligación legal lo exija. No los enviamos al proveedor de inteligencia artificial.
+- **Cuánto tiempo los conservamos y cómo eliminarlos:** los conservamos mientras tu cuenta esté activa. Podés pedir su eliminación en cualquier momento escribiendo a belvederegerman79@gmail.com, y los eliminamos dentro de los plazos indicados en la sección "Tus derechos". También podés revocar el acceso de Oplex desde la configuración de seguridad de tu cuenta de Google (https://myaccount.google.com/permissions) o de Microsoft.
+
+## 4. Para qué los usamos
 
 - Prestar el Servicio, identificarte y mantener la seguridad de tu cuenta.
 - Facturar y cobrar la suscripción.
@@ -29,11 +38,11 @@ Esta Política se aplica a los datos de las personas que usan Oplex (titulares d
 
 No vendemos tus datos ni los usamos para publicidad de terceros.
 
-## 4. Base legal
+## 5. Base legal
 
 Tratamos los datos con tu consentimiento, que prestás al aceptar esta Política, y porque son necesarios para cumplir el contrato del Servicio y obligaciones legales (Ley 25.326, art. 5).
 
-## 5. Con quién los compartimos
+## 6. Con quién los compartimos
 
 Sólo con proveedores que necesitamos para prestar el Servicio, que actúan bajo nuestras instrucciones y con obligaciones de confidencialidad:
 
@@ -47,24 +56,24 @@ Sólo con proveedores que necesitamos para prestar el Servicio, que actúan bajo
 
 Algunos de estos proveedores procesan datos **fuera de la Argentina**. En esos casos aplicamos las garantías previstas por la normativa (Ley 25.326, art. 12, y las cláusulas contractuales aprobadas por la autoridad de control), y al aceptar esta Política prestás tu consentimiento para esas transferencias.
 
-## 6. Cuánto tiempo los guardamos
+## 7. Cuánto tiempo los guardamos
 
 Mientras tu cuenta esté activa y, luego, el tiempo necesario para cumplir obligaciones legales o defendernos ante reclamos. Los avisos de la campana se borran a los 90 días. Al terminar el contrato, los datos de la empresa quedan disponibles 30 días para exportarlos y después se eliminan, salvo obligación legal de conservarlos.
 
-## 7. Cómo los protegemos
+## 8. Cómo los protegemos
 
 Contraseñas guardadas de forma irreversible; cifrado de certificados, claves y tokens; aislamiento de los datos de cada empresa en la propia base de datos; conexiones cifradas; roles y permisos por Usuario; registro de cambios; y copias de seguridad diarias. Ningún sistema es infalible: si ocurre un incidente que afecte tus datos, te avisaremos sin demora indebida.
 
-## 8. Tus derechos
+## 9. Tus derechos
 
 Podés pedir **acceso** a tus datos (en forma gratuita, cada seis meses, salvo interés legítimo), su **rectificación**, **actualización** o **supresión**, escribiendo a **belvederegerman79@gmail.com**. Respondemos el acceso dentro de los 10 días corridos y la rectificación o supresión dentro de los 5 días hábiles, según la Ley 25.326. También podés retirar tu consentimiento, lo que puede impedir seguir prestándote el Servicio.
 
 La AGENCIA DE ACCESO A LA INFORMACIÓN PÚBLICA, en su carácter de Órgano de Control de la Ley N° 25.326, tiene la atribución de atender las denuncias y reclamos que interpongan quienes resulten afectados en sus derechos por incumplimiento de las normas vigentes en materia de protección de datos personales.
 
-## 9. Menores
+## 10. Menores
 
 El Servicio está dirigido a empresas y profesionales. No está pensado para menores de 18 años.
 
-## 10. Cambios
+## 11. Cambios
 
 Si cambiamos esta Política, te avisaremos con anticipación por correo o dentro del Servicio, y te pediremos una nueva aceptación cuando el cambio sea relevante.
