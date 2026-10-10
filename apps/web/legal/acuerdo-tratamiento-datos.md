@@ -2,8 +2,6 @@
 
 **Versión 1.0 — forma parte de los Términos y Condiciones de Uso de Oplex**
 
-> BORRADOR PARA REVISIÓN LEGAL. No publicar sin la revisión de un abogado matriculado.
-
 ## 1. Roles
 
 1.1. Respecto de los datos personales que el Cliente carga en el Servicio sobre terceros (sus clientes, proveedores, contactos, empleados y cualquier otra persona), **el Cliente es el responsable del tratamiento** y **Oplex es el encargado del tratamiento**, en los términos de la Ley 25.326 y su reglamentación.

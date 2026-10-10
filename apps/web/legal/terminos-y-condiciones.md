@@ -1,8 +1,6 @@
 # Términos y Condiciones de Uso de Oplex
 
-**Versión 1.0 — vigente desde el [A DEFINIR: fecha de publicación]**
-
-> BORRADOR PARA REVISIÓN LEGAL. No publicar sin la revisión de un abogado matriculado.
+**Versión 1.0 — vigente desde el 9 de octubre de 2026**
 
 ## 1. Partes y aceptación
 

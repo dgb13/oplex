@@ -1,8 +1,6 @@
 # Política de Privacidad de Oplex
 
-**Versión 1.0 — vigente desde el [A DEFINIR: fecha de publicación]**
-
-> BORRADOR PARA REVISIÓN LEGAL. No publicar sin la revisión de un abogado matriculado.
+**Versión 1.0 — vigente desde el 9 de octubre de 2026**
 
 ## 1. Quién es el responsable
 
@@ -15,6 +13,7 @@ Esta Política se aplica a los datos de las personas que usan Oplex (titulares d
 ## 2. Qué datos recolectamos
 
 - **Datos de la cuenta**: nombre, correo electrónico, contraseña (guardada de forma irreversible), rol, foto de perfil opcional, y los datos que devuelva el proveedor si ingresás con Google, Microsoft o Apple.
+- **Ingreso con Google o Microsoft**: si elegís ingresar con tu cuenta de Google o Microsoft, recibimos únicamente tu nombre, tu dirección de correo electrónico y el identificador de tu cuenta en ese proveedor. Los usamos sólo para crear tu cuenta en Oplex e identificarte cuando ingresás. No accedemos a tus correos, contactos, archivos ni calendario. No vendemos ni compartimos esos datos con terceros, ni los usamos para publicidad. Podés pedir que los eliminemos escribiendo a belvederegerman79@gmail.com, y podés revocar el acceso de Oplex en cualquier momento desde la configuración de seguridad de tu cuenta de Google o Microsoft.
 - **Datos de la empresa y facturación**: razón social, CUIT, domicilio fiscal, condición frente al IVA, plan contratado y datos de los pagos.
 - **Datos de uso y técnicos**: fechas de ingreso, acciones realizadas en el sistema (registro de actividad), dirección IP, tipo de navegador y dispositivo, y registros de errores.
 - **Vinculación de WhatsApp** (opcional): número de teléfono y mensajes que envíes al asistente.
@@ -38,7 +37,7 @@ Tratamos los datos con tu consentimiento, que prestás al aceptar esta Política
 
 Sólo con proveedores que necesitamos para prestar el Servicio, que actúan bajo nuestras instrucciones y con obligaciones de confidencialidad:
 
-- **[A DEFINIR: proveedor de hosting]**: Servidores y base de datos. ([A DEFINIR])
+- **Vultr**: Servidores y base de datos. (Chile)
 - **Anthropic PBC**: Funciones de inteligencia artificial (lectura de facturas, asistente). (Estados Unidos)
 - **Resend**: Envío de correos electrónicos. (Estados Unidos)
 - **Meta Platforms (WhatsApp)**: Asistente por WhatsApp, si lo vinculás. (Estados Unidos y otros)
