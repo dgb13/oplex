@@ -10,6 +10,7 @@ import {
   WORDMARK_PATH,
   WORDMARK_TRANSLATE,
 } from '@/components/ui/oplexMark';
+import { OPLEX_BILLING_EMAIL, OPLEX_INFO_EMAIL, OPLEX_SUPPORT_EMAIL } from '@/lib/contact';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { COMPARISON, COMPARISON_SOURCES, COMPETITORS, TESTIMONIALS, type PublicPlan } from './data';
@@ -780,6 +781,9 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
                 Empezá gratis. <span className="grad-text">Crecé cuando lo necesites.</span>
               </h2>
               <p>15 días de prueba con todo incluido, sin tarjeta.</p>
+              <p className="plans-note">
+                ¿Dudas sobre planes o pagos? Escribinos a <a href={`mailto:${OPLEX_BILLING_EMAIL}`}>{OPLEX_BILLING_EMAIL}</a>.
+              </p>
             </div>
             {sortedPlans.length > 0 ? (
               <div className="plans">
@@ -997,7 +1001,13 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
               Botón de arrepentimiento
             </Link>
           </div>
-          <span>ERP en la nube para pymes argentinas</span>
+          <div className="foot-contact">
+            <span>ERP en la nube para pymes argentinas</span>
+            <span>
+              Consultas: <a href={`mailto:${OPLEX_INFO_EMAIL}`}>{OPLEX_INFO_EMAIL}</a> · Ayuda:{' '}
+              <a href={`mailto:${OPLEX_SUPPORT_EMAIL}`}>{OPLEX_SUPPORT_EMAIL}</a>
+            </span>
+          </div>
         </div>
       </footer>
 
