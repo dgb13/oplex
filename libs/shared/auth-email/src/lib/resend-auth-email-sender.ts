@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OPLEX_SUPPORT_EMAIL } from '@plexo/types';
 import { Resend } from 'resend';
 import type {
   AuthEmailSender,
@@ -10,6 +11,7 @@ import type {
 } from './auth-email-sender.port.js';
 import { buildVerificationEmailCopy } from './verification-email-template.js';
 import { buildMembershipNoticeCopy } from './membership-notice-template.js';
+import { withSupportFooter } from './support-footer.js';
 
 /** Real sender, wired in sólo cuando RESEND_API_KEY está seteado (ver
  * AuthEmailModule) - mismo criterio que ResendEmailSender de Facturación.
@@ -30,6 +32,7 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     const { error } = await this.resend.emails.send({
       from: this.from,
       to: payload.to,
+      replyTo: payload.replyTo ?? OPLEX_SUPPORT_EMAIL,
       subject: payload.subject,
       text: payload.text,
     });
@@ -46,6 +49,7 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     const { error } = await this.resend.emails.send({
       from: this.from,
       to: payload.to,
+      replyTo: OPLEX_SUPPORT_EMAIL,
       subject,
       html,
       text,
@@ -60,8 +64,9 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     const { error } = await this.resend.emails.send({
       from: this.from,
       to: payload.to,
+      replyTo: OPLEX_SUPPORT_EMAIL,
       subject: 'Recuperar tu contraseña de Oplex',
-      text: `Para elegir una contraseña nueva, entrá a ${payload.resetUrl}. El link expira en ${payload.expiresInMinutes} minutos. Si no pediste esto, ignorá este mensaje.`,
+      text: withSupportFooter(`Para elegir una contraseña nueva, entrá a ${payload.resetUrl}. El link expira en ${payload.expiresInMinutes} minutos. Si no pediste esto, ignorá este mensaje.`),
     });
 
     if (error) {
@@ -73,8 +78,9 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     const { error } = await this.resend.emails.send({
       from: this.from,
       to: payload.to,
+      replyTo: OPLEX_SUPPORT_EMAIL,
       subject: `Te invitaron a sumarte a ${payload.tenantName} en Oplex`,
-      text: `Te invitaron a unirte a ${payload.tenantName} en Oplex con el rol ${payload.role}. Para aceptar, entrá a ${payload.acceptUrl}. El link expira en ${payload.expiresInMinutes} minutos. Si no esperabas esta invitación, ignorá este mensaje.`,
+      text: withSupportFooter(`Te invitaron a unirte a ${payload.tenantName} en Oplex con el rol ${payload.role}. Para aceptar, entrá a ${payload.acceptUrl}. El link expira en ${payload.expiresInMinutes} minutos. Si no esperabas esta invitación, ignorá este mensaje.`),
     });
 
     if (error) {
@@ -87,8 +93,9 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     const { error } = await this.resend.emails.send({
       from: this.from,
       to: payload.to,
+      replyTo: OPLEX_SUPPORT_EMAIL,
       subject,
-      text,
+      text: withSupportFooter(text),
     });
 
     if (error) {

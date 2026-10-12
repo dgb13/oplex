@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { OPLEX_BILLING_EMAIL } from '@/lib/contact';
 import { legalApi, type LegalRequestReceipt } from '@/lib/legal';
 import { profileApi } from '@/lib/profile';
 import {
@@ -112,6 +113,13 @@ export default function BillingPage() {
         <div>
           <h2 className="text-sm font-semibold">Planes</h2>
           <p className="text-xs text-muted-foreground">Precios mensuales sin IVA. Pagando el año entero tenés descuento.</p>
+          <p className="text-xs text-muted-foreground">
+            ¿Dudas con tu plan, un pago o una factura de Oplex? Escribinos a{' '}
+            <a href={`mailto:${OPLEX_BILLING_EMAIL}`} className="font-medium text-foreground underline underline-offset-2">
+              {OPLEX_BILLING_EMAIL}
+            </a>
+            .
+          </p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {plans.map((plan) => {

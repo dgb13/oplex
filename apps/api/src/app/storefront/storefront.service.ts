@@ -19,6 +19,7 @@ import {
 } from '@plexo/database';
 import type { StorefrontOrder, StorefrontOrderStatus, StorefrontSettings } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
+import { OPLEX_SUPPORT_EMAIL } from '@plexo/types';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { unlink, writeFile } from 'node:fs/promises';
@@ -453,8 +454,11 @@ export class StorefrontService {
       const { error } = await new Resend(apiKey).emails.send({
         from,
         to,
+        // Este aviso es para el dueño de la tienda (cliente de Oplex), no
+        // para su comprador: si responde, le llega a soporte de Oplex.
+        replyTo: OPLEX_SUPPORT_EMAIL,
         subject: `Nuevo pedido #${number} en tu tienda online`,
-        text: `${message}\n\nLo ves en Oplex → Ventas → Pedidos de la tienda.`,
+        text: `${message}\n\nLo ves en Oplex → Ventas → Pedidos de la tienda.\n\n¿Dudas? Respondé este mail o escribinos a ${OPLEX_SUPPORT_EMAIL}.`,
       });
       if (error) this.logger.error(`No se pudo avisar el pedido #${number} a ${to}: ${error.message}`);
     } catch (err) {

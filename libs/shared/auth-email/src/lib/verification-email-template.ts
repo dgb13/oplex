@@ -1,3 +1,6 @@
+import { OPLEX_SUPPORT_EMAIL } from '@plexo/types';
+import { SUPPORT_FOOTER_TEXT } from './support-footer.js';
+
 export interface VerificationEmailCopy {
   subject: string;
   html: string;
@@ -58,6 +61,9 @@ export function buildVerificationEmailCopy({
                 <p style="margin:0;font-size:13px;line-height:1.6;color:#94a3b8;">
                   ¿No creaste una cuenta en Oplex? Ignorá este email - no se tomó ninguna acción.
                 </p>
+                <p style="margin:8px 0 0;font-size:13px;line-height:1.6;color:#94a3b8;">
+                  ¿Dudas? Respondé este mail o escribinos a <a href="mailto:${OPLEX_SUPPORT_EMAIL}" style="color:#4f46e5;text-decoration:none;">${OPLEX_SUPPORT_EMAIL}</a>.
+                </p>
               </td>
             </tr>
             <tr>
@@ -80,7 +86,9 @@ Estás a un paso de tener tu facturación, inventario y contabilidad funcionando
 Tu código de verificación es: ${code}
 Vence en ${expiresInMinutes} minutos.
 
-¿No creaste una cuenta en Oplex? Podés ignorar este mensaje - no se tomó ninguna acción.`;
+¿No creaste una cuenta en Oplex? Podés ignorar este mensaje - no se tomó ninguna acción.
+
+${SUPPORT_FOOTER_TEXT}`;
 
   return { subject: '¡Bienvenido a Oplex! Confirmá tu email con tu código de verificación', html, text };
 }

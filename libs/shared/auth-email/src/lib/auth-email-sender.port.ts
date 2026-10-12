@@ -34,6 +34,8 @@ export interface SendLegalNoticePayload {
   to: string;
   subject: string;
   text: string;
+  /** A quién le llega si responden - por defecto soporte@oplex.com.ar. */
+  replyTo?: string;
 }
 
 /**

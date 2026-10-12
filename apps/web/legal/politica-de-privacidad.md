@@ -4,7 +4,7 @@
 
 ## 1. Quién es el responsable
 
-El responsable de los datos personales descriptos en esta Política es **Darío Germán Belvedere** ("Oplex"), CUIT 20-27040394-9, con domicilio en Padre Gagliardi 3572, Villanueva, Guaymallén, Provincia de Mendoza. Contacto: **belvederegerman79@gmail.com**.
+El responsable de los datos personales descriptos en esta Política es **Darío Germán Belvedere** ("Oplex"), CUIT 20-27040394-9, con domicilio en Padre Gagliardi 3572, Villanueva, Guaymallén, Provincia de Mendoza. Contacto: **soporte@oplex.com.ar**.
 
 Esta Política se aplica a los datos de las personas que usan Oplex (titulares de cuentas y Usuarios) y a los visitantes del sitio.
 
@@ -26,7 +26,7 @@ Si elegís ingresar a Oplex con tu cuenta de Google o de Microsoft:
 - **Para qué los usamos:** sólo para crear tu cuenta en Oplex, identificarte cuando ingresás y mostrar tu nombre dentro del sistema. No los usamos para publicidad ni para elaborar perfiles, y no los usamos para entrenar modelos de inteligencia artificial.
 - **Cómo los almacenamos y protegemos:** se guardan en nuestra base de datos junto con tu cuenta, con conexiones cifradas, acceso restringido y las medidas descriptas en la sección "Cómo los protegemos". No guardamos tu contraseña de Google ni de Microsoft, ni los permisos de acceso (tokens) que esos proveedores nos entregan al ingresar: los usamos sólo en ese momento para leer los datos indicados y los descartamos.
 - **Con quién los compartimos:** no vendemos, transferimos ni divulgamos estos datos a terceros, salvo a los proveedores de infraestructura que alojan el Servicio, al proveedor de envío de correos electrónicos para mandarte los avisos del Servicio a tu dirección, y cuando una obligación legal lo exija. No los enviamos al proveedor de inteligencia artificial.
-- **Cuánto tiempo los conservamos y cómo eliminarlos:** los conservamos mientras tu cuenta esté activa. Podés pedir su eliminación en cualquier momento escribiendo a belvederegerman79@gmail.com, y los eliminamos dentro de los plazos indicados en la sección "Tus derechos". También podés revocar el acceso de Oplex desde la configuración de seguridad de tu cuenta de Google (https://myaccount.google.com/permissions) o de Microsoft.
+- **Cuánto tiempo los conservamos y cómo eliminarlos:** los conservamos mientras tu cuenta esté activa. Podés pedir su eliminación en cualquier momento escribiendo a soporte@oplex.com.ar, y los eliminamos dentro de los plazos indicados en la sección "Tus derechos". También podés revocar el acceso de Oplex desde la configuración de seguridad de tu cuenta de Google (https://myaccount.google.com/permissions) o de Microsoft.
 
 ## 4. Para qué los usamos
 
@@ -66,7 +66,7 @@ Contraseñas guardadas de forma irreversible; cifrado de certificados, claves y 
 
 ## 9. Tus derechos
 
-Podés pedir **acceso** a tus datos (en forma gratuita, cada seis meses, salvo interés legítimo), su **rectificación**, **actualización** o **supresión**, escribiendo a **belvederegerman79@gmail.com**. Respondemos el acceso dentro de los 10 días corridos y la rectificación o supresión dentro de los 5 días hábiles, según la Ley 25.326. También podés retirar tu consentimiento, lo que puede impedir seguir prestándote el Servicio.
+Podés pedir **acceso** a tus datos (en forma gratuita, cada seis meses, salvo interés legítimo), su **rectificación**, **actualización** o **supresión**, escribiendo a **soporte@oplex.com.ar**. Respondemos el acceso dentro de los 10 días corridos y la rectificación o supresión dentro de los 5 días hábiles, según la Ley 25.326. También podés retirar tu consentimiento, lo que puede impedir seguir prestándote el Servicio.
 
 La AGENCIA DE ACCESO A LA INFORMACIÓN PÚBLICA, en su carácter de Órgano de Control de la Ley N° 25.326, tiene la atribución de atender las denuncias y reclamos que interpongan quienes resulten afectados en sus derechos por incumplimiento de las normas vigentes en materia de protección de datos personales.
 

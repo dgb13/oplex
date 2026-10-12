@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AUTH_EMAIL_SENDER, type AuthEmailSender } from '@plexo/auth-email';
 import { getTenantDb, getTenantId, getUserId, PrismaService, type LegalRequestType } from '@plexo/database';
-import { LEGAL_TERMS_VERSION } from '@plexo/types';
+import { LEGAL_TERMS_VERSION, OPLEX_BILLING_EMAIL } from '@plexo/types';
 import { randomInt } from 'node:crypto';
 
-// Titular del servicio (ver apps/web/legal/terminos-y-condiciones.md): a
-// este email llegan los pedidos de arrepentimiento y de baja.
-const PROVIDER_EMAIL = process.env['LEGAL_CONTACT_EMAIL'] ?? 'belvederegerman79@gmail.com';
+// A dónde llega el aviso interno de cada pedido de arrepentimiento o de
+// baja - son de la suscripción, así que por defecto a facturacion@ (se
+// reenvía al buzón interno). LEGAL_CONTACT_EMAIL lo cambia sin tocar código.
+const PROVIDER_EMAIL = process.env['LEGAL_CONTACT_EMAIL'] || OPLEX_BILLING_EMAIL;
 
 export interface RequestMeta {
   ip?: string;
@@ -109,13 +110,16 @@ export class LegalService {
     try {
       await this.email.sendLegalNotice({
         to: PROVIDER_EMAIL,
+        // Responder el aviso le contesta directo a quien hizo el pedido.
+        replyTo: input.email,
         subject: `Oplex - pedido de ${label.name} ${created.code}`,
         text: `Llegó un pedido de ${label.name}.\n\n${detail}\n`,
       });
       await this.email.sendLegalNotice({
         to: input.email,
+        replyTo: OPLEX_BILLING_EMAIL,
         subject: `Oplex - recibimos tu pedido de ${label.name} (${created.code})`,
-        text: `Recibimos tu pedido de ${label.name}.\n\n${detail}\n\nGuardá este número de trámite. Te vamos a responder a este email.\n\nOplex`,
+        text: `Recibimos tu pedido de ${label.name}.\n\n${detail}\n\nGuardá este número de trámite. Te vamos a responder a este email. Si querés agregar algo, respondé este mail o escribinos a ${OPLEX_BILLING_EMAIL}.\n\nOplex`,
       });
     } catch (err) {
       // El pedido ya quedó registrado; un email que falla no lo invalida.

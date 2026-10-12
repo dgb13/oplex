@@ -39,9 +39,15 @@ describe('LegalService', () => {
 
     expect(result.code).toMatch(/^ARR-\d{6}$/);
     expect(email.sendLegalNotice).toHaveBeenCalledTimes(2);
-    expect(email.sendLegalNotice).toHaveBeenCalledWith(expect.objectContaining({ to: 'belvederegerman79@gmail.com' }));
     expect(email.sendLegalNotice).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'ana@cliente.com', subject: expect.stringContaining(result.code) }),
+      expect.objectContaining({ to: 'facturacion@oplex.com.ar', replyTo: 'ana@cliente.com' }),
+    );
+    expect(email.sendLegalNotice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'ana@cliente.com',
+        replyTo: 'facturacion@oplex.com.ar',
+        subject: expect.stringContaining(result.code),
+      }),
     );
   });
 

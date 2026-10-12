@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { OPLEX_BILLING_EMAIL } from '@/lib/contact';
 import {
   billingApi,
   computeSubscriptionCharge,
@@ -128,7 +129,11 @@ export default function CheckoutDialog({
               </dl>
             ) : (
               <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                Todavía no cargamos los datos bancarios de Oplex. Escribinos y te los pasamos.
+                Todavía no cargamos los datos bancarios de Oplex. Escribinos a{' '}
+                <a href={`mailto:${OPLEX_BILLING_EMAIL}`} className="font-medium underline underline-offset-2">
+                  {OPLEX_BILLING_EMAIL}
+                </a>{' '}
+                y te los pasamos.
               </p>
             )}
 
