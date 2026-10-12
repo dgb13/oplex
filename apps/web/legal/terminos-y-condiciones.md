@@ -120,7 +120,7 @@ Oplex puede modificar estos Términos. Los cambios se avisarán con al menos **3
 
 ## 18. Comunicaciones
 
-Las comunicaciones se harán por correo electrónico a la dirección registrada por el Cliente o por avisos dentro del Servicio, y se considerarán válidas y recibidas. Las comunicaciones a Oplex se dirigen a **belvederegerman79@gmail.com**.
+Las comunicaciones se harán por correo electrónico a la dirección registrada por el Cliente o por avisos dentro del Servicio, y se considerarán válidas y recibidas. Las comunicaciones a Oplex se dirigen a **info@oplex.com.ar**.
 
 ## 19. Ley aplicable y jurisdicción
 

@@ -50,7 +50,7 @@ Además, dos particularidades del OAuth de Tiendanube:
 TIENDANUBE_APP_ID=...
 TIENDANUBE_CLIENT_SECRET=...
 TIENDANUBE_OAUTH_REDIRECT_URI=https://app.oplex.../api/connectors/tiendanube/callback
-TIENDANUBE_APP_USER_AGENT=OPLEX (soporte@oplex...)   # requerido en cada request
+TIENDANUBE_APP_USER_AGENT=OPLEX (soporte@oplex.com.ar)   # requerido en cada request
 ```
 
 ### 2.3 Flujo OAuth (sin refresh)
