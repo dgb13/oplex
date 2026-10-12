@@ -260,7 +260,7 @@ describe('SubscriptionService quota checks', () => {
 
     const result = await runInTenant(db, () => service.getAssistantUsage());
 
-    expect(result).toEqual({ planName: 'Basic', quota: null, used: 0 });
+    expect(result).toEqual({ planName: 'Basic', quota: null, unlimited: false, used: 0 });
     expect(count).not.toHaveBeenCalled();
   });
 
@@ -274,7 +274,51 @@ describe('SubscriptionService quota checks', () => {
 
     const result = await runInTenant(db, () => service.getAssistantUsage());
 
-    expect(result).toEqual({ planName: 'Gold', quota: 300, used: 77 });
+    expect(result).toEqual({ planName: 'Gold', quota: 300, unlimited: false, used: 77 });
+  });
+
+  it('assertCanUseAssistant allows without counting when the plan is unlimited', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(
+        makeActiveSubscription({ plan: makePlan({ aiAssistantUnlimited: true, aiAssistantMonthlyQueryQuota: null }) }),
+      );
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanUseAssistant())).resolves.toBeUndefined();
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it('getAssistantUsage reports unlimited plans as included, with the real monthly count', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(
+        makeActiveSubscription({
+          plan: makePlan({ name: 'Diamond', aiAssistantUnlimited: true, aiAssistantMonthlyQueryQuota: null }),
+        }),
+      );
+    const count = jest.fn().mockResolvedValue(9000);
+    const db = { tenantSubscription: { findUniqueOrThrow }, assistantMessage: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    const result = await runInTenant(db, () => service.getAssistantUsage());
+
+    expect(result).toEqual({ planName: 'Diamond', quota: null, unlimited: true, used: 9000 });
+  });
+
+  it('assertCanAddClient allows without counting when maxClients is null (unlimited)', async () => {
+    const findUniqueOrThrow = jest
+      .fn()
+      .mockResolvedValue(makeActiveSubscription({ plan: makePlan({ maxClients: null }) }));
+    const count = jest.fn();
+    const db = { tenantSubscription: { findUniqueOrThrow }, company: { count } };
+    const service = new SubscriptionService({} as PrismaService);
+
+    await expect(runInTenant(db, () => service.assertCanAddClient())).resolves.toBeUndefined();
+    await expect(runInTenant(db, () => service.getClientQuota())).resolves.toBeNull();
+    expect(count).not.toHaveBeenCalled();
   });
 
   it('assertCanUseProduction rejects when the plan does not include the module (on/off, no quota to count)', async () => {

@@ -305,6 +305,8 @@ export interface WhatsAppLinkSummary {
    * incluye el Asistente de IA. */
   planName: string;
   planQuota: number | null;
+  /** true = Asistente sin tope (planQuota null pero incluido). */
+  planUnlimited: boolean;
   planUsed: number;
 }
 
@@ -326,15 +328,18 @@ export interface AdminPlan {
   sortOrder: number;
   priceMonthly: string;
   maxUsers: number;
-  maxClients: number;
+  // null = clientes ilimitados.
+  maxClients: number | null;
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
   annualDiscountPercent: string;
   isActive: boolean;
   slaMarkdown: string | null;
   slaUpdatedAt: string | null;
+  supportLevel: string | null;
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
+  aiAssistantUnlimited: boolean;
   // Módulo de Producción - on/off puro, sin cupo mensual.
   productionModuleEnabled: boolean;
   // Tienda online - on/off puro.
@@ -347,7 +352,8 @@ export interface CreatePlanInput {
   sortOrder?: number;
   priceMonthly: number;
   maxUsers: number;
-  maxClients: number;
+  // null = clientes ilimitados.
+  maxClients: number | null;
   maxMonthlyInvoices: number;
   debitDiscountPercent?: number;
   annualDiscountPercent?: number;
@@ -357,6 +363,9 @@ export interface CreatePlanInput {
   aiInvoiceScanMonthlyQuota?: number | null;
   // null = sacar al plan del Asistente de IA conversacional (no incluido).
   aiAssistantMonthlyQueryQuota?: number | null;
+  // Asistente sin tope mensual (el cupo de arriba se ignora).
+  aiAssistantUnlimited?: boolean;
+  supportLevel?: string;
   // Módulo de Producción - on/off puro, sin cupo mensual.
   productionModuleEnabled?: boolean;
   // Tienda online - on/off puro.

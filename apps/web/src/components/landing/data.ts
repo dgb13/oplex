@@ -9,10 +9,13 @@ export interface PublicPlan {
   sortOrder: number;
   priceMonthly: string;
   maxUsers: number;
-  maxClients: number;
+  // null = clientes ilimitados.
+  maxClients: number | null;
   maxMonthlyInvoices: number;
+  supportLevel?: string | null;
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
+  aiAssistantUnlimited?: boolean;
   productionModuleEnabled: boolean;
   storefrontEnabled?: boolean;
 }

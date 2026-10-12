@@ -138,7 +138,7 @@ export default function BillingPage() {
                   <li>
                     {plan.maxUsers} usuario{plan.maxUsers === 1 ? '' : 's'}
                   </li>
-                  <li>{plan.maxClients} clientes</li>
+                  <li>{plan.maxClients != null ? `${plan.maxClients.toLocaleString('es-AR')} clientes` : 'Clientes ilimitados'}</li>
                   <li>{plan.maxMonthlyInvoices.toLocaleString('es-AR')} facturas/mes</li>
                   <li>
                     {plan.aiInvoiceScanMonthlyQuota != null
@@ -262,7 +262,7 @@ function SwitchPlanDialog({
           <DialogTitle>{free ? `Pasar a ${plan.name}` : `${upgrading ? 'Subir' : 'Bajar'} al Plan ${plan.name}`}</DialogTitle>
           <DialogDescription>
             {free
-              ? `${plan.name} no tiene costo: ${plan.maxUsers} usuario${plan.maxUsers === 1 ? '' : 's'}, ${plan.maxClients} cliente${plan.maxClients === 1 ? '' : 's'} y ${plan.maxMonthlyInvoices} facturas por mes. Si hoy tenés más, primero vas a tener que desactivar los que sobran.`
+              ? `${plan.name} no tiene costo: ${plan.maxUsers} usuario${plan.maxUsers === 1 ? '' : 's'}, ${plan.maxClients == null ? 'clientes ilimitados' : `${plan.maxClients} cliente${plan.maxClients === 1 ? '' : 's'}`} y ${plan.maxMonthlyInvoices} facturas por mes. Si hoy tenés más, primero vas a tener que desactivar los que sobran.`
               : upgrading
                 ? 'Los topes nuevos aplican ya mismo. El precio nuevo corre desde tu próximo pago.'
                 : 'El precio nuevo corre desde tu próximo pago. Si hoy tenés más usuarios o clientes que el tope nuevo, primero vas a tener que desactivar los que sobran.'}

@@ -61,17 +61,20 @@ function planFeatures(plan: PublicPlan): { text: string; off?: boolean }[] {
   const n = (v: number, one: string, many: string) => `${ars.format(v)} ${v === 1 ? one : many}`;
   return [
     { text: n(plan.maxUsers, 'usuario', 'usuarios') },
-    { text: n(plan.maxClients, 'cliente', 'clientes') },
+    { text: plan.maxClients != null ? n(plan.maxClients, 'cliente', 'clientes') : 'Clientes ilimitados' },
     { text: `${n(plan.maxMonthlyInvoices, 'comprobante', 'comprobantes')} por mes` },
     { text: 'Facturación ARCA, Caja, stock, compras y contabilidad' },
     plan.productionModuleEnabled ? { text: 'Producción con recetas' } : { text: 'Producción', off: true },
     plan.storefrontEnabled ? { text: 'Tienda online con tu dirección' } : { text: 'Tienda online', off: true },
-    plan.aiAssistantMonthlyQueryQuota != null
-      ? { text: `Asistente de IA: ${ars.format(plan.aiAssistantMonthlyQueryQuota)} consultas por mes` }
-      : { text: 'Asistente de IA', off: true },
+    plan.aiAssistantUnlimited
+      ? { text: 'Asistente de IA: consultas ilimitadas' }
+      : plan.aiAssistantMonthlyQueryQuota != null
+        ? { text: `Asistente de IA: ${ars.format(plan.aiAssistantMonthlyQueryQuota)} consultas por mes` }
+        : { text: 'Asistente de IA', off: true },
     plan.aiInvoiceScanMonthlyQuota != null
       ? { text: `${ars.format(plan.aiInvoiceScanMonthlyQuota)} facturas de compra con IA por mes` }
       : { text: 'Facturas de compra con IA', off: true },
+    ...(plan.supportLevel ? [{ text: `Soporte: ${plan.supportLevel}` }] : []),
   ];
 }
 
@@ -796,7 +799,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
                         ) : (
                           <>
                             <b>$ {ars.format(price)}</b>
-                            <span className="unit">precio final por mes</span>
+                            <span className="unit">+ IVA por mes</span>
                           </>
                         )}
                       </div>
@@ -817,7 +820,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             ) : (
               <p className="plans-note">No pudimos cargar los planes en este momento. Probá recargar la página.</p>
             )}
-            <p className="plans-note">Precios finales por mes, en pesos argentinos.</p>
+            <p className="plans-note">Precios por mes en pesos argentinos, más IVA (21%).</p>
           </div>
         </section>
 

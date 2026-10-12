@@ -254,7 +254,24 @@ function WhatsAppStatusRow({ item }: { item: SystemStatusItem }) {
  * color que el resto de la app usa para semáforos de cupo (verde hasta
  * 70%, amber hasta 90%, rojo de ahí en adelante).
  */
-function PlanUsageBar({ planName, quota, used }: { planName: string; quota: number | null; used: number }) {
+function PlanUsageBar({
+  planName,
+  quota,
+  unlimited,
+  used,
+}: {
+  planName: string;
+  quota: number | null;
+  unlimited: boolean;
+  used: number;
+}) {
+  if (unlimited) {
+    return (
+      <span className="text-slate-400">
+        {used} · {planName} (ilimitado)
+      </span>
+    );
+  }
   if (quota == null) {
     return <span className="text-slate-500">{planName} (sin Asistente de IA)</span>;
   }
@@ -314,7 +331,7 @@ function WhatsAppLinksPanel() {
                 <td className="py-2 pr-4 text-slate-400">{DATE_TIME_FORMAT.format(new Date(link.linkedAt))}</td>
                 <td className="py-2 pr-4 text-slate-200">{link.messageCount}</td>
                 <td className="py-2">
-                  <PlanUsageBar planName={link.planName} quota={link.planQuota} used={link.planUsed} />
+                  <PlanUsageBar planName={link.planName} quota={link.planQuota} unlimited={link.planUnlimited} used={link.planUsed} />
                 </td>
               </tr>
             ))}

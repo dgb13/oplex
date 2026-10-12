@@ -9,13 +9,16 @@ export interface Plan {
   sortOrder: number;
   priceMonthly: string;
   maxUsers: number;
-  maxClients: number;
+  // null = clientes ilimitados.
+  maxClients: number | null;
   maxMonthlyInvoices: number;
   debitDiscountPercent: string;
   annualDiscountPercent: string;
   isActive: boolean;
+  supportLevel: string | null;
   aiInvoiceScanMonthlyQuota: number | null;
   aiAssistantMonthlyQueryQuota: number | null;
+  aiAssistantUnlimited: boolean;
   // Módulo de Producción - on/off puro, sin cupo mensual. Ver
   // SubscriptionService.assertCanUseProduction() en el backend.
   productionModuleEnabled: boolean;

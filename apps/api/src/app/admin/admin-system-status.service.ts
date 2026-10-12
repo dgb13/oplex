@@ -53,6 +53,8 @@ export interface WhatsAppLinkSummary {
    * incluye el Asistente de IA (mismo significado que en toda la app). */
   planName: string;
   planQuota: number | null;
+  /** true = Asistente sin tope (planQuota viene null pero SÍ está incluido). */
+  planUnlimited: boolean;
   planUsed: number;
 }
 
@@ -243,6 +245,7 @@ export class AdminSystemStatusService {
             }),
             planName: planUsage.planName,
             planQuota: planUsage.quota,
+            planUnlimited: planUsage.unlimited,
             planUsed: planUsage.used,
           })),
         );

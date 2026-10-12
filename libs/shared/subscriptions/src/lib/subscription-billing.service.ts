@@ -261,7 +261,7 @@ export class SubscriptionBillingService {
         `El plan ${plan.name} permite ${plan.maxUsers} usuario${plan.maxUsers === 1 ? '' : 's'} y hoy tenés ${users}. Desactivá los que sobran antes de cambiar.`,
       );
     }
-    if (clients > plan.maxClients) {
+    if (plan.maxClients != null && clients > plan.maxClients) {
       throw new BadRequestException(
         `El plan ${plan.name} permite ${plan.maxClients} clientes y hoy tenés ${clients} activos. Desactivá los que sobran antes de cambiar.`,
       );

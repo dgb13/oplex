@@ -31,6 +31,8 @@ export interface AssistantMessage {
 export interface AssistantUsage {
   planName: string;
   quota: number | null;
+  /** true = sin tope mensual (quota viene null pero el asistente está incluido). */
+  unlimited: boolean;
   used: number;
 }
 

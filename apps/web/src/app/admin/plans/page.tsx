@@ -138,7 +138,9 @@ export default function AdminPlansPage() {
                           {Number(plan.priceMonthly) === 0 ? 'Gratis' : `$${Number(plan.priceMonthly).toLocaleString('es-AR')}`}
                         </td>
                         <td className="p-3 text-right text-slate-300">{plan.maxUsers}</td>
-                        <td className="p-3 text-right text-slate-300">{plan.maxClients}</td>
+                        <td className="p-3 text-right text-slate-300">
+                          {plan.maxClients != null ? plan.maxClients.toLocaleString('es-AR') : 'Ilimitado'}
+                        </td>
                         <td className="p-3 text-right text-slate-300">{plan.maxMonthlyInvoices.toLocaleString('es-AR')}</td>
                         <td className="p-3 text-right text-slate-300">
                           {plan.aiInvoiceScanMonthlyQuota != null
@@ -146,9 +148,11 @@ export default function AdminPlansPage() {
                             : '—'}
                         </td>
                         <td className="p-3 text-right text-slate-300">
-                          {plan.aiAssistantMonthlyQueryQuota != null
-                            ? plan.aiAssistantMonthlyQueryQuota.toLocaleString('es-AR')
-                            : '—'}
+                          {plan.aiAssistantUnlimited
+                            ? 'Ilimitado'
+                            : plan.aiAssistantMonthlyQueryQuota != null
+                              ? plan.aiAssistantMonthlyQueryQuota.toLocaleString('es-AR')
+                              : '—'}
                         </td>
                         <td className="p-3 text-right text-slate-300">{Number(plan.debitDiscountPercent)}%</td>
                         <td className="p-3 text-right text-slate-300">{Number(plan.annualDiscountPercent)}%</td>
@@ -173,6 +177,7 @@ export default function AdminPlansPage() {
                           </span>
                         </td>
                         <td className="p-3">
+                          {plan.supportLevel && <p className="mb-1 text-xs text-slate-300">{plan.supportLevel}</p>}
                           {plan.slaMarkdown ? (
                             <a
                               href={`/sla/${plan.key}`}
@@ -230,7 +235,8 @@ function PlanForm({
     sortOrder: initial.sortOrder ?? 0,
     priceMonthly: Number(initial.priceMonthly),
     maxUsers: initial.maxUsers,
-    maxClients: initial.maxClients,
+    // Texto: "" = clientes ilimitados.
+    maxClients: initial.maxClients != null ? String(initial.maxClients) : '',
     maxMonthlyInvoices: initial.maxMonthlyInvoices,
     debitDiscountPercent: Number(initial.debitDiscountPercent ?? 0),
     annualDiscountPercent: Number(initial.annualDiscountPercent ?? 0),
@@ -238,6 +244,8 @@ function PlanForm({
     productionModuleEnabled: initial.productionModuleEnabled ?? false,
     storefrontEnabled: initial.storefrontEnabled ?? false,
     slaMarkdown: ('slaMarkdown' in initial ? initial.slaMarkdown : '') ?? '',
+    supportLevel: initial.supportLevel ?? '',
+    aiAssistantUnlimited: initial.aiAssistantUnlimited ?? false,
     // Texto, no número: "" representa null (función no incluida en este
     // plan) - un <input type="number"> no distingue "vacío" de "0" con la
     // misma claridad.
@@ -280,8 +288,14 @@ function PlanForm({
         <Field label="Máx. usuarios">
           <NumberInput value={form.maxUsers} onChange={(v) => setForm({ ...form, maxUsers: v })} />
         </Field>
-        <Field label="Máx. clientes">
-          <NumberInput value={form.maxClients} onChange={(v) => setForm({ ...form, maxClients: v })} />
+        <Field label="Máx. clientes (vacío = ilimitado)">
+          <input
+            type="number"
+            min={0}
+            value={form.maxClients}
+            onChange={(e) => setForm({ ...form, maxClients: e.target.value })}
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+          />
         </Field>
         <Field label="Máx. facturas/mes">
           <NumberInput value={form.maxMonthlyInvoices} onChange={(v) => setForm({ ...form, maxMonthlyInvoices: v })} />
@@ -306,7 +320,27 @@ function PlanForm({
             type="number"
             min={0}
             value={form.aiAssistantMonthlyQueryQuota}
+            disabled={form.aiAssistantUnlimited}
             onChange={(e) => setForm({ ...form, aiAssistantMonthlyQueryQuota: e.target.value })}
+            className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 disabled:opacity-50"
+          />
+        </Field>
+        <Field label="Asistente ilimitado">
+          <AdminSelect
+            buttonClassName={PLAN_FORM_SELECT_LOOK}
+            value={form.aiAssistantUnlimited ? '1' : '0'}
+            onChange={(v) => setForm({ ...form, aiAssistantUnlimited: v === '1' })}
+            options={[
+              { value: '1', label: 'Sí, sin tope' },
+              { value: '0', label: 'No, usa el cupo' },
+            ]}
+          />
+        </Field>
+        <Field label="Soporte (resumen del SLA)">
+          <input
+            value={form.supportLevel}
+            onChange={(e) => setForm({ ...form, supportLevel: e.target.value })}
+            placeholder="Email 48 h"
             className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
           />
         </Field>
@@ -391,15 +425,16 @@ function PlanForm({
               form.aiInvoiceScanMonthlyQuota === '' ? null : Number(form.aiInvoiceScanMonthlyQuota);
             const aiAssistantMonthlyQueryQuota =
               form.aiAssistantMonthlyQueryQuota === '' ? null : Number(form.aiAssistantMonthlyQueryQuota);
+            const maxClients = form.maxClients === '' ? null : Number(form.maxClients);
             onSave(
               showKey
-                ? { ...form, aiInvoiceScanMonthlyQuota, aiAssistantMonthlyQueryQuota }
+                ? { ...form, maxClients, aiInvoiceScanMonthlyQuota, aiAssistantMonthlyQueryQuota }
                 : {
                     name: form.name,
                     sortOrder: form.sortOrder,
                     priceMonthly: form.priceMonthly,
                     maxUsers: form.maxUsers,
-                    maxClients: form.maxClients,
+                    maxClients,
                     maxMonthlyInvoices: form.maxMonthlyInvoices,
                     debitDiscountPercent: form.debitDiscountPercent,
                     annualDiscountPercent: form.annualDiscountPercent,
@@ -407,8 +442,10 @@ function PlanForm({
                     productionModuleEnabled: form.productionModuleEnabled,
                     storefrontEnabled: form.storefrontEnabled,
                     slaMarkdown: form.slaMarkdown,
+                    supportLevel: form.supportLevel,
                     aiInvoiceScanMonthlyQuota,
                     aiAssistantMonthlyQueryQuota,
+                    aiAssistantUnlimited: form.aiAssistantUnlimited,
                   },
             );
           }}

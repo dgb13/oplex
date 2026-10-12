@@ -22,10 +22,12 @@ export class UpdatePlanDto {
   @Min(0)
   maxUsers?: number;
 
+  // null explícito = clientes ilimitados, ausente no toca el campo.
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @IsInt()
   @Min(0)
-  maxClients?: number;
+  maxClients?: number | null;
 
   @IsOptional()
   @IsInt()
@@ -67,6 +69,16 @@ export class UpdatePlanDto {
   @IsInt()
   @Min(0)
   aiAssistantMonthlyQueryQuota?: number | null;
+
+  // Asistente sin tope mensual - ver Plan.aiAssistantUnlimited.
+  @IsOptional()
+  @IsBoolean()
+  aiAssistantUnlimited?: boolean;
+
+  // Resumen corto del soporte ("Email 48 h"); string vacía lo borra.
+  @IsOptional()
+  @IsString()
+  supportLevel?: string;
 
   // Módulo de Producción - on/off puro, sin cupo. Ver
   // SubscriptionService.assertCanUseProduction().

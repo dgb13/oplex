@@ -236,7 +236,13 @@ export default function AssistantWidget() {
 
           <div
             className="h-1 w-full bg-slate-200 dark:bg-slate-800"
-            title={usage?.quota != null ? `${usage.used}/${usage.quota} consultas usadas este mes` : undefined}
+            title={
+              usage?.unlimited
+                ? `${usage.used} consultas este mes (sin tope)`
+                : usage?.quota != null
+                  ? `${usage.used}/${usage.quota} consultas usadas este mes`
+                  : undefined
+            }
           >
             <div
               className={`h-full transition-all ${usageCritical ? 'bg-red-500' : 'bg-indigo-500'}`}

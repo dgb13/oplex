@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min, MinLength, ValidateIf } from 'class-validator';
 
 export class CreatePlanDto {
   // Slug estable ("BRONZE") - lo que TenantSubscription.planId referencia
@@ -23,9 +23,12 @@ export class CreatePlanDto {
   @Min(0)
   maxUsers!: number;
 
+  // Ausente/null = clientes ilimitados.
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @IsInt()
   @Min(0)
-  maxClients!: number;
+  maxClients?: number | null;
 
   @IsInt()
   @Min(0)
@@ -63,6 +66,16 @@ export class CreatePlanDto {
   @IsInt()
   @Min(0)
   aiAssistantMonthlyQueryQuota?: number;
+
+  // Asistente sin tope mensual - ver Plan.aiAssistantUnlimited.
+  @IsOptional()
+  @IsBoolean()
+  aiAssistantUnlimited?: boolean;
+
+  // Resumen corto del soporte ("Email 48 h").
+  @IsOptional()
+  @IsString()
+  supportLevel?: string;
 
   // Módulo de Producción - on/off puro, sin cupo. Ver
   // SubscriptionService.assertCanUseProduction().

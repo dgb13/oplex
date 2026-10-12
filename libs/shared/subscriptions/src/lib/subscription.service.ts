@@ -31,6 +31,8 @@ export interface AiInvoiceScanUsage {
 export interface AssistantUsage {
   planName: string;
   quota: number | null;
+  /** true = sin tope mensual (Plan.aiAssistantUnlimited) - quota viene null. */
+  unlimited: boolean;
   used: number;
 }
 
@@ -118,6 +120,7 @@ export class SubscriptionService {
 
   async assertCanAddClient(): Promise<void> {
     const { plan } = await this.assertSubscriptionActive();
+    if (plan.maxClients == null) return;
     // Sólo cuenta empresas activas con rol CUSTOMER - una empresa
     // desactivada (ver CompaniesService.listCompanies) libera cupo, y una
     // empresa que es sólo SUPPLIER/BRANCH no es "un cliente".
@@ -134,9 +137,10 @@ export class SubscriptionService {
   /** Cuántos clientes más entran en el plan - para el importador de
    * empresas, que da de alta muchos de una vez y marca con error los que
    * superan el cupo en vez de cortar a mitad de camino. Mismo conteo que
-   * assertCanAddClient. */
-  async getClientQuota(): Promise<{ planName: string; max: number; used: number }> {
+   * assertCanAddClient. null = el plan no tiene tope de clientes. */
+  async getClientQuota(): Promise<{ planName: string; max: number; used: number } | null> {
     const { plan } = await this.assertSubscriptionActive();
+    if (plan.maxClients == null) return null;
     const used = await getTenantDb().company.count({
       where: { active: true, roles: { some: { role: 'CUSTOMER' } } },
     });
@@ -248,6 +252,7 @@ export class SubscriptionService {
    * Capacidad 1 (ayuda) o 2 (datos), ambas cuestan lo mismo en cupo. */
   async assertCanUseAssistant(): Promise<void> {
     const { plan } = await this.assertSubscriptionActive();
+    if (plan.aiAssistantUnlimited) return;
     if (plan.aiAssistantMonthlyQueryQuota == null) {
       throw new ForbiddenException(`Tu plan actual (${plan.name}) no incluye el Asistente de IA`);
     }
@@ -267,14 +272,15 @@ export class SubscriptionService {
    * suscripción vencida. */
   async getAssistantUsage(): Promise<AssistantUsage> {
     const { plan } = await this.getCurrentForTenant();
-    if (plan.aiAssistantMonthlyQueryQuota == null) {
-      return { planName: plan.name, quota: null, used: 0 };
+    if (!plan.aiAssistantUnlimited && plan.aiAssistantMonthlyQueryQuota == null) {
+      return { planName: plan.name, quota: null, unlimited: false, used: 0 };
     }
     const { from, to } = defaultMonthRange();
     const used = await getTenantDb().assistantMessage.count({
       where: { role: 'USER', createdAt: { gte: from, lte: to } },
     });
-    return { planName: plan.name, quota: plan.aiAssistantMonthlyQueryQuota, used };
+    if (plan.aiAssistantUnlimited) return { planName: plan.name, quota: null, unlimited: true, used };
+    return { planName: plan.name, quota: plan.aiAssistantMonthlyQueryQuota, unlimited: false, used };
   }
 
   /** Allowlist, not a blocklist for EXPIRED alone: CANCELLED has no write
@@ -312,7 +318,7 @@ export class SubscriptionService {
         sortOrder: dto.sortOrder ?? 0,
         priceMonthly: new Prisma.Decimal(dto.priceMonthly),
         maxUsers: dto.maxUsers,
-        maxClients: dto.maxClients,
+        maxClients: dto.maxClients ?? null,
         maxMonthlyInvoices: dto.maxMonthlyInvoices,
         debitDiscountPercent: new Prisma.Decimal(dto.debitDiscountPercent ?? 0),
         annualDiscountPercent: new Prisma.Decimal(dto.annualDiscountPercent ?? 0),
@@ -321,6 +327,8 @@ export class SubscriptionService {
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
+        aiAssistantUnlimited: dto.aiAssistantUnlimited ?? false,
+        supportLevel: dto.supportLevel === '' ? null : dto.supportLevel,
         productionModuleEnabled: dto.productionModuleEnabled ?? false,
         storefrontEnabled: dto.storefrontEnabled ?? false,
       },
@@ -353,6 +361,8 @@ export class SubscriptionService {
         slaUpdatedAt: dto.slaMarkdown === undefined ? undefined : new Date(),
         aiInvoiceScanMonthlyQuota: dto.aiInvoiceScanMonthlyQuota,
         aiAssistantMonthlyQueryQuota: dto.aiAssistantMonthlyQueryQuota,
+        aiAssistantUnlimited: dto.aiAssistantUnlimited,
+        supportLevel: dto.supportLevel === '' ? null : dto.supportLevel,
         productionModuleEnabled: dto.productionModuleEnabled,
         storefrontEnabled: dto.storefrontEnabled,
       },
