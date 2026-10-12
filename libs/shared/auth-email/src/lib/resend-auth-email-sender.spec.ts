@@ -145,3 +145,32 @@ describe('ResendAuthEmailSender.sendMembershipNotice', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('ResendAuthEmailSender Reply-To', () => {
+  beforeEach(() => {
+    sendMock.mockReset();
+    sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null });
+  });
+
+  it('account emails reply to soporte@ and say how to reach it (they come from no-responder@)', async () => {
+    const sender = new ResendAuthEmailSender('re_test_key', 'no-responder@oplex.com.ar');
+
+    await sender.sendVerificationCode({ to: 'nuevo@demo.com', code: '123456', expiresInMinutes: 15 });
+    await sender.sendPasswordResetLink({ to: 'nuevo@demo.com', resetUrl: 'https://x/reset', expiresInMinutes: 30 });
+
+    for (const [args] of sendMock.mock.calls) {
+      expect(args.replyTo).toBe('soporte@oplex.com.ar');
+      expect(args.text).toContain('soporte@oplex.com.ar');
+    }
+  });
+
+  it('legal notices use the replyTo they are given, soporte@ otherwise', async () => {
+    const sender = new ResendAuthEmailSender('re_test_key', 'no-responder@oplex.com.ar');
+
+    await sender.sendLegalNotice({ to: 'ana@cliente.com', subject: 's', text: 't', replyTo: 'facturacion@oplex.com.ar' });
+    await sender.sendLegalNotice({ to: 'ana@cliente.com', subject: 's', text: 't' });
+
+    expect(sendMock.mock.calls[0][0].replyTo).toBe('facturacion@oplex.com.ar');
+    expect(sendMock.mock.calls[1][0].replyTo).toBe('soporte@oplex.com.ar');
+  });
+});
