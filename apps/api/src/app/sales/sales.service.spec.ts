@@ -81,8 +81,12 @@ function makeTenantSettingsService(): TenantSettingsService {
   } as unknown as TenantSettingsService;
 }
 
-function makeBranchDb(branch: unknown = defaultBranch()) {
-  return { company: { findUnique: jest.fn().mockResolvedValue(branch) } };
+/** serviceVariantIds: variantes cuyo artículo es un servicio (Article.isService). */
+function makeBranchDb(branch: unknown = defaultBranch(), serviceVariantIds: string[] = []) {
+  return {
+    company: { findUnique: jest.fn().mockResolvedValue(branch) },
+    articleVariant: { findMany: jest.fn().mockResolvedValue(serviceVariantIds.map((id) => ({ id }))) },
+  };
 }
 
 function defaultBranch() {
@@ -178,6 +182,49 @@ describe('SalesService.createSale', () => {
     });
     expect((postedEntry.cogsAmount as InstanceType<typeof Prisma.Decimal>).toNumber()).toBe(50);
     expect(result).toBe(invoice);
+  });
+
+  it('does not move stock nor add COGS for a service line (Article.isService)', async () => {
+    const invoice = {
+      id: 'invoice-1',
+      subtotal: new Prisma.Decimal(15000),
+      taxTotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(15000),
+      exchangeRate: new Prisma.Decimal(1),
+      issueDate: new Date('2026-10-15'),
+      lines: [
+        { articleVariantId: 'service-1', quantity: new Prisma.Decimal(1) },
+        { articleVariantId: 'variant-1', quantity: new Prisma.Decimal(2) },
+      ],
+      taxLines: [],
+    };
+    const invoicingService = { createInvoice: jest.fn().mockResolvedValue(invoice) } as unknown as InvoicingService;
+    const inventoryService = {
+      recordMovement: jest.fn().mockResolvedValue({ unitCost: new Prisma.Decimal(10) }),
+    } as unknown as InventoryService;
+    const accountingService = {
+      postInvoiceJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-1', lines: [] }),
+    } as unknown as AccountingService;
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
+
+    await runInTenant(makeBranchDb(defaultBranch(), ['service-1']), () =>
+      service.createSale({
+        customerId: 'customer-1',
+        warehouseId: 'warehouse-1',
+        documentLetter: 'C' as const,
+        branchId: 'branch-1',
+        currencyId: 'currency-1',
+        lines: [
+          { articleVariantId: 'service-1', quantity: 1 },
+          { articleVariantId: 'variant-1', quantity: 2 },
+        ],
+      }),
+    );
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledTimes(1);
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(expect.objectContaining({ articleVariantId: 'variant-1' }));
+    const postedEntry = (accountingService.postInvoiceJournalEntry as jest.Mock).mock.calls[0][0];
+    expect((postedEntry.cogsAmount as InstanceType<typeof Prisma.Decimal>).toNumber()).toBe(20);
   });
 
   it('passes the resolved custom sender through to createInvoice when the tenant has a verified domain', async () => {

@@ -24,7 +24,9 @@ interface ProductOption {
   // Disponible para vender en el depósito de ESTA caja (no la suma de todos
   // los depósitos): físico menos lo reservado para producción, el mismo
   // número que controla PosService antes de cobrar.
+  // Un servicio no tiene stock: Infinity, así nunca lo limita.
   stock: number;
+  isService: boolean;
   // Lo reservado para producción en ese depósito, para explicar un "sin
   // stock" con unidades físicas.
   reserved: number;
@@ -44,7 +46,8 @@ function flatten(articles: Article[], warehouseId: string | undefined): ProductO
         sku: variant.sku,
         imageUrl: article.imageUrl,
         unitPrice: variant.unitPrice,
-        stock: Math.max((row?.quantity ?? 0) - reserved, 0),
+        stock: article.isService ? Number.POSITIVE_INFINITY : Math.max((row?.quantity ?? 0) - reserved, 0),
+        isService: article.isService,
         reserved,
         taxRate: article.taxRate,
         taxKind: article.taxKind,
@@ -347,7 +350,7 @@ function PosSellScreen() {
                       : 'text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500'
                   }`}
                 >
-                  {product.stock <= 0 ? 'Sin stock' : `Stock: ${formatStock(product.stock)}`}
+                  {product.isService ? 'Servicio' : product.stock <= 0 ? 'Sin stock' : `Stock: ${formatStock(product.stock)}`}
                   {product.reserved > 0 && ` · ${formatStock(product.reserved)} reservad${product.reserved === 1 ? 'a' : 'as'} p/ producción`}
                 </p>
               </button>
