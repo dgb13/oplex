@@ -436,6 +436,10 @@ model PlatformSettings {
   // Consultas reales a ARCA en el mes (las que salen de la caché no cuentan).
   arcaPadronQueriesMonth      String?
   arcaPadronQueriesCount      Int @default(0)
+  // "Probar" de Inteligencia artificial en /admin (AdminAiStatusService):
+  // resultado por función ({ [feature]: { ok, message } }), sin costo.
+  aiLastTestAt      DateTime?
+  aiLastTestResults Json?
   // Cuenta de Oplex donde los tenants transfieren el pago del plan (ver
   // SubscriptionBillingService.reportTransfer). Editable en /admin/subscriptions.
   oplexBankHolder String?
@@ -489,6 +493,25 @@ model OpsAlert {
 // Caché de consultas al padrón de ARCA por CUIT - global (sin tenantId/RLS,
 // como PlatformSettings: los datos públicos de un CUIT son los mismos para
 // todos los tenants). Evita repetir la consulta a ARCA por 30 días.
+// Usos y fallas de las funciones de IA (Anthropic) para /admin → Configuración
+// del sistema → Inteligencia artificial. Global, SIN RLS (como
+// arca_padron_cache): lo lee el admin de la plataforma. Nunca guarda el
+// documento ni la respuesta, sólo qué función, de qué tenant y el motivo de
+// la falla. Se poda sola (ver AiEventsService.record).
+model AiFeatureEvent {
+  id        String   @id @default(uuid())
+  // CONSTANCIA | INVOICE_SCAN | ASSISTANT_CHAT | ASSISTANT_HELP | ARTICLE_IMPORT
+  feature   String
+  ok        Boolean
+  tenantId  String?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([feature, createdAt])
+  @@index([ok, createdAt])
+  @@map("ai_feature_events")
+}
+
 model ArcaPadronCache {
   cuit      String   @id
   env       AfipEnvironment

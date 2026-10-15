@@ -9,7 +9,8 @@ import type {
 import { EXTRACT_INVOICE_TOOL } from './extract-invoice.tool.js';
 import { decodeAfipQrFromImage, type DecodedAfipQr } from './qr-decode.util.js';
 
-const DEFAULT_MODEL = 'claude-sonnet-5';
+// Exportado para /admin (AdminAiStatusService); lo usa también la constancia.
+export const DOCUMENTS_DEFAULT_MODEL = 'claude-sonnet-5';
 const MAX_TOKENS = 2048;
 
 const EXTRACTION_PROMPT = `Ésta es una factura de compra argentina (foto o escaneo). Extraé sus datos usando la herramienta extract_purchase_invoice_data. Para cada campo, asigná un "confidence" honesto entre 0 y 1 - bajo (menos de 0.6) si el texto está borroso, cortado, o estás adivinando; alto (más de 0.9) sólo si lo leíste con total claridad. subtotal es el NETO antes de impuestos, no el total final. Las líneas de impuestos (taxLines) van una por cada renglón de IVA/percepción que aparezca discriminado en la factura - si no hay ninguna discriminada, dejá el array vacío.`;
@@ -57,7 +58,7 @@ export class AiInvoiceExtractionService {
 
   private async callClaude(buffer: Buffer, mimetype: string): Promise<ClaudeExtractionOutput> {
     const response = await this.anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
+      model: process.env.ANTHROPIC_MODEL || DOCUMENTS_DEFAULT_MODEL,
       max_tokens: MAX_TOKENS,
       tools: [EXTRACT_INVOICE_TOOL],
       tool_choice: { type: 'tool', name: EXTRACT_INVOICE_TOOL.name },

@@ -8,3 +8,4 @@ export * from './lib/dto/create-article.dto.js';
 export * from './lib/dto/create-article-variant.dto.js';
 export * from './lib/dto/set-minimum-stock.dto.js';
 export * from './lib/dto/record-stock-movement.dto.js';
+export { ARTICLE_IMPORT_DEFAULT_MODEL } from './lib/import/category-ai.service.js';

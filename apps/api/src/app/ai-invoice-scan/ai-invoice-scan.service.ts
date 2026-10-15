@@ -1,7 +1,8 @@
-import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { AiInvoiceExtractionService, type AiInvoiceExtractionResult } from '@plexo/ai-invoice-scan';
 import { getTenantDb, getTenantId, PrismaService, withTenantContext } from '@plexo/database';
 import { SubscriptionService, type AiInvoiceScanUsage } from '@plexo/subscriptions';
+import { AiEventsService } from '../ai-events/ai-events.service.js';
 
 // Fila única de PlatformSettings - mismo criterio que
 // ExchangeRateSchedulerService/MembershipsService.getSettings.
@@ -49,6 +50,7 @@ export class AiInvoiceScanService {
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
     private readonly aiInvoiceExtractionService: AiInvoiceExtractionService,
+    @Optional() private readonly aiEvents?: AiEventsService,
   ) {}
 
   /** Get-or-create defensivo - mismo criterio que
@@ -147,6 +149,7 @@ export class AiInvoiceScanService {
     } catch (err) {
       const message = (err as Error).message;
       await this.recordAttempt('FAILURE', message);
+      await this.aiEvents?.record('INVOICE_SCAN', false, message);
       // El error técnico real (credenciales, rate limit del proveedor,
       // formato no soportado, etc.) queda en el log del servidor para
       // diagnóstico - nunca se lo devolvemos tal cual al usuario final, que

@@ -514,6 +514,29 @@ export const adminArcaPadronApi = {
     api.post<ArcaPadronStatus>('/admin/arca-padron/certificate', { certPem, keyPem }).then((r) => r.data),
 };
 
+// Inteligencia artificial (Anthropic) - ver AdminAiStatusService (API).
+export type AiKeyGroup = 'assistant' | 'documents';
+export type AiTestCode = 'OK' | 'NO_KEY' | 'INVALID_KEY' | 'NO_PERMISSION' | 'MODEL_NOT_FOUND' | 'NETWORK' | 'ERROR';
+
+export interface AiStatus {
+  keys: { group: AiKeyGroup; label: string; envVar: string; usedBy: string; configured: boolean }[];
+  features: {
+    key: string;
+    label: string;
+    group: AiKeyGroup;
+    model: string;
+    lastTest: { code: AiTestCode; message: string } | null;
+    usage: string | null;
+  }[];
+  lastTestAt: string | null;
+  lastFailure: { at: string; feature: string; tenantName: string | null; reason: string | null } | null;
+}
+
+export const adminAiApi = {
+  getStatus: () => api.get<AiStatus>('/admin/ai').then((r) => r.data),
+  test: () => api.post<AiStatus>('/admin/ai/test').then((r) => r.data),
+};
+
 // ---------------------------------------------------------------------------
 // Suscripciones (cobro de planes) - ver SubscriptionBillingService.
 

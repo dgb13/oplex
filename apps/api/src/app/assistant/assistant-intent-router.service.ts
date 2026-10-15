@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
+import { AiEventsService } from '../ai-events/ai-events.service.js';
+import { ASSISTANT_HELP_DEFAULT_MODEL } from './assistant-help.service.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 
-const DEFAULT_ROUTER_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 50;
 
 export type AssistantIntent = 'ayuda' | 'datos';
@@ -30,12 +31,15 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
 export class AssistantIntentRouterService {
   private readonly logger = new Logger(AssistantIntentRouterService.name);
 
-  constructor(@Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic) {}
+  constructor(
+    @Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic,
+    @Optional() private readonly aiEvents?: AiEventsService,
+  ) {}
 
   async classify(message: string): Promise<AssistantIntent> {
     try {
       const response = await this.anthropic.messages.create({
-        model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL ?? DEFAULT_ROUTER_MODEL,
+        model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL || ASSISTANT_HELP_DEFAULT_MODEL,
         max_tokens: MAX_TOKENS,
         tools: [CLASSIFY_TOOL],
         tool_choice: { type: 'tool', name: CLASSIFY_TOOL.name },
@@ -54,6 +58,7 @@ export class AssistantIntentRouterService {
       return intent === 'ayuda' ? 'ayuda' : 'datos';
     } catch (err) {
       this.logger.error('Falló la clasificación de intención', err instanceof Error ? err.stack : err);
+      await this.aiEvents?.record('ASSISTANT_HELP', false, err instanceof Error ? err.message : String(err));
       throw new ServiceUnavailableException('El asistente no está disponible en este momento. Probá de nuevo en un rato.');
     }
   }
