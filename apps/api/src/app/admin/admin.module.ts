@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { AfipCredentialsModule } from '@plexo/afip-credentials';
 import { SubscriptionModule } from '@plexo/subscriptions';
 import { AuthModule } from '../auth/auth.module.js';
+import { ArcaPadronModule } from '../arca-padron/arca-padron.module.js';
 import { AdminAiStatusController } from './admin-ai-status.controller.js';
+import { AdminArcaConstanciaLinkController } from './admin-arca-constancia-link.controller.js';
 import { AdminAiStatusService } from './admin-ai-status.service.js';
 import { AdminArcaPadronController } from './admin-arca-padron.controller.js';
 import { AdminAuditController } from './admin-audit.controller.js';
@@ -18,7 +20,7 @@ import { AdminSubscriptionsController } from './admin-subscriptions.controller.j
 import { AdminSubscriptionsService } from './admin-subscriptions.service.js';
 
 @Module({
-  imports: [SubscriptionModule, AuthModule, AfipCredentialsModule],
+  imports: [SubscriptionModule, AuthModule, AfipCredentialsModule, ArcaPadronModule],
   controllers: [
     AdminTenantsController,
     AdminAuditController,
@@ -26,6 +28,7 @@ import { AdminSubscriptionsService } from './admin-subscriptions.service.js';
     AdminSystemStatusController,
     AdminArcaPadronController,
     AdminAiStatusController,
+    AdminArcaConstanciaLinkController,
     AdminSubscriptionsController,
   ],
   providers: [AdminAiStatusService, AdminTenantsService, AdminAuditService, AdminMercadoPagoService, AdminSystemStatusService, AdminSubscriptionsService],

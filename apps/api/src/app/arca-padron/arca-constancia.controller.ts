@@ -1,10 +1,11 @@
-import { BadRequestException, Controller, Logger, Optional, Post, Req, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Logger, Optional, Post, Req, ServiceUnavailableException } from '@nestjs/common';
 import { ConstanciaExtractionService } from '@plexo/ai-invoice-scan';
 import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
 import { AiEventsService } from '../ai-events/ai-events.service.js';
+import { ArcaConstanciaLinkService } from './arca-constancia-link.service.js';
 
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
@@ -18,8 +19,16 @@ export class ArcaConstanciaController {
 
   constructor(
     private readonly constancia: ConstanciaExtractionService,
+    private readonly link: ArcaConstanciaLinkService,
     @Optional() private readonly aiEvents?: AiEventsService,
   ) {}
+
+  // Botón "Abrir la consulta en ARCA" del paso 1 (enlace administrable en /admin).
+  @Roles('OWNER', 'ADMIN')
+  @Get('link')
+  async getLink() {
+    return { url: await this.link.getUrl() };
+  }
 
   @Roles('OWNER', 'ADMIN')
   @LongRunningTransaction(45_000)

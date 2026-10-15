@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { diskTone, formatBytes, formatWhen, type Tone } from '../OpsUi';
 import { AiStatusRow } from './AiStatusRow';
 import { ArcaPadronRow } from './ArcaPadronRow';
+import { ConstanciaLinkRow } from './ConstanciaLinkRow';
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -51,6 +52,8 @@ export default function AdminSystemStatusPage() {
                 <WhatsAppStatusRow key={item.key} item={item} />
               ) : item.key === 'ai' ? (
                 <AiStatusRow key={item.key} item={item} />
+              ) : item.key === 'arcaConstanciaLink' ? (
+                <ConstanciaLinkRow key={item.key} item={item} />
               ) : item.key === 'arcaPadron' ? (
                 <ArcaPadronRow key={item.key} item={item} />
               ) : item.key === 'backups' ? (

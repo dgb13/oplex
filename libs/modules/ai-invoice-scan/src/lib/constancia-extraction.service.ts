@@ -3,7 +3,6 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { DOCUMENTS_DEFAULT_MODEL } from './ai-invoice-extraction.service.js';
 import { ANTHROPIC_CLIENT } from './anthropic-client.token.js';
 
-
 /** Lo que la IA lee de una Constancia de Inscripción de ARCA (o de una
  * constancia de Ingresos Brutos). Todo es lectura de la IA, nunca un dato
  * validado - la UI lo compara contra el padrón y el usuario decide. */
@@ -12,6 +11,8 @@ export interface ConstanciaExtraction {
   cuit: string | null;
   name: string | null;
   ivaCondition: 'RESPONSABLE_INSCRIPTO' | 'MONOTRIBUTO' | 'EXENTO' | null;
+  /** Letra de la categoría de Monotributo (A..K). */
+  monotributoCategory: string | null;
   fiscalAddress: string | null;
   /** AAAA-MM-DD */
   activityStartDate: string | null;
@@ -29,12 +30,18 @@ const TOOL = {
       cuit: { type: ['string', 'null'], description: 'Sólo los 11 dígitos.' },
       name: { type: ['string', 'null'], description: 'Apellido y nombre o razón social, tal cual figura.' },
       ivaCondition: { type: ['string', 'null'], enum: ['RESPONSABLE_INSCRIPTO', 'MONOTRIBUTO', 'EXENTO', null] },
+      monotributoCategory: { type: ['string', 'null'], description: 'Sólo para monotributo: la letra del recuadro CATEGORÍA (A a K). null en otro caso.' },
       fiscalAddress: { type: ['string', 'null'], description: 'Domicilio fiscal completo tal cual figura.' },
-      activityStartDate: { type: ['string', 'null'], description: 'Fecha de inicio de actividades, formato AAAA-MM-DD. null si no figura el día completo.' },
+      activityStartDate: {
+        type: ['string', 'null'],
+        description:
+          'Inicio de actividades, formato AAAA-MM-DD. En la Constancia de Opción de monotributo es la "FECHA DE INICIO" que está debajo de la categoría del monotributo (020 - MONOTRIBUTO), NO la de Ingresos Brutos ni la de otros impuestos. En la Constancia de Inscripción (régimen general) es la fecha de inicio de actividades o, si no figura, la del impuesto a las ganancias o IVA. null si no figura el día completo.',
+      },
       grossIncomeType: {
         type: ['string', 'null'],
         enum: ['SIMPLIFICADO', 'LOCAL', 'CONVENIO_MULTILATERAL', 'EXENTO', 'NO_INSCRIPTO', null],
-        description: 'Situación en Ingresos Brutos si la constancia la informa (ej. Régimen Simplificado provincial incluido en el monotributo unificado).',
+        description:
+          'Situación en Ingresos Brutos si la constancia la informa. SIMPLIFICADO cuando figura un "REGIMEN SIMPLIFICADO IMPUESTO SOBRE INGRESOS BRUTOS" con estado AC (activo). Si ese impuesto figura NA (jurisdicción no adherida) o no figura, null.',
       },
       grossIncomeDetail: {
         type: ['string', 'null'],
@@ -42,7 +49,7 @@ const TOOL = {
           'Texto corto (máximo 50 caracteres) para imprimir en la factura: el número de inscripción en Ingresos Brutos o, si no figura, el régimen y la provincia (ej. "Régimen Simplificado Mendoza"). No copies el código del impuesto (ej. "5445 - ...") ni su descripción completa.',
       },
     },
-    required: ['isConstancia', 'cuit', 'name', 'ivaCondition', 'fiscalAddress', 'activityStartDate', 'grossIncomeType', 'grossIncomeDetail'],
+    required: ['isConstancia', 'cuit', 'name', 'ivaCondition', 'monotributoCategory', 'fiscalAddress', 'activityStartDate', 'grossIncomeType', 'grossIncomeDetail'],
   },
 };
 
