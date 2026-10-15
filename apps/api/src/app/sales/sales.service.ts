@@ -75,8 +75,20 @@ export class SalesService {
     // around): the COGS lines below need each SALE_OUT movement's stamped
     // unitCost (the weighted-average cost consumed at that moment), which
     // only exists once recordMovement() has run.
+    // Un servicio (Article.isService) no tiene stock: no genera SALE_OUT ni
+    // costo de mercadería vendida. voidSale ya contempla la línea sin
+    // movimiento original (no repone ni toca el CMV).
+    const serviceVariantIds = new Set(
+      (
+        await getTenantDb().articleVariant.findMany({
+          where: { id: { in: invoice.lines.map((l) => l.articleVariantId) }, article: { isService: true } },
+          select: { id: true },
+        })
+      ).map((v) => v.id),
+    );
     let totalCogs = new Prisma.Decimal(0);
     for (const line of invoice.lines) {
+      if (serviceVariantIds.has(line.articleVariantId)) continue;
       const movement = await this.inventoryService.recordMovement({
         warehouseId: dto.warehouseId,
         articleVariantId: line.articleVariantId,

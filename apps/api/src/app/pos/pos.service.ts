@@ -335,7 +335,8 @@ export class PosService {
     }
     const [variants, warehouse] = await Promise.all([
       db.articleVariant.findMany({
-        where: { id: { in: [...needed.keys()] } },
+        // Los servicios no tienen stock (ver SalesService.createSale).
+        where: { id: { in: [...needed.keys()] }, article: { isService: false } },
         select: { id: true, article: { select: { name: true } } },
       }),
       db.warehouse.findUnique({ where: { id: warehouseId }, select: { name: true } }),
