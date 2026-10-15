@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
-import { getOrCreateSystemFinancialAccount, getTenantDb, getTenantId, getUserId, Prisma } from '@plexo/database';
-import { InventoryService } from '@plexo/inventory';
+import { getOrCreateSystemFinancialAccount, getTenantDb, getTenantId, getUserId, notify, Prisma, userIdsWithRoles } from '@plexo/database';
+import { getReservedQuantity, InventoryService } from '@plexo/inventory';
 import { InvoicingService, type CreateCreditNoteDto, type RecordReceiptDto } from '@plexo/invoicing';
 import { QuoteService } from '@plexo/quotes';
 import { ReportsFinancialService } from '@plexo/reports-financial';
@@ -9,6 +9,34 @@ import { resolveEmailFrom, TenantSettingsService } from '@plexo/tenant-settings'
 import { CheckService } from '@plexo/treasury';
 import type { CreateInvoiceFromQuoteDto } from './dto/create-invoice-from-quote.dto.js';
 import type { CreateSaleDto } from './dto/create-sale.dto.js';
+import type { StockCheckDto } from './dto/stock-check.dto.js';
+
+// Quienes manejan el depósito o venden - ven el aviso de entrega pendiente.
+const PENDING_DELIVERY_ROLES = ['OWNER', 'ADMIN', 'SALES', 'INVENTORY'] as const;
+const QTY = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+export interface StockShortage {
+  articleVariantId: string;
+  articleName: string;
+  requested: number;
+  available: number;
+  deliverNow: number;
+  pending: number;
+}
+
+export interface PendingDeliveryRow {
+  id: string;
+  invoiceId: string;
+  invoiceLabel: string;
+  issueDate: string;
+  customerName: string;
+  articleName: string;
+  sku: string;
+  warehouseName: string;
+  quantityOrdered: number;
+  quantityPending: number;
+  availableNow: number;
+}
 
 /**
  * Composes InvoicingService + InventoryService + AccountingService for
@@ -86,21 +114,48 @@ export class SalesService {
         })
       ).map((v) => v.id),
     );
+    // Con allowPendingDelivery (Nueva factura / Convertir a factura, después
+    // del aviso), lo que falta en el depósito queda en PendingDelivery y no
+    // se descuenta: sale recién con "Entregar" (deliverPending). Sin la
+    // opción, recordMovement rechaza la falta de stock como siempre.
+    const db = getTenantDb();
+    const pendingCreated: { articleVariantId: string; quantity: Prisma.Decimal }[] = [];
     let totalCogs = new Prisma.Decimal(0);
     for (const line of invoice.lines) {
       if (serviceVariantIds.has(line.articleVariantId)) continue;
+      let deliverNow = line.quantity;
+      if (dto.allowPendingDelivery) {
+        const available = await this.availableStock(dto.warehouseId, line.articleVariantId);
+        if (available.lt(line.quantity)) {
+          deliverNow = Prisma.Decimal.max(available, 0);
+          const pending = line.quantity.sub(deliverNow);
+          await db.pendingDelivery.create({
+            data: {
+              tenantId: getTenantId(),
+              invoiceId: invoice.id,
+              invoiceLineId: line.id,
+              articleVariantId: line.articleVariantId,
+              warehouseId: dto.warehouseId,
+              quantityOrdered: pending,
+              quantityPending: pending,
+            },
+          });
+          pendingCreated.push({ articleVariantId: line.articleVariantId, quantity: pending });
+        }
+      }
+      if (deliverNow.lte(0)) continue;
       const movement = await this.inventoryService.recordMovement({
         warehouseId: dto.warehouseId,
         articleVariantId: line.articleVariantId,
         type: 'SALE_OUT',
-        quantity: line.quantity.toNumber(),
+        quantity: deliverNow.toNumber(),
         invoiceId: invoice.id,
         invoiceLineId: line.id,
         sourceType: 'INVOICE',
         sourceId: invoice.id,
       });
       if (movement.unitCost != null) {
-        totalCogs = totalCogs.add(new Prisma.Decimal(movement.unitCost).mul(line.quantity));
+        totalCogs = totalCogs.add(new Prisma.Decimal(movement.unitCost).mul(deliverNow));
       }
     }
 
@@ -122,7 +177,167 @@ export class SalesService {
       otherTaxesTotal: otherTaxesTotal.mul(invoice.exchangeRate),
     });
 
+    if (pendingCreated.length > 0) {
+      await this.notifyPendingDelivery(invoice, pendingCreated);
+    }
+
     return invoice;
+  }
+
+  /** Disponible para vender en un depósito: físico menos lo reservado para
+   * producción (mismo criterio que InventoryService.recordMovement). */
+  private async availableStock(warehouseId: string, articleVariantId: string): Promise<Prisma.Decimal> {
+    const db = getTenantDb();
+    const ledger = await db.stockLedger.findUnique({
+      where: { warehouseId_articleVariantId: { warehouseId, articleVariantId } },
+      select: { quantity: true },
+    });
+    const reserved = await getReservedQuantity(db, { warehouseId, articleVariantId });
+    return (ledger?.quantity ?? new Prisma.Decimal(0)).sub(reserved);
+  }
+
+  private async notifyPendingDelivery(
+    invoice: { documentLetter: string; pointOfSale: string; number: string; customerName: string | null },
+    pending: { articleVariantId: string; quantity: Prisma.Decimal }[],
+  ): Promise<void> {
+    const variants = await getTenantDb().articleVariant.findMany({
+      where: { id: { in: pending.map((p) => p.articleVariantId) } },
+      select: { id: true, article: { select: { name: true } } },
+    });
+    const name = (id: string) => variants.find((v) => v.id === id)?.article.name ?? 'Un artículo';
+    const detail = pending.map((p) => `${name(p.articleVariantId)} (${QTY.format(p.quantity.toNumber())})`).join(', ');
+    await notify({
+      recipientUserIds: await userIdsWithRoles([...PENDING_DELIVERY_ROLES]),
+      category: 'SALES',
+      type: 'sales.pending_delivery',
+      preference: 'sales.pending_delivery',
+      message: `**Factura ${invoice.documentLetter} ${invoice.pointOfSale}-${invoice.number}** quedó con entrega pendiente para ${invoice.customerName ?? 'el cliente'}: ${detail}`,
+      link: '/sales/pending-deliveries',
+    });
+  }
+
+  /** Antes de emitir (Nueva factura / Convertir a factura): qué líneas no
+   * alcanzan con el stock del depósito. Los servicios no cuentan. */
+  async checkStock(dto: StockCheckDto): Promise<{ warehouseName: string; shortages: StockShortage[] }> {
+    const db = getTenantDb();
+    let lines: { articleVariantId: string; quantity: number }[] = dto.lines ?? [];
+    if (dto.quoteId) {
+      const quote = await db.quote.findUnique({ where: { id: dto.quoteId }, include: { lines: true } });
+      if (!quote) throw new NotFoundException('Cotización no encontrada');
+      lines = quote.lines.map((l) => ({ articleVariantId: l.articleVariantId, quantity: l.quantity.toNumber() }));
+    }
+    const needed = new Map<string, number>();
+    for (const line of lines) needed.set(line.articleVariantId, (needed.get(line.articleVariantId) ?? 0) + line.quantity);
+
+    const [variants, warehouse] = await Promise.all([
+      db.articleVariant.findMany({
+        where: { id: { in: [...needed.keys()] }, article: { isService: false } },
+        select: { id: true, article: { select: { name: true } } },
+      }),
+      db.warehouse.findUnique({ where: { id: dto.warehouseId }, select: { name: true } }),
+    ]);
+    const shortages: StockShortage[] = [];
+    for (const variant of variants) {
+      const requested = needed.get(variant.id) ?? 0;
+      const available = Prisma.Decimal.max(await this.availableStock(dto.warehouseId, variant.id), 0).toNumber();
+      if (available < requested) {
+        shortages.push({
+          articleVariantId: variant.id,
+          articleName: variant.article.name,
+          requested,
+          available,
+          deliverNow: available,
+          pending: requested - available,
+        });
+      }
+    }
+    return { warehouseName: warehouse?.name ?? 'el depósito', shortages };
+  }
+
+  async listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
+    const db = getTenantDb();
+    const rows = await db.pendingDelivery.findMany({
+      where: { completedAt: null, cancelledAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (rows.length === 0) return [];
+    const [invoices, variants, warehouses] = await Promise.all([
+      db.invoice.findMany({
+        where: { id: { in: [...new Set(rows.map((r) => r.invoiceId))] } },
+        select: { id: true, documentLetter: true, pointOfSale: true, number: true, issueDate: true, customerName: true },
+      }),
+      db.articleVariant.findMany({
+        where: { id: { in: [...new Set(rows.map((r) => r.articleVariantId))] } },
+        select: { id: true, sku: true, article: { select: { name: true } } },
+      }),
+      db.warehouse.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.warehouseId))] } }, select: { id: true, name: true } }),
+    ]);
+    const result: PendingDeliveryRow[] = [];
+    for (const row of rows) {
+      const invoice = invoices.find((i) => i.id === row.invoiceId);
+      const variant = variants.find((v) => v.id === row.articleVariantId);
+      const available = await this.availableStock(row.warehouseId, row.articleVariantId);
+      result.push({
+        id: row.id,
+        invoiceId: row.invoiceId,
+        invoiceLabel: invoice ? `${invoice.documentLetter} ${invoice.pointOfSale}-${invoice.number}` : '—',
+        issueDate: (invoice?.issueDate ?? row.createdAt).toISOString(),
+        customerName: invoice?.customerName ?? '—',
+        articleName: variant?.article.name ?? '—',
+        sku: variant?.sku ?? '',
+        warehouseName: warehouses.find((w) => w.id === row.warehouseId)?.name ?? '—',
+        quantityOrdered: row.quantityOrdered.toNumber(),
+        quantityPending: row.quantityPending.toNumber(),
+        availableNow: Prisma.Decimal.max(available, 0).toNumber(),
+      });
+    }
+    return result;
+  }
+
+  /** "Entregar": sale del depósito ahora (SALE_OUT) y se registra el costo
+   * de lo vendido al costo promedio de este momento. Se puede entregar una
+   * parte. */
+  async deliverPending(id: string, quantity?: number): Promise<PendingDeliveryRow[]> {
+    const db = getTenantDb();
+    // Dos personas tocando "Entregar" a la vez no pueden entregar dos veces.
+    await db.$queryRaw`SELECT id FROM pending_deliveries WHERE id = ${id} FOR UPDATE`;
+    const row = await db.pendingDelivery.findUnique({ where: { id } });
+    if (!row || row.completedAt || row.cancelledAt) {
+      throw new NotFoundException('Esa entrega ya no está pendiente');
+    }
+    const qty = quantity != null ? new Prisma.Decimal(quantity) : row.quantityPending;
+    if (qty.gt(row.quantityPending)) {
+      throw new BadRequestException(`Quedan ${QTY.format(row.quantityPending.toNumber())} por entregar`);
+    }
+    const movement = await this.inventoryService.recordMovement({
+      warehouseId: row.warehouseId,
+      articleVariantId: row.articleVariantId,
+      type: 'SALE_OUT',
+      quantity: qty.toNumber(),
+      invoiceId: row.invoiceId,
+      invoiceLineId: row.invoiceLineId,
+      sourceType: 'INVOICE',
+      sourceId: row.invoiceId,
+    });
+    if (movement.unitCost != null) {
+      const invoice = await db.invoice.findUnique({
+        where: { id: row.invoiceId },
+        select: { documentLetter: true, pointOfSale: true, number: true },
+      });
+      await this.accountingService.postPendingDeliveryCogsEntry({
+        amount: new Prisma.Decimal(movement.unitCost).mul(qty),
+        date: new Date(),
+        description: invoice
+          ? `Entrega pendiente - Factura ${invoice.documentLetter} ${invoice.pointOfSale}-${invoice.number}`
+          : `Entrega pendiente - comprobante ${row.invoiceId}`,
+      });
+    }
+    const remaining = row.quantityPending.sub(qty);
+    await db.pendingDelivery.update({
+      where: { id },
+      data: { quantityPending: remaining, completedAt: remaining.lte(0) ? new Date() : null },
+    });
+    return this.listPendingDeliveries();
   }
 
   /**
@@ -166,6 +381,24 @@ export class SalesService {
     let totalCogs = new Prisma.Decimal(0);
 
     for (const creditNoteLine of creditNote.lines) {
+      // Lo que todavía no salió del depósito se cancela primero: no hay
+      // stock que reponer ni costo que revertir por esa parte.
+      let toRestock = creditNoteLine.quantity;
+      const pending = await db.pendingDelivery.findFirst({
+        where: { invoiceLineId: creditNoteLine.invoiceLineId, completedAt: null, cancelledAt: null },
+      });
+      if (pending) {
+        const cancel = Prisma.Decimal.min(pending.quantityPending, toRestock);
+        const left = pending.quantityPending.sub(cancel);
+        await db.pendingDelivery.update({
+          where: { id: pending.id },
+          data: { quantityPending: left, cancelledAt: left.lte(0) ? new Date() : null },
+        });
+        toRestock = toRestock.sub(cancel);
+      }
+      if (toRestock.lte(0)) {
+        continue;
+      }
       const original = await db.stockMovement.findFirst({
         where: { invoiceLineId: creditNoteLine.invoiceLineId, type: 'SALE_OUT' },
       });
@@ -177,11 +410,11 @@ export class SalesService {
         warehouseId: original.warehouseId,
         articleVariantId: original.articleVariantId,
         invoiceLineId: creditNoteLine.invoiceLineId,
-        quantity: creditNoteLine.quantity,
+        quantity: toRestock,
         unitCost: original.unitCost,
       });
       if (original.unitCost != null) {
-        totalCogs = totalCogs.add(original.unitCost.mul(creditNoteLine.quantity));
+        totalCogs = totalCogs.add(original.unitCost.mul(toRestock));
       }
     }
 
@@ -363,6 +596,7 @@ export class SalesService {
       globalDiscountPercent: dto.globalDiscountPercent,
       dueDate: dto.dueDate,
       pricesIncludeTax: dto.pricesIncludeTax,
+      allowPendingDelivery: dto.allowPendingDelivery,
       lines: quote.lines.map((line) => ({
         articleVariantId: line.articleVariantId,
         quantity: line.quantity.toNumber(),

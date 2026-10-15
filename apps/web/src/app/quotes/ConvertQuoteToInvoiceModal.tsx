@@ -1,10 +1,12 @@
 'use client';
 
+import { PendingDeliveryDialog } from '@/components/sales/PendingDeliveryDialog';
 import { Button } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
+import { invoicingApi, type StockShortage } from '@/lib/invoicing';
 import { quotesApi, type QuoteDetail } from '@/lib/quotes';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +27,9 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   const [warehouseId, setWarehouseId] = useState('');
   const [documentLetter, setDocumentLetter] = useState<DocumentLetter>('B');
   const [error, setError] = useState('');
+  // Aviso "Falta stock para entregar todo" (null = cerrado).
+  const [shortages, setShortages] = useState<StockShortage[] | null>(null);
+  const [checkingStock, setCheckingStock] = useState(false);
 
   // La letra se sugiere igual que en la Caja y en Nueva factura (condición
   // IVA propia + la del cliente) - antes arrancaba siempre en "B", y un
@@ -50,18 +55,33 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   if (!warehouseId && warehouses[0]) setWarehouseId(warehouses[0].id);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      quotesApi.convertToInvoice(quote.id, { branchId, warehouseId, documentLetter }),
+    mutationFn: (allowPendingDelivery: boolean) =>
+      quotesApi.convertToInvoice(quote.id, { branchId, warehouseId, documentLetter, allowPendingDelivery }),
     onSuccess: (invoice) => {
       void queryClient.invalidateQueries({ queryKey: ['quote-detail', quote.id] });
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       onConverted(invoice);
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      setShortages(null);
       const message = err.response?.data?.message ?? 'No se pudo convertir la cotización';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
   });
+
+  // Igual que Nueva factura: si falta stock, se avisa y se puede seguir.
+  function convert() {
+    setError('');
+    setCheckingStock(true);
+    invoicingApi
+      .checkStock({ warehouseId, quoteId: quote.id })
+      .then((result) => {
+        if (result.shortages.length > 0) setShortages(result.shortages);
+        else mutation.mutate(false);
+      })
+      .catch(() => mutation.mutate(false))
+      .finally(() => setCheckingStock(false));
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
@@ -123,14 +143,22 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
             </Button>
             <Button
               type="button"
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || !branchId || !warehouseId}
+              onClick={convert}
+              disabled={mutation.isPending || checkingStock || !branchId || !warehouseId}
             >
-              {mutation.isPending ? 'Convirtiendo...' : 'Convertir a factura'}
+              {mutation.isPending ? 'Convirtiendo...' : checkingStock ? 'Revisando stock...' : 'Convertir a factura'}
             </Button>
           </div>
         </div>
       </div>
+      {shortages && (
+        <PendingDeliveryDialog
+          shortages={shortages}
+          pending={mutation.isPending}
+          onBack={() => setShortages(null)}
+          onConfirm={() => mutation.mutate(true)}
+        />
+      )}
     </div>
   );
 }

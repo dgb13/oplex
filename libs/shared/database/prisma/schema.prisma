@@ -2395,6 +2395,29 @@ model CreditNote {
 // la transacción de Oplex no llegó a confirmar, o si otro sistema emite en
 // el mismo punto de venta. Es un comprobante fiscal válido: hay que
 // registrarlo o anularlo con nota de crédito, nunca ignorarlo.
+// Parte de una línea de factura que se facturó sin stock y todavía no salió
+// del depósito (Ventas → Pendientes de entrega). No mueve stock: el SALE_OUT
+// y el costo de lo vendido se registran recién al "Entregar"
+// (SalesService.deliverPending). Una nota de crédito cancela primero lo
+// pendiente. Referencias sueltas (sin FK) como StockMovement.sourceId.
+model PendingDelivery {
+  id               String    @id @default(uuid())
+  tenantId         String
+  invoiceId        String
+  invoiceLineId    String    @unique
+  articleVariantId String
+  warehouseId      String
+  // Lo que quedó pendiente al facturar y lo que falta entregar hoy.
+  quantityOrdered  Decimal   @db.Decimal(14, 3)
+  quantityPending  Decimal   @db.Decimal(14, 3)
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+
+  @@index([tenantId, completedAt, cancelledAt])
+  @@map("pending_deliveries")
+}
+
 model ArcaUnregisteredVoucher {
   id                String         @id @default(uuid())
   tenantId          String

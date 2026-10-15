@@ -54,6 +54,14 @@ export class CreateSaleDto {
   @IsBoolean()
   pricesIncludeTax?: boolean;
 
+  // Facturar aunque falte stock: lo que hay se entrega y el resto queda en
+  // Ventas → Pendientes de entrega (ver SalesService.createSale). Sólo lo
+  // manda Nueva factura / Convertir a factura después de que la persona
+  // confirma el aviso; la Caja nunca (ahí no se vende sin stock).
+  @IsOptional()
+  @IsBoolean()
+  allowPendingDelivery?: boolean;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

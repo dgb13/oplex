@@ -2,7 +2,9 @@
 
 import CompanyFormModal from '@/components/CompanyFormModal';
 import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
+import { ArcaCertAlert, ArcaCertPill, arcaCertState, canIssueWith } from '@/components/sales/ArcaCertStatus';
 import CustomerPicker from '@/components/sales/CustomerPicker';
+import { PendingDeliveryDialog } from '@/components/sales/PendingDeliveryDialog';
 import { computeSalesTotals, type SalesLine } from '@/components/sales/salesDocument';
 import SalesDocumentSheet, { LinkButton, SectionLabel, Segmented } from '@/components/sales/SalesDocumentSheet';
 import SalesLinesEditor, { Kbd } from '@/components/sales/SalesLinesEditor';
@@ -13,7 +15,7 @@ import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
-import { invoicingApi, type InvoiceTaxLineInput } from '@/lib/invoicing';
+import { invoicingApi, type InvoiceTaxLineInput, type StockShortage } from '@/lib/invoicing';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -65,6 +67,9 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
+  // Aviso "Falta stock para entregar todo" (null = cerrado).
+  const [shortages, setShortages] = useState<StockShortage[] | null>(null);
+  const [checkingStock, setCheckingStock] = useState(false);
   const addArticleRef = useRef<HTMLInputElement>(null);
 
   const ready = !customersQuery.isLoading && !branchesQuery.isLoading && !warehousesQuery.isLoading;
@@ -105,8 +110,9 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
   const totals = computeSalesTotals(lines, pricesIncludeTax, validOtherTaxLines, withoutVat);
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (allowPendingDelivery: boolean) =>
       invoicingApi.createSale({
+        allowPendingDelivery,
         customerId,
         branchId,
         warehouseId,
@@ -132,6 +138,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
       onClose();
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      setShortages(null);
       const message = err.response?.data?.message ?? 'No se pudo emitir la factura';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
@@ -139,8 +146,10 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
 
   // undefined mientras carga (aún no sabemos) se trata como "no
   // configurado" - más seguro bloquear el submit un instante de más que
-  // dejarlo habilitado y que el POST falle recién en el backend.
-  const afipConfigured = tenantSettingsQuery.data?.afipConfigured ?? false;
+  // dejarlo habilitado y que el POST falle recién en el backend. Un
+  // certificado vencido también bloquea (ARCA lo rechazaría).
+  const certState = arcaCertState(tenantSettingsQuery.data);
+  const afipConfigured = canIssueWith(certState);
   // Sin condición frente al IVA no se sabe qué letra corresponde (antes
   // quedaba B por defecto, mal para un monotributista).
   const missingTaxCondition = tenantSettingsQuery.isSuccess && !tenantSettingsQuery.data?.ownTaxCondition;
@@ -181,7 +190,19 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
       setError('Configurá el certificado ARCA en Contabilidad → Conexión con ARCA antes de emitir.');
       return;
     }
-    mutation.mutate();
+    // Si falta stock, se avisa y se deja seguir: lo que falta queda
+    // pendiente de entrega (ver PendingDeliveryDialog).
+    setCheckingStock(true);
+    invoicingApi
+      .checkStock({ warehouseId, lines: lines.map((l) => ({ articleVariantId: l.articleVariantId, quantity: l.quantity })) })
+      .then((result) => {
+        if (result.shortages.length > 0) setShortages(result.shortages);
+        else mutation.mutate(false);
+      })
+      // Si el control previo falla, se emite como siempre: el backend vuelve a
+      // controlar el stock al descontarlo.
+      .catch(() => mutation.mutate(false))
+      .finally(() => setCheckingStock(false));
   }
 
   return (
@@ -189,9 +210,12 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
       <SalesDocumentSheet
         title="Nueva factura"
         badge={
-          <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            Factura {documentLetter}
-          </span>
+          <>
+            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Factura {documentLetter}
+            </span>
+            {tenantSettingsQuery.isSuccess && <ArcaCertPill state={certState} />}
+          </>
         }
         onClose={onClose}
         onSubmit={handleSubmit}
@@ -205,6 +229,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
             </p>
           ) : (
             <>
+              {tenantSettingsQuery.isSuccess && <ArcaCertAlert state={certState} />}
               <section>
                 <SectionLabel action={perms.can('CUSTOMER') ? <LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton> : undefined}>
                   Cliente
@@ -315,24 +340,15 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
                   : sin ella no se puede saber si corresponde Factura A, B o C.
                 </p>
               )}
-              {!afipConfigured && (
-                <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                  Todavía no configuraste el certificado ARCA - la factura no va a poder pedir CAE hasta que lo cargues en{' '}
-                  <Link href="/accounting/arca" className="font-medium underline">
-                    Contabilidad → Conexión con ARCA
-                  </Link>
-                  .
-                </p>
-              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={mutation.isPending || !ready || missingWarehouse || !afipConfigured || missingTaxCondition}
+                disabled={mutation.isPending || checkingStock || !ready || missingWarehouse || !afipConfigured || missingTaxCondition}
                 title={!afipConfigured ? 'Configurá el certificado ARCA en Contabilidad → Conexión con ARCA primero' : undefined}
               >
-                {mutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
+                {mutation.isPending ? 'Emitiendo...' : checkingStock ? 'Revisando stock...' : 'Emitir factura'}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
                 <Kbd>Ctrl</Kbd> + <Kbd>Enter</Kbd> para emitir
@@ -342,6 +358,14 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
         }
       />
 
+      {shortages && (
+        <PendingDeliveryDialog
+          shortages={shortages}
+          pending={mutation.isPending}
+          onBack={() => setShortages(null)}
+          onConfirm={() => mutation.mutate(true)}
+        />
+      )}
       {creatingCustomer && (
         <CompanyFormModal
           lockedRole="CUSTOMER"

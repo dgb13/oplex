@@ -9,6 +9,7 @@ import {
 } from '@/lib/invoicing';
 import { buildVariantLabel } from '@/lib/inventory';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 interface Props {
@@ -114,6 +115,16 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
                 <Info label="Vencimiento">{new Date(data.dueDate).toLocaleDateString('es-AR')}</Info>
               )}
               {data.afipCae && <Info label="CAE">{data.afipCae}</Info>}
+              {(data.pendingDeliveries?.length ?? 0) > 0 && (
+                <Info label="Entrega">
+                  <Link
+                    href="/sales/pending-deliveries"
+                    className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:underline dark:bg-amber-950 dark:text-amber-300"
+                  >
+                    Pendiente de entrega
+                  </Link>
+                </Info>
+              )}
             </div>
 
             <section>
@@ -142,6 +153,11 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
                           <p className="font-mono text-[10px] text-slate-500">
                             {line.articleVariant.sku}
                           </p>
+                          {data.pendingDeliveries?.find((p) => p.invoiceLineId === line.id) && (
+                            <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                              Faltan entregar {Number(data.pendingDeliveries.find((p) => p.invoiceLineId === line.id)?.quantityPending)}
+                            </p>
+                          )}
                         </td>
                         <td className="p-2 text-right text-slate-700 dark:text-slate-300">
                           {line.quantity}

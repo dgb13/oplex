@@ -103,6 +103,9 @@ export type InvoiceDetail = Invoice & {
   lines: InvoiceLineDetail[];
   receipts: Receipt[];
   creditNotes: CreditNote[];
+  // Lo facturado sin stock que todavía no salió del depósito (Ventas →
+  // Pendientes de entrega), por línea.
+  pendingDeliveries: { invoiceLineId: string; quantityPending: Prisma.Decimal }[];
 };
 /** Shape usada por generatePdf()/buildInvoicePdfData - a diferencia de
  * InvoiceDetail (la del panel "ver detalle"), acá sí hace falta `currency`
@@ -258,7 +261,11 @@ export class InvoicingService {
       where: { invoiceId: id },
       orderBy: { issueDate: 'desc' },
     });
-    return { ...invoice, receipts, creditNotes };
+    const pendingDeliveries = await db.pendingDelivery.findMany({
+      where: { invoiceId: id, completedAt: null, cancelledAt: null },
+      select: { invoiceLineId: true, quantityPending: true },
+    });
+    return { ...invoice, receipts, creditNotes, pendingDeliveries };
   }
 
   /** "Descargar PDF" en el detalle de Facturación - consulta propia (no

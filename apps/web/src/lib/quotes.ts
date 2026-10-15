@@ -104,6 +104,8 @@ export interface ConvertQuoteToInvoiceInput {
   dueDate?: string;
   pricesIncludeTax?: boolean;
   globalDiscountPercent?: number;
+  // Facturar igual lo que falta en el depósito: queda pendiente de entrega.
+  allowPendingDelivery?: boolean;
 }
 
 export interface CreateQuoteInput {
