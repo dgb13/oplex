@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { normalizePointOfSaleNumber } from './point-of-sale';
+import { normalizePointOfSaleNumber } from './point-of-sale.js';
 
 describe('normalizePointOfSaleNumber', () => {
   it('pads a new point of sale to 5 digits', () => {
