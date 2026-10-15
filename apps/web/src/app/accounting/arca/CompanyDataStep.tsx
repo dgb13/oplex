@@ -6,7 +6,6 @@ import Select from '@/components/ui/Select';
 import { companiesApi, type AfipPadronData } from '@/lib/companies';
 import { formatCuitInput } from '@/lib/cuit';
 import {
-  constanciaApi,
   tenantInfoApi,
   tenantSettingsApi,
   type ConstanciaReading,
@@ -17,12 +16,19 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
-import { Badge, lookupError, SourceBadge, ValueBox, type Source } from '@/components/arca/ArcaFields';
+import { lookupError, SourceBadge, ValueBox, type Source } from '@/components/arca/ArcaFields';
+import { ConstanciaIntake } from './ConstanciaIntake';
 
 const TAX_CONDITION_LABELS: Record<TenantTaxCondition, string> = {
   RESPONSABLE_INSCRIPTO: 'Responsable Inscripto',
   MONOTRIBUTO: 'Monotributo',
   EXENTO: 'Exento',
+};
+
+const LETTER_HINT: Record<TenantTaxCondition, string> = {
+  MONOTRIBUTO: 'emitís Factura C',
+  RESPONSABLE_INSCRIPTO: 'emitís Factura A o B',
+  EXENTO: 'emitís Factura C',
 };
 
 const GROSS_INCOME_LABELS: Record<GrossIncomeType, string> = {
@@ -39,7 +45,12 @@ type LookupState =
   | { kind: 'ok' }
   | { kind: 'error'; message: string };
 
-type FieldKey = 'legalName' | 'fiscalAddress' | 'condition';
+type FieldKey = 'legalName' | 'fiscalAddress' | 'condition' | 'grossIncome' | 'activityStart';
+
+/** constancia = subir la constancia (lo recomendado); review = datos leídos o
+ * ya guardados, listos para revisar y guardar; cuit = plan B, sólo con el
+ * CUIT y el padrón de ARCA. */
+type Mode = 'constancia' | 'review' | 'cuit';
 
 function apiError(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }>)?.response?.data?.message;
@@ -63,11 +74,6 @@ function sameText(a: string, b: string): boolean {
   if (ta.length === 0 || tb.size === 0) return false;
   const common = ta.filter((t) => tb.has(t)).length;
   return common / Math.min(ta.length, tb.size) >= 0.7;
-}
-
-function formatMonth(month: string): string {
-  const [y, m] = month.split('-');
-  return `${m}/${y}`;
 }
 
 function formatDay(date: string): string {
@@ -94,6 +100,10 @@ const CONDITION_HINT: Record<TenantTaxCondition, { title: string; items: string[
 };
 
 export function CompanyDataStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () => void }) {
+  const savedCuit = (settings.tenantTaxId ?? '').replace(/\D/g, '');
+  const hasSavedData = Boolean(savedCuit && settings.ownTaxCondition);
+  const [mode, setMode] = useState<Mode>(hasSavedData ? 'review' : 'constancia');
+
   const [taxId, setTaxId] = useState(settings.tenantTaxId ? formatCuitInput(settings.tenantTaxId) : '');
   const [lookup, setLookup] = useState<LookupState>({ kind: 'idle' });
   const [padron, setPadron] = useState<AfipPadronData | null>(null);
@@ -101,6 +111,7 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
   const [legalName, setLegalName] = useState(settings.tenantName ?? '');
   const [fiscalAddress, setFiscalAddress] = useState(settings.fiscalAddress ?? '');
   const [condition, setCondition] = useState<TenantTaxCondition | ''>(settings.ownTaxCondition ?? '');
+  const [category, setCategory] = useState<string | null>(null);
   // Datos cargados antes de que existiera el tipo: se deduce del detalle.
   const [grossIncomeType, setGrossIncomeType] = useState<GrossIncomeType | ''>(
     settings.grossIncomeType ??
@@ -113,11 +124,13 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
   const [grossIncomeDetail, setGrossIncomeDetail] = useState(settings.grossIncomeNumber ?? '');
   const [activityStart, setActivityStart] = useState(settings.activityStartDate?.slice(0, 10) ?? '');
 
-  const [sources, setSources] = useState<Partial<Record<FieldKey | 'activityStart' | 'grossIncome', Source>>>({});
-  const [editing, setEditing] = useState<Set<FieldKey>>(() => {
-    // Sin datos guardados todavía, los campos quedan a la espera del CUIT;
-    // si ya había algo cargado a mano, se muestra como valor con "corregir".
-    return new Set();
+  const [sources, setSources] = useState<Partial<Record<FieldKey, Source>>>({});
+  const [editing, setEditing] = useState<Set<FieldKey>>(() => new Set());
+  // Constancia leída en esta visita + lo que no coincide con el padrón.
+  const [constanciaFile, setConstanciaFile] = useState<string | null>(null);
+  const [padronCheck, setPadronCheck] = useState<{ kind: 'pending' | 'done' | 'unavailable'; mismatches: string[] }>({
+    kind: 'done',
+    mismatches: [],
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -133,6 +146,68 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
     setSources((prev) => ({ ...prev, [key]: prev[key] ? 'edited' : prev[key] }));
     touch();
   };
+
+  /** Constancia leída: completa todo y la compara contra el padrón. Devuelve
+   * un problema para mostrar si no se puede usar. */
+  function applyReading(reading: ConstanciaReading, fileName: string): string | null {
+    const readCuit = reading.cuit?.replace(/\D/g, '') ?? '';
+    if (savedCuit && readCuit && readCuit !== savedCuit) {
+      return `Esa constancia es del CUIT ${formatCuitInput(readCuit)} y tu empresa tiene el ${formatCuitInput(savedCuit)}. Sacá la de tu empresa.`;
+    }
+    const cuit = readCuit || savedCuit;
+    if (!cuit) return 'No pudimos leer el CUIT de la constancia. Probá con otra foto o con el PDF.';
+
+    setTaxId(formatCuitInput(cuit));
+    const next: Partial<Record<FieldKey, Source>> = {};
+    if (reading.name) {
+      setLegalName(reading.name);
+      next.legalName = 'constancia';
+    }
+    if (reading.fiscalAddress) {
+      setFiscalAddress(reading.fiscalAddress);
+      next.fiscalAddress = 'constancia';
+    }
+    if (reading.ivaCondition) {
+      setCondition(reading.ivaCondition);
+      next.condition = 'constancia';
+    }
+    setCategory(reading.monotributoCategory);
+    if (reading.grossIncomeType || reading.grossIncomeDetail) {
+      setGrossIncomeType(reading.grossIncomeType ?? '');
+      setGrossIncomeDetail(reading.grossIncomeDetail ?? (reading.grossIncomeType ? GROSS_INCOME_LABELS[reading.grossIncomeType] : ''));
+      next.grossIncome = 'constancia';
+    }
+    if (reading.activityStartDate) {
+      setActivityStart(reading.activityStartDate.slice(0, 10));
+      next.activityStart = 'constancia';
+    }
+    setSources(next);
+    setEditing(new Set());
+    setConstanciaFile(fileName);
+    setMode('review');
+    touch();
+    void checkAgainstPadron(cuit, reading);
+    return null;
+  }
+
+  async function checkAgainstPadron(cuit: string, reading: ConstanciaReading) {
+    setPadronCheck({ kind: 'pending', mismatches: [] });
+    try {
+      const data = await companiesApi.lookupAfip(cuit);
+      setPadron(data);
+      const mismatches: string[] = [];
+      if (reading.name && data.name && !sameText(reading.name, data.name)) mismatches.push(`razón social (padrón: ${data.name})`);
+      if (reading.ivaCondition && data.ivaCondition && reading.ivaCondition !== data.ivaCondition) {
+        mismatches.push(`condición frente al IVA (padrón: ${TAX_CONDITION_LABELS[data.ivaCondition]})`);
+      }
+      if (reading.fiscalAddress && data.fiscalAddress && !sameText(reading.fiscalAddress, data.fiscalAddress)) {
+        mismatches.push(`domicilio fiscal (padrón: ${data.fiscalAddress})`);
+      }
+      setPadronCheck({ kind: 'done', mismatches });
+    } catch {
+      setPadronCheck({ kind: 'unavailable', mismatches: [] });
+    }
+  }
 
   async function runLookup(cuit: string) {
     lastLookup.current = cuit;
@@ -185,7 +260,7 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
   const save = useMutation({
     mutationFn: async () => {
       const info: { taxId?: string; legalName?: string } = {};
-      if (taxId.trim() && taxId.replace(/\D/g, '') !== (settings.tenantTaxId ?? '').replace(/\D/g, '')) info.taxId = taxId;
+      if (taxId.trim() && taxId.replace(/\D/g, '') !== savedCuit) info.taxId = taxId;
       if (legalName.trim() && legalName.trim() !== settings.tenantName) info.legalName = legalName.trim();
       if (info.taxId || info.legalName) await tenantInfoApi.update(info);
       await tenantSettingsApi.update({
@@ -205,17 +280,230 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
   });
 
   const hasCuit = taxId.replace(/\D/g, '').length === 11;
+
+  const saveBar = (extra?: React.ReactNode) => (
+    <>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Button
+          type="button"
+          onClick={() => (conditionChanged ? setConfirmConditionChange(true) : save.mutate())}
+          disabled={save.isPending || !hasCuit}
+        >
+          {save.isPending ? 'Guardando...' : 'Guardar datos'}
+        </Button>
+        {extra}
+        {saved && <span className="text-[12.5px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Guardado</span>}
+        {error && <span className="text-sm text-destructive">{error}</span>}
+      </div>
+      {confirmConditionChange && conditionChanged && (
+        <div role="alertdialog" className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <b>
+            ¿Cambiar de {settings.ownTaxCondition && TAX_CONDITION_LABELS[settings.ownTaxCondition]} a {TAX_CONDITION_LABELS[condition as TenantTaxCondition]}?
+          </b>
+          <p className="text-muted-foreground">
+            {condition === 'RESPONSABLE_INSCRIPTO'
+              ? 'Desde ahora los costos nuevos se toman sin IVA (lo vas a recuperar), tus precios de venta pasan a ser sin IVA y vas a facturar A o B.'
+              : 'Desde ahora los costos nuevos se toman con IVA (no lo vas a recuperar), tus precios de venta pasan a ser finales y vas a facturar C.'}
+          </p>
+          <p className="text-muted-foreground">
+            El stock que ya tenés conserva su costo: era el correcto cuando lo compraste. Las ventas y las ganancias de
+            antes no cambian.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmConditionChange(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmConditionChange(false);
+                save.mutate();
+              }}
+            >
+              Cambiar condición
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  if (mode === 'constancia') {
+    return (
+      <>
+        <ConstanciaIntake cuit={savedCuit || null} onRead={applyReading} onUseCuit={() => setMode('cuit')} />
+        {hasSavedData && (
+          <button type="button" onClick={() => setMode('review')} className="w-max text-[13px] font-semibold text-primary underline underline-offset-2">
+            Volver a los datos guardados
+          </button>
+        )}
+      </>
+    );
+  }
+
+  if (mode === 'review') {
+    const conditionText = condition
+      ? `${TAX_CONDITION_LABELS[condition]}${condition === 'MONOTRIBUTO' && category ? ` (categoría ${category})` : ''} · ${LETTER_HINT[condition]}`
+      : '';
+    // "Régimen Simplificado Mendoza" ya dice el tipo: no se repite delante.
+    const typeLabel = grossIncomeType ? GROSS_INCOME_LABELS[grossIncomeType] : '';
+    const detail = grossIncomeDetail.trim();
+    const grossText =
+      detail && typeLabel && !detail.toLowerCase().includes(typeLabel.toLowerCase()) ? `${typeLabel} · ${detail}` : detail || typeLabel;
+    return (
+      <>
+        {constanciaFile ? (
+          padronCheck.kind === 'done' && padronCheck.mismatches.length > 0 ? (
+            <div className="flex gap-2.5 rounded-[10px] bg-amber-500/10 px-3 py-2.5 text-[13px] leading-snug text-amber-800 dark:text-amber-300">
+              <span>!</span>
+              <span>
+                <b className="text-foreground">Leímos tu constancia</b> ({constanciaFile}), pero no coincide con el padrón de ARCA en:{' '}
+                {padronCheck.mismatches.join('; ')}. Revisá esos datos antes de guardar.
+              </span>
+            </div>
+          ) : (
+            <div className="flex gap-2.5 rounded-[10px] bg-emerald-500/10 px-3 py-2.5 text-[13px] leading-snug text-emerald-700 dark:text-emerald-400">
+              <span>✓</span>
+              <span>
+                <b className="text-foreground">Leímos tu constancia</b> ({constanciaFile}).{' '}
+                {savedCuit ? 'El CUIT coincide con el de tu empresa' : 'Tomamos el CUIT de la constancia'}
+                {padronCheck.kind === 'pending'
+                  ? '; estamos comparando con el padrón de ARCA.'
+                  : padronCheck.kind === 'unavailable'
+                    ? '. El padrón de ARCA no respondió para comparar.'
+                    : ' y los datos coinciden con el padrón de ARCA.'}{' '}
+                Revisalos y guardá.
+              </span>
+            </div>
+          )
+        ) : (
+          <p className="m-0 text-[13px] text-muted-foreground">
+            Estos son los datos guardados de tu empresa. Si cambiaron (por ejemplo, de categoría o de domicilio), subí una constancia nueva.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <ReviewField label="CUIT" value={taxId} />
+          <ReviewField
+            label="Razón social"
+            source={sources.legalName}
+            value={legalName}
+            editing={editing.has('legalName')}
+            onEdit={() => edit('legalName')}
+          >
+            <Input
+              value={legalName}
+              autoFocus
+              onChange={(e) => {
+                setLegalName(e.target.value);
+                touch();
+              }}
+            />
+          </ReviewField>
+          <ReviewField
+            label="Condición frente al IVA"
+            source={sources.condition}
+            value={conditionText}
+            editing={editing.has('condition')}
+            onEdit={() => edit('condition')}
+          >
+            <Select
+              value={condition}
+              onChange={(v) => {
+                setCondition(v as TenantTaxCondition);
+                setCategory(null);
+                touch();
+              }}
+              placeholder="Elegir..."
+              options={(Object.keys(TAX_CONDITION_LABELS) as TenantTaxCondition[]).map((value) => ({ value, label: TAX_CONDITION_LABELS[value] }))}
+            />
+          </ReviewField>
+          <ReviewField
+            label="Domicilio fiscal"
+            source={sources.fiscalAddress}
+            value={fiscalAddress}
+            editing={editing.has('fiscalAddress')}
+            onEdit={() => edit('fiscalAddress')}
+          >
+            <Input
+              value={fiscalAddress}
+              autoFocus
+              onChange={(e) => {
+                setFiscalAddress(e.target.value);
+                touch();
+              }}
+            />
+          </ReviewField>
+          <ReviewField
+            label="Ingresos Brutos"
+            source={sources.grossIncome}
+            value={grossText}
+            note={grossText ? 'Sale así en tus facturas.' : undefined}
+            editing={editing.has('grossIncome')}
+            onEdit={() => edit('grossIncome')}
+          >
+            <GrossIncomeInputs
+              type={grossIncomeType}
+              detail={grossIncomeDetail}
+              onType={(v) => {
+                setGrossIncomeType(v);
+                touch();
+              }}
+              onDetail={(v) => {
+                setGrossIncomeDetail(v);
+                touch();
+              }}
+            />
+          </ReviewField>
+          <ReviewField
+            label="Inicio de actividades"
+            source={sources.activityStart}
+            value={activityStart ? formatDay(activityStart) : ''}
+            editing={editing.has('activityStart')}
+            onEdit={() => edit('activityStart')}
+          >
+            <Input
+              type="date"
+              value={activityStart}
+              onChange={(e) => {
+                setActivityStart(e.target.value);
+                touch();
+              }}
+            />
+          </ReviewField>
+        </div>
+
+        {saveBar(
+          <>
+            <Button type="button" variant="outline" onClick={() => setMode('constancia')}>
+              {constanciaFile ? 'Subir otra constancia' : 'Actualizar con una constancia'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Si un dato de la constancia no coincide con el padrón de ARCA, lo marcamos acá antes de guardar.
+            </span>
+          </>,
+        )}
+      </>
+    );
+  }
+
+  // Plan B: sólo con el CUIT (padrón de ARCA). Ingresos Brutos e inicio de
+  // actividades no los informa el padrón: se completan acá.
   const personType = padron ? (padron.personType === 'JURIDICA' ? 'Persona jurídica' : 'Persona humana') : null;
   const inicioHelp =
-    sources.activityStart === 'constancia'
-      ? 'Confirmado con la constancia.'
-      : sources.activityStart === 'arcaMonth'
-        ? 'ARCA no informa la fecha: es un mes estimado. Confirmala con tu constancia.'
-        : 'Figura en tu constancia de inscripción.';
+    sources.activityStart === 'arcaMonth'
+      ? 'ARCA no informa la fecha: es un mes estimado. Confirmala con tu constancia.'
+      : 'Figura en tu constancia de inscripción.';
 
   return (
     <>
-      {/* CUIT primero: lo único que el usuario tiene que escribir. */}
+      <div className="text-[13px] text-muted-foreground">
+        Cargando sólo con el CUIT.{' '}
+        <button type="button" onClick={() => setMode('constancia')} className="font-semibold text-primary underline underline-offset-2">
+          Prefiero subir la constancia
+        </button>{' '}
+        (completa también Ingresos Brutos e inicio de actividades).
+      </div>
       <div className="flex flex-col gap-2 rounded-[14px] border-[1.5px] border-primary bg-primary/10 px-4 py-3.5">
         <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="company-cuit" className="text-sm font-semibold">
@@ -313,35 +601,21 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
         <Field
           className="md:col-span-3"
           label="Ingresos Brutos"
-          extraBadge={<Badge tone="hand">a mano</Badge>}
           source={sources.grossIncome}
-          help="ARCA no informa Ingresos Brutos (es provincial). La constancia de abajo puede traerlo."
+          help="ARCA no lo informa con el CUIT (es provincial): figura en tu constancia."
         >
-          <div className="flex flex-wrap gap-2">
-            <Select
-              className="w-[190px] shrink-0"
-              value={grossIncomeType}
-              onChange={(v) => {
-                setGrossIncomeType(v as GrossIncomeType);
-                touch();
-              }}
-              placeholder="Elegir..."
-              options={(Object.keys(GROSS_INCOME_LABELS) as GrossIncomeType[]).map((value) => ({
-                value,
-                label: GROSS_INCOME_LABELS[value],
-              }))}
-            />
-            <Input
-              className="min-w-[140px] flex-1"
-              value={grossIncomeDetail}
-              maxLength={50}
-              onChange={(e) => {
-                setGrossIncomeDetail(e.target.value);
-                touch();
-              }}
-              placeholder="Detalle (sale en la factura)"
-            />
-          </div>
+          <GrossIncomeInputs
+            type={grossIncomeType}
+            detail={grossIncomeDetail}
+            onType={(v) => {
+              setGrossIncomeType(v);
+              touch();
+            }}
+            onDetail={(v) => {
+              setGrossIncomeDetail(v);
+              touch();
+            }}
+          />
         </Field>
         <Field className="md:col-span-3" label="Inicio de actividades" source={sources.activityStart} help={inicioHelp}>
           <Input
@@ -355,82 +629,79 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
         </Field>
       </div>
 
-      <ConstanciaVerify
-        cuit={taxId.replace(/\D/g, '')}
-        padron={padron}
-        current={{ legalName, fiscalAddress, condition }}
-        onApply={(reading, fillMissing) => {
-          const next: typeof sources = {};
-          if (reading.activityStartDate) {
-            setActivityStart(reading.activityStartDate.slice(0, 10));
-            next.activityStart = 'constancia';
-          }
-          if (reading.grossIncomeType || reading.grossIncomeDetail) {
-            if (reading.grossIncomeType) setGrossIncomeType(reading.grossIncomeType);
-            if (reading.grossIncomeDetail) setGrossIncomeDetail(reading.grossIncomeDetail);
-            next.grossIncome = 'constancia';
-          }
-          if (fillMissing) {
-            if (!legalName.trim() && reading.name) {
-              setLegalName(reading.name);
-              next.legalName = 'constancia';
-            }
-            if (!fiscalAddress.trim() && reading.fiscalAddress) {
-              setFiscalAddress(reading.fiscalAddress);
-              next.fiscalAddress = 'constancia';
-            }
-            if (!condition && reading.ivaCondition) {
-              setCondition(reading.ivaCondition);
-              next.condition = 'constancia';
-            }
-          }
-          setSources((prev) => ({ ...prev, ...next }));
-          touch();
-        }}
-      />
-
-      <div className="flex flex-wrap items-center gap-2.5">
-        <Button
-          type="button"
-          onClick={() => (conditionChanged ? setConfirmConditionChange(true) : save.mutate())}
-          disabled={save.isPending || !hasCuit}
-        >
-          {save.isPending ? 'Guardando...' : 'Guardar datos'}
-        </Button>
-        {saved && <span className="text-[12.5px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Guardado</span>}
-        {error && <span className="text-sm text-destructive">{error}</span>}
-      </div>
-      {confirmConditionChange && conditionChanged && (
-        <div role="alertdialog" className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          <b>
-            ¿Cambiar de {settings.ownTaxCondition && TAX_CONDITION_LABELS[settings.ownTaxCondition]} a {TAX_CONDITION_LABELS[condition as TenantTaxCondition]}?
-          </b>
-          <p className="text-muted-foreground">
-            {condition === 'RESPONSABLE_INSCRIPTO'
-              ? 'Desde ahora los costos nuevos se toman sin IVA (lo vas a recuperar), tus precios de venta pasan a ser sin IVA y vas a facturar A o B.'
-              : 'Desde ahora los costos nuevos se toman con IVA (no lo vas a recuperar), tus precios de venta pasan a ser finales y vas a facturar C.'}
-          </p>
-          <p className="text-muted-foreground">
-            El stock que ya tenés conserva su costo: era el correcto cuando lo compraste. Las ventas y las ganancias de
-            antes no cambian.
-          </p>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setConfirmConditionChange(false)}>
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setConfirmConditionChange(false);
-                save.mutate();
-              }}
-            >
-              Cambiar condición
-            </Button>
-          </div>
-        </div>
-      )}
+      {saveBar()}
     </>
+  );
+}
+
+function GrossIncomeInputs({
+  type,
+  detail,
+  onType,
+  onDetail,
+}: {
+  type: GrossIncomeType | '';
+  detail: string;
+  onType: (value: GrossIncomeType) => void;
+  onDetail: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Select
+        className="w-[190px] shrink-0"
+        value={type}
+        onChange={(v) => onType(v as GrossIncomeType)}
+        placeholder="Elegir..."
+        options={(Object.keys(GROSS_INCOME_LABELS) as GrossIncomeType[]).map((value) => ({ value, label: GROSS_INCOME_LABELS[value] }))}
+      />
+      <Input
+        className="min-w-[140px] flex-1"
+        value={detail}
+        maxLength={50}
+        onChange={(e) => onDetail(e.target.value)}
+        placeholder="Detalle (sale en la factura)"
+      />
+    </div>
+  );
+}
+
+/** Dato del paso 1 en modo revisión: valor + de dónde salió + "✎ corregir". */
+function ReviewField({
+  label,
+  value,
+  source,
+  note,
+  editing,
+  onEdit,
+  children,
+}: {
+  label: string;
+  value: string;
+  source?: Source;
+  note?: string;
+  editing?: boolean;
+  onEdit?: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-[10px] border px-3 py-2.5">
+      <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        {label} {source === 'constancia' ? <span className="rounded-full bg-emerald-500/15 px-[7px] py-px text-[10.5px] font-bold text-emerald-700 dark:text-emerald-400">de la constancia</span> : <SourceBadge source={source} />}
+      </span>
+      {editing && children ? (
+        children
+      ) : (
+        <>
+          <span className={`font-semibold [overflow-wrap:anywhere] ${value ? '' : 'font-normal text-muted-foreground'}`}>{value || 'Sin cargar'}</span>
+          {note && <span className="text-xs text-muted-foreground">{note}</span>}
+          {onEdit && (
+            <button type="button" onClick={onEdit} className="w-max text-xs text-primary hover:underline">
+              ✎ corregir
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -444,14 +715,12 @@ function LookupStatus({ state }: { state: LookupState }) {
 function Field({
   label,
   source,
-  extraBadge,
   help,
   className,
   children,
 }: {
   label: string;
   source?: Source;
-  extraBadge?: React.ReactNode;
   help?: string;
   className?: string;
   children: React.ReactNode;
@@ -459,201 +728,10 @@ function Field({
   return (
     <div className={`flex flex-col gap-[5px] ${className ?? ''}`}>
       <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
-        {label} {extraBadge} <SourceBadge source={source} />
+        {label} <SourceBadge source={source} />
       </span>
       {children}
       {help && <p className="text-xs text-muted-foreground">{help}</p>}
-    </div>
-  );
-}
-
-type CompareStatus = 'match' | 'fill' | 'mismatch' | 'none';
-
-function ConstanciaVerify({
-  cuit,
-  padron,
-  current,
-  onApply,
-}: {
-  cuit: string;
-  padron: AfipPadronData | null;
-  current: { legalName: string; fiscalAddress: string; condition: TenantTaxCondition | '' };
-  onApply: (reading: ConstanciaReading, fillMissing: boolean) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [applied, setApplied] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const read = useMutation({
-    mutationFn: (file: File) => constanciaApi.read(file),
-    onMutate: () => setApplied(false),
-  });
-
-  const pick = (file: File | undefined) => {
-    if (file) read.mutate(file);
-  };
-
-  const r = read.data;
-  const rows: { label: string; padron: string; constancia: string; status: CompareStatus }[] = [];
-  if (r?.isConstancia) {
-    const cmp = (base: string, other: string | null, same: (a: string, b: string) => boolean): CompareStatus =>
-      !other ? 'none' : !base ? 'fill' : same(base, other) ? 'match' : 'mismatch';
-    const cuitFmt = (c: string) => (c.length === 11 ? formatCuitInput(c) : c);
-    rows.push({
-      label: 'CUIT',
-      padron: cuitFmt(cuit),
-      constancia: r.cuit ? cuitFmt(r.cuit) : '—',
-      status: cmp(cuit, r.cuit, (a, b) => a === b),
-    });
-    rows.push({
-      label: 'Razón social',
-      padron: current.legalName || '—',
-      constancia: r.name ?? '—',
-      status: cmp(current.legalName, r.name, sameText),
-    });
-    rows.push({
-      label: 'Condición IVA',
-      padron: current.condition ? TAX_CONDITION_LABELS[current.condition] : '—',
-      constancia: r.ivaCondition ? TAX_CONDITION_LABELS[r.ivaCondition] : '—',
-      status: cmp(current.condition, r.ivaCondition, (a, b) => a === b),
-    });
-    rows.push({
-      label: 'Domicilio fiscal',
-      padron: current.fiscalAddress || '—',
-      constancia: r.fiscalAddress ?? '—',
-      status: cmp(current.fiscalAddress, r.fiscalAddress, sameText),
-    });
-    const month = padron?.activityStartMonth ?? null;
-    rows.push({
-      label: 'Inicio de actividades',
-      // El padrón no informa el inicio de actividades: ese mes es una estimación
-      // (el alta más vieja de un impuesto o actividad vigente, ver
-      // mapConstancia en arca-padron.service) y suele diferir de la fecha real.
-      // Manda la constancia: completa, nunca "no coincide".
-      padron: month ? `${formatMonth(month)} (estimado)` : '—',
-      constancia: r.activityStartDate ? formatDay(r.activityStartDate) : '—',
-      status: r.activityStartDate ? 'fill' : 'none',
-    });
-    const gross = r.grossIncomeDetail ?? (r.grossIncomeType ? GROSS_INCOME_LABELS[r.grossIncomeType] : null);
-    rows.push({
-      label: 'Ingresos Brutos',
-      padron: '— (ARCA no lo informa)',
-      constancia: gross ?? '—',
-      status: gross ? 'fill' : 'none',
-    });
-  }
-  const mismatches = rows.filter((row) => row.status === 'mismatch').length;
-  const fillsBasics = rows.some((row) => row.status === 'fill' && ['Razón social', 'Condición IVA', 'Domicilio fiscal'].includes(row.label));
-  const canApply = rows.some((row) => row.status === 'fill');
-
-  return (
-    <div className="flex flex-col gap-2.5 rounded-[14px] border-[1.5px] border-dashed border-violet-400/60 bg-violet-50/50 px-4 py-3.5 dark:border-violet-400/40 dark:bg-violet-950/25">
-      <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-        ✦ Verificar con tu Constancia de Inscripción <Badge tone="ai">IA · recomendado</Badge> <Badge tone="hand">opcional</Badge>
-      </h3>
-      <p className="text-[13px] text-muted-foreground">
-        Subí el PDF de la constancia (la descargás de ARCA → &quot;Constancia de inscripción&quot;). La IA la lee y compara cada dato
-        con lo que devolvió el padrón. Si algo no coincide, te avisamos antes de guardar.
-      </p>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          pick(e.dataTransfer.files[0]);
-        }}
-        className={`flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed bg-card px-3.5 py-3 transition hover:border-violet-500 ${
-          dragOver ? 'border-violet-500' : ''
-        }`}
-      >
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-violet-100 text-lg text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-          ⬆
-        </div>
-        <div>
-          <b className="text-sm">Subir constancia (PDF o foto)</b>
-          <p className="text-xs text-muted-foreground">Arrastrala acá o hacé clic. No se guarda: sólo se usa para verificar.</p>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/pdf,image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={(e) => {
-            pick(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-      </div>
-
-      {read.isPending && <p className="text-xs text-muted-foreground">✦ Leyendo la constancia con IA...</p>}
-      {read.isError && <p className="text-xs text-destructive">✕ {apiError(read.error, 'No se pudo leer la constancia.')}</p>}
-      {r && !r.isConstancia && (
-        <p className="text-xs text-destructive">✕ Ese archivo no parece una Constancia de Inscripción de ARCA.</p>
-      )}
-      {r?.isConstancia && (
-        <>
-          <div className="overflow-x-auto rounded-[10px] bg-card">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  {['Dato', 'Padrón ARCA', 'Constancia (IA)', ''].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.label} className="border-b last:border-b-0">
-                    <td className="px-2.5 py-2 align-top">{row.label}</td>
-                    <td className="px-2.5 py-2 align-top">{row.padron}</td>
-                    <td className="px-2.5 py-2 align-top">{row.constancia}</td>
-                    <td className="px-2.5 py-2 align-top">
-                      {row.status === 'match' && <Badge tone="ok">✓ coincide</Badge>}
-                      {row.status === 'fill' && <Badge tone="ai">completa</Badge>}
-                      {row.status === 'mismatch' && <Badge tone="bad">≠ no coincide</Badge>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            {mismatches === 0 ? (
-              <Badge tone="ok">✓ Datos verificados con la constancia</Badge>
-            ) : (
-              <Badge tone="warn">
-                {mismatches === 1 ? 'Hay un dato que no coincide' : `Hay ${mismatches} datos que no coinciden`}: revisalo antes de guardar
-              </Badge>
-            )}
-            {canApply && !applied && (
-              <button
-                type="button"
-                onClick={() => {
-                  onApply(r, fillsBasics);
-                  setApplied(true);
-                }}
-                className="rounded-[10px] border border-violet-600 bg-violet-600 px-3.5 py-2 text-[13.5px] font-semibold text-white transition hover:bg-violet-700 dark:border-violet-500 dark:bg-violet-500"
-              >
-                {fillsBasics ? 'Completar con los datos de la constancia' : 'Usar inicio de actividades e Ingresos Brutos de la constancia'}
-              </button>
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }

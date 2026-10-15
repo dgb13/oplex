@@ -190,6 +190,7 @@ export interface ConstanciaReading {
   cuit: string | null;
   name: string | null;
   ivaCondition: TenantTaxCondition | null;
+  monotributoCategory: string | null;
   fiscalAddress: string | null;
   activityStartDate: string | null;
   grossIncomeType: GrossIncomeType | null;
@@ -202,4 +203,6 @@ export const constanciaApi = {
     formData.append('file', file);
     return api.post<ConstanciaReading>('/arca/constancia/read', formData).then((r) => r.data);
   },
+  // Enlace a la consulta pública de ARCA (administrable en /admin).
+  link: () => api.get<{ url: string }>('/arca/constancia/link').then((r) => r.data),
 };

@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ArcaPadronService } from '@plexo/afip-credentials';
 import { PrismaService, getTenantDb, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
+import { ArcaConstanciaLinkService } from '../arca-padron/arca-constancia-link.service.js';
 import { AdminAiStatusService } from './admin-ai-status.service.js';
 
 const execFileAsync = promisify(execFile);
@@ -133,6 +134,7 @@ export class AdminSystemStatusService {
     private readonly subscriptionService: SubscriptionService,
     private readonly arcaPadron: ArcaPadronService,
     private readonly aiStatus: AdminAiStatusService,
+    private readonly constanciaLink: ArcaConstanciaLinkService,
   ) {}
 
   async getStatus(): Promise<SystemStatusItem[]> {
@@ -161,6 +163,7 @@ export class AdminSystemStatusService {
         'APPLE_PRIVATE_KEY',
       ]),
       await this.checkArcaPadron(),
+      await this.checkConstanciaLink(),
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
       // Las dos claves de Anthropic (chat y lectura de documentos), separadas a
       // propósito para ver el gasto por separado - el detalle (modelos,
@@ -298,6 +301,19 @@ export class AdminSystemStatusService {
   /** Certificado de Oplex para el padrón de ARCA - vive en PlatformSettings
    * (se sube desde Admin), no en una env var. El detalle y "Probar consulta"
    * van por AdminArcaPadronController. */
+  /** Enlace a la consulta pública de la constancia (ArcaConstanciaLinkService).
+   * Sin verificar todavía cuenta como bien: es el de Oplex por defecto. */
+  private async checkConstanciaLink(): Promise<SystemStatusItem> {
+    const status = await this.constanciaLink.getStatus();
+    const ok = !status.status || status.status === 'OK';
+    return {
+      key: 'arcaConstanciaLink',
+      label: 'ARCA · Consulta de constancia (enlace)',
+      configured: ok,
+      detail: ok ? undefined : (status.message ?? undefined),
+    };
+  }
+
   private async checkArcaPadron(): Promise<SystemStatusItem> {
     const status = await this.arcaPadron.getStatus();
     return {

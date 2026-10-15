@@ -514,6 +514,21 @@ export const adminArcaPadronApi = {
     api.post<ArcaPadronStatus>('/admin/arca-padron/certificate', { certPem, keyPem }).then((r) => r.data),
 };
 
+// Enlace a la consulta pública de la constancia de ARCA - ver ArcaConstanciaLinkService (API).
+export interface ConstanciaLinkStatus {
+  url: string;
+  isDefault: boolean;
+  checkedAt: string | null;
+  status: 'OK' | 'CHANGED' | 'DOWN' | null;
+  message: string | null;
+}
+
+export const adminConstanciaLinkApi = {
+  getStatus: () => api.get<ConstanciaLinkStatus>('/admin/arca-constancia-link').then((r) => r.data),
+  setUrl: (url: string) => api.put<ConstanciaLinkStatus>('/admin/arca-constancia-link', { url }).then((r) => r.data),
+  verify: () => api.post<ConstanciaLinkStatus>('/admin/arca-constancia-link/verify').then((r) => r.data),
+};
+
 // Inteligencia artificial (Anthropic) - ver AdminAiStatusService (API).
 export type AiKeyGroup = 'assistant' | 'documents';
 export type AiTestCode = 'OK' | 'NO_KEY' | 'INVALID_KEY' | 'NO_PERMISSION' | 'MODEL_NOT_FOUND' | 'NETWORK' | 'ERROR';

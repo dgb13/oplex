@@ -440,6 +440,15 @@ model PlatformSettings {
   // resultado por función ({ [feature]: { ok, message } }), sin costo.
   aiLastTestAt      DateTime?
   aiLastTestResults Json?
+  // Enlace a la consulta pública de la Constancia de Inscripción de ARCA
+  // (botón "Abrir la consulta en ARCA" de Conexión con ARCA → paso 1).
+  // null = el de Oplex por defecto (ArcaConstanciaLinkService). Se verifica
+  // desde /admin y una vez por día: OK | CHANGED (responde pero ya no es la
+  // consulta) | DOWN (no responde).
+  constanciaUrl          String?
+  constanciaUrlCheckAt   DateTime?
+  constanciaUrlCheckStatus String?
+  constanciaUrlCheckMessage String?
   // Cuenta de Oplex donde los tenants transfieren el pago del plan (ver
   // SubscriptionBillingService.reportTransfer). Editable en /admin/subscriptions.
   oplexBankHolder String?
