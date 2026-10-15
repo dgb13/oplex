@@ -237,7 +237,7 @@ export class AfipWsfeClient {
             .join('')}</ar:Iva>`;
 
     const cbtesAsocXml = invoice.associatedVoucher
-      ? `<ar:CbtesAsoc><ar:CbteAsoc><ar:Tipo>${CBTE_TIPO.FACTURA[invoice.associatedVoucher.documentLetter]}</ar:Tipo><ar:PtoVta>${invoice.associatedVoucher.pointOfSale}</ar:PtoVta><ar:Nro>${Number.parseInt(invoice.associatedVoucher.number, 10)}</ar:Nro></ar:CbteAsoc></ar:CbtesAsoc>`
+      ? `<ar:CbtesAsoc><ar:CbteAsoc><ar:Tipo>${CBTE_TIPO.FACTURA[invoice.associatedVoucher.documentLetter]}</ar:Tipo><ar:PtoVta>${Number.parseInt(invoice.associatedVoucher.pointOfSale, 10)}</ar:PtoVta><ar:Nro>${Number.parseInt(invoice.associatedVoucher.number, 10)}</ar:Nro></ar:CbteAsoc></ar:CbtesAsoc>`
       : '';
 
     // Percepciones/otros tributos (ej. IIBB) - vacío en la enorme mayoría
@@ -275,7 +275,7 @@ export class AfipWsfeClient {
       <ar:FeCAEReq>
         <ar:FeCabReq>
           <ar:CantReg>1</ar:CantReg>
-          <ar:PtoVta>${invoice.pointOfSale}</ar:PtoVta>
+          <ar:PtoVta>${Number.parseInt(invoice.pointOfSale, 10)}</ar:PtoVta>
           <ar:CbteTipo>${cbteTipo}</ar:CbteTipo>
         </ar:FeCabReq>
         <ar:FeDetReq>

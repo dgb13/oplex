@@ -17,6 +17,7 @@ import {
 } from './afip-padron.port.js';
 import { assertCanManageAll, assertCanManageAny, assertCanManagePersonCompany } from './company-permissions.js';
 import { isValidCuit } from './cuit.js';
+import { normalizePointOfSaleNumber } from './point-of-sale.js';
 import type { CreateCompanyDto } from './dto/create-company.dto.js';
 import type { CreatePersonDto } from './dto/create-person.dto.js';
 import type { UpdateCompanyDto } from './dto/update-company.dto.js';
@@ -58,7 +59,7 @@ export class CompaniesService {
         taxId: dto.taxId,
         email: dto.email,
         creditLimit: dto.creditLimit ?? 0,
-        pointOfSaleNumber: dto.pointOfSaleNumber,
+        pointOfSaleNumber: dto.pointOfSaleNumber ? normalizePointOfSaleNumber(dto.pointOfSaleNumber) : dto.pointOfSaleNumber,
         taxCondition: dto.taxCondition,
         fiscalAddress: dto.fiscalAddress,
         industry: dto.industry,
@@ -145,7 +146,9 @@ export class CompaniesService {
         taxId: dto.taxId,
         email: dto.email,
         creditLimit: dto.creditLimit,
-        pointOfSaleNumber: dto.pointOfSaleNumber,
+        pointOfSaleNumber: dto.pointOfSaleNumber
+          ? normalizePointOfSaleNumber(dto.pointOfSaleNumber, existing.pointOfSaleNumber)
+          : dto.pointOfSaleNumber,
         taxCondition: dto.taxCondition,
         fiscalAddress: dto.fiscalAddress,
         industry: dto.industry,

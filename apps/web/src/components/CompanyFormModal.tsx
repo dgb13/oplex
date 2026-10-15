@@ -6,6 +6,7 @@ import Select from '@/components/ui/Select';
 import { companiesApi, type Company, type CompanyIndustry, type CompanyRoleType } from '@/lib/companies';
 import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { lookupError, SourceBadge, ValueBox, type Source } from '@/components/arca/ArcaFields';
+import { PointOfSaleHelpModal } from '@/components/arca/PointOfSaleHelpModal';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -80,6 +81,7 @@ export default function CompanyFormModal({
   const [email, setEmail] = useState(company?.email ?? '');
   const [creditLimit, setCreditLimit] = useState(company?.creditLimit ?? '0');
   const [pointOfSaleNumber, setPointOfSaleNumber] = useState(company?.pointOfSaleNumber ?? '');
+  const [showPointOfSaleHelp, setShowPointOfSaleHelp] = useState(false);
   const [taxCondition, setTaxCondition] = useState(company?.taxCondition ?? '');
   const [fiscalAddress, setFiscalAddress] = useState(company?.fiscalAddress ?? '');
   const [industry, setIndustry] = useState<CompanyIndustry | ''>(company?.industry ?? '');
@@ -270,6 +272,10 @@ export default function CompanyFormModal({
     }
     if (effectiveRoles.includes('BRANCH') && !pointOfSaleNumber.trim()) {
       setError('Una sucursal necesita un número de punto de venta');
+      return;
+    }
+    if (effectiveRoles.includes('BRANCH') && (!/^\d{1,5}$/.test(pointOfSaleNumber.trim()) || Number(pointOfSaleNumber) === 0)) {
+      setError('El punto de venta tiene que ser un número de 1 a 99999 (por ejemplo 8 o 00008)');
       return;
     }
     // Duplicate-CUIT detection only applies to a brand-new, role-locked
@@ -546,9 +552,22 @@ export default function CompanyFormModal({
                 <Input
                   value={pointOfSaleNumber}
                   onChange={(e) => setPointOfSaleNumber(e.target.value)}
-                  placeholder="0001"
+                  placeholder="00001"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Número de punto de venta habilitado para Web Services en ARCA.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowPointOfSaleHelp(true)}
+                    className="font-semibold text-primary underline underline-offset-2"
+                  >
+                    ¿Dónde lo encuentro?
+                  </button>
+                </p>
               </Field>
+            )}
+            {showPointOfSaleHelp && (
+              <PointOfSaleHelpModal taxCondition={ownSettings?.ownTaxCondition} onClose={() => setShowPointOfSaleHelp(false)} />
             )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}

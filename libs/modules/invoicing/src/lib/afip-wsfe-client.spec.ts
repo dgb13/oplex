@@ -143,7 +143,7 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const wsfeBody = fetchMock.mock.calls[1][1].body as string;
-    expect(wsfeBody).toContain('<ar:PtoVta>0001</ar:PtoVta>');
+    expect(wsfeBody).toContain('<ar:PtoVta>1</ar:PtoVta>');
     expect(wsfeBody).toContain('<ar:CbteTipo>6</ar:CbteTipo>'); // Factura B
     expect(wsfeBody).toContain('<ar:DocTipo>80</ar:DocTipo>');
     expect(wsfeBody).toContain('<ar:DocNro>20111111112</ar:DocNro>');
