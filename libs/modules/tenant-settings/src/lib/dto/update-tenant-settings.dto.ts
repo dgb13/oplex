@@ -93,7 +93,7 @@ export class UpdateTenantSettingsDto {
 
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
-  @MaxLength(50)
+  @MaxLength(50, { message: 'Ingresos Brutos: máximo 50 caracteres (por ejemplo "Régimen Simplificado Mendoza" o el número de inscripción).' })
   grossIncomeNumber?: string | null;
 
   // Situación en Ingresos Brutos (provincial, ARCA no la informa).

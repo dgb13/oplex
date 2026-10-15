@@ -210,7 +210,7 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
     sources.activityStart === 'constancia'
       ? 'Confirmado con la constancia.'
       : sources.activityStart === 'arcaMonth'
-        ? 'ARCA informa sólo mes y año: confirmá el día.'
+        ? 'ARCA no informa la fecha: es un mes estimado. Confirmala con tu constancia.'
         : 'Figura en tu constancia de inscripción.';
 
   return (
@@ -334,6 +334,7 @@ export function CompanyDataStep({ settings, onSaved }: { settings: TenantSetting
             <Input
               className="min-w-[140px] flex-1"
               value={grossIncomeDetail}
+              maxLength={50}
               onChange={(e) => {
                 setGrossIncomeDetail(e.target.value);
                 touch();
@@ -524,9 +525,13 @@ function ConstanciaVerify({
     const month = padron?.activityStartMonth ?? null;
     rows.push({
       label: 'Inicio de actividades',
-      padron: month ? `${formatMonth(month)} (sólo mes)` : '—',
+      // El padrón no informa el inicio de actividades: ese mes es una estimación
+      // (el alta más vieja de un impuesto o actividad vigente, ver
+      // mapConstancia en arca-padron.service) y suele diferir de la fecha real.
+      // Manda la constancia: completa, nunca "no coincide".
+      padron: month ? `${formatMonth(month)} (estimado)` : '—',
       constancia: r.activityStartDate ? formatDay(r.activityStartDate) : '—',
-      status: !r.activityStartDate ? 'none' : month && !r.activityStartDate.startsWith(month) ? 'mismatch' : 'fill',
+      status: r.activityStartDate ? 'fill' : 'none',
     });
     const gross = r.grossIncomeDetail ?? (r.grossIncomeType ? GROSS_INCOME_LABELS[r.grossIncomeType] : null);
     rows.push({
