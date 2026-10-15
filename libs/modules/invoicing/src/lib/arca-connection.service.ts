@@ -86,8 +86,10 @@ export class ArcaConnectionService {
               `punto de venta ${formatPointOfSale(pointOfSale)} (${branchName}): Factura ${documentLetter} ${String(lastNumber).padStart(8, '0')}`,
             );
           } catch (err) {
+            const raw = (err as Error).message;
+            const enabled = raw.includes('[11002]') ? await describeEnabledPointsOfSale(client) : '';
             failure = {
-              ...describeFailure((err as Error).message, { pointOfSale, branchName }),
+              ...describeFailure(raw, { pointOfSale, branchName, enabled }),
               pointOfSale,
               documentLetter,
               lastNumber: null,
@@ -132,14 +134,14 @@ export class ArcaConnectionService {
 /** Traduce lo que devuelve ARCA a algo accionable. */
 function describeFailure(
   raw: string,
-  context: { pointOfSale: number; branchName: string },
+  context: { pointOfSale: number; branchName: string; enabled: string },
 ): Pick<ArcaConnectionCheckResult, 'ok' | 'problem' | 'message'> {
   // [11002] El punto de venta no se encuentra habilitado a usar en el presente WS.
   if (raw.includes('[11002]')) {
     return {
       ok: false,
       problem: 'OTHER',
-      message: `El punto de venta ${formatPointOfSale(context.pointOfSale)} de la sucursal "${context.branchName}" no está habilitado para Web Services en ARCA. Corregí el número en Sucursales (ahí está la ayuda "¿Dónde lo encuentro?") o desactivá esa sucursal si ya no la usás. Detalle de ARCA: ${raw}`,
+      message: `El punto de venta ${formatPointOfSale(context.pointOfSale)} de la sucursal "${context.branchName}" no está habilitado para Web Services en ARCA. Corregí el número en Sucursales (ahí está la ayuda "¿Dónde lo encuentro?") o desactivá esa sucursal si ya no la usás. ${context.enabled} Detalle de ARCA: ${raw}`,
     };
   }
   if (raw.includes('notAuthorized')) {
@@ -164,6 +166,28 @@ function describeFailure(
     return { ok: false, problem: 'NETWORK', message: `No se pudo llegar a ARCA. Probá de nuevo en unos minutos. Detalle: ${raw}` };
   }
   return { ok: false, problem: 'OTHER', message: raw };
+}
+
+/** Para un 11002: qué puntos de venta sí tiene ARCA para Web Services en
+ * este CUIT (FEParamGetPtosVenta). Si la consulta falla no se agrega nada:
+ * es sólo una pista, el error principal ya está explicado. */
+async function describeEnabledPointsOfSale(client: AfipWsfeClient): Promise<string> {
+  try {
+    const points = await client.enabledPointsOfSale();
+    const usable = points.filter((p) => !p.blocked && !p.deregisteredOn);
+    const others = points.filter((p) => p.blocked || p.deregisteredOn);
+    const otherNote = others.length
+      ? ` Bloqueados o dados de baja: ${others
+          .map((p) => `${formatPointOfSale(p.number)}${p.blocked ? ' (bloqueado)' : ''}${p.deregisteredOn ? ` (baja ${p.deregisteredOn})` : ''}`)
+          .join(', ')}.`
+      : '';
+    if (usable.length === 0) {
+      return `ARCA no informa ningún punto de venta habilitado para Web Services en este CUIT.${otherNote} Si lo creaste hace poco, revisá en ARCA que el sistema sea el de Web Services o probá de nuevo más tarde.`;
+    }
+    return `Puntos de venta habilitados para Web Services según ARCA: ${usable.map((p) => formatPointOfSale(p.number)).join(', ')}.${otherNote}`;
+  } catch {
+    return '';
+  }
 }
 
 function formatPointOfSale(pointOfSale: number): string {
