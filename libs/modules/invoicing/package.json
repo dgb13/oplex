@@ -29,6 +29,7 @@
     "fast-xml-parser": "^5.10.1",
     "qrcode": "^1.5.4",
     "resend": "^6.18.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "undici": "^7.30.0"
   }
 }
