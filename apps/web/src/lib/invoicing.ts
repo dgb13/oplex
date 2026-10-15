@@ -162,6 +162,8 @@ export interface CreateSaleInput {
   exchangeRate?: number;
   globalDiscountPercent?: number;
   dueDate?: string;
+  // Observaciones que salen en el PDF (orden de compra, remito...).
+  notes?: string;
   pricesIncludeTax?: boolean;
   // Facturar igual lo que falta en el depósito: queda pendiente de entrega.
   allowPendingDelivery?: boolean;
@@ -213,11 +215,23 @@ export const INVOICE_PDF_FORMATS: { value: InvoicePdfFormat; label: string; desc
   { value: 'TICKET', label: 'Ticket', description: 'Angosto, para impresora térmica/de tickets' },
 ];
 
+// Copia propia (no importada de quotes.ts/purchases.ts), mismo criterio que
+// los demás lib/*.ts: los mismos 5 estilos, para facturas y notas de crédito.
+export type InvoicePdfStyle = 'MODERNO' | 'COMPACTO' | 'TRADICIONAL' | 'NATURAL' | 'LETRAS_GRANDES';
+
+export const INVOICE_PDF_STYLES: { value: InvoicePdfStyle; label: string; description: string }[] = [
+  { value: 'MODERNO', label: 'Moderno', description: 'Con el color de la marca, limpio y actual' },
+  { value: 'COMPACTO', label: 'Compacto', description: 'La grilla clásica de ARCA, para facturas largas' },
+  { value: 'TRADICIONAL', label: 'Tradicional', description: 'Blanco y negro, formal, con serifa' },
+  { value: 'NATURAL', label: 'Natural', description: 'Tonos cálidos y fotos de los artículos' },
+  { value: 'LETRAS_GRANDES', label: 'Letras grandes', description: 'Máxima legibilidad, tipografía grande' },
+];
+
 /** Blob en vez de un <a href>/window.open directo, así viaja el header de
  * Authorization - mismo criterio que openPdf en apps/web/src/lib/purchases.ts. */
-async function openPdf(id: string, format?: InvoicePdfFormat): Promise<void> {
-  const res = await api.get(`/invoicing/invoices/${id}/pdf`, {
-    params: format ? { format } : {},
+async function openPdf(path: string, format?: InvoicePdfFormat, style?: InvoicePdfStyle): Promise<void> {
+  const res = await api.get(path, {
+    params: { ...(format ? { format } : {}), ...(style ? { style } : {}) },
     responseType: 'blob',
   });
   const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
@@ -250,7 +264,10 @@ export const invoicingApi = {
     api.post('/sales/receipts', dto).then((r) => r.data),
   createCreditNote: (dto: CreateCreditNoteInput) =>
     api.post('/sales/credit-notes', dto).then((r) => r.data),
-  openPdf: (id: string, format?: InvoicePdfFormat) => openPdf(id, format),
+  openPdf: (id: string, format?: InvoicePdfFormat, style?: InvoicePdfStyle) =>
+    openPdf(`/invoicing/invoices/${id}/pdf`, format, style),
+  openCreditNotePdf: (id: string, format?: InvoicePdfFormat, style?: InvoicePdfStyle) =>
+    openPdf(`/invoicing/credit-notes/${id}/pdf`, format, style),
 };
 
 /** Comprobante que ARCA autorizó y Oplex no tiene registrado (aviso de
@@ -288,8 +305,13 @@ export const arcaUnregisteredApi = {
       .then((r) => r.data),
 };
 
+export interface InvoicingPreferences {
+  invoicePdfFormat: InvoicePdfFormat;
+  invoicePdfStyle: InvoicePdfStyle;
+}
+
 export const invoicingPreferencesApi = {
-  get: () => api.get<{ invoicePdfFormat: InvoicePdfFormat }>('/invoicing/preferences').then((r) => r.data),
-  update: (invoicePdfFormat: InvoicePdfFormat) =>
-    api.patch<{ invoicePdfFormat: InvoicePdfFormat }>('/invoicing/preferences', { invoicePdfFormat }).then((r) => r.data),
+  get: () => api.get<InvoicingPreferences>('/invoicing/preferences').then((r) => r.data),
+  update: (dto: Partial<InvoicingPreferences>) =>
+    api.patch<InvoicingPreferences>('/invoicing/preferences', dto).then((r) => r.data),
 };

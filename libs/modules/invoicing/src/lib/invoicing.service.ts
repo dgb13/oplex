@@ -23,6 +23,7 @@ import {
   type InvoiceConcept,
   type InvoicePdfFormat,
   type InvoiceTaxLine,
+  type PdfStyle,
   type InvoiceTaxLineKind,
   type Receipt,
   type ReminderTone,
@@ -46,8 +47,14 @@ import {
   type ElectronicInvoiceTaxLine,
   type VoucherSequence,
 } from './electronic-invoicing.port.js';
-import { buildInvoicePdfData } from './pdf/build-pdf-data.js';
+import {
+  buildInvoicePdfData,
+  formatFecha,
+  type InvoicePdfOtherTax,
+  type PdfSourceDocument,
+} from './pdf/build-pdf-data.js';
 import { InvoicePdfService } from './pdf/invoice-pdf.service.js';
+import { loadPdfImage } from './pdf/load-pdf-image.js';
 
 // AFIP WSFE Tributos[].Id (tabla pública de FEParamGetTiposTributos) -
 // hardcodeada a propósito, mismo criterio que las alícuotas de IVA fijas
@@ -278,11 +285,11 @@ export class InvoicingService {
   /** "Descargar PDF" en el detalle de Facturación - consulta propia (no
    * reusa getInvoice()) porque hace falta `currency` acá (código/isBase
    * para el QR y el desglose de moneda), que ese otro caller no necesita.
-   * `format` es opcional - si no viene, se resuelve la preferencia guardada
-   * del usuario (mismo criterio que purchaseDocumentPdfStyle). */
-  async generatePdf(id: string, format?: InvoicePdfFormat): Promise<{ buffer: Buffer; filename: string }> {
+   * `format`/`style` son opcionales - si no vienen, se usan las
+   * preferencias guardadas del usuario (mismo criterio que
+   * purchaseDocumentPdfStyle). */
+  async generatePdf(id: string, format?: InvoicePdfFormat, style?: PdfStyle): Promise<{ buffer: Buffer; filename: string }> {
     const db = getTenantDb();
-    const tenantId = getTenantId();
     const invoice = await db.invoice.findUnique({
       where: { id },
       include: {
@@ -293,27 +300,148 @@ export class InvoicingService {
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
     }
-    const customer = await db.company.findUniqueOrThrow({ where: { id: invoice.customerId } });
-    const tenant = await db.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-    const tenantSettings = await db.tenantSettings.findUnique({ where: { tenantId } });
-    const resolvedFormat = format ?? (await this.resolveRequesterInvoicePdfFormat());
+    const prefs = await this.resolveRequesterInvoicePdfPrefs(format, style);
+    const [customer, otherTaxes, saleCondition] = await Promise.all([
+      db.company.findUniqueOrThrow({ where: { id: invoice.customerId } }),
+      db.invoiceTaxLine.findMany({ where: { invoiceId: id } }),
+      this.resolveSaleCondition(invoice, true),
+    ]);
 
-    const otherTaxes = await db.invoiceTaxLine.findMany({ where: { invoiceId: id } });
-    const data = await buildInvoicePdfData(invoice, customer, tenant, tenantSettings, otherTaxes);
-    const buffer = await this.invoicePdfService.generate(resolvedFormat, data);
-    return { buffer, filename: `${invoice.documentLetter}-${invoice.pointOfSale}-${invoice.number}.pdf` };
+    const buffer = await this.renderPdf(
+      prefs,
+      {
+        ...invoice,
+        kind: 'FACTURA',
+        customerTaxCondition: invoice.customerTaxCondition ?? customer.taxCondition,
+        customerFiscalAddress: invoice.customerFiscalAddress ?? customer.fiscalAddress,
+        saleCondition,
+      },
+      otherTaxes,
+    );
+    return { buffer, filename: `Factura-${invoice.documentLetter}-${invoice.pointOfSale}-${invoice.number}.pdf` };
   }
 
-  private async resolveRequesterInvoicePdfFormat(): Promise<InvoicePdfFormat> {
-    const userId = getUserId();
-    if (!userId) {
-      return 'A4';
+  /** PDF de una nota de crédito: las mismas plantillas que la factura, con
+   * las líneas acreditadas y el comprobante asociado. */
+  async generateCreditNotePdf(id: string, format?: InvoicePdfFormat, style?: PdfStyle): Promise<{ buffer: Buffer; filename: string }> {
+    const db = getTenantDb();
+    const creditNote = await db.creditNote.findUnique({
+      where: { id },
+      include: {
+        currency: true,
+        lines: { include: { invoiceLine: { include: { articleVariant: { include: { article: true } } } } } },
+        invoice: { include: { customer: true } },
+      },
+    });
+    if (!creditNote) {
+      throw new NotFoundException('Credit note not found');
     }
+    const { invoice } = creditNote;
+    const prefs = await this.resolveRequesterInvoicePdfPrefs(format, style);
+    const saleCondition = await this.resolveSaleCondition(invoice, false);
+
+    const buffer = await this.renderPdf(
+      prefs,
+      {
+        kind: 'NOTA_CREDITO',
+        documentLetter: creditNote.documentLetter,
+        pointOfSale: creditNote.pointOfSale,
+        number: creditNote.number,
+        // Mismo concepto y cliente que la factura (ver createCreditNote).
+        concept: invoice.concept,
+        issueDate: creditNote.issueDate,
+        dueDate: null,
+        customerName: invoice.customerName,
+        customerTaxId: invoice.customerTaxId,
+        customerTaxCondition: invoice.customerTaxCondition ?? invoice.customer.taxCondition,
+        customerFiscalAddress: invoice.customerFiscalAddress ?? invoice.customer.fiscalAddress,
+        issuerTaxCondition: invoice.issuerTaxCondition,
+        globalDiscountPercent: invoice.globalDiscountPercent,
+        total: creditNote.total,
+        exchangeRate: creditNote.exchangeRate,
+        currency: creditNote.currency,
+        afipCae: creditNote.afipCae,
+        afipCaeExpiry: creditNote.afipCaeExpiry,
+        notes: null,
+        // Cada línea acreditada con el precio y la bonificación de la línea
+        // original; netAmount/lineTotal ya son la parte proporcional.
+        lines: creditNote.lines.map((line) => {
+          const original = line.invoiceLine;
+          const ratio = line.quantity.div(original.quantity);
+          return {
+            ...original,
+            quantity: line.quantity,
+            discountValue: original.discountType === 'AMOUNT' ? original.discountValue.mul(ratio) : original.discountValue,
+            netAmount: line.netAmount,
+            lineTotal: line.lineTotal,
+          };
+        }),
+        saleCondition,
+        associatedDocument: `Factura ${invoice.documentLetter} ${invoice.pointOfSale}-${invoice.number} del ${formatFecha(invoice.issueDate)}`,
+        reason: creditNote.reason,
+      },
+      [],
+    );
+    return {
+      buffer,
+      filename: `Nota-de-credito-${creditNote.documentLetter}-${creditNote.pointOfSale}-${creditNote.number}.pdf`,
+    };
+  }
+
+  private async renderPdf(
+    prefs: { format: InvoicePdfFormat; style: PdfStyle },
+    doc: PdfSourceDocument,
+    otherTaxes: InvoicePdfOtherTax[],
+  ): Promise<Buffer> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const [tenant, tenantSettings] = await Promise.all([
+      db.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+      db.tenantSettings.findUnique({ where: { tenantId } }),
+    ]);
+    // Las fotos de los artículos sólo las dibuja el estilo Natural.
+    const withPhotos = prefs.format !== 'TICKET' && prefs.style === 'NATURAL';
+    const [logo, ...lineImages] = await Promise.all([
+      loadPdfImage(tenantSettings?.logoUrl),
+      ...doc.lines.map((line) => (withPhotos ? loadPdfImage(line.articleVariant.article.imageUrl) : null)),
+    ]);
+    const data = await buildInvoicePdfData(doc, tenant, tenantSettings, { logo, lineImages }, otherTaxes);
+    return this.invoicePdfService.generate(prefs.format, prefs.style, data);
+  }
+
+  /** "Contado" si se cobró entera el mismo día que se emitió (Caja, o
+   * cobro registrado al facturar); si no, cuenta corriente, con el
+   * vencimiento cuando hay uno. */
+  private async resolveSaleCondition(
+    invoice: Pick<Invoice, 'id' | 'issueDate' | 'dueDate' | 'total'>,
+    withDueDate: boolean,
+  ): Promise<string> {
+    const db = getTenantDb();
+    const sameDay = (date: Date) => date.toISOString().slice(0, 10) === invoice.issueDate.toISOString().slice(0, 10);
+    const [receipts, cashMovements] = await Promise.all([
+      db.receipt.findMany({ where: { invoiceId: invoice.id }, select: { amount: true, paidAt: true } }),
+      db.cashMovement.findMany({ where: { invoiceId: invoice.id }, select: { amount: true, createdAt: true } }),
+    ]);
+    const paidAtIssue = [
+      ...receipts.filter((r) => sameDay(r.paidAt)).map((r) => r.amount),
+      ...cashMovements.filter((m) => sameDay(m.createdAt)).map((m) => m.amount),
+    ].reduce((sum, amount) => sum.add(amount.abs()), new Prisma.Decimal(0));
+    if (paidAtIssue.gte(invoice.total)) return 'Contado';
+    return withDueDate && invoice.dueDate ? `Cuenta corriente · vence ${formatFecha(invoice.dueDate)}` : 'Cuenta corriente';
+  }
+
+  private async resolveRequesterInvoicePdfPrefs(
+    format?: InvoicePdfFormat,
+    style?: PdfStyle,
+  ): Promise<{ format: InvoicePdfFormat; style: PdfStyle }> {
+    const userId = getUserId();
+    if (format && style) return { format, style };
+    if (!userId) return { format: format ?? 'A4', style: style ?? 'MODERNO' };
     const user = await getTenantDb().user.findUniqueOrThrow({
       where: { id: userId },
-      select: { invoicePdfFormat: true },
+      select: { invoicePdfFormat: true, invoicePdfStyle: true },
     });
-    return user.invoicePdfFormat;
+    return { format: format ?? user.invoicePdfFormat, style: style ?? user.invoicePdfStyle };
   }
 
   /**
@@ -550,6 +678,7 @@ export class InvoicingService {
         customerTaxId: customer.taxId,
         issuerTaxCondition: settings?.ownTaxCondition ?? null,
         customerTaxCondition: customer.taxCondition,
+        customerFiscalAddress: customer.fiscalAddress,
         documentLetter: dto.documentLetter,
         concept,
         pointOfSale: dto.pointOfSale,
@@ -562,6 +691,7 @@ export class InvoicingService {
         subtotal: netSubtotal,
         taxTotal,
         total,
+        notes: dto.notes?.trim() || null,
         balanceDue: total,
         issuedByUserId,
         lines: { createMany: { data: lineInputs } },

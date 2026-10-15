@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseEnumPipe, ParseUUIDPipe, Post, Query, StreamableFile } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
-import { InvoicePdfFormat, LongRunningTransaction } from '@plexo/database';
+import { InvoicePdfFormat, LongRunningTransaction, PdfStyle } from '@plexo/database';
 import { CreateCurrencyDto } from './dto/create-currency.dto.js';
 import { RecordExchangeRateDto } from './dto/record-exchange-rate.dto.js';
 import { ResolveUnregisteredVoucherDto } from './dto/resolve-unregistered-voucher.dto.js';
@@ -86,8 +86,22 @@ export class InvoicingController {
   async downloadPdf(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('format', new ParseEnumPipe(InvoicePdfFormat, { optional: true })) format?: InvoicePdfFormat,
+    @Query('style', new ParseEnumPipe(PdfStyle, { optional: true })) style?: PdfStyle,
   ) {
-    const { buffer, filename } = await this.invoicingService.generatePdf(id, format);
+    const { buffer, filename } = await this.invoicingService.generatePdf(id, format, style);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
+  @Get('credit-notes/:id/pdf')
+  async downloadCreditNotePdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format', new ParseEnumPipe(InvoicePdfFormat, { optional: true })) format?: InvoicePdfFormat,
+    @Query('style', new ParseEnumPipe(PdfStyle, { optional: true })) style?: PdfStyle,
+  ) {
+    const { buffer, filename } = await this.invoicingService.generateCreditNotePdf(id, format, style);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: `attachment; filename="${filename}"`,

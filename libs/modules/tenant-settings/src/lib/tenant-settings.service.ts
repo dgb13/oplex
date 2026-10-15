@@ -79,6 +79,7 @@ export interface TenantSettingsView {
   quoteDefaultDeliveryPlace: string | null;
   quoteDefaultWarranty: string | null;
   quoteShowBankDetails: boolean;
+  invoiceShowBankDetails: boolean;
   // Tenant.taxId (the tenant's OWN CUIT - who the AFIP certificate is
   // registered under), surfaced here because Preferencias/AFIP is the only
   // screen that needs to show/edit it today - see updateTenantInfo. Not a
@@ -202,6 +203,7 @@ export class TenantSettingsService {
       quoteDefaultDeliveryPlace: row?.quoteDefaultDeliveryPlace ?? null,
       quoteDefaultWarranty: row?.quoteDefaultWarranty ?? null,
       quoteShowBankDetails: row?.quoteShowBankDetails ?? true,
+      invoiceShowBankDetails: row?.invoiceShowBankDetails ?? true,
       tenantTaxId,
       tenantName,
     };
@@ -243,6 +245,7 @@ export class TenantSettingsService {
         quoteDefaultDeliveryPlace: blankToNull(dto.quoteDefaultDeliveryPlace) ?? null,
         quoteDefaultWarranty: blankToNull(dto.quoteDefaultWarranty) ?? null,
         quoteShowBankDetails: dto.quoteShowBankDetails,
+        invoiceShowBankDetails: dto.invoiceShowBankDetails,
       },
       update: {
         arReminderIntervalDays: dto.arReminderIntervalDays,
@@ -273,6 +276,7 @@ export class TenantSettingsService {
         quoteDefaultDeliveryPlace: blankToNull(dto.quoteDefaultDeliveryPlace),
         quoteDefaultWarranty: blankToNull(dto.quoteDefaultWarranty),
         quoteShowBankDetails: dto.quoteShowBankDetails,
+        invoiceShowBankDetails: dto.invoiceShowBankDetails,
       },
     });
     return this.toView(row, await this.getTenantTaxId());

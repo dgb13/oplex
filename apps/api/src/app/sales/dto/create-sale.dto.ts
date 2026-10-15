@@ -10,8 +10,10 @@ import {
   IsNumber,
   IsOptional,
   IsPositive,
+  IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -49,6 +51,12 @@ export class CreateSaleDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  // Observaciones del PDF de la factura (ver CreateInvoiceDto.notes).
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 
   @IsOptional()
   @IsBoolean()

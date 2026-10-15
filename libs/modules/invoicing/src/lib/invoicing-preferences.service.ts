@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { getTenantDb, getUserId, type InvoicePdfFormat } from '@plexo/database';
+import { getTenantDb, getUserId, type InvoicePdfFormat, type PdfStyle } from '@plexo/database';
 import type { UpdateInvoicingPreferencesDto } from './dto/update-invoicing-preferences.dto.js';
 
 export interface InvoicingPreferencesView {
   invoicePdfFormat: InvoicePdfFormat;
+  invoicePdfStyle: PdfStyle;
 }
 
 /** Preferencia personal del usuario para "Descargar PDF" en Facturación -
@@ -17,7 +18,7 @@ export class InvoicingPreferencesService {
     const userId = requireUserId();
     return getTenantDb().user.findUniqueOrThrow({
       where: { id: userId },
-      select: { invoicePdfFormat: true },
+      select: { invoicePdfFormat: true, invoicePdfStyle: true },
     });
   }
 
@@ -25,8 +26,8 @@ export class InvoicingPreferencesService {
     const userId = requireUserId();
     return getTenantDb().user.update({
       where: { id: userId },
-      data: { invoicePdfFormat: dto.invoicePdfFormat },
-      select: { invoicePdfFormat: true },
+      data: { invoicePdfFormat: dto.invoicePdfFormat, invoicePdfStyle: dto.invoicePdfStyle },
+      select: { invoicePdfFormat: true, invoicePdfStyle: true },
     });
   }
 }

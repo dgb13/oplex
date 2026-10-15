@@ -1,5 +1,5 @@
 import { DocumentLetter } from '@plexo/database';
-import { IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 // Los campos que "Convertir a factura" no puede sacar de la Cotización
 // (customerId/lines/currencyId sí salen de ahí, ver
@@ -18,6 +18,11 @@ export class CreateInvoiceFromQuoteDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 
   @IsOptional()
   @IsBoolean()

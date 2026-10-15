@@ -52,6 +52,7 @@ export interface TenantSettings {
   quoteDefaultWarranty: string | null;
   logoUrl: string | null;
   quoteShowBankDetails: boolean;
+  invoiceShowBankDetails: boolean;
   tenantTaxId: string | null;
   // Razón social (Tenant.name) - emisor en los comprobantes.
   tenantName: string | null;
@@ -114,6 +115,7 @@ export const tenantSettingsApi = {
       quoteDefaultDeliveryPlace: string | null;
       quoteDefaultWarranty: string | null;
       quoteShowBankDetails: boolean;
+      invoiceShowBankDetails: boolean;
     }>,
   ) => api.patch<TenantSettings>('/tenant-settings', dto).then((r) => r.data),
 };

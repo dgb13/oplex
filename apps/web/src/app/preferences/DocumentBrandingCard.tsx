@@ -44,8 +44,9 @@ function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback
 }
 
 /** Logo, contacto, color, datos bancarios y condiciones comerciales por
- * defecto que salen en el PDF de las cotizaciones (ver TenantSettings.tradeName
- * en el schema y libs/modules/quotes/src/lib/pdf). */
+ * defecto que salen en el PDF de las cotizaciones y las facturas (ver
+ * TenantSettings.tradeName en el schema, libs/modules/quotes/src/lib/pdf y
+ * libs/modules/invoicing/src/lib/pdf). */
 export default function DocumentBrandingCard({ settings }: { settings: TenantSettings }) {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -54,6 +55,7 @@ export default function DocumentBrandingCard({ settings }: { settings: TenantSet
   );
   const [brandColor, setBrandColor] = useState(settings.brandColor ?? '');
   const [showBank, setShowBank] = useState(settings.quoteShowBankDetails);
+  const [showBankOnInvoices, setShowBankOnInvoices] = useState(settings.invoiceShowBankDetails);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -68,6 +70,7 @@ export default function DocumentBrandingCard({ settings }: { settings: TenantSet
         bankCbu: values.bankCbu.replace(/\D/g, '') || null,
         brandColor: brandColor || null,
         quoteShowBankDetails: showBank,
+        invoiceShowBankDetails: showBankOnInvoices,
       }),
     onSuccess: (next) => {
       onSaved(next);
@@ -126,7 +129,7 @@ export default function DocumentBrandingCard({ settings }: { settings: TenantSet
         <div>
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">Tu empresa en los documentos</h2>
           <p className="text-xs text-muted-foreground">
-            Lo que ve tu cliente en el PDF de las cotizaciones. Razón social, CUIT, condición frente al IVA, domicilio e
+            Lo que ve tu cliente en el PDF de las cotizaciones y las facturas. Razón social, CUIT, condición frente al IVA, domicilio e
             Ingresos Brutos se cargan en Contabilidad → Conexión con ARCA → Datos de la empresa.
           </p>
         </div>
@@ -208,6 +211,15 @@ export default function DocumentBrandingCard({ settings }: { settings: TenantSet
           <label className="flex items-center gap-2 text-sm" htmlFor="branding-show-bank">
             <input id="branding-show-bank" type="checkbox" checked={showBank} onChange={(e) => setShowBank(e.target.checked)} />
             Mostrar los datos para transferir en las cotizaciones
+          </label>
+          <label className="flex items-center gap-2 text-sm" htmlFor="branding-show-bank-invoices">
+            <input
+              id="branding-show-bank-invoices"
+              type="checkbox"
+              checked={showBankOnInvoices}
+              onChange={(e) => setShowBankOnInvoices(e.target.checked)}
+            />
+            Mostrar los datos para transferir en las facturas
           </label>
           <div className="grid gap-3 sm:grid-cols-3">
             {field('bankName', 'Banco', 'Banco Galicia')}

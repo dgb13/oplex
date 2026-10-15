@@ -13,6 +13,7 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -95,6 +96,12 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  // Observaciones que salen en el PDF (orden de compra del cliente, remito...).
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 
   // Si es true, cualquier `unitPrice` override en las líneas se interpreta
   // como precio final (con IVA incluido) en vez de neto - se desglosa por
