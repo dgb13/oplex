@@ -5,14 +5,16 @@ import { CBTE_TIPO, resolveDocTipoNro, resolveMonId } from '../afip-wsfe-client.
 const AFIP_QR_BASE_URL = 'https://www.afip.gob.ar/fe/qr/?p=';
 
 export interface AfipQrInput {
+  /** Sin indicar = factura. */
+  kind?: 'FACTURA' | 'NOTA_CREDITO';
   issueDate: Date;
   issuerCuit: string;
   pointOfSale: string;
   documentLetter: DocumentLetter;
   number: string;
-  total: Prisma.Decimal;
+  total: Pick<Prisma.Decimal, 'toNumber'>;
   currencyCode: string;
-  exchangeRate: Prisma.Decimal;
+  exchangeRate: Pick<Prisma.Decimal, 'toNumber'>;
   customerTaxId: string | null;
   cae: string;
 }
@@ -28,7 +30,7 @@ export function buildAfipQrUrl(input: AfipQrInput): string {
     fecha: input.issueDate.toISOString().slice(0, 10),
     cuit: Number(input.issuerCuit.replace(/\D/g, '')),
     ptoVta: Number(input.pointOfSale),
-    tipoCmp: CBTE_TIPO.FACTURA[input.documentLetter],
+    tipoCmp: CBTE_TIPO[input.kind ?? 'FACTURA'][input.documentLetter],
     nroCmp: Number(input.number),
     importe: input.total.toNumber(),
     moneda: resolveMonId(input.currencyCode),

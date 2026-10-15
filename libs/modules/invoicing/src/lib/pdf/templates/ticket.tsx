@@ -1,111 +1,158 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import type { InvoicePdfData } from '../pdf-data.js';
+import { FONTS } from '../fonts.js';
+import { AUTHORIZED_LEGEND, TRANSPARENCY_TITLE, type InvoicePdfData } from '../pdf-data.js';
+import { contactLine, customerTaxLine, displayName, documentTitle, joinDefined, Logo } from './parts.js';
 
 // 80mm de ancho (impresora térmica/de tickets común) en puntos PDF
-// (1mm ≈ 2.83465pt). En PDF no hay "alto infinito": el alto se estima según
-// el contenido (antes era fijo en 850pt y un ticket de 1 línea salía con
-// media hoja en blanco). Si la estimación se queda corta, react-pdf pagina
-// a una segunda hoja del mismo ancho, no rompe nada.
+// (1mm ≈ 2.83465pt). Un solo diseño: los 5 estilos son para A4/A5. En PDF
+// no hay "alto infinito": el alto se estima según el contenido. Si la
+// estimación se queda corta, react-pdf pagina a una segunda hoja del mismo
+// ancho, no rompe nada.
 const TICKET_WIDTH_PT = 227;
+const ROW = 9;
+// Caracteres de Geist Mono 7,2pt que entran en un renglón de 80mm.
+const CHARS_PER_ROW = 46;
 
 function ticketHeight(data: InvoicePdfData): number {
-  const issuerRows = [
-    data.issuerTaxId,
-    data.issuerTaxConditionLabel,
-    data.issuerFiscalAddress,
-    data.issuerGrossIncomeNumber,
-    data.issuerActivityStartDate,
-  ].filter(Boolean).length;
-  const totalsRows = data.totalRows.length + (data.vatContained ? 1 : 0);
-  // Cabecera/divisores/título/cliente ~150pt, CAE + QR ~130pt, márgenes 20pt.
-  return Math.max(320, 300 + issuerRows * 9 + data.lines.length * 20 + totalsRows * 9);
+  const rowsFor = (text: string | null) => (text ? Math.ceil(text.length / CHARS_PER_ROW) : 0);
+  const issuerRows = 6 + (data.emitter.tradeName ? 1 : 0) + rowsFor(data.emitter.address);
+  const customerRows = 2 + (data.associatedDocument ? 2 : 0) + (data.servicePeriod ? 2 : 0);
+  // Una línea larga ocupa dos renglones de descripción.
+  const lineRows = data.lines.reduce((sum, line) => sum + rowsFor(line.description) + 1.3, 0);
+  const totalsRows = data.totalRows.length + 2 + (data.transparency ? 4 : 0) + data.legends.length * 5;
+  const footerRows = 3 + rowsFor(contactLine(data.emitter)) + rowsFor(data.notes);
+  // Logo y nombre ~50pt, letra ~30pt, QR ~95pt, separadores (8) ~90pt, márgenes 24pt.
+  return Math.ceil(290 + (issuerRows + customerRows + lineRows + totalsRows + footerRows) * ROW);
 }
 
-const styles = StyleSheet.create({
-  page: { padding: 10, fontSize: 7, fontFamily: 'Courier', color: '#0f172a' },
+const s = StyleSheet.create({
+  page: { paddingVertical: 12, paddingHorizontal: 10, fontSize: 7.2, fontFamily: FONTS.mono, color: '#111111' },
   center: { textAlign: 'center' },
-  bold: { fontFamily: 'Courier-Bold' },
-  title: { fontFamily: 'Courier-Bold', fontSize: 9, textAlign: 'center', marginBottom: 2 },
-  divider: { borderBottomWidth: 1, borderBottomColor: '#0f172a', borderStyle: 'dashed', marginVertical: 4 },
-  line: { flexDirection: 'row', justifyContent: 'space-between' },
-  lineDesc: { marginBottom: 1 },
-  lineDetail: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  totalsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 },
-  qrImage: { width: 90, height: 90, alignSelf: 'center', marginTop: 6 },
+  name: { fontFamily: FONTS.sans, fontWeight: 700, fontSize: 10, textAlign: 'center', marginTop: 3 },
+  divider: { borderBottomWidth: 0.8, borderBottomColor: '#111111', borderStyle: 'dashed', marginVertical: 5 },
+  letterRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
+  letterBox: { width: 22, height: 22, borderWidth: 1.2, borderColor: '#111111', alignItems: 'center', justifyContent: 'center' },
+  letterText: { fontFamily: FONTS.sans, fontWeight: 700, fontSize: 14 },
+  bold: { fontWeight: 600 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
+  total: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2, fontSize: 10, fontWeight: 600 },
+  qr: { width: 92, height: 92, alignSelf: 'center' },
 });
 
 export function TicketTemplate({ data }: { data: InvoicePdfData }) {
+  const { emitter, customer } = data;
+  const discriminated = data.vatMode === 'DISCRIMINATED';
+
   return (
-    <Document>
-      <Page size={[TICKET_WIDTH_PT, ticketHeight(data)]} style={styles.page}>
-        <Text style={[styles.center, styles.bold]}>{data.issuerName}</Text>
-        {data.issuerTaxId && <Text style={styles.center}>CUIT {data.issuerTaxId}</Text>}
-        {data.issuerTaxConditionLabel && <Text style={styles.center}>{data.issuerTaxConditionLabel}</Text>}
-        {data.issuerFiscalAddress && <Text style={styles.center}>{data.issuerFiscalAddress}</Text>}
-        {data.issuerGrossIncomeNumber && <Text style={styles.center}>IIBB: {data.issuerGrossIncomeNumber}</Text>}
-        {data.issuerActivityStartDate && (
-          <Text style={styles.center}>Inicio de actividades: {data.issuerActivityStartDate}</Text>
-        )}
-
-        <View style={styles.divider} />
-
-        <Text style={styles.title}>
-          FACTURA {data.documentLetter} (COD. {String(data.cbteTipoCode).padStart(2, '0')})
+    <Document title={documentTitle(data)} author={emitter.name}>
+      <Page size={[TICKET_WIDTH_PT, ticketHeight(data)]} style={s.page}>
+        <View style={{ alignItems: 'center' }}>
+          <Logo emitter={emitter} size={30} radius={6} background={emitter.logo ? undefined : '#111111'} fontFamily={FONTS.sans} />
+        </View>
+        <Text style={s.name}>{displayName(emitter)}</Text>
+        <Text style={s.center}>
+          {joinDefined(
+            [
+              emitter.tradeName ? emitter.name : null,
+              emitter.address,
+              emitter.taxId ? `CUIT ${emitter.taxId}` : null,
+              emitter.taxConditionLabel,
+              emitter.grossIncomeNumber ? `IIBB ${emitter.grossIncomeNumber}` : null,
+              emitter.activityStart ? `Inicio act. ${emitter.activityStart}` : null,
+            ],
+            '\n',
+          )}
         </Text>
-        <Text style={styles.center}>{data.fullNumber}</Text>
-        <Text style={styles.center}>{data.issueDate}</Text>
 
-        <View style={styles.divider} />
-
-        <Text>{data.customerName}</Text>
-        {data.customerTaxIdLabel && (
-          <Text>
-            {data.customerTaxIdLabel}
-            {data.customerTaxId ? ` ${data.customerTaxId}` : ''}
+        <View style={s.divider} />
+        <View style={s.letterRow}>
+          <View style={s.letterBox}>
+            <Text style={s.letterText}>{data.documentLetter}</Text>
+          </View>
+          <View>
+            <Text style={s.bold}>{data.title.toUpperCase()}</Text>
+            <Text>
+              Cód. {data.cbteTipoCode} · N° {data.fullNumber}
+            </Text>
+          </View>
+        </View>
+        <Text style={[s.center, { marginTop: 3 }]}>
+          Fecha {data.issueDate} · {data.saleCondition}
+        </Text>
+        {data.servicePeriod ? (
+          <Text style={s.center}>
+            Período {data.servicePeriod.from} al {data.servicePeriod.to}
+            {`\n`}Vto. de pago {data.servicePeriod.paymentDue}
           </Text>
-        )}
-        {data.customerTaxConditionLabel && <Text>{data.customerTaxConditionLabel}</Text>}
+        ) : null}
 
-        <View style={styles.divider} />
+        <View style={s.divider} />
+        <Text>{customer.name}</Text>
+        {customerTaxLine(data) ? <Text>{customerTaxLine(data)}</Text> : null}
+        {customer.address ? <Text>{customer.address}</Text> : null}
+        {data.associatedDocument ? <Text>Asoc.: {data.associatedDocument}</Text> : null}
+        {data.reason ? <Text>Motivo: {data.reason}</Text> : null}
 
+        <View style={s.divider} />
         {data.lines.map((line, i) => (
-          <View key={i}>
-            <Text style={styles.lineDesc}>{line.description}</Text>
-            <View style={styles.lineDetail}>
+          <View key={i} style={{ marginBottom: 2 }} wrap={false}>
+            <Text>{line.description}</Text>
+            <View style={s.row}>
               <Text>
-                {line.quantity} x {line.unitPrice}
-                {line.discount ? ` (bonif. ${line.discount})` : ''}
+                {`${line.quantity} x ${line.unitPrice}`}
+                {line.discount ? ` -${line.discount}` : ''}
+                {discriminated ? ` (${line.vatLabel})` : ''}
               </Text>
               <Text>{line.lineTotal}</Text>
             </View>
           </View>
         ))}
 
-        <View style={styles.divider} />
-
-        {data.totalRows.map((row, i) => (
-          <View style={styles.totalsRow} key={i}>
+        <View style={s.divider} />
+        {data.totalRows.map((row) => (
+          <View key={row.label} style={s.row}>
             <Text>{row.label}</Text>
             <Text>{row.amount}</Text>
           </View>
         ))}
-        <View style={styles.grandTotalRow}>
-          <Text style={styles.bold}>TOTAL {data.currencyCode}</Text>
-          <Text style={styles.bold}>{data.total}</Text>
+        <View style={s.total}>
+          <Text>TOTAL</Text>
+          <Text>
+            {data.isBaseCurrency ? '$' : data.currencyCode} {data.total}
+          </Text>
         </View>
-        {data.vatContained && (
-          <View style={styles.totalsRow}>
-            <Text>IVA contenido</Text>
-            <Text>{data.vatContained}</Text>
+        {!data.isBaseCurrency ? <Text>Cotización {data.exchangeRate}</Text> : null}
+
+        {data.transparency ? (
+          <View>
+            <View style={s.divider} />
+            <Text style={{ fontSize: 6.4 }}>{TRANSPARENCY_TITLE}</Text>
+            <View style={s.row}>
+              <Text>IVA contenido</Text>
+              <Text>{data.transparency.vatContained}</Text>
+            </View>
+            <View style={s.row}>
+              <Text>Otros imp. nac. indirectos</Text>
+              <Text>{data.transparency.otherIndirectTaxes}</Text>
+            </View>
           </View>
-        )}
+        ) : null}
+        {data.legends.map((legend) => (
+          <Text key={legend} style={{ fontSize: 6.2, marginTop: 4 }}>
+            {legend}
+          </Text>
+        ))}
+        {data.notes ? <Text style={{ marginTop: 4 }}>{data.notes}</Text> : null}
 
-        <View style={styles.divider} />
+        <View style={s.divider} />
+        <Image style={s.qr} src={data.qrDataUri} />
+        <Text style={[s.center, { marginTop: 3 }]}>
+          <Text style={s.bold}>{AUTHORIZED_LEGEND}</Text>
+          {`\nCAE ${data.cae}\nVto. CAE ${data.caeExpiry}`}
+        </Text>
 
-        <Text style={styles.center}>CAE: {data.cae}</Text>
-        <Text style={styles.center}>Vto. CAE: {data.caeExpiry}</Text>
-        <Image style={styles.qrImage} src={data.qrDataUri} />
+        <View style={s.divider} />
+        <Text style={s.center}>{joinDefined([contactLine(emitter), data.kind === 'FACTURA' ? '¡Gracias por su compra!' : null], '\n')}</Text>
       </Page>
     </Document>
   );

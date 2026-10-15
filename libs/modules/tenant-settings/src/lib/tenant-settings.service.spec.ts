@@ -29,6 +29,7 @@ const EMPTY_BRANDING = {
   quoteDefaultDeliveryPlace: null,
   quoteDefaultWarranty: null,
   quoteShowBankDetails: true,
+  invoiceShowBankDetails: true,
 };
 
 function withTenant<T extends Record<string, unknown>>(db: T, taxId: string | null = '20-11111111-2') {
@@ -259,6 +260,7 @@ describe('TenantSettingsService.updateSettings', () => {
         quoteDefaultDeliveryPlace: null,
         quoteDefaultWarranty: null,
         quoteShowBankDetails: undefined,
+        invoiceShowBankDetails: undefined,
       },
       update: {
         arReminderIntervalDays: 5,
@@ -289,6 +291,7 @@ describe('TenantSettingsService.updateSettings', () => {
         quoteDefaultDeliveryPlace: undefined,
         quoteDefaultWarranty: undefined,
         quoteShowBankDetails: undefined,
+        invoiceShowBankDetails: undefined,
       },
     });
     expect(result.arReminderIntervalDays).toBe(5);

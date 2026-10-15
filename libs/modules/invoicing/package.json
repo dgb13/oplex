@@ -24,6 +24,7 @@
     "@plexo/subscriptions": "^0.0.1",
     "@plexo/types": "^0.0.1",
     "@react-pdf/renderer": "^4.5.0",
+    "@react-pdf/types": "^2.11.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "fast-xml-parser": "^5.10.1",

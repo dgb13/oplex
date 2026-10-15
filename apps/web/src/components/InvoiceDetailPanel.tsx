@@ -3,10 +3,12 @@
 import Select from '@/components/ui/Select';
 import {
   INVOICE_PDF_FORMATS,
+  INVOICE_PDF_STYLES,
   invoiceDisplayStatus,
   invoicingApi,
   invoicingPreferencesApi,
   type InvoicePdfFormat,
+  type InvoicePdfStyle,
 } from '@/lib/invoicing';
 import { buildVariantLabel } from '@/lib/inventory';
 import { useQuery } from '@tanstack/react-query';
@@ -81,9 +83,12 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
   });
   const [pdfFormat, setPdfFormat] = useState<InvoicePdfFormat>('A4');
   const [formatTouched, setFormatTouched] = useState(false);
+  const [pdfStyle, setPdfStyle] = useState<InvoicePdfStyle>('MODERNO');
+  const [styleTouched, setStyleTouched] = useState(false);
   useEffect(() => {
     if (!formatTouched && preferences) setPdfFormat(preferences.invoicePdfFormat);
-  }, [preferences, formatTouched]);
+    if (!styleTouched && preferences) setPdfStyle(preferences.invoicePdfStyle);
+  }, [preferences, formatTouched, styleTouched]);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
@@ -249,9 +254,20 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
                           {cn.reason} · {new Date(cn.issueDate).toLocaleDateString('es-AR')}
                         </p>
                       </div>
-                      <p className="font-medium text-red-700 dark:text-red-400">
-                        -${Number(cn.total).toFixed(2)}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <p className="font-medium text-red-700 dark:text-red-400">
+                          -${Number(cn.total).toFixed(2)}
+                        </p>
+                        {cn.afipCae && (
+                          <button
+                            type="button"
+                            onClick={() => void invoicingApi.openCreditNotePdf(cn.id, pdfFormat, pdfStyle)}
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 px-2 py-1 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
+                          >
+                            PDF
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -270,9 +286,21 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
                     }}
                     options={INVOICE_PDF_FORMATS}
                   />
+                  {/* El ticket tiene un solo diseño: el estilo sólo aplica a A4/A5. */}
+                  {pdfFormat !== 'TICKET' && (
+                    <Select
+                      buttonClassName="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-200 dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                      value={pdfStyle}
+                      onChange={(style) => {
+                        setPdfStyle(style as InvoicePdfStyle);
+                        setStyleTouched(true);
+                      }}
+                      options={INVOICE_PDF_STYLES}
+                    />
+                  )}
                   <button
                     type="button"
-                    onClick={() => void invoicingApi.openPdf(invoice.id, pdfFormat)}
+                    onClick={() => void invoicingApi.openPdf(invoice.id, pdfFormat, pdfStyle)}
                     className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-800"
                   >
                     Descargar PDF

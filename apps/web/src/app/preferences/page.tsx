@@ -4,7 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
-import { INVOICE_PDF_FORMATS, invoicingPreferencesApi, type InvoicePdfFormat } from '@/lib/invoicing';
+import {
+  INVOICE_PDF_FORMATS,
+  INVOICE_PDF_STYLES,
+  invoicingPreferencesApi,
+  type InvoicePdfFormat,
+  type InvoicePdfStyle,
+  type InvoicingPreferences,
+} from '@/lib/invoicing';
 import { inventoryApi, type AutoReplenishmentResult } from '@/lib/inventory';
 import {
   emailDomainApi,
@@ -189,8 +196,8 @@ function InvoicePdfCard() {
     queryFn: invoicingPreferencesApi.get,
   });
 
-  const formatMutation = useMutation({
-    mutationFn: (invoicePdfFormat: InvoicePdfFormat) => invoicingPreferencesApi.update(invoicePdfFormat),
+  const preferencesMutation = useMutation({
+    mutationFn: (dto: Partial<InvoicingPreferences>) => invoicingPreferencesApi.update(dto),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['invoicing-preferences'] }),
   });
 
@@ -202,13 +209,27 @@ function InvoicePdfCard() {
           Domicilio, Ingresos Brutos e inicio de actividades se cargan en Conexión con ARCA → Datos de la empresa.
         </p>
         {preferences && (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Formato de PDF por defecto</span>
-            <Select
-              value={preferences.invoicePdfFormat}
-              onChange={(value) => formatMutation.mutate(value as InvoicePdfFormat)}
-              options={INVOICE_PDF_FORMATS}
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <span className="w-44 text-xs text-muted-foreground">Papel por defecto</span>
+              <Select
+                value={preferences.invoicePdfFormat}
+                onChange={(value) => preferencesMutation.mutate({ invoicePdfFormat: value as InvoicePdfFormat })}
+                options={INVOICE_PDF_FORMATS}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-44 text-xs text-muted-foreground">Estilo (A4 y A5)</span>
+              <Select
+                value={preferences.invoicePdfStyle}
+                onChange={(value) => preferencesMutation.mutate({ invoicePdfStyle: value as InvoicePdfStyle })}
+                options={INVOICE_PDF_STYLES}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El logo, el color, los datos de contacto y los bancarios se toman de "Tu empresa en los documentos". Las notas de
+              crédito usan el mismo estilo.
+            </p>
           </div>
         )}
       </CardContent>

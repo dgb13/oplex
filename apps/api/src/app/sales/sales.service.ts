@@ -92,6 +92,7 @@ export class SalesService {
         exchangeRate: dto.exchangeRate,
         globalDiscountPercent: dto.globalDiscountPercent,
         dueDate: dto.dueDate,
+        notes: dto.notes,
         pricesIncludeTax: dto.pricesIncludeTax,
         lines: dto.lines,
         otherTaxLines: dto.otherTaxLines,
@@ -595,6 +596,7 @@ export class SalesService {
       exchangeRate: factor.toNumber(),
       globalDiscountPercent: dto.globalDiscountPercent,
       dueDate: dto.dueDate,
+      notes: dto.notes,
       pricesIncludeTax: dto.pricesIncludeTax,
       allowPendingDelivery: dto.allowPendingDelivery,
       lines: quote.lines.map((line) => ({

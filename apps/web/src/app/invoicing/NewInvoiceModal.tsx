@@ -12,6 +12,7 @@ import SalesTotalsPanel from '@/components/sales/SalesTotalsPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/textarea';
 import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
@@ -64,6 +65,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
   const [lines, setLines] = useState<SalesLine[]>(initialLines ?? []);
   const [otherTaxLines, setOtherTaxLines] = useState<InvoiceTaxLineInput[]>([]);
   const [showOtherTaxes, setShowOtherTaxes] = useState(false);
+  const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
@@ -123,6 +125,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
             ? Number(exchangeRateOverride)
             : undefined,
         pricesIncludeTax: pricesIncludeTax && !withoutVat,
+        notes: notes.trim() || undefined,
         lines: lines.map((l) => ({
           articleVariantId: l.articleVariantId,
           quantity: l.quantity,
@@ -262,6 +265,18 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
                   <LinkButton onClick={() => setShowOtherTaxes(true)}>+ Agregar percepciones / otros tributos</LinkButton>
                 </div>
               )}
+
+              <section>
+                <SectionLabel>Observaciones</SectionLabel>
+                <Textarea
+                  id="invoice-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Opcional. Sale en el PDF: orden de compra del cliente, remito, aclaraciones..."
+                />
+              </section>
             </>
           )
         }

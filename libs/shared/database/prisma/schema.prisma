@@ -840,6 +840,8 @@ model TenantSettings {
   bankCbu              String?
   bankAlias            String?
   quoteShowBankDetails Boolean @default(true)
+  // Lo mismo para el PDF de las facturas (casilla aparte).
+  invoiceShowBankDetails Boolean @default(true)
   // Valores con los que arranca cada cotización nueva (editables en cada una).
   quoteDefaultPaymentTerms  String?
   quoteDefaultDeliveryTerms String?
@@ -902,6 +904,9 @@ model User {
   // (5 estilos visuales libres), acá el diseño es uno solo fiel al formato
   // real de ARCA - lo que varía es el tamaño de papel, no el estilo.
   invoicePdfFormat         InvoicePdfFormat @default(A4)
+  // Estilo visual para A4/A5 (los mismos 5 de Cotizaciones) - el ticket
+  // tiene un solo diseño.
+  invoicePdfStyle          PdfStyle         @default(MODERNO)
   // Same per-user numbering/PDF-style pattern as the Compras fields above,
   // for Cotizaciones (@plexo/quotes) - a separate series on purpose, not
   // shared with quoteRequestPrefix even though both start from "cotización"
@@ -2238,6 +2243,8 @@ model Invoice {
   // después. null en facturas C viejas (se cae a la condición actual).
   issuerTaxCondition    TenantTaxCondition?
   customerTaxCondition  String?
+  // Domicilio del cliente al emitir, mismo motivo que customerName.
+  customerFiscalAddress String?
   documentLetter        DocumentLetter
   // AFIP Concepto (1/2/3, ver InvoiceConcept) - derivado de Article.isService
   // de cada línea al crear la factura (InvoicingService.createInvoice), no
@@ -2265,6 +2272,8 @@ model Invoice {
   subtotal              Decimal        @db.Decimal(14, 2)
   taxTotal              Decimal        @db.Decimal(14, 2)
   total                 Decimal        @db.Decimal(14, 2)
+  // Observaciones opcionales que salen en el PDF.
+  notes                 String?
   balanceDue            Decimal        @db.Decimal(14, 2)
   afipCae               String?
   afipCaeExpiry         DateTime?

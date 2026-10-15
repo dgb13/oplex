@@ -156,6 +156,10 @@ export class UpdateTenantSettingsDto {
   @IsBoolean()
   quoteShowBankDetails?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  invoiceShowBankDetails?: boolean;
+
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
   @MaxLength(300)
