@@ -1,6 +1,7 @@
 import { AfipWsaaClient, type AfipWsaaCredentials } from '@plexo/afip-credentials';
 import { Prisma, type DocumentLetter, type InvoiceConcept } from '@plexo/database';
 import { XMLParser } from 'fast-xml-parser';
+import { Agent } from 'undici';
 import type {
   AuthorizedVoucher,
   AuthorizedVoucherDetail,
@@ -15,6 +16,12 @@ const WSFE_URL: Record<AfipWsaaCredentials['env'], string> = {
   homologacion: 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx',
   produccion: 'https://servicios1.afip.gov.ar/wsfev1/service.asmx',
 };
+
+// servicios1.afip.gov.ar (WSFE producción) negocia una clave Diffie-Hellman
+// de 1024 bits, que OpenSSL 3 rechaza con su nivel de seguridad por defecto
+// (fetch failed / ERR_SSL_DH_KEY_TOO_SMALL). Sólo para esa conexión se baja
+// a SECLEVEL=1, que acepta 1024; homologación y el resto de Oplex no cambian.
+const LEGACY_TLS_DISPATCHER = new Agent({ connect: { ciphers: 'DEFAULT@SECLEVEL=1' } });
 
 const xmlParser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
 
@@ -200,10 +207,14 @@ interface WsfeError {
 export class AfipWsfeClient {
   private readonly wsaa: AfipWsaaClient;
   private readonly url: string;
+  // `dispatcher` lo acepta el fetch de Node (undici) aunque RequestInit no lo declare.
+  private readonly fetchOptions: RequestInit;
 
   constructor(private readonly credentials: AfipWsaaCredentials & { cuitRepresentada: string }) {
     this.wsaa = new AfipWsaaClient(credentials);
     this.url = WSFE_URL[credentials.env];
+    this.fetchOptions =
+      credentials.env === 'produccion' ? ({ dispatcher: LEGACY_TLS_DISPATCHER } as unknown as RequestInit) : {};
   }
 
   async requestCae(invoice: ElectronicInvoiceRequest): Promise<ElectronicInvoiceResult> {
@@ -309,6 +320,7 @@ export class AfipWsfeClient {
     let responseText: string;
     try {
       const response = await fetch(this.url, {
+        ...this.fetchOptions,
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -384,6 +396,7 @@ export class AfipWsfeClient {
     let responseText: string;
     try {
       const response = await fetch(this.url, {
+        ...this.fetchOptions,
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -444,6 +457,7 @@ export class AfipWsfeClient {
     let responseText: string;
     try {
       const response = await fetch(this.url, {
+        ...this.fetchOptions,
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',

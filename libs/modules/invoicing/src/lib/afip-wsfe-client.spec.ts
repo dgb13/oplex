@@ -157,6 +157,24 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(wsfeBody).toContain('<ar:ImpOpEx>0.00</ar:ImpOpEx>');
   });
 
+  it('uses the legacy-TLS dispatcher only against production WSFE (servicios1 negotiates a 1024-bit DH key)', async () => {
+    const callWsfe = async (env: 'homologacion' | 'produccion') => {
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsfeAcceptedResponse()) });
+      await new AfipWsfeClient({ certPem, keyPem, env, cuitRepresentada: '20111111112' }).requestCae(baseInvoice());
+      return fetchMock.mock.calls[1];
+    };
+
+    const [prodUrl, prodInit] = await callWsfe('produccion');
+    expect(prodUrl).toBe('https://servicios1.afip.gov.ar/wsfev1/service.asmx');
+    expect(prodInit.dispatcher).toBeDefined();
+
+    const [, homoInit] = await callWsfe('homologacion');
+    expect(homoInit.dispatcher).toBeUndefined();
+  });
+
   it('reports exemptAmount/nonTaxedAmount as ImpOpEx/ImpTotConc, separate from ImpNeto', async () => {
     fetchMock
       .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
