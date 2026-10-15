@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { invoicingApi } from '@/lib/invoicing';
+import { invoiceDisplayStatus, invoicingApi } from '@/lib/invoicing';
 import { useQuery } from '@tanstack/react-query';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -11,6 +11,7 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Pagada',
   OVERDUE: 'Vencida',
   CANCELLED: 'Cancelada',
+  CREDITED: 'Anulada',
 };
 
 export default function ResumenTab() {
@@ -28,12 +29,16 @@ export default function ResumenTab() {
     );
   }
 
-  const totalFacturado = data.reduce((sum, inv) => sum + Number(inv.total), 0);
-  const totalCobrado = data.reduce((sum, inv) => sum + (Number(inv.total) - Number(inv.balanceDue)), 0);
-  const totalPendiente = data.reduce((sum, inv) => sum + Number(inv.balanceDue), 0);
+  // Neto de notas de crédito: lo acreditado no es venta ni cobro (antes una
+  // factura anulada contaba como facturada y cobrada).
+  const credited = (inv: (typeof data)[number]) => Number(inv.creditedTotal ?? 0);
+  const totalFacturado = data.reduce((sum, inv) => sum + Number(inv.total) - credited(inv), 0);
+  const totalCobrado = data.reduce((sum, inv) => sum + (Number(inv.total) - Number(inv.balanceDue) - credited(inv)), 0);
+  const totalPendiente = data.reduce((sum, inv) => sum + Math.max(Number(inv.balanceDue), 0), 0);
 
   const countByStatus = data.reduce<Record<string, number>>((acc, inv) => {
-    acc[inv.status] = (acc[inv.status] ?? 0) + 1;
+    const status = invoiceDisplayStatus(inv);
+    acc[status] = (acc[status] ?? 0) + 1;
     return acc;
   }, {});
 

@@ -223,11 +223,18 @@ export class InvoicingService {
     return this.recordExchangeRate({ currencyId: usd.id, rate: sell });
   }
 
-  listInvoices(): Promise<InvoiceWithLines[]> {
-    return getTenantDb().invoice.findMany({
-      include: { lines: true },
+  /** creditedTotal = suma de las notas de crédito de cada factura: la UI
+   * muestra "Anulada" cuando cubre el total (el status guardado queda PAID a
+   * propósito, ver createCreditNote). */
+  async listInvoices(): Promise<(InvoiceWithLines & { creditedTotal: Prisma.Decimal })[]> {
+    const invoices = await getTenantDb().invoice.findMany({
+      include: { lines: true, creditNotes: { select: { total: true } } },
       orderBy: { issueDate: 'desc' },
     });
+    return invoices.map(({ creditNotes, ...invoice }) => ({
+      ...invoice,
+      creditedTotal: creditNotes.reduce((sum, cn) => sum.add(cn.total), new Prisma.Decimal(0)),
+    }));
   }
 
   /** Full detail (line items, discounts, receipt history, credit notes) -

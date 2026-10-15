@@ -3,6 +3,7 @@
 import Select from '@/components/ui/Select';
 import {
   INVOICE_PDF_FORMATS,
+  invoiceDisplayStatus,
   invoicingApi,
   invoicingPreferencesApi,
   type InvoicePdfFormat,
@@ -28,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Pagada',
   OVERDUE: 'Vencida',
   CANCELLED: 'Cancelada',
+  CREDITED: 'Anulada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,6 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
   PAID: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
   OVERDUE: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
   CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
+  CREDITED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
 };
 
 const METHOD_LABELS: Record<string, string> = {
@@ -60,6 +63,14 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
     queryKey: ['invoice-detail', invoice.id],
     queryFn: () => invoicingApi.getInvoice(invoice.id),
   });
+  // "Anulada" si las notas de crédito cubren el total (ver invoiceDisplayStatus).
+  const displayStatus = data
+    ? invoiceDisplayStatus({
+        status: data.status,
+        total: data.total,
+        creditedTotal: String(data.creditNotes.reduce((sum, cn) => sum + Number(cn.total), 0)),
+      })
+    : '';
 
   // Precarga el formato preferido del usuario, sin pisar un cambio manual
   // que haga después en este mismo panel - mismo patrón que
@@ -103,9 +114,9 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Info label="Estado">
                 <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[data.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                  className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[displayStatus] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
                 >
-                  {STATUS_LABELS[data.status] ?? data.status}
+                  {STATUS_LABELS[displayStatus] ?? data.status}
                 </span>
               </Info>
               <Info label="Fecha de emisión">

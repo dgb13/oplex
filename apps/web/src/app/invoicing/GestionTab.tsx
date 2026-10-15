@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { invoicingApi, type Invoice } from '@/lib/invoicing';
+import { invoiceDisplayStatus, invoicingApi, type Invoice } from '@/lib/invoicing';
 import { mercadoPagoApi } from '@/lib/mercadopago';
 import { getSocket } from '@/lib/socket';
 import { useDensity } from '@/providers/DensityProvider';
@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Pagada',
   OVERDUE: 'Vencida',
   CANCELLED: 'Cancelada',
+  CREDITED: 'Anulada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
   PAID: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
   OVERDUE: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
   CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
+  CREDITED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
 };
 
 export default function GestionTab() {
@@ -149,8 +151,8 @@ export default function GestionTab() {
                       ${Number(inv.balanceDue).toFixed(2)}
                     </td>
                     <td className={`${cellY} pr-4`}>
-                      <Badge className={STATUS_COLORS[inv.status] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}>
-                        {STATUS_LABELS[inv.status] ?? inv.status}
+                      <Badge className={STATUS_COLORS[invoiceDisplayStatus(inv)] ?? 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}>
+                        {STATUS_LABELS[invoiceDisplayStatus(inv)] ?? inv.status}
                       </Badge>
                     </td>
                     <td className={cellY}>
@@ -171,7 +173,7 @@ export default function GestionTab() {
                             Cobrar con Mercado Pago
                           </button>
                         )}
-                        {inv.afipCae && inv.status !== 'CANCELLED' && (
+                        {inv.afipCae && inv.status !== 'CANCELLED' && invoiceDisplayStatus(inv) !== 'CREDITED' && (
                           <button onClick={() => setCreditNoteFor(inv)} className="text-xs text-destructive hover:underline">
                             Nota de crédito
                           </button>

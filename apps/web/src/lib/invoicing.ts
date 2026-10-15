@@ -47,6 +47,16 @@ export interface Invoice {
   balanceDue: string;
   afipCae: string | null;
   lines: InvoiceLine[];
+  // Suma de sus notas de crédito (sólo en el listado).
+  creditedTotal?: string;
+}
+
+/** Estado para mostrar: "CREDITED" (Anulada) cuando las notas de crédito
+ * cubren el total. El status guardado queda PAID a propósito (ver
+ * InvoicingService.createCreditNote): sólo cambia lo que se ve. */
+export function invoiceDisplayStatus(invoice: { status: string; total: string; creditedTotal?: string }): string {
+  const total = Number(invoice.total);
+  return total > 0 && Number(invoice.creditedTotal ?? 0) >= total ? 'CREDITED' : invoice.status;
 }
 
 export interface InvoiceLineDetail extends InvoiceLine {
