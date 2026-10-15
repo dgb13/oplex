@@ -1318,7 +1318,7 @@ export class InvoicingService {
       const company = companies.find((c) => c.taxId?.replace(/\D/g, '') === digits);
       if (!company) {
         throw new BadRequestException(
-          `La ${label} es a nombre del CUIT ${digits}, que no está cargado en Oplex: cargalo en Empresas (con "Buscar en ARCA") y reintentá`,
+          `La ${label} es a nombre del CUIT ${digits}, que no está cargado en Oplex: cargalo como cliente en Ventas › Clientes (con el CUIT se completa desde ARCA) y reintentá`,
         );
       }
       customerTaxCondition = company.taxCondition;

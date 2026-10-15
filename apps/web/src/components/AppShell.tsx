@@ -19,6 +19,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
+  BookOpen,
   Briefcase,
   Building2,
   Calculator,
@@ -114,6 +115,8 @@ const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
   { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store, roles: ['SALES'] },
   { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase, roles: ['ACCOUNTANT'] },
+  // Manual de usuario: público (también se ve sin iniciar sesión), para todos los roles.
+  { kind: 'link', href: '/documentacion', label: 'Documentación', icon: BookOpen },
 ];
 
 interface ModuleGrant {

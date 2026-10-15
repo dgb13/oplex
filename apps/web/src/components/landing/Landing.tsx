@@ -392,6 +392,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             <a href="#planes">Planes</a>
             <a href="#comparativa">Comparativa</a>
             <a href="#faq">Preguntas</a>
+            <Link href="/documentacion">Ayuda</Link>
           </nav>
           <div className="nav-cta">
             <Link className="login" href="/login">
@@ -997,6 +998,7 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
             <a href="#planes">Planes</a>
             <a href="#comparativa">Comparativa</a>
             <a href="#faq">Preguntas</a>
+            <Link href="/documentacion">Manual de usuario</Link>
             <Link href="/legal/terminos">Términos y Condiciones</Link>
             <Link href="/legal/privacidad">Privacidad</Link>
             {/* Res. 424/2020: visible desde la página de inicio. */}

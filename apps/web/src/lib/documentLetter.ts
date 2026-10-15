@@ -37,7 +37,7 @@ export function suggestDocumentLetter(
       letter: null,
       locked: false,
       reason:
-        'Cargá la condición frente al IVA de tu empresa en Contabilidad → ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).',
+        'Cargá la condición frente al IVA de tu empresa en Contabilidad → Conexión con ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).',
     };
   }
 
@@ -70,6 +70,6 @@ export function suggestDocumentLetter(
     letter: 'B',
     locked: false,
     reason:
-      'No se conoce la condición IVA de este cliente (usá "Buscar en ARCA" en su ficha) - se sugiere Factura B por defecto. Cambiá a A sólo si confirmás que es Responsable Inscripto.',
+      'No se conoce la condición IVA de este cliente (en su ficha, Editar empresa → "Actualizar desde ARCA") - se sugiere Factura B por defecto. Cambiá a A sólo si confirmás que es Responsable Inscripto.',
   };
 }

@@ -353,7 +353,7 @@ export class TenantSettingsService {
     const certKind = detectAfipFileKind(dto.certPem);
     if (certKind === 'CSR') {
       throw new BadRequestException(
-        'Ese archivo es el pedido (CSR), no el certificado. El certificado es lo que te devuelve ARCA después de pegar el pedido en WSASS.',
+        'Ese archivo es el pedido (CSR), no el certificado. El certificado es lo que te devuelve ARCA después de subirle el pedido.',
       );
     }
     if (certKind !== 'CERTIFICATE') {
@@ -380,7 +380,7 @@ export class TenantSettingsService {
       const message = (error as Error).message;
       throw new BadRequestException(
         usingPendingKey && message.includes('no corresponde')
-          ? 'Este certificado no se generó con el pedido que creó Oplex. Usá el pedido del paso 2 en WSASS, o subí también tu propia clave privada.'
+          ? 'Este certificado no se generó con el pedido que creó Oplex. Usá el pedido del paso 2 en ARCA, o subí también tu propia clave privada.'
           : message,
       );
     }

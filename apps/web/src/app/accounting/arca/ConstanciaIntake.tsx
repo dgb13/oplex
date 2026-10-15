@@ -56,7 +56,7 @@ export function ConstanciaIntake({
     onMutate: () => setProblem(''),
     onSuccess: ({ reading, fileName }) => {
       if (!reading.isConstancia) {
-        setProblem('Ese archivo no parece una constancia de ARCA. Revisá que sea la que sacaste en el paso 3.');
+        setProblem('Ese archivo no parece una constancia de ARCA. Revisá que sea la que guardaste en el paso 4.');
         return;
       }
       setProblem(onRead(reading, fileName) ?? '');
