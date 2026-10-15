@@ -527,3 +527,75 @@ describe('AfipWsfeClient.requestCae', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('AfipWsfeClient.enabledPointsOfSale', () => {
+  const originalFetch = global.fetch;
+  let fetchMock: jest.Mock;
+  let certPem: string;
+  let keyPem: string;
+
+  beforeAll(() => {
+    const keys = forge.pki.rsa.generateKeyPair(2048);
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date('2026-01-01');
+    cert.validity.notAfter = new Date('2027-01-01');
+    const attrs = [{ name: 'commonName', value: 'test' }];
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.sign(keys.privateKey);
+    certPem = forge.pki.certificateToPem(cert);
+    keyPem = forge.pki.privateKeyToPem(keys.privateKey);
+  });
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
+
+  function ptosVentaResponse(inner: string): string {
+    return `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>
+<FEParamGetPtosVentaResponse xmlns="http://ar.gov.afip.dif.FEV1/"><FEParamGetPtosVentaResult>${inner}</FEParamGetPtosVentaResult></FEParamGetPtosVentaResponse>
+</soap:Body></soap:Envelope>`;
+  }
+
+  it('lists the points of sale ARCA has for Web Services, with blocked/deregistered flags', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            ptosVentaResponse(
+              '<ResultGet><PtoVenta><Nro>8</Nro><EmisionTipo>CAE</EmisionTipo><Bloqueado>N</Bloqueado><FchBaja>NULL</FchBaja></PtoVenta>' +
+                '<PtoVenta><Nro>3</Nro><EmisionTipo>CAE</EmisionTipo><Bloqueado>S</Bloqueado><FchBaja>20260101</FchBaja></PtoVenta></ResultGet>',
+            ),
+          ),
+      });
+
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+    await expect(client.enabledPointsOfSale()).resolves.toEqual([
+      { number: 8, emissionType: 'CAE', blocked: false, deregisteredOn: null },
+      { number: 3, emissionType: 'CAE', blocked: true, deregisteredOn: '20260101' },
+    ]);
+    expect(fetchMock.mock.calls[1][1].headers.SOAPAction).toBe('http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta');
+  });
+
+  it('returns an empty list for ARCA error 602 (Sin Resultados)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(wsaaResponse()) })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ptosVentaResponse('<ResultGet/><Errors><Err><Code>602</Code><Msg>Sin Resultados: </Msg></Err></Errors>')),
+      });
+
+    const client = new AfipWsfeClient({ certPem, keyPem, env: 'homologacion', cuitRepresentada: '20111111112' });
+    await expect(client.enabledPointsOfSale()).resolves.toEqual([]);
+  });
+});

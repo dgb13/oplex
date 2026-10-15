@@ -182,6 +182,15 @@ interface WsfeError {
   Msg: string;
 }
 
+export interface WsfePointOfSale {
+  number: number;
+  // "CAE" / "CAEA" ... tal cual lo informa ARCA.
+  emissionType: string | null;
+  blocked: boolean;
+  // AAAAMMDD de la baja, si la tiene.
+  deregisteredOn: string | null;
+}
+
 /**
  * Real WSFE (facturación electrónica) client - FECAESolicitar only, the one
  * operation this app needs (issue a voucher, get a CAE back). Deliberately
@@ -492,6 +501,66 @@ export class AfipWsfeClient {
       customerDocNumber: get.DocNro !== undefined ? String(get.DocNro) : null,
       detail: this.parseVoucherDetail(get),
     };
+  }
+
+  /** FEParamGetPtosVenta: los puntos de venta que ARCA tiene habilitados
+   * para Web Services en este CUIT. Lo usa "Probar conexión con ARCA" para
+   * explicar un error 11002 (punto de venta no habilitado). ARCA responde
+   * con el error 602 "Sin Resultados" cuando no hay ninguno. */
+  async enabledPointsOfSale(): Promise<WsfePointOfSale[]> {
+    const ticket = await this.wsaa.getTicket(WSFE_SERVICE);
+    const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FEParamGetPtosVenta>
+      <ar:Auth>
+        <ar:Token>${ticket.token}</ar:Token>
+        <ar:Sign>${ticket.sign}</ar:Sign>
+        <ar:Cuit>${this.credentials.cuitRepresentada.replace(/\D/g, '')}</ar:Cuit>
+      </ar:Auth>
+    </ar:FEParamGetPtosVenta>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    let responseText: string;
+    try {
+      const response = await fetch(this.url, {
+        ...this.fetchOptions,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: 'http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta',
+        },
+        body: soapBody,
+      });
+      responseText = await response.text();
+    } catch (err) {
+      throw new Error(`No se pudo conectar con ARCA WSFE: ${(err as Error).message}`);
+    }
+
+    const faultMatch = responseText.match(/<faultstring>(.*?)<\/faultstring>/);
+    if (faultMatch) {
+      throw new Error(`ARCA WSFE rechazó la solicitud: ${faultMatch[1]}`);
+    }
+    const parsed = xmlParser.parse(responseText);
+    const result = parsed?.Envelope?.Body?.FEParamGetPtosVentaResponse?.FEParamGetPtosVentaResult;
+    const errores = (this.toArray(result?.Errors?.Err) as WsfeError[]).filter((e) => Number(e.Code) !== 602);
+    if (errores.length > 0) {
+      throw new Error(`ARCA WSFE: ${errores.map((e) => `[${e.Code}] ${e.Msg}`).join('; ')}`);
+    }
+    const rows = this.toArray(result?.ResultGet?.PtoVenta) as {
+      Nro: number | string;
+      EmisionTipo?: string;
+      Bloqueado?: string;
+      FchBaja?: string;
+    }[];
+    return rows.map((row) => ({
+      number: Number(row.Nro),
+      emissionType: row.EmisionTipo ? String(row.EmisionTipo) : null,
+      blocked: String(row.Bloqueado ?? '').toUpperCase() === 'S',
+      deregisteredOn: row.FchBaja && String(row.FchBaja) !== 'NULL' ? String(row.FchBaja) : null,
+    }));
   }
 
   /** ResultGet de FECompConsultar → lo que hace falta para emitir una nota
