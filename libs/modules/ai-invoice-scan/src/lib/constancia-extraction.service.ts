@@ -1,8 +1,8 @@
 import { Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
+import { DOCUMENTS_DEFAULT_MODEL } from './ai-invoice-extraction.service.js';
 import { ANTHROPIC_CLIENT } from './anthropic-client.token.js';
 
-const DEFAULT_MODEL = 'claude-sonnet-5';
 
 /** Lo que la IA lee de una Constancia de Inscripción de ARCA (o de una
  * constancia de Ingresos Brutos). Todo es lectura de la IA, nunca un dato
@@ -50,7 +50,7 @@ export class ConstanciaExtractionService {
 
   async extract(buffer: Buffer, mimetype: string): Promise<ConstanciaExtraction> {
     const response = await this.anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
+      model: process.env.ANTHROPIC_MODEL || DOCUMENTS_DEFAULT_MODEL,
       max_tokens: 1024,
       tools: [TOOL],
       tool_choice: { type: 'tool', name: TOOL.name },

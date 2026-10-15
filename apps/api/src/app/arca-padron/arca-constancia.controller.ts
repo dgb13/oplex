@@ -1,9 +1,10 @@
-import { BadRequestException, Controller, Logger, Post, Req, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Controller, Logger, Optional, Post, Req, ServiceUnavailableException } from '@nestjs/common';
 import { ConstanciaExtractionService } from '@plexo/ai-invoice-scan';
 import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
+import { AiEventsService } from '../ai-events/ai-events.service.js';
 
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
@@ -15,7 +16,10 @@ const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 export class ArcaConstanciaController {
   private readonly logger = new Logger(ArcaConstanciaController.name);
 
-  constructor(private readonly constancia: ConstanciaExtractionService) {}
+  constructor(
+    private readonly constancia: ConstanciaExtractionService,
+    @Optional() private readonly aiEvents?: AiEventsService,
+  ) {}
 
   @Roles('OWNER', 'ADMIN')
   @LongRunningTransaction(45_000)
@@ -28,9 +32,12 @@ export class ArcaConstanciaController {
     }
     const buffer = await data.toBuffer();
     try {
-      return await this.constancia.extract(buffer, data.mimetype);
+      const result = await this.constancia.extract(buffer, data.mimetype);
+      await this.aiEvents?.record('CONSTANCIA', true);
+      return result;
     } catch (err) {
       this.logger.error(`No se pudo leer la constancia con IA: ${(err as Error).message}`);
+      await this.aiEvents?.record('CONSTANCIA', false, (err as Error).message);
       throw new ServiceUnavailableException('No se pudo leer la constancia con IA en este momento.');
     }
   }

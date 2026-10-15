@@ -8,7 +8,8 @@ export const IMPORT_ANTHROPIC_CLIENT = Symbol('IMPORT_ANTHROPIC_CLIENT');
 // Clasificar nombres es una tarea simple: alcanza con el modelo más barato
 // (decisión del usuario, 2026-10-04). Variable propia para no mezclarlo con
 // ANTHROPIC_MODEL, que usa el escaneo de facturas.
-const DEFAULT_MODEL = 'claude-haiku-4-5';
+// Exportado para /admin (AdminAiStatusService).
+export const ARTICLE_IMPORT_DEFAULT_MODEL = 'claude-haiku-4-5';
 const BATCH_SIZE = 300;
 export const MAX_AI_ARTICLES = 3000;
 
@@ -84,7 +85,7 @@ export class CategoryAiService {
     const existing = categories.length ? categories.join(', ') : '(todavía no hay)';
     try {
       const response = await anthropic.messages.create({
-        model: process.env.ANTHROPIC_IMPORT_MODEL || DEFAULT_MODEL,
+        model: process.env.ANTHROPIC_IMPORT_MODEL || ARTICLE_IMPORT_DEFAULT_MODEL,
         max_tokens: 16000,
         system: SYSTEM,
         tools: [TOOL],

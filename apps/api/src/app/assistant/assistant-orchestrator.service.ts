@@ -1,13 +1,16 @@
-import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { AuthenticatedUser } from '@plexo/types';
+import { AiEventsService } from '../ai-events/ai-events.service.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import type { HistoryMessage } from './assistant-conversation.service.js';
 import { ASSISTANT_TOOLS, executeAssistantTool, labelForTool } from './assistant-tools.catalog.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 import type { AssistantStreamChunk } from './assistant-stream.types.js';
 
-const DEFAULT_MODEL = 'claude-sonnet-5';
+// Exportado para /admin (AdminAiStatusService). `||` y no `??` al usarlo: el
+// .env de producción trae ANTHROPIC_ASSISTANT_MODEL="" y un modelo vacío falla.
+export const ASSISTANT_DEFAULT_MODEL = 'claude-sonnet-5';
 const MAX_TOKENS = 1024;
 
 // Tope duro de vueltas del loop de tool use por turno (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
@@ -39,6 +42,7 @@ export class AssistantOrchestratorService {
   constructor(
     @Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic,
     private readonly assistantToolsService: AssistantToolsService,
+    @Optional() private readonly aiEvents?: AiEventsService,
   ) {}
 
   /** Variante sin streaming, usada por el endpoint JSON de siempre
@@ -115,6 +119,7 @@ export class AssistantOrchestratorService {
         }
       } catch (err) {
         this.logger.error('Falló la llamada a Claude', err instanceof Error ? err.stack : err);
+        await this.aiEvents?.record('ASSISTANT_CHAT', false, err instanceof Error ? err.message : String(err));
         throw new ServiceUnavailableException('El asistente no está disponible en este momento. Probá de nuevo en un rato.');
       }
 
@@ -169,7 +174,7 @@ export class AssistantOrchestratorService {
 
   private callClaudeStream(messages: Anthropic.Messages.MessageParam[]) {
     return this.anthropic.messages.stream({
-      model: process.env.ANTHROPIC_ASSISTANT_MODEL ?? DEFAULT_MODEL,
+      model: process.env.ANTHROPIC_ASSISTANT_MODEL || ASSISTANT_DEFAULT_MODEL,
       max_tokens: MAX_TOKENS,
       system: buildSystemPrompt(),
       tools: ASSISTANT_TOOLS,

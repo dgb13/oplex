@@ -4,6 +4,7 @@ import { adminBackupsApi, adminSystemStatusApi, type LiveTokenCheckResult, type 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { diskTone, formatBytes, formatWhen, type Tone } from '../OpsUi';
+import { AiStatusRow } from './AiStatusRow';
 import { ArcaPadronRow } from './ArcaPadronRow';
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' });
@@ -48,6 +49,8 @@ export default function AdminSystemStatusPage() {
             {items.map((item) =>
               item.key === 'whatsapp' ? (
                 <WhatsAppStatusRow key={item.key} item={item} />
+              ) : item.key === 'ai' ? (
+                <AiStatusRow key={item.key} item={item} />
               ) : item.key === 'arcaPadron' ? (
                 <ArcaPadronRow key={item.key} item={item} />
               ) : item.key === 'backups' ? (

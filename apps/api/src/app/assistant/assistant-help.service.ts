@@ -1,12 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
+import { AiEventsService } from '../ai-events/ai-events.service.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import type { HistoryMessage } from './assistant-conversation.service.js';
 import type { AssistantStreamChunk } from './assistant-stream.types.js';
 
-const DEFAULT_HELP_MODEL = 'claude-haiku-4-5-20251001';
+// Exportado para /admin (AdminAiStatusService); lo usa también el
+// clasificador de intención (assistant-intent-router).
+export const ASSISTANT_HELP_DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 512;
 
 // Repo-root relative, no relativo a este archivo - mismo supuesto que
@@ -40,7 +43,10 @@ export class AssistantHelpService {
   private readonly logger = new Logger(AssistantHelpService.name);
   private readonly corpus = loadHelpCorpus();
 
-  constructor(@Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic) {}
+  constructor(
+    @Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic,
+    @Optional() private readonly aiEvents?: AiEventsService,
+  ) {}
 
   /** Variante sin streaming, usada por el endpoint JSON de siempre
    * (`POST /assistant/message`) - drena answerStream() y concatena el
@@ -61,7 +67,7 @@ export class AssistantHelpService {
   async *answerStream(history: HistoryMessage[], question: string): AsyncGenerator<AssistantStreamChunk> {
     try {
       const stream = this.anthropic.messages.stream({
-        model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL ?? DEFAULT_HELP_MODEL,
+        model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL || ASSISTANT_HELP_DEFAULT_MODEL,
         max_tokens: MAX_TOKENS,
         system: [
           {
@@ -79,6 +85,7 @@ export class AssistantHelpService {
       }
     } catch (err) {
       this.logger.error('Falló la llamada a Claude (ayuda)', err instanceof Error ? err.stack : err);
+      await this.aiEvents?.record('ASSISTANT_HELP', false, err instanceof Error ? err.message : String(err));
       throw new ServiceUnavailableException('El asistente no está disponible en este momento. Probá de nuevo en un rato.');
     }
   }

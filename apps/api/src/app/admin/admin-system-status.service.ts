@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ArcaPadronService } from '@plexo/afip-credentials';
 import { PrismaService, getTenantDb, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
+import { AdminAiStatusService } from './admin-ai-status.service.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -131,6 +132,7 @@ export class AdminSystemStatusService {
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
     private readonly arcaPadron: ArcaPadronService,
+    private readonly aiStatus: AdminAiStatusService,
   ) {}
 
   async getStatus(): Promise<SystemStatusItem[]> {
@@ -160,11 +162,10 @@ export class AdminSystemStatusService {
       ]),
       await this.checkArcaPadron(),
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
-      // API key propia del asistente de IA conversacional, separada de
-      // ANTHROPIC_API_KEY (Carga de Comprobantes IA) - ver
-      // docs/planesdemodulos/plan-asistente-ia-conversacional.md, sección 2: son dos
-      // consumos de facturación de Anthropic distintos a propósito.
-      this.checkGroup('assistant', 'Asistente de IA (Anthropic)', ['ANTHROPIC_ASSISTANT_API_KEY']),
+      // Las dos claves de Anthropic (chat y lectura de documentos), separadas a
+      // propósito para ver el gasto por separado - el detalle (modelos,
+      // prueba sin costo, uso, fallas) es AdminAiStatusService.
+      { key: 'ai', label: 'Inteligencia artificial (Anthropic)', ...this.aiStatus.summary() },
       // Fase 5b del asistente (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
       // sección 6.3) - "Configurado" acá sólo dice que las 4 credenciales
       // de la app de Meta están cargadas, NO que el token siga siendo

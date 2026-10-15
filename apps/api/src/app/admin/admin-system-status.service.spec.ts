@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import type { ArcaPadronService } from '@plexo/afip-credentials';
 import type { SubscriptionService } from '@plexo/subscriptions';
+import { AdminAiStatusService } from './admin-ai-status.service.js';
 import { AdminSystemStatusService } from './admin-system-status.service.js';
 
 jest.mock('node:child_process', () => ({ execFile: jest.fn() }));
@@ -28,6 +29,7 @@ const ALL_MANAGED_VARS = [
   'EMAIL_FROM',
   'BACKUP_STORAGE_DIR',
   'ANTHROPIC_ASSISTANT_API_KEY',
+  'ANTHROPIC_API_KEY',
 ];
 
 /**
@@ -93,7 +95,7 @@ describe('AdminSystemStatusService.getStatus', () => {
 
   it('reports Mercado Pago as configured only when all 5 vars are set', async () => {
     for (const key of MP_VARS) process.env[key] = 'x';
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -105,7 +107,7 @@ describe('AdminSystemStatusService.getStatus', () => {
     process.env['MP_CLIENT_ID'] = 'x';
     process.env['MP_CLIENT_SECRET'] = 'x';
     // MP_OAUTH_REDIRECT_URI, MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET left unset
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -117,36 +119,32 @@ describe('AdminSystemStatusService.getStatus', () => {
   it('treats a blank/whitespace-only value the same as unset', async () => {
     for (const key of MP_VARS) process.env[key] = 'x';
     process.env['MP_WEBHOOK_SECRET'] = '   ';
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
     expect(status.find((s) => s.key === 'mercadopago')?.configured).toBe(false);
   });
 
-  it('reports the assistant as configured only when ANTHROPIC_ASSISTANT_API_KEY is set', async () => {
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
-
-    const unconfigured = await service.getStatus();
-    expect(unconfigured.find((s) => s.key === 'assistant')).toEqual({
-      key: 'assistant',
-      label: 'Asistente de IA (Anthropic)',
-      configured: false,
-      detail: 'Falta: ANTHROPIC_ASSISTANT_API_KEY',
-    });
+  it('reports Anthropic as configured only when both keys (chat and documents) are set', async () => {
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     process.env['ANTHROPIC_ASSISTANT_API_KEY'] = 'sk-ant-x';
-    const configured = await service.getStatus();
-    expect(configured.find((s) => s.key === 'assistant')).toEqual({
-      key: 'assistant',
-      label: 'Asistente de IA (Anthropic)',
-      configured: true,
-      detail: undefined,
+    const onlyChat = await service.getStatus();
+    expect(onlyChat.find((s) => s.key === 'ai')).toEqual({
+      key: 'ai',
+      label: 'Inteligencia artificial (Anthropic)',
+      configured: false,
+      detail: 'Falta ANTHROPIC_API_KEY (lectura de documentos)',
     });
+
+    process.env['ANTHROPIC_API_KEY'] = 'sk-ant-y';
+    const both = await service.getStatus();
+    expect(both.find((s) => s.key === 'ai')).toEqual({ key: 'ai', label: 'Inteligencia artificial (Anthropic)', configured: true });
   });
 
   it('reports WhatsApp as configured only when all 4 Meta Cloud API vars are set', async () => {
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const unconfigured = await service.getStatus();
     expect(unconfigured.find((s) => s.key === 'whatsapp')).toEqual({
@@ -173,7 +171,7 @@ describe('AdminSystemStatusService.getStatus', () => {
       tenantIds: ['tenant-1'],
       tx: { whatsAppLink: { count: jest.fn().mockResolvedValue(3), findMany: jest.fn() } },
     });
-    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -187,7 +185,7 @@ describe('AdminSystemStatusService.getStatus', () => {
       tenantIds: ['tenant-1', 'tenant-2'],
       tx: { whatsAppLink: { count: jest.fn(() => Promise.resolve(counts[call++])), findMany: jest.fn() } },
     });
-    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -195,7 +193,7 @@ describe('AdminSystemStatusService.getStatus', () => {
   });
 
   it('never lists ENCRYPTION_MASTER_KEY/JWT_SECRET/DATABASE_URL - they are boot-required, not optional', async () => {
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -206,7 +204,7 @@ describe('AdminSystemStatusService.getStatus', () => {
   });
 
   it('backups: reports not configured when BACKUP_STORAGE_DIR is missing, without even checking pg_dump', async () => {
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -236,7 +234,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
   it('reports invalid without calling Meta when the required vars are missing', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -252,7 +250,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
     process.env['WHATSAPP_PHONE_NUMBER_ID'] = 'phone-x';
     const fetchMock = jest.fn().mockResolvedValue({ ok: true });
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -280,7 +278,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
         }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -300,7 +298,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
       json: () => Promise.resolve({ error: { message: 'Some other OAuth failure', code: 190, error_subcode: 999 } }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -316,7 +314,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
       json: () => Promise.reject(new Error('not json')),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -328,7 +326,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
     process.env['WHATSAPP_PHONE_NUMBER_ID'] = 'phone-x';
     const fetchMock = jest.fn().mockRejectedValue(new Error('fetch failed'));
     global.fetch = fetchMock as unknown as typeof fetch;
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.verifyWhatsAppToken();
 
@@ -341,7 +339,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
   it('backups: reports not configured when BACKUP_STORAGE_DIR is set but pg_dump is not on PATH', async () => {
     process.env['BACKUP_STORAGE_DIR'] = '/tmp/backups';
     mockedExecFile.mockImplementation((_cmd, _args, _opts, cb) => cb(new Error('ENOENT')));
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -353,7 +351,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
   it('backups: reports configured when BACKUP_STORAGE_DIR is set and pg_dump responds', async () => {
     process.env['BACKUP_STORAGE_DIR'] = '/tmp/backups';
     mockedExecFile.mockImplementation((_cmd, _args, _opts, cb) => cb(null, 'pg_dump (PostgreSQL) 18.0', ''));
-    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const status = await service.getStatus();
 
@@ -369,7 +367,7 @@ describe('AdminSystemStatusService.verifyWhatsAppToken', () => {
 describe('AdminSystemStatusService.listWhatsAppLinks', () => {
   it('returns an empty array without opening any tenant transaction when there are no tenants', async () => {
     const prisma = makePrisma({ tenantIds: [] });
-    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.listWhatsAppLinks();
 
@@ -393,7 +391,7 @@ describe('AdminSystemStatusService.listWhatsAppLinks', () => {
           assistantMessage: { count: jest.fn().mockResolvedValue(27) },
         },
       }),
-      makeSubscriptionService({ planName: 'Plan Pro', quota: 100, used: 31 }), makeArcaPadron());
+      makeSubscriptionService({ planName: 'Plan Pro', quota: 100, used: 31 }), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.listWhatsAppLinks();
 
@@ -426,7 +424,7 @@ describe('AdminSystemStatusService.listWhatsAppLinks', () => {
           whatsAppLink: { findMany: jest.fn().mockResolvedValue([link]), count: jest.fn() },
         },
       }),
-      makeSubscriptionService({ planName: 'Plan Básico', quota: null, used: 0 }), makeArcaPadron());
+      makeSubscriptionService({ planName: 'Plan Básico', quota: null, used: 0 }), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.listWhatsAppLinks();
 
@@ -461,7 +459,7 @@ describe('AdminSystemStatusService.listWhatsAppLinks', () => {
         );
       }),
     } as unknown as ConstructorParameters<typeof AdminSystemStatusService>[0];
-    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron());
+    const service = new AdminSystemStatusService(prisma, makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never));
 
     const result = await service.listWhatsAppLinks();
 
