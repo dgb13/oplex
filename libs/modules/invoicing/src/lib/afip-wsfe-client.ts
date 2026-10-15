@@ -114,7 +114,7 @@ export function resolveCondicionIvaReceptor(
   if (c.includes('consumidor final')) return 5;
   if (c.includes('no categorizado')) return 7;
   throw new Error(
-    `Falta la condición frente al IVA del cliente${customerName ? ` "${customerName}"` : ''}: ARCA la exige para facturar a un CUIT. Completala en su ficha (Empresas → "Buscar en ARCA").`,
+    `Falta la condición frente al IVA del cliente${customerName ? ` "${customerName}"` : ''}: ARCA la exige para facturar a un CUIT. Completala en su ficha (Ventas › Clientes → Editar empresa → "Actualizar desde ARCA").`,
   );
 }
 

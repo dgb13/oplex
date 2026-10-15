@@ -1,3 +1,4 @@
+import { getDocsTree } from '@/lib/docs';
 import { LEGAL_DOCS } from '@/lib/legal';
 import { SITE_URL } from '@/lib/site';
 import type { MetadataRoute } from 'next';
@@ -20,5 +21,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.3,
     })),
     { url: `${SITE_URL}/arrepentimiento`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    // Manual de usuario (público).
+    { url: `${SITE_URL}/documentacion`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
+    ...getDocsTree().flatMap((chapter) =>
+      chapter.articles.map((article) => ({
+        url: `${SITE_URL}${article.href}`,
+        lastModified: now,
+        changeFrequency: 'monthly' as const,
+        priority: chapter.featured ? 0.6 : 0.4,
+      })),
+    ),
   ];
 }

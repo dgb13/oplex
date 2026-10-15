@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -105,7 +106,10 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
             <h2 className="text-xl font-semibold">Conexión con ARCA</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Lo necesario para emitir facturas electrónicas con CAE. Seguí los pasos en orden; cada uno queda tildado cuando
-              está listo.
+              está listo.{' '}
+              <Link href="/documentacion/arca/antes-de-empezar" className="font-medium text-primary underline underline-offset-2">
+                Guía paso a paso con capturas
+              </Link>
             </p>
           </div>
           <span
@@ -210,7 +214,7 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
           open={open.has(3)}
           onToggle={() => toggle(3)}
           title="Obtener el certificado en ARCA"
-          subtitle="con tu clave fiscal, en WSASS"
+          subtitle="con tu clave fiscal"
         >
           <ArcaStep settings={settings} alias={alias} step32Ref={step32Ref} highlight32={notAuthorized} />
         </Step>
@@ -301,17 +305,22 @@ function Step({
   );
 }
 
-// Nombre simbólico sugerido para WSASS, a partir del nombre de la empresa
-// del tenant (sólo letras y números, como exige el campo) + "homo" en
-// homologación - p. ej. "Ferretería López" → "ferreterialopezhomo".
+// Alias sugerido para el certificado (lo que ARCA llama alias o nombre
+// simbólico), a partir del nombre de la empresa del tenant (sólo letras y
+// números, como exige ARCA) - p. ej. "Ferretería López" → "ferreterialopez".
+// Antes sumaba "homo" mientras no hubiera certificado de producción, y eso
+// también le tocaba a quien iba directo a producción.
 function suggestedAlias(settings: TenantSettings): string {
-  const base =
+  // Sin el tipo de sociedad al final: "Ferretería Los Andes SRL" →
+  // "ferreterialosandes" y no "ferreterialosandessr" (cortado a 20).
+  return (
     (settings.tenantName ?? '')
       .normalize('NFD')
+      .replace(/\s+(S\.?R\.?L|S\.?A\.?S|S\.?A|S\.?H|S\.?C)\.?\s*$/i, '')
       .replace(/[^a-zA-Z0-9]/g, '')
       .toLowerCase()
-      .slice(0, 20) || 'miempresa';
-  return settings.afipEnv === 'PRODUCCION' ? base : `${base}homo`;
+      .slice(0, 20) || 'miempresa'
+  );
 }
 
 function KeyStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () => void }) {
@@ -352,7 +361,7 @@ function KeyStep({ settings, onSaved }: { settings: TenantSettings; onSaved: () 
         <>
           <div className="flex flex-wrap items-end gap-2.5">
             <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
-              Nombre del certificado (el que vas a usar en WSASS)
+              Nombre del certificado (el alias que vas a usar en ARCA)
               <Input
                 className="w-56 font-mono"
                 value={alias}
@@ -465,6 +474,157 @@ function ArcaStep({
 }) {
   const cuit = (settings.tenantTaxId ?? '').replace(/\D/g, '');
   const csr = settings.afipPendingCsr;
+  // Producción es el camino para facturar de verdad; homologación (WSASS)
+  // queda para probar. Arranca en homologación sólo si ya hay un
+  // certificado de pruebas cargado.
+  const [target, setTarget] = useState<'prod' | 'homo'>(
+    settings.afipConfigured && settings.afipEnv !== 'PRODUCCION' ? 'homo' : 'prod',
+  );
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <ChoiceCard
+          active={target === 'prod'}
+          onClick={() => setTarget('prod')}
+          title="Producción (facturas reales)"
+          tag="para facturar"
+          text="Las facturas tienen validez fiscal. El certificado se saca en Administración de Certificados Digitales."
+        />
+        <ChoiceCard
+          active={target === 'homo'}
+          onClick={() => setTarget('homo')}
+          title="Homologación (pruebas)"
+          text="Para probar sin validez fiscal. Se usa WSASS. Los certificados de pruebas no sirven para producción."
+        />
+      </div>
+      {target === 'prod' ? (
+        <ProductionInstructions alias={alias} cuit={cuit} step32Ref={step32Ref} highlight32={highlight32} />
+      ) : (
+        <HomologationInstructions alias={alias} cuit={cuit} csr={csr} step32Ref={step32Ref} highlight32={highlight32} />
+      )}
+    </div>
+  );
+}
+
+function Step32Title({ highlight }: { highlight: boolean }) {
+  return (
+    <h3 className="mb-1 text-sm font-semibold">
+      3.2 · Autorizarlo a facturar
+      {highlight && (
+        <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-px text-[11px] font-bold text-red-700 dark:bg-red-950 dark:text-red-400">
+          te falta este
+        </span>
+      )}
+    </h3>
+  );
+}
+
+function ProductionInstructions({
+  alias,
+  cuit,
+  step32Ref,
+  highlight32,
+}: {
+  alias: string;
+  cuit: string;
+  step32Ref: React.RefObject<HTMLDivElement | null>;
+  highlight32: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="rounded-lg bg-muted/50 px-3 py-2 text-[12.5px] text-muted-foreground">
+        Necesitás clave fiscal <b className="text-foreground">nivel 3 o superior</b> del titular (en una sociedad, la del
+        administrador de relaciones) y el archivo <Code>{alias}.csr</Code> del paso 2.
+      </p>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">3.1 · Crear el certificado</h3>
+          <ol className="ml-4 flex list-decimal flex-col gap-1 text-[13px] text-muted-foreground">
+            <li>
+              Entrá a ARCA con tu clave fiscal y abrí{' '}
+              <b className="text-foreground">Administración de Certificados Digitales</b>. Si no aparece, adherílo en{' '}
+              <b className="text-foreground">Administrador de Relaciones de Clave Fiscal</b> › Adherir servicio › ARCA ›
+              Servicios interactivos.
+            </li>
+            <li>Elegí tu empresa (el contribuyente representado).</li>
+            <li>
+              Tocá <b className="text-foreground">&quot;Agregar alias&quot;</b> y en <b className="text-foreground">Alias</b>{' '}
+              poné <Code>{alias}</Code>
+              <CopyChip text={alias} />
+            </li>
+            <li>
+              En <b className="text-foreground">Archivo</b> elegí el pedido <Code>{alias}.csr</Code> que descargaste en el
+              paso 2 y tocá <b className="text-foreground">&quot;Agregar alias&quot;</b>.
+            </li>
+            <li>
+              En la lista de alias tocá <b className="text-foreground">&quot;Ver&quot;</b> y después{' '}
+              <b className="text-foreground">&quot;Descargar&quot;</b>. Ese archivo es el certificado que subís en el paso 4.
+            </li>
+          </ol>
+        </div>
+        <ExampleShot title="ARCA · Administración de Certificados Digitales" heading="Agregar alias">
+          <ShotField label="Alias" pin={1}>
+            {alias}
+          </ShotField>
+          <ShotField label="Archivo" pin={2}>
+            {alias}.csr
+          </ShotField>
+          <ShotButton pin={3}>Agregar alias</ShotButton>
+        </ExampleShot>
+      </div>
+
+      <div ref={step32Ref} className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div>
+          <Step32Title highlight={highlight32} />
+          <ol className="ml-4 flex list-decimal flex-col gap-1 text-[13px] text-muted-foreground">
+            <li>
+              Abrí <b className="text-foreground">Administrador de Relaciones de Clave Fiscal</b> y elegí tu empresa.
+            </li>
+            <li>
+              Tocá <b className="text-foreground">&quot;Nueva Relación&quot;</b> › <b className="text-foreground">Buscar</b> ›
+              ARCA › <b className="text-foreground">WebServices</b> ›{' '}
+              <b className="text-foreground">Facturación Electrónica</b>.
+            </li>
+            <li>
+              En <b className="text-foreground">Representante</b> tocá el segundo{' '}
+              <b className="text-foreground">Buscar</b>, elegí <b className="text-foreground">Computador Fiscal</b> y el alias{' '}
+              <Code>{alias}</Code>.
+            </li>
+            <li>
+              Tocá <b className="text-foreground">&quot;Confirmar&quot;</b>. ARCA te muestra el formulario F.3283 como
+              constancia. Después volvé acá y tocá <b className="text-foreground">&quot;Probar conexión&quot;</b>.
+            </li>
+          </ol>
+        </div>
+        <ExampleShot title="ARCA · Administrador de Relaciones de Clave Fiscal" heading="Incorporar nueva relación">
+          <ShotField label="Autorizante">{cuit || '30XXXXXXXXX'}</ShotField>
+          <ShotField label="Servicio" pin={1}>
+            ARCA › WebServices › Facturación Electrónica
+          </ShotField>
+          <ShotField label="Representante" pin={2}>
+            Computador Fiscal · {alias}
+          </ShotField>
+          <ShotButton pin={3}>Confirmar</ShotButton>
+        </ExampleShot>
+      </div>
+    </div>
+  );
+}
+
+function HomologationInstructions({
+  alias,
+  cuit,
+  csr,
+  step32Ref,
+  highlight32,
+}: {
+  alias: string;
+  cuit: string;
+  csr: string | null;
+  step32Ref: React.RefObject<HTMLDivElement | null>;
+  highlight32: boolean;
+}) {
   const csrPreview = csr
     ? `${csr.split('\n').slice(0, 2).join('\n').slice(0, 70)}…\n-----END CERTIFICATE REQUEST-----`
     : '-----BEGIN CERTIFICATE REQUEST-----\nMIICnjCCAYYCAQAwWTELMAkGA1UEBhMCQVIx…\n-----END CERTIFICATE REQUEST-----';
@@ -478,7 +638,8 @@ function ArcaStep({
             <li>
               Entrá a ARCA con tu clave fiscal y abrí{' '}
               <b className="text-foreground">WSASS - Autogestión Certificados Homologación</b>. Si no aparece, adheríte en
-              &quot;Administrador de Relaciones de Clave Fiscal&quot;.
+              &quot;Administrador de Relaciones de Clave Fiscal&quot; (con la clave fiscal de una persona, no la de la
+              sociedad).
             </li>
             <li>
               Tocá <b className="text-foreground">&quot;Nuevo certificado&quot;</b>.
@@ -511,14 +672,7 @@ function ArcaStep({
 
       <div ref={step32Ref} className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div>
-          <h3 className="mb-1 text-sm font-semibold">
-            3.2 · Autorizarlo a facturar
-            {highlight32 && (
-              <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-px text-[11px] font-bold text-red-700 dark:bg-red-950 dark:text-red-400">
-                te falta este
-              </span>
-            )}
-          </h3>
+          <Step32Title highlight={highlight32} />
           <ol className="ml-4 flex list-decimal flex-col gap-1 text-[13px] text-muted-foreground">
             <li>
               En WSASS tocá <b className="text-foreground">&quot;Crear autorización de acceso&quot;</b>.
@@ -763,7 +917,7 @@ function UploadStep({
           <CertInfo label="Vence">{formatDate(cert.expiresAt)}</CertInfo>
           {usePendingKey && cert.matchesPendingKey === false && (
             <p className="col-span-full text-destructive">
-              Este certificado no corresponde al pedido que generó Oplex. Usá el pedido del paso 2 en WSASS, o elegí
+              Este certificado no corresponde al pedido que generó Oplex. Usá el pedido del paso 2 en ARCA, o elegí
               &quot;Ya tengo mis archivos&quot; y subí también tu clave.
             </p>
           )}
@@ -797,6 +951,16 @@ function UploadStep({
           </button>
         )}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Para probar hace falta al menos una sucursal con su punto de venta de Web Services, cargado en{' '}
+        <Link href="/branches" className="font-medium text-primary underline underline-offset-2">
+          Sucursales
+        </Link>
+        .{' '}
+        <Link href="/documentacion/arca/punto-de-venta" className="underline underline-offset-2">
+          Cómo saber cuál es
+        </Link>
+      </p>
 
       {checkResult && (
         <div

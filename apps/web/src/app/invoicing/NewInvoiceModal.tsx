@@ -186,7 +186,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
       return;
     }
     if (missingTaxCondition) {
-      setError('Cargá tu condición frente al IVA en Contabilidad → ARCA → Datos de la empresa antes de emitir.');
+      setError('Cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa antes de emitir.');
       return;
     }
     if (!afipConfigured) {
@@ -350,7 +350,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Antes de emitir, cargá tu condición frente al IVA en{' '}
                   <Link href="/accounting/arca" className="font-medium underline">
-                    Contabilidad → ARCA → Datos de la empresa
+                    Contabilidad → Conexión con ARCA → Datos de la empresa
                   </Link>
                   : sin ella no se puede saber si corresponde Factura A, B o C.
                 </p>

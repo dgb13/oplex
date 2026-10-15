@@ -149,7 +149,7 @@ export class StorefrontService {
     }
     if (dto.published && !(await getOwnTaxCondition(db))) {
       throw new BadRequestException(
-        'Antes de publicar la tienda, cargá tu condición frente al IVA (Contabilidad → ARCA → Datos de la empresa): sin ella no se sabe qué precio final mostrar',
+        'Antes de publicar la tienda, cargá tu condición frente al IVA (Contabilidad → Conexión con ARCA → Datos de la empresa): sin ella no se sabe qué precio final mostrar',
       );
     }
     if (dto.warehouseId) {
