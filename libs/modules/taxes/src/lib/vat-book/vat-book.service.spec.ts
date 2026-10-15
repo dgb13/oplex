@@ -97,6 +97,7 @@ describe('VatBookService.getSalesBook', () => {
               {
                 netAmount: d(1000),
                 taxAmount: d(210),
+                lineTotal: d(1210),
                 invoiceLine: { taxKind: 'GRAVADO', taxRate: d(21) },
               },
             ],
@@ -123,6 +124,57 @@ describe('VatBookService.getSalesBook', () => {
     expect(result.totals.vat21).toBe(0);
     expect(result.totals.vatTotal).toBe(0);
     expect(result.totals.total).toBe(0);
+  });
+
+  it('con descuento general: neto ya descontado e IVA = lineTotal - ese neto (factura y nota de crédito)', async () => {
+    // 1 x 100 neto, 10% de descuento general: neto 90, IVA 21% 18,90, total 108,90.
+    const db = {
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-1',
+            issueDate: new Date('2026-08-05'),
+            documentLetter: 'A',
+            pointOfSale: '0001',
+            number: '00000300',
+            customerName: 'Acme SA',
+            customerTaxId: '30-71659554-9',
+            customer: { taxCondition: 'Responsable Inscripto' },
+            currency: { code: 'ARS' },
+            globalDiscountPercent: d(10),
+            total: d(108.9),
+            lines: [{ taxKind: 'GRAVADO', taxRate: d(21), netAmount: d(100), lineTotal: d(108.9) }],
+            taxLines: [],
+          },
+        ]),
+      },
+      creditNote: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'cn-1',
+            issueDate: new Date('2026-08-06'),
+            documentLetter: 'A',
+            pointOfSale: '0001',
+            number: '00000010',
+            currency: { code: 'ARS' },
+            total: d(108.9),
+            invoice: { globalDiscountPercent: d(10), customerName: 'Acme SA', customerTaxId: '30-71659554-9', customer: { taxCondition: 'Responsable Inscripto' } },
+            // taxAmount 8,90: el valor equivocado que guardaban las notas de
+            // crédito anteriores al arreglo - el libro no lo usa.
+            lines: [{ netAmount: d(100), taxAmount: d(8.9), lineTotal: d(108.9), invoiceLine: { taxKind: 'GRAVADO', taxRate: d(21) } }],
+          },
+        ]),
+      },
+    };
+    const service = new VatBookService();
+
+    const result = await runInTenant(db, () => service.getSalesBook());
+
+    const [invoice, creditNote] = result.entries;
+    expect(invoice.netTaxed).toBeCloseTo(90);
+    expect(invoice.vat21).toBeCloseTo(18.9);
+    expect(creditNote.netTaxed).toBeCloseTo(-90);
+    expect(creditNote.vat21).toBeCloseTo(-18.9);
   });
 
   it('suma InvoiceTaxLine.amount en la columna perceptions - no queda hardcodeada en 0', async () => {

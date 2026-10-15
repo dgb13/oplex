@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { getTenantDb } from '@plexo/database';
+import { getTenantDb, Prisma } from '@plexo/database';
 import { sumTotals, type VatBookEntry, type VatBookResult } from './vat-book.types.js';
 
 /** Igual que reports-sales/reports-pnl (ver PROGRESS.md) - un "hasta" de
@@ -29,6 +29,11 @@ function bucketRate(rate: number, amount: number, into: typeof ZERO_BUCKET): voi
   else into.vatOther += amount;
 }
 
+/** 1 - descuento general de la factura (ver InvoicingService.createInvoice). */
+function globalDiscountFactor(percent: Prisma.Decimal | null | undefined): Prisma.Decimal {
+  return percent ? new Prisma.Decimal(1).sub(percent.div(100)) : new Prisma.Decimal(1);
+}
+
 function counterpartyDocType(taxId: string | null): 'CUIT' | 'CF' {
   return taxId ? 'CUIT' : 'CF';
 }
@@ -43,7 +48,13 @@ export class VatBookService {
    * netAmount` (nunca recalculando `netAmount*rate/100` a mano - eso
    * arriesgaría un redondeo distinto al centavo ya persistido por
    * InvoicingService, que tiene su propia batería de tests de redondeo).
-   * `CreditNoteLine.taxAmount` ya viene calculado, se usa tal cual. */
+   *
+   * `netAmount` (de la factura y de la nota de crédito) es ANTES del
+   * descuento general y `lineTotal` ya lo tiene: el neto del libro es
+   * netAmount con el descuento general aplicado, y el IVA lo que queda de
+   * lineTotal. Antes se tomaba netAmount tal cual y el IVA como
+   * lineTotal - netAmount: con descuento general el neto salía de más y el
+   * IVA de menos. */
   async getSalesBook(from?: string, to?: string): Promise<VatBookResult> {
     const range = defaultRange(from, to);
     const db = getTenantDb();
@@ -63,7 +74,7 @@ export class VatBookService {
       where: { issueDate: { gte: range.from, lte: range.to } },
       include: {
         lines: { include: { invoiceLine: { select: { taxKind: true, taxRate: true } } } },
-        invoice: { select: { customerName: true, customerTaxId: true, customer: { select: { taxCondition: true } } } },
+        invoice: { select: { globalDiscountPercent: true, customerName: true, customerTaxId: true, customer: { select: { taxCondition: true } } } },
         currency: { select: { code: true } },
       },
       orderBy: { issueDate: 'asc' },
@@ -76,13 +87,15 @@ export class VatBookService {
       let netExempt = 0;
       let netUntaxed = 0;
       const buckets = { ...ZERO_BUCKET };
+      const factor = globalDiscountFactor(invoice.globalDiscountPercent);
       for (const line of invoice.lines) {
-        const net = line.netAmount.toNumber();
+        const netAfterDiscount = line.netAmount.mul(factor).toDecimalPlaces(2);
+        const net = netAfterDiscount.toNumber();
         if (line.taxKind === 'EXENTO') netExempt += net;
         else if (line.taxKind === 'NO_GRAVADO') netUntaxed += net;
         else {
           netTaxed += net;
-          bucketRate(line.taxRate.toNumber(), line.lineTotal.sub(line.netAmount).toNumber(), buckets);
+          bucketRate(line.taxRate.toNumber(), line.lineTotal.sub(netAfterDiscount).toNumber(), buckets);
         }
       }
       const vatTotal = buckets.vat21 + buckets.vat10_5 + buckets.vat27 + buckets.vatOther;
@@ -118,14 +131,19 @@ export class VatBookService {
       let netExempt = 0;
       let netUntaxed = 0;
       const buckets = { ...ZERO_BUCKET };
+      const factor = globalDiscountFactor(creditNote.invoice.globalDiscountPercent);
       for (const line of creditNote.lines) {
-        const net = line.netAmount.toNumber();
+        const netAfterDiscount = line.netAmount.mul(factor).toDecimalPlaces(2);
+        const net = netAfterDiscount.toNumber();
         const kind = line.invoiceLine.taxKind;
         if (kind === 'EXENTO') netExempt += net;
         else if (kind === 'NO_GRAVADO') netUntaxed += net;
         else {
           netTaxed += net;
-          bucketRate(line.invoiceLine.taxRate.toNumber(), line.taxAmount.toNumber(), buckets);
+          // lineTotal - neto y no taxAmount: las notas de crédito anteriores al
+          // arreglo de createCreditNote guardaron taxAmount sin el descuento
+          // general; lineTotal siempre estuvo bien.
+          bucketRate(line.invoiceLine.taxRate.toNumber(), line.lineTotal.sub(netAfterDiscount).toNumber(), buckets);
         }
       }
       const vatTotal = buckets.vat21 + buckets.vat10_5 + buckets.vat27 + buckets.vatOther;

@@ -1168,7 +1168,7 @@ describe('InvoicingService.createCreditNote', () => {
   function dbWithInvoice(invoice: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
     return {
       invoice: {
-        findUnique: jest.fn().mockResolvedValue(invoice),
+        findUnique: jest.fn().mockResolvedValue({ globalDiscountPercent: new Prisma.Decimal(0), ...invoice }),
         update: jest.fn().mockResolvedValue(invoice),
       },
       creditNote: {
@@ -1378,6 +1378,60 @@ describe('InvoicingService.createCreditNote', () => {
     expect(caeRequest.nonTaxedAmount.toNumber()).toBe(30);
     expect(caeRequest.netAmount.toNumber()).toBe(0); // nothing GRAVADO was credited
     expect(caeRequest.taxLines).toHaveLength(0);
+  });
+
+  it('con descuento general: neto con el descuento e IVA sobre ese neto (ARCA y asiento)', async () => {
+    // Factura: 1 x 100 neto, 10% de descuento general -> neto 90, IVA 21% 18,90, total 108,90.
+    const discountedLine = {
+      id: 'line-1',
+      quantity: new Prisma.Decimal(1),
+      netAmount: new Prisma.Decimal(100),
+      lineTotal: new Prisma.Decimal(108.9),
+      taxRate: new Prisma.Decimal(21),
+      taxKind: 'GRAVADO',
+    };
+    const invoice = {
+      id: 'invoice-1',
+      afipCae: 'CAE-ORIGINAL',
+      customer: { taxCondition: 'Responsable Inscripto' },
+      number: '00000042',
+      pointOfSale: '0001',
+      documentLetter: 'A',
+      concept: 'PRODUCTOS',
+      customerTaxId: '30-1-1',
+      currencyId: 'currency-1',
+      exchangeRate: new Prisma.Decimal(1),
+      globalDiscountPercent: new Prisma.Decimal(10),
+      balanceDue: new Prisma.Decimal(108.9),
+      lines: [discountedLine],
+    };
+    const electronicInvoicing = makeElectronicInvoicing();
+    const db = dbWithInvoice(invoice);
+    // Devuelve lo que se guarda, así el pedido de CAE usa los importes reales.
+    (db.creditNote.create as jest.Mock).mockImplementation(({ data }) => Promise.resolve({ id: 'cn-1', ...data, lines: [] }));
+    const service = new InvoicingService(makeEmailSender(), electronicInvoicing, makeEventEmitter(), makeSubscriptionService(), makeBnaExchangeRate(), makeInvoicePdfService());
+
+    await runInTenant(db, () =>
+      service.createCreditNote({ invoiceId: 'invoice-1', reason: 'devolución', lines: [{ invoiceLineId: 'line-1', quantity: 1 }] }),
+    );
+
+    const createArgs = (db.creditNote.create as jest.Mock).mock.calls[0][0];
+    // Lo que usa el asiento (Ventas / IVA Débito Fiscal / Deudores).
+    expect(createArgs.data.subtotal.toNumber()).toBeCloseTo(90, 6);
+    expect(createArgs.data.taxTotal.toNumber()).toBeCloseTo(18.9, 6);
+    expect(createArgs.data.total.toNumber()).toBeCloseTo(108.9, 6);
+    // La línea mantiene el shape de InvoiceLine: netAmount antes del descuento general.
+    const line = createArgs.data.lines.createMany.data[0];
+    expect(line.netAmount.toNumber()).toBe(100);
+    expect(line.taxAmount.toNumber()).toBeCloseTo(18.9, 6);
+
+    const caeRequest = (electronicInvoicing.requestCae as jest.Mock).mock.calls[0][0];
+    expect(caeRequest.netAmount.toNumber()).toBeCloseTo(90, 6);
+    expect(caeRequest.taxAmount.toNumber()).toBeCloseTo(18.9, 6);
+    expect(caeRequest.total.toNumber()).toBeCloseTo(108.9, 6);
+    // ARCA controla BaseImp x alícuota = Importe.
+    expect(caeRequest.taxLines[0].netAmount.toNumber()).toBeCloseTo(90, 6);
+    expect(caeRequest.taxLines[0].taxAmount.toNumber()).toBeCloseTo(18.9, 6);
   });
 
   it('rejects a credit note whose total exceeds the invoice balance due', async () => {

@@ -825,6 +825,7 @@ export class InvoicingService {
     // re-derived from the article's current TaxDefinition).
     let exemptAmount = new Prisma.Decimal(0);
     let nonTaxedAmount = new Prisma.Decimal(0);
+    const globalDiscountFactor = new Prisma.Decimal(1).sub(invoice.globalDiscountPercent.div(100));
     const linesToCreate: {
       invoiceLineId: string;
       quantity: Prisma.Decimal;
@@ -852,21 +853,29 @@ export class InvoicingService {
       // Proportional slice of the line's already-computed amounts, not
       // re-derived from taxRate - avoids drifting from whatever rounding
       // the original invoice line's lineTotal/netAmount already baked in.
+      // InvoiceLine.netAmount es ANTES del descuento general y lineTotal ya
+      // lo tiene (ver createInvoice): el neto que se acredita es el neto con
+      // el descuento general, y el IVA lo que queda de lineTotal. Antes el
+      // IVA salía de lineTotal - netAmount (le restaba el descuento) y el neto
+      // iba sin descontar: ARCA recibía BaseImp × alícuota ≠ Importe y el
+      // asiento revertía de más en Ventas y de menos en IVA Débito Fiscal.
       const ratio = quantity.div(invoiceLine.quantity);
       const netAmount = invoiceLine.netAmount.mul(ratio);
-      const originalTax = invoiceLine.lineTotal.sub(invoiceLine.netAmount);
-      const taxAmount = originalTax.mul(ratio);
-      const lineTotal = netAmount.add(taxAmount);
+      const lineTotal = invoiceLine.lineTotal.mul(ratio);
+      const netAfterGlobalDiscount = netAmount.mul(globalDiscountFactor);
+      const taxAmount = lineTotal.sub(netAfterGlobalDiscount);
 
+      // CreditNoteLine.netAmount queda como InvoiceLine.netAmount (antes del
+      // descuento general), mismo shape que la línea original.
       linesToCreate.push({ invoiceLineId: invoiceLine.id, quantity, netAmount, taxAmount, lineTotal });
       if (invoiceLine.taxKind === 'EXENTO') {
-        exemptAmount = exemptAmount.add(netAmount);
+        exemptAmount = exemptAmount.add(netAfterGlobalDiscount);
       } else if (invoiceLine.taxKind === 'NO_GRAVADO') {
-        nonTaxedAmount = nonTaxedAmount.add(netAmount);
+        nonTaxedAmount = nonTaxedAmount.add(netAfterGlobalDiscount);
       } else {
-        taxLineRows.push({ taxRate: invoiceLine.taxRate, netAmount, taxAmount });
+        taxLineRows.push({ taxRate: invoiceLine.taxRate, netAmount: netAfterGlobalDiscount, taxAmount });
       }
-      subtotal = subtotal.add(netAmount);
+      subtotal = subtotal.add(netAfterGlobalDiscount);
       taxTotal = taxTotal.add(taxAmount);
       total = total.add(lineTotal);
     }
