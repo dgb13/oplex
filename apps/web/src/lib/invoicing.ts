@@ -82,6 +82,8 @@ export interface InvoiceDetail extends Invoice {
   lines: InvoiceLineDetail[];
   receipts: InvoiceReceipt[];
   creditNotes: InvoiceCreditNote[];
+  // Lo facturado sin stock que todavía no salió del depósito, por línea.
+  pendingDeliveries?: { invoiceLineId: string; quantityPending: string }[];
 }
 
 export interface CreateSaleLineInput {
@@ -108,6 +110,36 @@ export interface InvoiceTaxLineInput {
   amount: number;
 }
 
+/** Ver SalesService.checkStock (API). */
+export interface StockShortage {
+  articleVariantId: string;
+  articleName: string;
+  requested: number;
+  available: number;
+  deliverNow: number;
+  pending: number;
+}
+
+export interface StockCheckResult {
+  warehouseName: string;
+  shortages: StockShortage[];
+}
+
+/** Ventas → Pendientes de entrega (SalesService.listPendingDeliveries). */
+export interface PendingDeliveryRow {
+  id: string;
+  invoiceId: string;
+  invoiceLabel: string;
+  issueDate: string;
+  customerName: string;
+  articleName: string;
+  sku: string;
+  warehouseName: string;
+  quantityOrdered: number;
+  quantityPending: number;
+  availableNow: number;
+}
+
 export interface CreateSaleInput {
   customerId: string;
   warehouseId: string;
@@ -121,6 +153,8 @@ export interface CreateSaleInput {
   globalDiscountPercent?: number;
   dueDate?: string;
   pricesIncludeTax?: boolean;
+  // Facturar igual lo que falta en el depósito: queda pendiente de entrega.
+  allowPendingDelivery?: boolean;
   lines: CreateSaleLineInput[];
   // Percepciones/otros tributos (ej. IIBB) - opcional, la mayoría de las
   // facturas no llevan ninguno.
@@ -196,6 +230,12 @@ export const invoicingApi = {
       .get<ExchangeRateHistoryEntry[]>('/invoicing/exchange-rates', { params: { currencyId } })
       .then((r) => r.data),
   createSale: (dto: CreateSaleInput) => api.post<Invoice>('/sales/invoices', dto).then((r) => r.data),
+  // Antes de emitir: qué falta en el depósito (lines de Nueva factura, o quoteId).
+  checkStock: (dto: { warehouseId: string; lines?: { articleVariantId: string; quantity: number }[]; quoteId?: string }) =>
+    api.post<StockCheckResult>('/sales/stock-check', dto).then((r) => r.data),
+  listPendingDeliveries: () => api.get<PendingDeliveryRow[]>('/sales/pending-deliveries').then((r) => r.data),
+  deliverPending: (id: string, quantity?: number) =>
+    api.post<PendingDeliveryRow[]>(`/sales/pending-deliveries/${id}/deliver`, { quantity }).then((r) => r.data),
   recordReceipt: (dto: RecordReceiptInput) =>
     api.post('/sales/receipts', dto).then((r) => r.data),
   createCreditNote: (dto: CreateCreditNoteInput) =>

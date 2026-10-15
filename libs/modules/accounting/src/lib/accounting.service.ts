@@ -941,6 +941,37 @@ export class AccountingService {
   }
 
   /**
+   * Costo de lo vendido de una entrega pendiente (Ventas → Pendientes de
+   * entrega): la factura ya registró la venta y el IVA, pero el CMV de la
+   * parte sin stock se registra recién cuando la mercadería sale del
+   * depósito, al costo promedio de ese momento. Dr Costo de Mercadería
+   * Vendida / Cr Mercaderías. No lleva invoiceId (es @unique en
+   * JournalEntry y ya lo usa el asiento de la venta).
+   */
+  async postPendingDeliveryCogsEntry(input: {
+    amount: Prisma.Decimal | number | string;
+    date?: Date;
+    description: string;
+  }): Promise<JournalEntryWithLines | undefined> {
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lte(0)) {
+      return undefined;
+    }
+    const [cogs, inventory] = await Promise.all([
+      this.getOrCreateAccount(COGS_EXPENSE_ACCOUNT),
+      this.getOrCreateAccount(INVENTORY_ASSET_ACCOUNT),
+    ]);
+    return this.postJournalEntry({
+      description: input.description,
+      date: input.date?.toISOString(),
+      lines: [
+        { accountId: cogs.id, direction: 'DEBIT', amount: amount.toNumber() },
+        { accountId: inventory.id, direction: 'CREDIT', amount: amount.toNumber() },
+      ],
+    });
+  }
+
+  /**
    * Auto-posting entry point for credit notes - called by SalesService
    * .voidSale() (apps/api) right after InvoicingService.createCreditNote(),
    * same per-request transaction as everything else. Deliberately does NOT

@@ -491,6 +491,7 @@ describe('SalesService.voidSale', () => {
       'line-2': { warehouseId: 'warehouse-1', articleVariantId: 'variant-2', unitCost: null },
     };
     const db = {
+      pendingDelivery: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
       stockMovement: {
         findFirst: jest
           .fn()
@@ -562,6 +563,7 @@ describe('SalesService.voidSale', () => {
       postCreditNoteJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-2', lines: [] }),
     } as unknown as AccountingService;
     const db = {
+      pendingDelivery: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
       stockMovement: {
         findFirst: jest.fn().mockResolvedValue({
           warehouseId: 'warehouse-1',
@@ -601,7 +603,7 @@ describe('SalesService.voidSale', () => {
     const accountingService = {
       postCreditNoteJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-2', lines: [] }),
     } as unknown as AccountingService;
-    const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const db = { pendingDelivery: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() }, stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
     const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
@@ -628,7 +630,7 @@ describe('SalesService.voidSale', () => {
     const accountingService = {
       postCreditNoteJournalEntry: jest.fn().mockRejectedValue(failure),
     } as unknown as AccountingService;
-    const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const db = { pendingDelivery: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() }, stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
     const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
@@ -653,7 +655,7 @@ describe('SalesService.voidSale', () => {
     const accountingService = {
       postCreditNoteJournalEntry: jest.fn().mockResolvedValue({ id: 'entry-2', lines: [] }),
     } as unknown as AccountingService;
-    const db = { stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
+    const db = { pendingDelivery: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() }, stockMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
 
     const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
 
@@ -1107,5 +1109,144 @@ describe('SalesService.createInvoiceFromQuote', () => {
     await expect(
       runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto)),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('SalesService - entregas pendientes (facturar sin stock)', () => {
+  function makeSale() {
+    return {
+      id: 'invoice-1',
+      documentLetter: 'C',
+      pointOfSale: '00008',
+      number: '00000012',
+      customerName: 'Consumidor Final',
+      subtotal: new Prisma.Decimal(300),
+      taxTotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(300),
+      exchangeRate: new Prisma.Decimal(1),
+      issueDate: new Date('2026-10-15'),
+      lines: [{ id: 'line-1', articleVariantId: 'variant-1', quantity: new Prisma.Decimal(3) }],
+      taxLines: [],
+    };
+  }
+
+  function makeDb(stockQuantity: number) {
+    return {
+      ...makeBranchDb(),
+      stockLedger: { findUnique: jest.fn().mockResolvedValue({ quantity: new Prisma.Decimal(stockQuantity) }) },
+      stockReservation: { aggregate: jest.fn().mockResolvedValue({ _sum: { quantityReserved: null } }) },
+      pendingDelivery: { create: jest.fn().mockResolvedValue({}) },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+  }
+
+  const dto = {
+    customerId: 'customer-1',
+    warehouseId: 'warehouse-1',
+    documentLetter: 'C' as const,
+    branchId: 'branch-1',
+    currencyId: 'currency-1',
+    lines: [{ articleVariantId: 'variant-1', quantity: 3 }],
+  };
+
+  it('delivers what is in stock and leaves the rest pending, with COGS only for what left the warehouse', async () => {
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: new Prisma.Decimal(10) }) } as unknown as InventoryService;
+    const accountingService = { postInvoiceJournalEntry: jest.fn().mockResolvedValue({}) } as unknown as AccountingService;
+    const invoicingService = { createInvoice: jest.fn().mockResolvedValue(makeSale()) } as unknown as InvoicingService;
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
+    const db = makeDb(1);
+
+    await runInTenant(db, () => service.createSale({ ...dto, allowPendingDelivery: true }));
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(expect.objectContaining({ articleVariantId: 'variant-1', quantity: 1 }));
+    expect(db.pendingDelivery.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ invoiceLineId: 'line-1', warehouseId: 'warehouse-1' }),
+    });
+    const created = (db.pendingDelivery.create as jest.Mock).mock.calls[0][0].data;
+    expect(created.quantityPending.toNumber()).toBe(2);
+    const entry = (accountingService.postInvoiceJournalEntry as jest.Mock).mock.calls[0][0];
+    expect(entry.cogsAmount.toNumber()).toBe(10);
+  });
+
+  it('without the confirmation it keeps rejecting the missing stock (and never creates a pending delivery)', async () => {
+    const failure = new BadRequestException('No hay stock suficiente en este depósito: hay 1 y se piden 3');
+    const inventoryService = { recordMovement: jest.fn().mockRejectedValue(failure) } as unknown as InventoryService;
+    const invoicingService = { createInvoice: jest.fn().mockResolvedValue(makeSale()) } as unknown as InvoicingService;
+    const service = new SalesService(invoicingService, inventoryService, {} as AccountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
+    const db = makeDb(1);
+
+    await expect(runInTenant(db, () => service.createSale(dto))).rejects.toBe(failure);
+    expect(db.pendingDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('Entregar moves the stock now, posts the COGS at the current cost and closes the row', async () => {
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({ unitCost: new Prisma.Decimal(12) }) } as unknown as InventoryService;
+    const accountingService = { postPendingDeliveryCogsEntry: jest.fn().mockResolvedValue({}) } as unknown as AccountingService;
+    const service = new SalesService({} as InvoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
+    const row = {
+      id: 'pd-1',
+      invoiceId: 'invoice-1',
+      invoiceLineId: 'line-1',
+      articleVariantId: 'variant-1',
+      warehouseId: 'warehouse-1',
+      quantityOrdered: new Prisma.Decimal(2),
+      quantityPending: new Prisma.Decimal(2),
+      completedAt: null,
+      cancelledAt: null,
+    };
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      pendingDelivery: {
+        findUnique: jest.fn().mockResolvedValue(row),
+        update: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      invoice: { findUnique: jest.fn().mockResolvedValue({ documentLetter: 'C', pointOfSale: '00008', number: '00000012' }) },
+    };
+
+    await runInTenant(db, () => service.deliverPending('pd-1'));
+
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'SALE_OUT', quantity: 2, invoiceLineId: 'line-1', warehouseId: 'warehouse-1' }),
+    );
+    const cogs = (accountingService.postPendingDeliveryCogsEntry as jest.Mock).mock.calls[0][0];
+    expect(cogs.amount.toNumber()).toBe(24);
+    const update = (db.pendingDelivery.update as jest.Mock).mock.calls[0][0];
+    expect(update.data.quantityPending.toNumber()).toBe(0);
+    expect(update.data.completedAt).toBeInstanceOf(Date);
+  });
+
+  it('a credit note cancels the pending part first and only restocks what was delivered', async () => {
+    const creditNote = {
+      id: 'cn-1',
+      subtotal: new Prisma.Decimal(300),
+      taxTotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(300),
+      exchangeRate: new Prisma.Decimal(1),
+      issueDate: new Date('2026-10-16'),
+      lines: [{ id: 'cnl-1', invoiceLineId: 'line-1', quantity: new Prisma.Decimal(3) }],
+    };
+    const invoicingService = { createCreditNote: jest.fn().mockResolvedValue(creditNote) } as unknown as InvoicingService;
+    const inventoryService = { recordMovement: jest.fn().mockResolvedValue({}) } as unknown as InventoryService;
+    const accountingService = { postCreditNoteJournalEntry: jest.fn().mockResolvedValue({}) } as unknown as AccountingService;
+    const service = new SalesService(invoicingService, inventoryService, accountingService, makeReportsFinancialService(), makeQuoteService(), makeTenantSettingsService(), makeCheckService());
+    const db = {
+      pendingDelivery: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'pd-1', quantityPending: new Prisma.Decimal(2) }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      stockMovement: {
+        findFirst: jest.fn().mockResolvedValue({ warehouseId: 'warehouse-1', articleVariantId: 'variant-1', unitCost: new Prisma.Decimal(10) }),
+      },
+    };
+
+    await runInTenant(db, () => service.voidSale({ invoiceId: 'invoice-1', lines: [{ invoiceLineId: 'line-1', quantity: 3 }] } as never));
+
+    const cancel = (db.pendingDelivery.update as jest.Mock).mock.calls[0][0];
+    expect(cancel.data.quantityPending.toNumber()).toBe(0);
+    expect(cancel.data.cancelledAt).toBeInstanceOf(Date);
+    expect(inventoryService.recordMovement).toHaveBeenCalledWith(expect.objectContaining({ type: 'RETURN', quantity: 1 }));
+    const entry = (accountingService.postCreditNoteJournalEntry as jest.Mock).mock.calls[0][0];
+    expect(entry.cogsAmount.toNumber()).toBe(10);
   });
 });

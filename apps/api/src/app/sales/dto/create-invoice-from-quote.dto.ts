@@ -23,6 +23,14 @@ export class CreateInvoiceFromQuoteDto {
   @IsBoolean()
   pricesIncludeTax?: boolean;
 
+  // Facturar aunque falte stock: lo que hay se entrega y el resto queda en
+  // Ventas → Pendientes de entrega (ver SalesService.createSale). Sólo lo
+  // manda Nueva factura / Convertir a factura después de que la persona
+  // confirma el aviso; la Caja nunca (ahí no se vende sin stock).
+  @IsOptional()
+  @IsBoolean()
+  allowPendingDelivery?: boolean;
+
   @IsOptional()
   @IsNumber()
   @Min(0)

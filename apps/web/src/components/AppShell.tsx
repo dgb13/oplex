@@ -78,6 +78,7 @@ const NAV_ENTRIES: NavEntry[] = [
     items: [
       { href: '/invoicing', label: 'Facturación', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
       { href: '/quotes', label: 'Cotizaciones', roles: ['SALES', 'VIEWER'] },
+      { href: '/sales/pending-deliveries', label: 'Pendientes de entrega', roles: ['SALES', 'INVENTORY'] },
       { href: '/receivables', label: 'Cuentas a Cobrar', roles: ['SALES', 'ACCOUNTANT'] },
       { href: '/clients', label: 'Clientes', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
       { href: '/storefront', label: 'Tienda online', roles: [] },
