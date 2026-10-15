@@ -36,7 +36,11 @@ const TOOL = {
         enum: ['SIMPLIFICADO', 'LOCAL', 'CONVENIO_MULTILATERAL', 'EXENTO', 'NO_INSCRIPTO', null],
         description: 'Situación en Ingresos Brutos si la constancia la informa (ej. Régimen Simplificado provincial incluido en el monotributo unificado).',
       },
-      grossIncomeDetail: { type: ['string', 'null'], description: 'Texto corto para imprimir en la factura, ej. "Régimen Simplificado Mendoza" o el número de inscripción.' },
+      grossIncomeDetail: {
+        type: ['string', 'null'],
+        description:
+          'Texto corto (máximo 50 caracteres) para imprimir en la factura: el número de inscripción en Ingresos Brutos o, si no figura, el régimen y la provincia (ej. "Régimen Simplificado Mendoza"). No copies el código del impuesto (ej. "5445 - ...") ni su descripción completa.',
+      },
     },
     required: ['isConstancia', 'cuit', 'name', 'ivaCondition', 'fiscalAddress', 'activityStartDate', 'grossIncomeType', 'grossIncomeDetail'],
   },
@@ -74,6 +78,32 @@ export class ConstanciaExtractionService {
       throw new InternalServerErrorException('Claude no devolvió una lectura estructurada');
     }
     const out = toolUse.input as ConstanciaExtraction;
-    return { ...out, cuit: out.cuit ? out.cuit.replace(/\D/g, '') || null : null };
+    return {
+      ...out,
+      cuit: out.cuit ? out.cuit.replace(/\D/g, '') || null : null,
+      grossIncomeDetail: shortenGrossIncomeDetail(out.grossIncomeDetail),
+    };
   }
+}
+
+// Tope del campo "Ingresos Brutos" (UpdateTenantSettingsDto.grossIncomeNumber).
+const GROSS_INCOME_MAX = 50;
+
+/** El renglón del impuesto en la constancia viene como
+ * "5445 - Régimen Simplificado Impuesto sobre Ingresos Brutos Mendoza": el
+ * 5445 es el código del impuesto en ARCA, no un número de inscripción, y el
+ * texto entero no entra en el campo. Queda "Régimen Simplificado Mendoza".
+ * Exportado para tests. */
+export function shortenGrossIncomeDetail(detail: string | null): string | null {
+  if (!detail) return null;
+  let text = detail
+    .replace(/^\s*\d{3,5}\s*-\s*/, '')
+    .replace(/\s*(del\s+)?impuesto\s+sobre\s+(los\s+)?ingresos\s+brutos\s*/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length > GROSS_INCOME_MAX) {
+    const cut = text.slice(0, GROSS_INCOME_MAX);
+    text = cut.includes(' ') ? cut.slice(0, cut.lastIndexOf(' ')) : cut;
+  }
+  return text || null;
 }

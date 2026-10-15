@@ -48,7 +48,7 @@ export function SourceBadge({ source }: { source: Source | undefined }) {
   if (source === 'arca') return <Badge tone="arca">✓ de ARCA</Badge>;
   if (source === 'edited') return <Badge tone="hand">editado</Badge>;
   if (source === 'constancia') return <Badge tone="ai">✓ constancia</Badge>;
-  if (source === 'arcaMonth') return <Badge tone="warn">mes de ARCA</Badge>;
+  if (source === 'arcaMonth') return <Badge tone="warn">mes estimado</Badge>;
   return null;
 }
 
