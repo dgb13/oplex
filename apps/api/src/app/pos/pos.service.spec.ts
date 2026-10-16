@@ -257,6 +257,22 @@ describe('PosService - cobros QR sin venta', () => {
     expect(createSale).not.toHaveBeenCalled();
   });
 
+  it('no cobra un artículo que se vende por largo o por superficie', async () => {
+    const createCharge = jest.fn();
+    const service = makeService({ mercadoPagoQrService: { createCharge } });
+    const db = {
+      ...stockDb(100),
+      articleVariant: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'variant-1', article: { name: 'Perfil U 40', measurementType: 'LINEAL_1D' } }]),
+      },
+    };
+
+    await expect(
+      runInTenant(db, () => service.createQrCharge({ registerId: 'register-1', amount: 16, sale } as never)),
+    ).rejects.toThrow('Perfil U 40: se vende por medida y no se puede cobrar desde Caja');
+    expect(createCharge).not.toHaveBeenCalled();
+  });
+
   it('lo reservado para producción no cuenta como disponible', async () => {
     const createCharge = jest.fn();
     const service = makeService({ mercadoPagoQrService: { createCharge } });

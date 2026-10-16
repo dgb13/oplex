@@ -34,8 +34,15 @@ interface ProductOption {
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
 }
 
+/** Caja vende por unidad (o kilo/litro): un artículo por largo (perfiles,
+ * mm) o por superficie (chapas, m²) necesita la medida del corte, que esta
+ * pantalla no pide, así que no se lista. */
+function sellsByUnit(article: Article): boolean {
+  return article.measurementType !== 'LINEAL_1D' && article.measurementType !== 'SURFACE_2D';
+}
+
 function flatten(articles: Article[], warehouseId: string | undefined): ProductOption[] {
-  return articles.flatMap((article) =>
+  return articles.filter(sellsByUnit).flatMap((article) =>
     article.variants.map((variant) => {
       const row = variant.stockByWarehouse.find((r) => r.warehouseId === warehouseId);
       const reserved = row?.reserved ?? 0;
@@ -122,6 +129,18 @@ function PosSellScreen() {
       return words.every((w) => haystack.includes(w));
     });
   }, [products, search]);
+  // Lo buscado existe pero se vende por medida: decirlo en vez de "sin artículos".
+  const byMeasureMatches = useMemo(() => {
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [];
+    return (articlesQuery.data ?? [])
+      .filter((a) => !sellsByUnit(a))
+      .filter((a) => {
+        const haystack = `${a.name} ${a.variants.map((v) => v.sku).join(' ')}`.toLowerCase();
+        return words.every((w) => haystack.includes(w));
+      })
+      .map((a) => a.name);
+  }, [articlesQuery.data, search]);
 
   // Emisor Monotributo/Exento: factura C, sin IVA (mismo criterio que el
   // backend, que es el que factura).
@@ -357,7 +376,9 @@ function PosSellScreen() {
             ))}
             {!articlesQuery.isLoading && filtered.length === 0 && (
               <p className="col-span-full text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-                Sin artículos que coincidan
+                {byMeasureMatches.length > 0
+                  ? `${byMeasureMatches.slice(0, 3).join(', ')}${byMeasureMatches.length > 3 ? '…' : ''}: ${byMeasureMatches.length === 1 ? 'se vende' : 'se venden'} por largo o por medida y no se ${byMeasureMatches.length === 1 ? 'cobra' : 'cobran'} desde Caja.`
+                  : 'Sin artículos que coincidan'}
               </p>
             )}
           </div>

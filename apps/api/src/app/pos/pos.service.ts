@@ -337,10 +337,21 @@ export class PosService {
       db.articleVariant.findMany({
         // Los servicios no tienen stock (ver SalesService.createSale).
         where: { id: { in: [...needed.keys()] }, article: { isService: false } },
-        select: { id: true, article: { select: { name: true } } },
+        select: { id: true, article: { select: { name: true, measurementType: true } } },
       }),
       db.warehouse.findUnique({ where: { id: warehouseId }, select: { name: true } }),
     ]);
+    // Caja vende por unidad: un perfil (mm) o una chapa (m²) necesita el
+    // largo o la medida del corte, que esta pantalla no pide. La grilla ya
+    // no los muestra; esto corta una venta armada igual.
+    const byMeasure = variants.filter((v) => v.article.measurementType === 'LINEAL_1D' || v.article.measurementType === 'SURFACE_2D');
+    if (byMeasure.length > 0) {
+      throw new BadRequestException(
+        byMeasure.length === 1
+          ? `${byMeasure[0].article.name}: se vende por medida y no se puede cobrar desde Caja`
+          : `${byMeasure.map((v) => v.article.name).join(', ')}: se venden por medida y no se pueden cobrar desde Caja`,
+      );
+    }
     const problems: string[] = [];
     for (const variant of variants) {
       const ledger = await db.stockLedger.findUnique({
