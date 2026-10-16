@@ -81,6 +81,7 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Pagada',
   OVERDUE: 'Vencida',
   CANCELLED: 'Cancelada',
+  CREDITED: 'Anulada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -90,6 +91,7 @@ const STATUS_COLORS: Record<string, string> = {
   PAID: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
   OVERDUE: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
   CANCELLED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
+  CREDITED: 'bg-slate-200 dark:bg-slate-800 text-slate-500',
 };
 
 /** Atajo de navegación en la esquina de cada card - no un menú de acciones
