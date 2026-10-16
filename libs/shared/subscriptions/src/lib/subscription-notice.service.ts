@@ -48,6 +48,7 @@ export class SubscriptionNoticeService {
   async sendTrialEndingIfDue(now = new Date()): Promise<boolean> {
     const sub = await this.subscription();
     if (!sub || sub.status !== 'TRIALING' || !sub.trialEndsAt || sub.trialEndingNoticeSentAt) return false;
+    if (Number(sub.plan.priceMonthly) <= 0) return false;
     const left = sub.trialEndsAt.getTime() - now.getTime();
     if (left <= 0 || left > TRIAL_ENDING_NOTICE_DAYS * DAY_MS) return false;
     const free = await this.freePlan();

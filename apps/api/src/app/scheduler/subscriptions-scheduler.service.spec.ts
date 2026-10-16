@@ -90,7 +90,7 @@ describe('SubscriptionsSchedulerService - avisos por mail', () => {
     const subscriptionService = {} as unknown as SubscriptionService;
     const notices = makeNotices();
     const row = { tenantName: 'Panadería La Espiga SRL', total: 290037, coveredUntil: new Date('2026-11-19T13:24:00Z') };
-    notices.pendingTransferDueTomorrow.mockResolvedValueOnce(row).mockResolvedValueOnce(null);
+    (notices.pendingTransferDueTomorrow as jest.Mock).mockResolvedValueOnce(row).mockResolvedValueOnce(null);
     const scheduler = new SubscriptionsSchedulerService(prisma, subscriptionService, makeBillingService(), notices);
 
     await scheduler.sendDailyNotices(new Date('2026-11-18T12:00:00Z'));

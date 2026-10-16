@@ -518,3 +518,29 @@ describe('SubscriptionService plan catalog (global, no tenant context)', () => {
     await expect(service.getPlanSla('OLD')).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('SubscriptionService con el plan gratis', () => {
+  it('registrarse con el plan gratis arranca activo, sin prueba', async () => {
+    const plan = makePlan({ key: 'BASIC', name: 'Basic Gratis', priceMonthly: 0 });
+    const prisma = { plan: { findUniqueOrThrow: jest.fn().mockResolvedValue(plan) } } as unknown as PrismaService;
+    const create = jest.fn().mockResolvedValue({ id: 'sub-1', status: 'ACTIVE', plan });
+    const service = new SubscriptionService(prisma);
+
+    await runInTenant({ tenantSubscription: { create } }, () => service.startTrial('BASIC'));
+
+    expect(create.mock.calls[0][0].data).toEqual({ tenantId: 'tenant-1', planId: 'plan-1', status: 'ACTIVE' });
+  });
+
+  it('una prueba vencida de un plan gratis queda activa; las pagas pasan a sólo lectura', async () => {
+    const updateMany = jest.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const service = new SubscriptionService({} as PrismaService);
+
+    expect(await runInTenant({ tenantSubscription: { updateMany } }, () => service.expireIfTrialEnded())).toBe(false);
+
+    expect(updateMany.mock.calls[0][0]).toMatchObject({
+      where: { status: 'TRIALING', plan: { priceMonthly: { lte: 0 } } },
+      data: { status: 'ACTIVE', currentPeriodEnd: null },
+    });
+    expect(updateMany.mock.calls[1][0]).toMatchObject({ where: { status: 'TRIALING' }, data: { status: 'EXPIRED' } });
+  });
+});
