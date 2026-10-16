@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { posApi } from '@/lib/pos';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -159,16 +160,18 @@ export default function OpenSessionModal({ registerId, onClose, onOpened }: Prop
           >
             Cancelar
           </button>
-          <button
-            onClick={() => {
-              setError('');
-              mutation.mutate();
-            }}
-            disabled={mutation.isPending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
-          >
-            {mutation.isPending ? 'Abriendo...' : 'Abrir turno'}
-          </button>
+          <ReadOnlyLock>
+            <button
+              onClick={() => {
+                setError('');
+                mutation.mutate();
+              }}
+              disabled={mutation.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"
+            >
+              {mutation.isPending ? 'Abriendo...' : 'Abrir turno'}
+            </button>
+          </ReadOnlyLock>
         </div>
       </div>
     </div>

@@ -67,3 +67,11 @@ export class OplexBankDetailsDto {
   @MaxLength(40)
   alias!: string | null;
 }
+
+/** Motivo del rechazo de una transferencia: le llega al cliente por mail. */
+export class RejectSubscriptionPaymentDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}

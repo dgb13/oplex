@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { describeQuoteStatus, quotesApi, type QuoteDetail as QuoteDetailType } from '@/lib/quotes';
@@ -21,9 +22,11 @@ export default function CotizacionesTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button type="button" onClick={() => setCreating(true)}>
-          Nueva cotización
-        </Button>
+        <ReadOnlyLock>
+          <Button type="button" onClick={() => setCreating(true)}>
+            Nueva cotización
+          </Button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

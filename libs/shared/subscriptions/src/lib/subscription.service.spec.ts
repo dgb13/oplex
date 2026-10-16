@@ -121,7 +121,7 @@ describe('SubscriptionService quota checks', () => {
     const service = new SubscriptionService({} as PrismaService);
 
     await expect(runInTenant(db, () => service.assertCanAddUser())).rejects.toThrow(
-      /período de prueba venció/,
+      /sólo lectura/,
     );
     expect(count).not.toHaveBeenCalled();
   });
@@ -133,7 +133,7 @@ describe('SubscriptionService quota checks', () => {
     const service = new SubscriptionService({} as PrismaService);
 
     await expect(runInTenant(db, () => service.assertCanAddUser())).rejects.toThrow(
-      /período de prueba venció/,
+      /sólo lectura/,
     );
     expect(count).not.toHaveBeenCalled();
   });

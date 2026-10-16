@@ -1,4 +1,4 @@
-import { adminBackupsApi, adminErrorsApi, adminSystemStatusApi } from '@/lib/admin';
+import { adminBackupsApi, adminErrorsApi, adminSubscriptionsApi, adminSystemStatusApi } from '@/lib/admin';
 import { useQuery } from '@tanstack/react-query';
 import { AR_TIME_ZONE, diskTone, type Tone } from './OpsUi';
 
@@ -42,7 +42,20 @@ export function useAdminNavStatus(): Partial<Record<string, NavChip>> {
     refetchInterval: 60_000,
   });
 
+  // Mismo queryKey que /admin/subscriptions: el número del menú son las
+  // transferencias que esperan confirmación.
+  const subscriptions = useQuery({
+    queryKey: ['admin-subscriptions'],
+    queryFn: adminSubscriptionsApi.list,
+    refetchInterval: 60_000,
+  });
+
   const chips: Partial<Record<string, NavChip>> = {};
+
+  if (subscriptions.data) {
+    const n = subscriptions.data.filter((row) => row.pendingPayment).length;
+    if (n > 0) chips['/admin/subscriptions'] = { tone: 'warn', label: `${n} por confirmar` };
+  }
 
   if (errors.data) {
     const n = errors.data.length;

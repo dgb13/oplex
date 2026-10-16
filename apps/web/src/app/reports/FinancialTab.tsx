@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -104,9 +105,11 @@ export default function FinancialTab() {
                   Liquidación de tarjeta
                 </Button>
               )}
-              <Button type="button" onClick={() => setNewAccountOpen(true)}>
-                + Nueva cuenta
-              </Button>
+              <ReadOnlyLock>
+                <Button type="button" onClick={() => setNewAccountOpen(true)}>
+                  + Nueva cuenta
+                </Button>
+              </ReadOnlyLock>
             </div>
           </div>
           {revalueError && <p className="mb-3 text-sm text-destructive">{revalueError}</p>}
@@ -182,12 +185,16 @@ export default function FinancialTab() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Conciliación — {summary?.accountName ?? '...'}</h2>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-                  Importar extracto
-                </Button>
-                <Button type="button" onClick={() => setNewTxOpen(true)}>
-                  + Nuevo movimiento
-                </Button>
+                <ReadOnlyLock>
+                  <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+                    Importar extracto
+                  </Button>
+                </ReadOnlyLock>
+                <ReadOnlyLock>
+                  <Button type="button" onClick={() => setNewTxOpen(true)}>
+                    + Nuevo movimiento
+                  </Button>
+                </ReadOnlyLock>
               </div>
             </div>
 

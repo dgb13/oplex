@@ -13,9 +13,10 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
 }
 
-/** Persistente en toda la app (ver AppShell): prueba en curso, pago vencido
- * (todavía funciona, con fecha de pase a sólo lectura) o cuenta en sólo
- * lectura. ACTIVE no muestra nada. */
+/** Persistente en toda la app (ver AppShell): prueba en curso, transferencia
+ * avisada esperando confirmación, pago vencido (todavía funciona, con fecha
+ * de pase a sólo lectura) o cuenta en sólo lectura. ACTIVE sin nada
+ * pendiente no muestra nada. */
 export default function TrialBanner() {
   const { data: subscription, isError } = useQuery({
     queryKey: ['subscription-me'],
@@ -38,6 +39,14 @@ export default function TrialBanner() {
       </Banner>
     );
   }
+  if (subscription.status === 'ACTIVE' && subscription.hasPendingPayment && subscription.currentPeriodEnd) {
+    return (
+      <Banner tone="info">
+        Recibimos tu aviso de transferencia. Mientras la confirmamos, tu cuenta funciona normal hasta el{' '}
+        {formatDate(subscription.currentPeriodEnd)}.
+      </Banner>
+    );
+  }
   if (subscription.status === 'PAST_DUE') {
     return (
       <Banner tone="warn" link="Pagar">
@@ -47,9 +56,12 @@ export default function TrialBanner() {
     );
   }
   if (subscription.status === 'EXPIRED') {
+    // Nunca pagó (sin período pago): terminó la prueba. Si no, venció el plan.
+    const fromTrial = subscription.trialEndsAt && !subscription.currentPeriodEnd;
     return (
       <Banner tone="bad" link="Elegir plan">
-        Tu cuenta está en sólo lectura: podés ver tus datos pero no cargar nada nuevo.
+        {fromTrial ? `Tu prueba terminó el ${formatDate(subscription.trialEndsAt as string)}. ` : 'Tu plan venció. '}
+        La cuenta está en sólo lectura: podés ver y exportar tus datos, pero no cargar nada nuevo.
       </Banner>
     );
   }
@@ -58,13 +70,15 @@ export default function TrialBanner() {
 
 const TONES = { info: 'bg-indigo-600 text-white', warn: 'bg-amber-500 text-amber-950', bad: 'bg-red-600 text-white' } as const;
 
-function Banner({ tone, link, children }: { tone: keyof typeof TONES; link: string; children: React.ReactNode }) {
+function Banner({ tone, link, children }: { tone: keyof typeof TONES; link?: string; children: React.ReactNode }) {
   return (
     <div className={`flex items-center justify-center gap-2 px-4 py-1.5 text-center text-xs font-medium ${TONES[tone]}`}>
       <span>{children}</span>
-      <Link href="/settings/billing" className="underline hover:no-underline">
-        {link}
-      </Link>
+      {link && (
+        <Link href="/settings/billing" className="underline hover:no-underline">
+          {link}
+        </Link>
+      )}
     </div>
   );
 }

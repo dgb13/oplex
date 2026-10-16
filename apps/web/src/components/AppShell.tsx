@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyNotice } from './ReadOnlyLock';
 import { initials, profileApi } from '@/lib/profile';
 import { PlexoLogo } from '@/components/ui/PlexoLogo';
 import AmbientBackground from './AmbientBackground';
@@ -385,6 +386,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Globitos de avisos en vivo (NotificationBell) - abajo a la
           izquierda: abajo a la derecha está el Asistente. */}
       <Toaster position="bottom-left" theme={theme === 'dark' ? 'dark' : 'light'} closeButton />
+      <ReadOnlyNotice />
     </div>
   );
 }

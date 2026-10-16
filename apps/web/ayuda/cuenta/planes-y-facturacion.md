@@ -40,16 +40,46 @@ En la tarjeta **Tu suscripción** ves el plan y una etiqueta con el estado:
 | Estado | Qué significa | Aviso arriba de la pantalla |
 |---|---|---|
 | **En prueba** | Los 15 días gratis desde que creaste la cuenta | *Te quedan N días de tu prueba gratuita del Plan…* |
-| **Activo** | Pagaste hasta una fecha (**Pago hasta**) | Ninguno |
-| **Pago vencido** | Se terminó el período pago. Seguís usando Oplex 5 días más | *Tu plan venció el … El … la cuenta pasa a sólo lectura.* |
-| **Sólo lectura** | Venció la prueba o el período de gracia. Podés ver tus datos pero no cargar nada nuevo | *Tu cuenta está en sólo lectura: podés ver tus datos pero no cargar nada nuevo.* |
-| **Esperando confirmación** | Avisaste una transferencia y la estamos confirmando | Ninguno |
+| **Activo** | Pagaste hasta una fecha (**Pago hasta**), o estás en Basic Gratis | Ninguno |
+| **Pago vencido** | Se terminó el período pago. Seguís usando Oplex 10 días más | *Tu plan venció el … El … la cuenta pasa a sólo lectura.* |
+| **Sólo lectura** | Venció la prueba o los días de gracia. Podés ver y exportar tus datos, pero no cargar nada nuevo | *Tu prueba terminó el … La cuenta está en sólo lectura: podés ver y exportar tus datos, pero no cargar nada nuevo.* |
+| **Esperando confirmación** | Avisaste una transferencia y la estamos confirmando | *Recibimos tu aviso de transferencia. Mientras la confirmamos, tu cuenta funciona normal hasta el …* |
 | **Dado de baja** | Pediste la baja y ya se aplicó | — |
 
 Cada aviso tiene un link (**Ver planes**, **Pagar** o **Elegir plan**) que te trae a esta pantalla.
 
 > [!IMPORTANTE]
-> Cuando termina la prueba sin que hayas pagado, la cuenta pasa directo a **Sólo lectura**. No perdés nada de lo cargado: apenas pagás, volvés a trabajar normalmente.
+> Cuando termina la prueba sin que hayas pagado, la cuenta pasa directo a **Sólo lectura**. No perdés nada de lo cargado: apenas pagás, o pasás a Basic Gratis, volvés a trabajar normalmente.
+
+## Qué podés hacer en sólo lectura
+
+| Sigue andando | Queda bloqueado |
+|---|---|
+| Ver todo, buscar y filtrar | Crear, editar o borrar facturas, ventas de Caja, artículos, stock, compras, cotizaciones, asientos, cheques, empresas y usuarios |
+| Abrir y descargar PDFs, reportes, Libro IVA y exportar a Excel | |
+| Mi perfil y cambiar la contraseña | |
+| **Planes y facturación**, para pagar o pasar a Basic Gratis | |
+| Desactivar usuarios y clientes (para entrar en los topes de Basic Gratis) | |
+
+Los botones de carga se ven con un candado. Si igual intentás guardar algo, aparece el aviso *Tu cuenta está en sólo lectura* con el botón **Ver planes**.
+
+Al entrar a **Planes y facturación** con la prueba terminada ves dos salidas:
+
+- **Seguir con tu plan**: pagás por transferencia, avisás y la cuenta vuelve a funcionar en el momento.
+- **Seguir gratis con Basic Gratis**: sin costo. Si tenés más usuarios o clientes de los que permite, Oplex te dice cuántos sobran y dónde desactivarlos; cuando entran, tocás **Pasar a Basic Gratis**.
+
+## Los avisos por mail
+
+Al **Dueño** de la cuenta le llegan estos mails de Oplex:
+
+| Cuándo | Qué dice |
+|---|---|
+| 3 días antes de que termine la prueba | Cuándo termina y cómo seguir |
+| El día que termina la prueba | Que la cuenta quedó en sólo lectura y cómo volver a cargar |
+| 7 días antes de que venza tu plan pago | Que tenés que renovarlo |
+| Si vence sin pago | Que tenés 10 días de gracia y hasta qué fecha |
+| Cuando confirmamos tu transferencia | El detalle del pago y hasta cuándo quedó pago |
+| Si no encontramos tu transferencia | El motivo y cómo volver a avisar |
 
 ## Pagar por transferencia
 
@@ -61,14 +91,14 @@ Cada aviso tiene un link (**Ver planes**, **Pagar** o **Elegir plan**) que te tr
 
 ![Ventana Contratar Plan con transferencia y la elección de meses](/ayuda/capturas/cuenta-contratar-plan.png)
 
-La confirmamos dentro del día hábil. Mientras tanto, tu cuenta sigue funcionando 3 días aunque se haya vencido.
+La confirmamos dentro del día hábil y te llega un mail. Mientras tanto, tu cuenta sigue funcionando 3 días aunque se haya vencido. Si no la encontramos, te escribimos con el motivo y la cuenta vuelve a como estaba.
 
 > [!NOTA]
 > La opción **Tarjeta con débito automático** (con Mercado Pago, todos los meses) todavía no está disponible: aparece apagada con la leyenda *Disponible muy pronto*.
 
 ## Tus pagos
 
-En la tarjeta **Pagos** ves cada pago con su **Fecha**, **Concepto** (plan, meses y período cubierto), **Medio**, **Importe** y **Estado**: **Por confirmar**, **Pagado**, **Rechazado** o **Devuelto**.
+En la tarjeta **Pagos** ves cada pago con su **Fecha**, **Concepto** (plan, meses y período cubierto), **Medio**, **Importe** y **Estado**: **Por confirmar**, **Pagado**, **Rechazado** (con el motivo) o **Devuelto**.
 
 ¿Dudas con un pago o una factura de Oplex? Escribinos a **facturacion@oplex.com.ar**.
 
@@ -92,7 +122,7 @@ La baja se aplica al final del período ya pagado. Tus datos quedan disponibles 
 
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
-| *Tu período de prueba venció - actualizá tu plan para seguir usando Oplex* | La cuenta está en **Sólo lectura** (puede aparecer también si venció un plan pago) | Pagá el plan desde esta pantalla |
+| *Tu cuenta está en sólo lectura* | Terminó la prueba o venció el plan pago | Pagá el plan o pasá a Basic Gratis desde esta pantalla |
 | *Alcanzaste el límite de facturas mensuales de tu plan actual (…)* | Emitiste todas las facturas que incluye tu plan este mes | Pasá a un plan más grande o esperá al mes que viene |
 | *Alcanzaste el límite de clientes de tu plan actual (…)* | Tenés tantos clientes activos como permite tu plan | Desactivá clientes que no uses o subí de plan |
 | *El plan … permite … usuarios y hoy tenés …. Desactivá los que sobran antes de cambiar.* | Querés bajar a un plan con menos usuarios o clientes | Desactivá los que sobran y volvé a intentar |

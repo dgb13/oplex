@@ -39,6 +39,8 @@ export interface TenantSubscription {
   promoLabel: string | null;
   promoDiscountPercent: string | null;
   promoExpiresAt: string | null;
+  // Sólo en GET /subscriptions/me: hay una transferencia avisada sin confirmar.
+  hasPendingPayment?: boolean;
 }
 
 export interface PlanSla {
@@ -114,6 +116,9 @@ export interface SubscriptionPayment {
   total: string;
   reference: string | null;
   receiptUrl: string | null;
+  // Motivo del rechazo que escribió Oplex.
+  reviewNote: string | null;
+  reportedBy: string | null;
   createdAt: string;
   plan: Plan;
 }
@@ -131,6 +136,9 @@ export interface BillingOverview {
   pendingPayment: SubscriptionPayment | null;
   payments: SubscriptionPayment[];
   oplexBank: OplexBankDetails;
+  // Usuarios activos (sin contadores externos) y clientes activos: lo que
+  // cuentan los topes de cada plan.
+  usage: { users: number; clients: number };
 }
 
 export const billingApi = {

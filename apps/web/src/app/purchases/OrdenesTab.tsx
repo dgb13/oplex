@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { describeReceiptStatus, purchaseOrdersApi } from '@/lib/purchases';
 import { useQuery } from '@tanstack/react-query';
 import { PackageCheck } from 'lucide-react';
@@ -38,13 +39,15 @@ export default function OrdenesTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-        >
-          Nueva orden
-        </button>
+        <ReadOnlyLock>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+          >
+            Nueva orden
+          </button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import {
   ARGENTINE_JURISDICTION_LABELS,
@@ -50,9 +51,11 @@ export default function WithholdingRegimesTab() {
       )}
 
       <div className="flex justify-end">
-        <Button type="button" onClick={() => setNewOpen(true)}>
-          + Nuevo régimen
-        </Button>
+        <ReadOnlyLock>
+          <Button type="button" onClick={() => setNewOpen(true)}>
+            + Nuevo régimen
+          </Button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

@@ -16,7 +16,10 @@ import { UserAvatarService } from './user-avatar.service.js';
 import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { SignupService } from './signup.service.js';
 import { requestMeta } from '../legal/legal.controller.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
+// Entrar, el perfil y la contraseña andan aunque la cuenta esté en sólo lectura.
+@AllowWhenReadOnly()
 @Controller('auth')
 export class AuthController {
   constructor(

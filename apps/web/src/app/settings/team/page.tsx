@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
 import { profileApi } from '@/lib/profile';
@@ -58,9 +59,11 @@ export default function TeamPage() {
             Quién tiene acceso a esta cuenta, con qué rol y qué tan activo está.
           </p>
         </div>
-        <Button type="button" className="shrink-0" onClick={() => setInviteOpen(true)}>
-          + Invitar / Agregar colaborador
-        </Button>
+        <ReadOnlyLock>
+          <Button type="button" className="shrink-0" onClick={() => setInviteOpen(true)}>
+            + Invitar / Agregar colaborador
+          </Button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

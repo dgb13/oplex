@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import { taxesApi, type TaxCalculationType, type TaxDefinition } from '@/lib/taxes';
 import { useQuery } from '@tanstack/react-query';
@@ -39,9 +40,11 @@ export default function TaxDefinitionsTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button type="button" onClick={() => setNewOpen(true)}>
-          + Nuevo impuesto
-        </Button>
+        <ReadOnlyLock>
+          <Button type="button" onClick={() => setNewOpen(true)}>
+            + Nuevo impuesto
+          </Button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

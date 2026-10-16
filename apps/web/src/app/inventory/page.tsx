@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import {
   buildVariantLabel,
   formatStock,
@@ -294,16 +295,24 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href="/inventory/import" className={buttonVariants({ variant: 'outline' })}>
-            Importar artículos
-          </Link>
-          <Button variant="outline" onClick={() => setCreatingWarehouse(true)}>
-            + Nuevo depósito
-          </Button>
-          <Button variant="outline" onClick={() => setCreatingArticle(true)}>
-            + Nuevo artículo
-          </Button>
-          <Button onClick={() => setModalOpen(true)}>+ Nuevo movimiento</Button>
+          <ReadOnlyLock>
+            <Link href="/inventory/import" className={buttonVariants({ variant: 'outline' })}>
+              Importar artículos
+            </Link>
+          </ReadOnlyLock>
+          <ReadOnlyLock>
+            <Button variant="outline" onClick={() => setCreatingWarehouse(true)}>
+              + Nuevo depósito
+            </Button>
+          </ReadOnlyLock>
+          <ReadOnlyLock>
+            <Button variant="outline" onClick={() => setCreatingArticle(true)}>
+              + Nuevo artículo
+            </Button>
+          </ReadOnlyLock>
+          <ReadOnlyLock>
+            <Button onClick={() => setModalOpen(true)}>+ Nuevo movimiento</Button>
+          </ReadOnlyLock>
         </div>
       </div>
 

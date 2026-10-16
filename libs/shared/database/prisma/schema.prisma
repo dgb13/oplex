@@ -581,6 +581,11 @@ model TenantSubscription {
   promoLabel           String?
   promoDiscountPercent Decimal?           @db.Decimal(5, 2)
   promoExpiresAt       DateTime?
+  // Avisos por mail ya mandados, para no repetirlos (ver
+  // SubscriptionNoticeService): "faltan 3 días de prueba" y "renovar el
+  // plan", este último guardando el currentPeriodEnd por el que se avisó.
+  trialEndingNoticeSentAt DateTime?
+  renewalNoticeSentFor    DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -631,6 +636,10 @@ model SubscriptionPayment {
   externalId     String?
   reviewedAt     DateTime?
   reviewedBy     String?
+  // Motivo del rechazo que escribe Oplex (le llega al cliente por mail).
+  reviewNote     String?
+  // Quién avisó la transferencia (nombre o email del usuario).
+  reportedBy     String?
   createdAt      DateTime                  @default(now())
   updatedAt      DateTime                  @updatedAt
 

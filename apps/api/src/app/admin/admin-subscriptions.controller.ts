@@ -7,6 +7,7 @@ import {
   ExtendTrialDto,
   OplexBankDetailsDto,
   RecordSubscriptionPaymentDto,
+  RejectSubscriptionPaymentDto,
 } from './dto/admin-subscription.dto.js';
 
 @Controller('admin/subscriptions')
@@ -56,9 +57,10 @@ export class AdminSubscriptionsController {
   reject(
     @Param('tenantId') tenantId: string,
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body() dto: RejectSubscriptionPaymentDto,
     @CurrentUser() admin: AuthenticatedUser,
   ) {
-    return this.service.rejectPayment(tenantId, paymentId, admin.email);
+    return this.service.rejectPayment(tenantId, paymentId, admin.email, dto.note);
   }
 
   @Post(':tenantId/extend-trial')

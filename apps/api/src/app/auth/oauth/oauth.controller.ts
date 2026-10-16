@@ -10,11 +10,13 @@ import { OAuthConfigService } from './oauth-config.service.js';
 import type { OAuthLoginOutcome } from './oauth.service.js';
 import { OAuthService } from './oauth.service.js';
 import type { OAuthValidatedProfile } from './oauth.types.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 type RequestWithOAuthProfile = FastifyRequest & { user: OAuthValidatedProfile };
 
 const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:4200';
 
+@AllowWhenReadOnly()
 @Controller('auth/oauth')
 export class OAuthController {
   constructor(

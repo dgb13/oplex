@@ -14,7 +14,13 @@
       "path": "../auth/tsconfig.lib.json"
     },
     {
+      "path": "../auth-email/tsconfig.lib.json"
+    },
+    {
       "path": "../database/tsconfig.lib.json"
+    },
+    {
+      "path": "../types/tsconfig.lib.json"
     }
   ],
   "exclude": [

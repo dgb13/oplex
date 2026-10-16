@@ -5,12 +5,15 @@ import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyRequest } from 'fastify';
 import { CancellationRequestDto, WithdrawalRequestDto } from './dto/legal-request.dto.js';
 import { LegalService, type RequestMeta } from './legal.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 export function requestMeta(req: FastifyRequest): RequestMeta {
   const ua = req.headers['user-agent'];
   return { ip: req.ip, userAgent: Array.isArray(ua) ? ua[0] : ua };
 }
 
+// Aceptar los Términos y pedir la baja andan aunque la cuenta esté en sólo lectura.
+@AllowWhenReadOnly()
 @Controller('legal')
 export class LegalController {
   constructor(private readonly legal: LegalService) {}
