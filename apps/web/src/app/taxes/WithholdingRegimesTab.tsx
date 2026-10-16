@@ -90,8 +90,10 @@ export default function WithholdingRegimesTab() {
                     <td className="p-3 text-muted-foreground">
                       {regime.jurisdiction ? ARGENTINE_JURISDICTION_LABELS[regime.jurisdiction] : '—'}
                     </td>
-                    <td className="p-3">{regime.rate}%</td>
-                    <td className="p-3">${regime.minTaxableAmount}</td>
+                    <td className="p-3">{Number(regime.rate).toLocaleString('es-AR', { maximumFractionDigits: 4 })}%</td>
+                    <td className="p-3">
+                      ${Number(regime.minTaxableAmount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
                     <td className="p-3 text-xs text-muted-foreground">
                       {new Date(regime.validFrom).toLocaleDateString('es-AR')} —{' '}
                       {active ? (
