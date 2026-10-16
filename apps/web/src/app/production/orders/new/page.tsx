@@ -7,15 +7,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import { buildArticleVariantLookup, inventoryApi } from '@/lib/inventory';
-import { dateInputToIso, isoToDateInput, productionApi } from '@/lib/production';
+import { dateInputToIso, isoToDateInput, productionApi, type BomLine } from '@/lib/production';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Package, Ruler } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProductionPlanGateBanner, useProductionGate } from '../../ProductionPlanGate';
 
 const QUANTITY_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+/** Qué pieza de ese insumo lleva cada unidad: el mismo perfil aparece una
+ * vez por largo de corte, y sin esto se ven filas repetidas. */
+function pieceLabel(line: BomLine, perUnit: number, unit: string | undefined): string {
+  const mm = (v: string) => QUANTITY_FORMAT.format(Number(v));
+  if (line.width && line.length) return `${line.cutsCount ?? 1} × ${mm(line.width)} × ${mm(line.length)} mm`;
+  if (line.length) return `${line.cutsCount ?? 1} × ${mm(line.length)} mm`;
+  return `${QUANTITY_FORMAT.format(perUnit)}${unit ? ` ${unit}` : ''} por unidad`;
+}
 
 export default function NewProductionOrderPage() {
   const router = useRouter();
@@ -29,6 +38,8 @@ export default function NewProductionOrderPage() {
   // viene); los insumos se reservan igual al crear la orden.
   const [scheduledStart, setScheduledStart] = useState(() => isoToDateInput(new Date().toISOString()));
   const [error, setError] = useState('');
+  // El aviso es del intento anterior: al corregir un campo deja de aplicar.
+  useEffect(() => setError(''), [outputArticleVariantId, warehouseId, quantity]);
 
   const warehousesQuery = useQuery({
     queryKey: ['inventory-warehouses'],
@@ -242,6 +253,7 @@ function ProducibilityPreview({
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className={`truncate ${isBottleneck ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
                     {article ? article.articleName : entry.line.inputArticleVariantId}
+                    <span className="font-normal text-muted-foreground"> · {pieceLabel(entry.line, requeridoPorUnidad, article?.stockUnit)}</span>
                   </span>
                   <span className="shrink-0 text-muted-foreground tabular-nums">
                     {QUANTITY_FORMAT.format(disponible)}
