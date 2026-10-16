@@ -375,7 +375,7 @@ function PendingCard({ billing }: { billing: BillingOverview }) {
   if (subscription.currentPeriodEnd) {
     facts.push(['Funciona hasta', `${formatDate(subscription.currentPeriodEnd)} (o hasta que confirmemos)`]);
   }
-  const reportedAt = new Date(payment.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const reportedAt = new Date(payment.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border p-5">
