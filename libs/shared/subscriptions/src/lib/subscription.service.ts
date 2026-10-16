@@ -79,10 +79,15 @@ export class SubscriptionService {
    * for everyone, only writes where it matters" shape as
    * ReceivablesSchedulerService's daily sweep. */
   async expireIfTrialEnded(): Promise<boolean> {
-    const result = await getTenantDb().tenantSubscription.updateMany({
-      where: { tenantId: getTenantId(), status: 'TRIALING', trialEndsAt: { lt: new Date() } },
-      data: { status: 'EXPIRED' },
+    const db = getTenantDb();
+    const where = { tenantId: getTenantId(), status: 'TRIALING' as const, trialEndsAt: { lt: new Date() } };
+    // Una "prueba" de un plan gratis no vence: queda activa sin fecha, igual
+    // que al pasarse a Basic Gratis desde Planes y facturación.
+    await db.tenantSubscription.updateMany({
+      where: { ...where, plan: { priceMonthly: { lte: 0 } } },
+      data: { status: 'ACTIVE', currentPeriodEnd: null, graceEndsAt: null },
     });
+    const result = await db.tenantSubscription.updateMany({ where, data: { status: 'EXPIRED' } });
     return result.count > 0;
   }
 
@@ -98,6 +103,13 @@ export class SubscriptionService {
     const trialEndsAt = new Date();
     trialEndsAt.setUTCDate(trialEndsAt.getUTCDate() + TRIAL_DAYS);
 
+    // Registrarse con el plan gratis no es una prueba: arranca activo.
+    if (Number(plan.priceMonthly) <= 0) {
+      return getTenantDb().tenantSubscription.create({
+        data: { tenantId, planId: plan.id, status: 'ACTIVE' },
+        include: { plan: true },
+      });
+    }
     return getTenantDb().tenantSubscription.create({
       data: { tenantId, planId: plan.id, status: 'TRIALING', trialEndsAt },
       include: { plan: true },
