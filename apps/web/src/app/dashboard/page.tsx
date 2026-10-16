@@ -45,7 +45,7 @@ import {
 interface WarehouseStock {
   warehouseId: string;
   warehouseName: string;
-  items: { articleVariantId: string; sku: string; articleName: string; quantity: number }[];
+  items: { articleVariantId: string; sku: string; articleName: string; quantity: number; unit: string }[];
   totalItems: number;
 }
 
@@ -253,10 +253,10 @@ export default function DashboardPage() {
         {
           id: 'stock',
           icon: Package,
-          label: 'Stock total',
+          label: 'Artículos con stock',
           value: stockTotal,
           decimals: 0,
-          sub: `${data.stockByWarehouse.length} depósito${data.stockByWarehouse.length !== 1 ? 's' : ''}`,
+          sub: `en ${data.stockByWarehouse.length} depósito${data.stockByWarehouse.length !== 1 ? 's' : ''}`,
           accent: 'primary',
         },
         {
@@ -396,7 +396,9 @@ function DashboardBelowKpis({
                   <CardContent>
                     <div className="mb-2 flex items-center justify-between">
                       <span className="font-medium">{wh.warehouseName}</span>
-                      <span className="text-lg font-bold text-primary">{wh.totalItems}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {wh.totalItems} artículo{wh.totalItems !== 1 ? 's' : ''}
+                      </span>
                     </div>
                     {wh.items.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Sin stock</p>
@@ -404,8 +406,10 @@ function DashboardBelowKpis({
                       <ul className="flex flex-col gap-1">
                         {wh.items.slice(0, 5).map((item) => (
                           <li key={item.articleVariantId} className="flex justify-between text-xs">
-                            <span className="truncate text-muted-foreground">{item.sku}</span>
-                            <span className="ml-2 shrink-0">{item.quantity}</span>
+                            <span className="truncate text-muted-foreground">{item.articleName}</span>
+                            <span className="ml-2 shrink-0">
+                              {item.quantity.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {item.unit}
+                            </span>
                           </li>
                         ))}
                         {wh.items.length > 5 && (
