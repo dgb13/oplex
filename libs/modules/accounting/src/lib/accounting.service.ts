@@ -15,6 +15,14 @@ import {
 import type { CreateAccountDto } from './dto/create-account.dto.js';
 import type { CreateReversingEntryDto } from './dto/create-reversing-entry.dto.js';
 import type { PostJournalEntryDto } from './dto/post-journal-entry.dto.js';
+import {
+  creditNoteDescription,
+  goodsReceiptDescription,
+  purchaseCreditNoteDescription,
+  purchaseInvoiceDescription,
+  saleDescription,
+  withReadableDescriptions,
+} from './journal-descriptions.js';
 
 type JournalEntryWithLines = JournalEntry & { lines: JournalEntryLine[] };
 
@@ -554,11 +562,12 @@ export class AccountingService {
     return getTenantDb().accountingAccount.update({ where: { id }, data: { isMonetary: dto.isMonetary } });
   }
 
-  listJournalEntries(): Promise<JournalEntryWithLines[]> {
-    return getTenantDb().journalEntry.findMany({
+  async listJournalEntries(): Promise<JournalEntryWithLines[]> {
+    const entries = await getTenantDb().journalEntry.findMany({
       include: { lines: true },
       orderBy: { date: 'desc' },
     });
+    return withReadableDescriptions(entries);
   }
 
   async getJournalEntry(id: string): Promise<JournalEntryWithLines> {
@@ -569,7 +578,8 @@ export class AccountingService {
     if (!entry) {
       throw new NotFoundException('Journal entry not found');
     }
-    return entry;
+    const [readable] = await withReadableDescriptions([entry]);
+    return readable;
   }
 
   /**
@@ -933,7 +943,7 @@ export class AccountingService {
     }
 
     return this.postJournalEntry({
-      description: `Venta - comprobante ${input.invoiceId}`,
+      description: await saleDescription(input.invoiceId),
       date: input.date?.toISOString(),
       invoiceId: input.invoiceId,
       lines,
@@ -1058,7 +1068,7 @@ export class AccountingService {
     return getTenantDb().journalEntry.create({
       data: {
         tenantId,
-        description: `Nota de crédito - comprobante ${input.invoiceId}`,
+        description: await creditNoteDescription(input.creditNoteId, input.invoiceId),
         date: input.date,
         creditNoteId: input.creditNoteId,
         createdById,
@@ -1177,7 +1187,7 @@ export class AccountingService {
       this.getOrCreateAccount(GRNI_ACCOUNT),
     ]);
     return this.createBalancedEntry(
-      `Recepción de mercadería - remito ${input.goodsReceiptId}`,
+      await goodsReceiptDescription(input.goodsReceiptId),
       [
         { accountId: inventory.id, direction: 'DEBIT', amount: amount.toNumber() },
         { accountId: grni.id, direction: 'CREDIT', amount: amount.toNumber() },
@@ -1311,7 +1321,7 @@ export class AccountingService {
     }
 
     return this.createBalancedEntry(
-      `Factura de compra - comprobante ${input.purchaseInvoiceId}`,
+      await purchaseInvoiceDescription(input.purchaseInvoiceId),
       lines,
       { date: input.date, purchaseInvoiceId: input.purchaseInvoiceId },
     );
@@ -1357,7 +1367,7 @@ export class AccountingService {
     }
 
     return this.createBalancedEntry(
-      `Nota de crédito de compra - comprobante ${input.purchaseCreditNoteId}`,
+      await purchaseCreditNoteDescription(input.purchaseCreditNoteId),
       lines,
       { date: input.date, purchaseCreditNoteId: input.purchaseCreditNoteId },
     );
@@ -2019,11 +2029,13 @@ export class AccountingService {
       throw new NotFoundException('Account not found');
     }
 
-    const lines = await db.journalEntryLine.findMany({
+    const rawLines = await db.journalEntryLine.findMany({
       where: { accountId },
       include: { journalEntry: true },
       orderBy: { journalEntry: { date: 'asc' } },
     });
+    const entries = await withReadableDescriptions(rawLines.map((l) => l.journalEntry));
+    const lines = rawLines.map((l, i) => ({ ...l, journalEntry: entries[i] }));
 
     return { accountId, code: account.code, name: account.name, lines };
   }

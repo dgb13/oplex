@@ -16,9 +16,12 @@ const CALC_TYPE_LABELS: Record<TaxCalculationType, string> = {
   NO_GRAVADO: 'No gravado',
 };
 
+const RATE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 });
+const MONEY = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function formatValue(def: TaxDefinition): string {
-  if (def.calculationType === 'PERCENTAGE') return def.rate ? `${def.rate}%` : '—';
-  if (def.calculationType === 'FIXED_AMOUNT') return def.fixedAmount ? `$${def.fixedAmount}` : '—';
+  if (def.calculationType === 'PERCENTAGE') return def.rate ? `${RATE.format(Number(def.rate))}%` : '—';
+  if (def.calculationType === 'FIXED_AMOUNT') return def.fixedAmount ? `${MONEY.format(Number(def.fixedAmount))}` : '—';
   if (def.calculationType === 'EXENTO' || def.calculationType === 'NO_GRAVADO') return '—';
   return def.formula ?? '—';
 }

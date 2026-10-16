@@ -51,6 +51,13 @@ interface Props {
   autoOpenNew?: boolean;
 }
 
+const NOUNS: Record<string, [string, string]> = {
+  '': ['empresa', 'empresas'],
+  BRANCH: ['sucursal', 'sucursales'],
+  CUSTOMER: ['cliente', 'clientes'],
+  SUPPLIER: ['proveedor', 'proveedores'],
+};
+
 export default function CompanyListView({
   role,
   editable,
@@ -80,6 +87,8 @@ export default function CompanyListView({
   });
 
   const companies = companiesQuery.data ?? [];
+  // "3 sucursales" en Sucursales, no "3 empresas".
+  const [one, many] = NOUNS[role ?? ''] ?? NOUNS[''];
   const normalizedSearch = search.trim().toLowerCase();
   const rows =
     normalizedSearch === ''
@@ -96,7 +105,7 @@ export default function CompanyListView({
     <div>
       <h1 className="text-xl font-semibold">{title}</h1>
       <p className="mt-1 text-xs text-muted-foreground">
-        {rows.length} empresa{rows.length !== 1 ? 's' : ''}
+        {rows.length} {rows.length === 1 ? one : many}
       </p>
     </div>
   );
@@ -155,15 +164,15 @@ export default function CompanyListView({
       <div className={variant === 'card' ? '' : 'rounded-xl border bg-card p-4'}>
         {companiesQuery.isLoading ? (
           <div className="flex h-40 items-center justify-center text-muted-foreground">
-            Cargando empresas...
+            Cargando {many}...
           </div>
         ) : companiesQuery.error ? (
           <div className="flex h-40 items-center justify-center text-destructive">
-            Error al cargar las empresas
+            No se pudieron cargar las {many}
           </div>
         ) : rows.length === 0 ? (
           <div className="flex h-40 items-center justify-center text-muted-foreground">
-            Sin empresas que coincidan
+            Sin {many} que coincidan
           </div>
         ) : (
           <div className="overflow-x-auto">

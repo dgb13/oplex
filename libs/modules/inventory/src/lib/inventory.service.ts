@@ -887,7 +887,10 @@ export class InventoryService {
         data: { quantity: { increment: delta } },
       });
       if (decremented.count === 0) {
-        throw new BadRequestException('No hay stock suficiente en este depósito');
+        // Un ajuste no pasa por el chequeo de arriba: decir cuánto hay.
+        throw new BadRequestException(
+          `No hay stock suficiente en este depósito: hay ${(priorLedger?.quantity ?? new Prisma.Decimal(0)).toString()} y se piden ${-delta}`,
+        );
       }
     } else {
       let newAvgUnitCost: Prisma.Decimal | undefined;

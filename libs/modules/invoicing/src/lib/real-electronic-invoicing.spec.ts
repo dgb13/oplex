@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException } from '@nestjs/common';
 import type { AfipCredentialsService } from '@plexo/afip-credentials';
 import { Prisma } from '@plexo/database';
-import { RealElectronicInvoicingService } from './real-electronic-invoicing.js';
+import { explainArcaError, RealElectronicInvoicingService } from './real-electronic-invoicing.js';
 import type { ElectronicInvoiceRequest } from './electronic-invoicing.port.js';
 
 function makeInvoice(): ElectronicInvoiceRequest {
@@ -47,5 +47,18 @@ describe('RealElectronicInvoicingService.requestCae', () => {
     const service = new RealElectronicInvoicingService(afipCredentials);
 
     await expect(service.requestCae(makeInvoice())).rejects.toThrow(BadGatewayException);
+  });
+});
+
+describe('explainArcaError', () => {
+  it('explica el punto de venta no habilitado para Web Services', () => {
+    const raw = 'ARCA WSFE: [11002] El punto de venta no se encuentra habilitado a usar en el presente WS. Ver metodo FEParamGetPtosVenta';
+    const text = explainArcaError(raw, '1');
+    expect(text).toMatch(/^El punto de venta 0001 no está habilitado para Web Services en ARCA\. Revisá el número en Sucursales/);
+    expect(text).toContain(`Detalle de ARCA: ${raw}`);
+  });
+
+  it('deja el resto como lo manda ARCA', () => {
+    expect(explainArcaError('ARCA WSFE: [600] ValidacionDeToken', '1')).toBe('ARCA WSFE: [600] ValidacionDeToken');
   });
 });

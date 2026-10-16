@@ -2,17 +2,28 @@ import { Injectable } from '@nestjs/common';
 import { getTenantDb, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 
+/** Mismo criterio que stockUnitLabel del front (apps/web/src/lib/inventory.ts). */
+function stockUnit(article: { measurementType: string; baseUnit: string | null; unitOfMeasure: string }): string {
+  if (article.measurementType === 'LINEAL_1D') return 'mm';
+  if (article.measurementType === 'SURFACE_2D') return 'm²';
+  if (article.measurementType === 'CONTINUOUS') return article.baseUnit ?? '';
+  return article.unitOfMeasure === 'KG' ? 'kg' : 'un.';
+}
+
 export interface StockItem {
   articleVariantId: string;
   sku: string;
   articleName: string;
   quantity: number;
+  /** Unidad de quantity: mm, m², la base de un continuo (gr, ml), kg o un. */
+  unit: string;
 }
 
 export interface WarehouseStock {
   warehouseId: string;
   warehouseName: string;
   items: StockItem[];
+  /** Artículos con stock. No se suman cantidades: mezclan mm, m², kg y unidades. */
   totalItems: number;
 }
 
@@ -129,17 +140,21 @@ export class DashboardService {
 
     // Stock by warehouse
     const stockByWarehouse: WarehouseStock[] = warehouses.map((wh) => {
-      const items: StockItem[] = wh.stockLedger.map((sl) => ({
-        articleVariantId: sl.articleVariantId,
-        sku: sl.articleVariant.sku,
-        articleName: sl.articleVariant.article.name,
-        quantity: sl.quantity.toNumber(),
-      }));
+      const items: StockItem[] = wh.stockLedger
+        .filter((sl) => sl.quantity.gt(0) && !sl.articleVariant.article.isService)
+        .map((sl) => ({
+          articleVariantId: sl.articleVariantId,
+          sku: sl.articleVariant.sku,
+          articleName: sl.articleVariant.article.name,
+          quantity: sl.quantity.toNumber(),
+          unit: stockUnit(sl.articleVariant.article),
+        }))
+        .sort((a, b) => a.articleName.localeCompare(b.articleName, 'es'));
       return {
         warehouseId: wh.id,
         warehouseName: wh.name,
         items,
-        totalItems: items.reduce((s, i) => s + i.quantity, 0),
+        totalItems: items.length,
       };
     });
 

@@ -19,7 +19,7 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
   constructor(private readonly afipCredentials: AfipCredentialsService) {}
 
   async requestCae(invoice: ElectronicInvoiceRequest): Promise<ElectronicInvoiceResult> {
-    return this.withClient((client) => client.requestCae(invoice));
+    return this.withClient((client) => client.requestCae(invoice), invoice.pointOfSale);
   }
 
   async lastAuthorizedNumber(sequence: VoucherSequence): Promise<number> {
@@ -28,6 +28,7 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
         Number.parseInt(sequence.pointOfSale, 10),
         CBTE_TIPO[sequence.kind][sequence.documentLetter],
       ),
+      sequence.pointOfSale,
     );
   }
 
@@ -38,10 +39,11 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
         CBTE_TIPO[sequence.kind][sequence.documentLetter],
         number,
       ),
+      sequence.pointOfSale,
     );
   }
 
-  private async withClient<T>(fn: (client: AfipWsfeClient) => Promise<T>): Promise<T> {
+  private async withClient<T>(fn: (client: AfipWsfeClient) => Promise<T>, pointOfSale?: string): Promise<T> {
     const credentials = await this.afipCredentials.getCurrent();
     if (!credentials) {
       throw new BadRequestException(
@@ -56,7 +58,19 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
       // voucher rejected) - same 502 convention as AfipLookupError in the
       // padrón integration (see CompaniesService.lookupAfip), since this is
       // the upstream failing, not a malformed request on our end.
-      throw new BadGatewayException((err as Error).message);
+      throw new BadGatewayException(explainArcaError((err as Error).message, pointOfSale));
     }
   }
+}
+
+/** El texto de ARCA no dice qué hacer; para los errores que el usuario
+ * resuelve solo, se antepone la explicación (mismo criterio que
+ * ArcaConnectionService.describeFailure, que además lista los habilitados). */
+export function explainArcaError(raw: string, pointOfSale?: string): string {
+  // [11002] El punto de venta no se encuentra habilitado a usar en el presente WS.
+  if (raw.includes('[11002]')) {
+    const pv = pointOfSale ? `El punto de venta ${pointOfSale.padStart(4, '0')}` : 'El punto de venta';
+    return `${pv} no está habilitado para Web Services en ARCA. Revisá el número en Sucursales; "Probar conexión" en Contabilidad › Conexión con ARCA te dice cuáles tiene habilitados. Detalle de ARCA: ${raw}`;
+  }
+  return raw;
 }
