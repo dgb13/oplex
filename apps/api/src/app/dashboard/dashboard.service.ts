@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { getTenantDb } from '@plexo/database';
+import { getTenantDb, Prisma } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
 
 export interface StockItem {
@@ -55,17 +55,41 @@ export interface DashboardSnapshot {
   salesLast7Days: SalesDay[];
 }
 
+type WithCreditNotes = { total: Prisma.Decimal; creditNotes: { total: Prisma.Decimal }[] };
+
+function creditedTotal(inv: WithCreditNotes): number {
+  return inv.creditNotes.reduce((s, cn) => s + cn.total.toNumber(), 0);
+}
+
+function netTotal(inv: WithCreditNotes): number {
+  return inv.total.toNumber() - creditedTotal(inv);
+}
+
+/** Mismo criterio que invoiceDisplayStatus en la web: "Anulada" cuando las
+ * notas de crédito cubren el total. */
+function isFullyCredited(inv: WithCreditNotes): boolean {
+  return inv.total.toNumber() > 0 && creditedTotal(inv) >= inv.total.toNumber();
+}
+
+// "Hoy" y los días del gráfico van en hora argentina (UTC-3, sin horario de
+// verano), no en la del servidor: el contenedor corre en UTC y una factura
+// de las 22 hs caía en el día siguiente.
+const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Fecha argentina (AAAA-MM-DD) de un instante. */
+function arDayKey(date: Date): string {
+  return new Date(date.getTime() - AR_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly inventoryService: InventoryService) {}
 
   async getSnapshot(): Promise<DashboardSnapshot> {
     const db = getTenantDb();
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(todayStart);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const todayStart = new Date(Date.parse(`${arDayKey(new Date())}T00:00:00Z`) + AR_OFFSET_MS);
+    const sevenDaysAgo = new Date(todayStart.getTime() - 6 * DAY_MS);
 
     const [warehouses, recentInvoices, todayInvoices, last7Invoices, reorderSuggestions] =
       await Promise.all([
@@ -89,15 +113,16 @@ export class DashboardService {
             issueDate: true,
             documentLetter: true,
             number: true,
+            creditNotes: { select: { total: true } },
           },
         }),
         db.invoice.findMany({
           where: { issueDate: { gte: todayStart }, status: { not: 'CANCELLED' } },
-          select: { total: true, status: true },
+          select: { total: true, status: true, creditNotes: { select: { total: true } } },
         }),
         db.invoice.findMany({
           where: { issueDate: { gte: sevenDaysAgo }, status: { not: 'CANCELLED' } },
-          select: { issueDate: true, total: true },
+          select: { issueDate: true, total: true, creditNotes: { select: { total: true } } },
         }),
         this.inventoryService.listReorderSuggestions(),
       ]);
@@ -130,26 +155,26 @@ export class DashboardService {
       minimumQuantity: s.minimumQuantity,
     }));
 
-    // Today summary
-    const todayTotal = todayInvoices.reduce((s, inv) => s + inv.total.toNumber(), 0);
+    // Today summary - neto de notas de crédito, como el Resumen de
+    // Facturación: una factura anulada por NC queda en PAID a propósito (ver
+    // InvoicingService.createCreditNote), así que no es venta ni cobro.
+    const todayActive = todayInvoices.filter((inv) => !isFullyCredited(inv));
     const todaySummary: TodaySummary = {
-      invoiceCount: todayInvoices.length,
-      total: todayTotal,
-      paidCount: todayInvoices.filter((inv) => inv.status === 'PAID').length,
+      invoiceCount: todayActive.length,
+      total: todayActive.reduce((s, inv) => s + netTotal(inv), 0),
+      paidCount: todayActive.filter((inv) => inv.status === 'PAID').length,
     };
 
-    // Sales last 7 days — group by date string
+    // Sales last 7 days — group by date string (fecha argentina)
     const salesMap = new Map<string, { total: number; count: number }>();
     for (let i = 0; i < 7; i++) {
-      const d = new Date(sevenDaysAgo);
-      d.setDate(d.getDate() + i);
-      salesMap.set(d.toISOString().split('T')[0]!, { total: 0, count: 0 });
+      salesMap.set(arDayKey(new Date(sevenDaysAgo.getTime() + i * DAY_MS)), { total: 0, count: 0 });
     }
     for (const inv of last7Invoices) {
-      const key = inv.issueDate.toISOString().split('T')[0]!;
+      const key = arDayKey(inv.issueDate);
       const existing = salesMap.get(key);
-      if (existing) {
-        existing.total += inv.total.toNumber();
+      if (existing && !isFullyCredited(inv)) {
+        existing.total += netTotal(inv);
         existing.count += 1;
       }
     }
@@ -165,7 +190,7 @@ export class DashboardService {
         customerName: inv.customerName,
         total: inv.total.toNumber(),
         balanceDue: inv.balanceDue.toNumber(),
-        status: inv.status,
+        status: isFullyCredited(inv) ? 'CREDITED' : inv.status,
         issueDate: inv.issueDate.toISOString(),
         documentLetter: inv.documentLetter,
         number: inv.number,

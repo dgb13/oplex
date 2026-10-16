@@ -30,29 +30,65 @@ function normalize(text: string): string {
     .toLowerCase();
 }
 
+// Palabras que no ayudan a encontrar nada ("¿cómo subo el certificado?").
+const STOP_WORDS = new Set('a al como con cual de del el en es la las lo los me mi para por que se su sus un una uno y o'.split(' '));
+
+// Terminaciones que se sacan para que "vencido", "vence" y "vencimiento"
+// busquen lo mismo. De la más larga a la más corta; siempre quedan al menos
+// 4 letras, así "caja" o "iva" no se recortan.
+const SUFFIXES = [
+  'imientos', 'imiento', 'amientos', 'amiento', 'aciones', 'iciones', 'acion', 'icion', 'adoras', 'adores',
+  'adora', 'ador', 'istas', 'ista', 'iendo', 'ando', 'idos', 'idas', 'ados', 'adas', 'ido', 'ida', 'ado', 'ada', 'ales', 'al',
+  'es', 'ar', 'er', 'ir', 'as', 'os', 'a', 'e', 'o', 's',
+];
+
+function stem(word: string): string {
+  const suffix = SUFFIXES.find((s) => word.endsWith(s) && word.length - s.length >= 4);
+  return suffix ? word.slice(0, -suffix.length) : word;
+}
+
+function tokens(text: string): string[] {
+  return normalize(text).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
 /** Temario + buscador + descarga del PDF. Buscar es local (el índice viene
- * armado del servidor): sin acentos ni mayúsculas, todas las palabras
- * tienen que aparecer; el título pesa más que el texto. */
+ * armado del servidor): sin acentos ni mayúsculas, cada palabra se compara
+ * por su raíz (vencido = vence = vencimiento) contra el principio de las
+ * palabras del artículo, y tienen que aparecer todas. El título pesa más que
+ * el texto, y suma un poco cuántas veces aparece. */
 export default function DocsSidebar({ chapters, index }: { chapters: DocsSidebarChapter[]; index: DocsSearchEntry[] }) {
   const pathname = usePathname();
   const [query, setQuery] = useState('');
   const activeChapter = pathname.split('/')[2] ?? '';
 
+  const searchable = useMemo(
+    () => index.map((entry) => ({ entry, title: tokens(entry.title), body: tokens(`${entry.summary} ${entry.text}`) })),
+    [index],
+  );
+
   const results = useMemo(() => {
-    const words = normalize(query).split(/\s+/).filter((w) => w.length > 1);
-    if (words.length === 0) return null;
-    return index
-      .map((entry) => {
-        const title = normalize(entry.title);
-        const body = normalize(`${entry.summary} ${entry.text}`);
-        if (!words.every((w) => title.includes(w) || body.includes(w))) return null;
-        const score = words.reduce((sum, w) => sum + (title.includes(w) ? 3 : 1), 0);
-        return { entry, score };
-      })
-      .filter((r): r is { entry: DocsSearchEntry; score: number } => r !== null)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 12);
-  }, [query, index]);
+    const roots = tokens(query)
+      .filter((w) => w.length > 1 && !STOP_WORDS.has(w))
+      .map(stem);
+    if (roots.length === 0) return null;
+    const scored = searchable.map(({ entry, title, body }) => {
+      let score = 0;
+      let matched = 0;
+      for (const root of roots) {
+        const inTitle = title.some((t) => t.startsWith(root));
+        const hits = body.filter((t) => t.startsWith(root)).length;
+        if (!inTitle && hits === 0) continue;
+        matched += 1;
+        score += (inTitle ? 3 : 1) + Math.min(hits, 10) * 0.1;
+      }
+      return { entry, score, matched };
+    });
+    // Primero los que tienen todas las palabras; si ninguno, los que tienen
+    // más (un verbo conjugado como "subo" no siempre aparece tal cual).
+    const all = scored.filter((r) => r.matched === roots.length);
+    const pool = all.length > 0 ? all : scored.filter((r) => r.matched > 0);
+    return pool.sort((a, b) => b.matched - a.matched || b.score - a.score).slice(0, 12);
+  }, [query, searchable]);
 
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" aria-label="Temario del manual">
