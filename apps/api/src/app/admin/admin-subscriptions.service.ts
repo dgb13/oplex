@@ -71,8 +71,8 @@ export class AdminSubscriptionsService {
     return withTenantContext(this.prisma, tenantId, () => this.billing.confirmPayment(paymentId, adminEmail));
   }
 
-  rejectPayment(tenantId: string, paymentId: string, adminEmail: string) {
-    return withTenantContext(this.prisma, tenantId, () => this.billing.rejectPayment(paymentId, adminEmail));
+  rejectPayment(tenantId: string, paymentId: string, adminEmail: string, note?: string) {
+    return withTenantContext(this.prisma, tenantId, () => this.billing.rejectPayment(paymentId, adminEmail, note));
   }
 
   extendTrial(tenantId: string, days: number) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,7 +112,9 @@ export default function CompanyListView({
                 {role === 'SUPPLIER' ? 'Importar proveedores' : 'Importar clientes'}
               </Link>
             )}
-            <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>
+            <ReadOnlyLock>
+              <Button onClick={() => setNewOpen(true)}>{newLabel ?? '+ Nueva empresa'}</Button>
+            </ReadOnlyLock>
           </div>
         )}
       </div>

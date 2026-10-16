@@ -50,6 +50,23 @@ function errorMessage(err: unknown, fallback: string): string {
   return Array.isArray(message) ? message.join(', ') : message;
 }
 
+const DAY_MS = 86_400_000;
+// Argentina no tiene horario de verano: siempre UTC-3.
+function arDay(date: Date): string {
+  return new Date(date.getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** Cuándo vence el crédito provisorio de una transferencia avisada: si nadie
+ * la confirma, la cuenta vuelve a su estado anterior sola. */
+function creditChip(row: TenantSubscriptionRow): { label: string; urgent: boolean } | null {
+  if (row.status !== 'ACTIVE' || !row.currentPeriodEnd) return null;
+  const end = new Date(row.currentPeriodEnd);
+  const now = new Date();
+  if (arDay(end) === arDay(now)) return { label: 'Crédito vence hoy', urgent: true };
+  if (arDay(end) === arDay(new Date(now.getTime() + DAY_MS))) return { label: 'Crédito vence mañana', urgent: true };
+  return { label: `Crédito hasta el ${formatDate(row.currentPeriodEnd)}`, urgent: false };
+}
+
 /** Hasta cuándo puede usar Oplex sin pagar de nuevo, según el estado. */
 function coveredUntil(row: TenantSubscriptionRow): string {
   if (row.status === 'TRIALING') return formatDate(row.trialEndsAt);
@@ -63,6 +80,8 @@ export default function AdminSubscriptionsPage() {
   const { data: rows, isLoading } = useQuery({ queryKey: ['admin-subscriptions'], queryFn: adminSubscriptionsApi.list });
   const { data: plans } = useQuery({ queryKey: ['admin-plans'], queryFn: adminPlansApi.listAll });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Motivo del rechazo por tenant (le llega al cliente en el mail).
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   const pending = (rows ?? []).filter((row) => row.pendingPayment);
   const selected = rows?.find((row) => row.tenantId === selectedId) ?? null;
@@ -77,7 +96,7 @@ export default function AdminSubscriptionsPage() {
     mutationFn: ({ row, action }: { row: TenantSubscriptionRow; action: 'confirm' | 'reject' }) =>
       action === 'confirm'
         ? adminSubscriptionsApi.confirm(row.tenantId, row.pendingPayment!.id)
-        : adminSubscriptionsApi.reject(row.tenantId, row.pendingPayment!.id),
+        : adminSubscriptionsApi.reject(row.tenantId, row.pendingPayment!.id, notes[row.tenantId]?.trim()),
     onSuccess: refresh,
   });
 
@@ -115,17 +134,46 @@ export default function AdminSubscriptionsPage() {
           pending.map((row) => {
             const payment = row.pendingPayment!;
             const receipt = resolveUploadUrl(payment.receiptUrl);
+            const credit = creditChip(row);
+            const reportedAt = new Date(payment.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
             return (
-              <div key={row.tenantId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-slate-900 p-4">
-                <div>
-                  <p className="font-medium text-slate-100">{row.tenantName}</p>
-                  <p className="text-xs text-slate-400">
-                    Plan {payment.plan.name} · {payment.months} {payment.months === 1 ? 'mes' : 'meses'} · {formatPesos(payment.total)} IVA
-                    incl.
-                    {payment.reference ? ` · op. ${payment.reference}` : ''} · avisó el {formatDate(payment.createdAt)}
-                  </p>
+              <div key={row.tenantId} className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-slate-900 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-100">{row.tenantName}</p>
+                    <p className="text-xs text-slate-400">
+                      Plan {payment.plan.name} · {payment.months} {payment.months === 1 ? 'mes' : 'meses'} · avisó el{' '}
+                      {formatDate(payment.createdAt)} {reportedAt}
+                      {payment.reportedBy ? ` · ${payment.reportedBy}` : ''}
+                      {payment.reference ? ` · op. ${payment.reference}` : ' · sin N° de operación'}
+                      {receipt ? '' : ' · sin comprobante'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {credit && (
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          credit.urgent ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        {credit.label}
+                      </span>
+                    )}
+                    <span className="text-lg font-semibold text-slate-100 tabular-nums">{formatPesos(payment.total)}</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-[260px] flex-1 flex-col gap-1 text-xs text-slate-400">
+                    Motivo si la rechazás (le llega al cliente en el mail)
+                    <input
+                      type="text"
+                      value={notes[row.tenantId] ?? ''}
+                      onChange={(e) => setNotes((prev) => ({ ...prev, [row.tenantId]: e.target.value }))}
+                      placeholder="Ej.: llegó un importe menor, falta el IVA"
+                      maxLength={500}
+                      className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-600"
+                    />
+                  </label>
                   {receipt && (
                     <a href={receipt} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
                       Ver comprobante
@@ -154,6 +202,8 @@ export default function AdminSubscriptionsPage() {
         )}
         {review.isError && <p className="text-xs text-red-400">{errorMessage(review.error, 'No se pudo revisar el pago')}</p>}
       </section>
+
+      {rows && <StatusSummary rows={rows} plans={plans ?? []} />}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="rounded-xl border border-slate-800 bg-slate-900">
@@ -449,6 +499,49 @@ function OplexBankCard() {
           {save.isPending ? 'Guardando...' : 'Guardar'}
         </button>
         {save.isError && <span className="text-xs text-red-400">{errorMessage(save.error, 'No se pudo guardar')}</span>}
+      </div>
+    </section>
+  );
+}
+
+/** Cuántas cuentas hay en cada estado, con el dato que importa de cada uno
+ * (mockup aprobado 2026-10-15). */
+function StatusSummary({ rows, plans }: { rows: TenantSubscriptionRow[]; plans: AdminPlan[] }) {
+  const now = Date.now();
+  const freeKeys = new Set(plans.filter((plan) => Number(plan.priceMonthly) === 0).map((plan) => plan.key));
+  const trialing = rows.filter((row) => row.status === 'TRIALING');
+  const endingSoon = trialing.filter((row) => row.trialEndsAt && new Date(row.trialEndsAt).getTime() - now <= 7 * DAY_MS).length;
+  const active = rows.filter((row) => row.status === 'ACTIVE');
+  const onFree = active.filter((row) => freeKeys.has(row.planKey)).length;
+  const pastDue = rows.filter((row) => row.status === 'PAST_DUE').length;
+  const readOnly = rows.filter((row) => row.status === 'EXPIRED');
+  // Desde cuándo está en sólo lectura: lo último que tenía cubierto.
+  const oldestDays = readOnly.reduce((max, row) => {
+    const since = row.graceEndsAt ?? row.currentPeriodEnd ?? row.trialEndsAt;
+    return since ? Math.max(max, Math.floor((now - new Date(since).getTime()) / DAY_MS)) : max;
+  }, 0);
+  const cards: { label: string; value: number; sub: string; tone?: string }[] = [
+    { label: 'En prueba', value: trialing.length, sub: `${endingSoon} vence${endingSoon === 1 ? '' : 'n'} en 7 días` },
+    { label: 'Activas', value: active.length, sub: `${onFree} en plan gratis` },
+    { label: 'Pago vencido', value: pastDue, sub: 'en días de gracia', tone: pastDue > 0 ? 'text-amber-300' : undefined },
+    {
+      label: 'Sólo lectura',
+      value: readOnly.length,
+      sub: readOnly.length > 0 ? `más vieja: ${oldestDays} día${oldestDays === 1 ? '' : 's'}` : 'ninguna',
+      tone: readOnly.length > 0 ? 'text-red-400' : undefined,
+    },
+  ];
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-slate-200">Cuentas por estado</h2>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {cards.map((card) => (
+          <div key={card.label} className="flex flex-col gap-0.5 rounded-xl border border-slate-800 bg-slate-900 p-3.5">
+            <span className="text-xs text-slate-500">{card.label}</span>
+            <strong className={`text-2xl tabular-nums ${card.tone ?? 'text-slate-100'}`}>{card.value}</strong>
+            <span className="text-xs text-slate-500">{card.sub}</span>
+          </div>
+        ))}
       </div>
     </section>
   );

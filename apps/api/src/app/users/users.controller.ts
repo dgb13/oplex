@@ -7,6 +7,7 @@ import { InviteUserDto } from './dto/invite-user.dto.js';
 import { SendInvitationDto } from './dto/send-invitation.dto.js';
 import { ToggleStatusDto } from './dto/toggle-status.dto.js';
 import { UsersService } from './users.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 @Controller('users')
 export class UsersController {
@@ -43,6 +44,9 @@ export class UsersController {
   }
 
   @Roles('OWNER', 'ADMIN')
+  // Desactivar usuarios anda en sólo lectura: es como se entra en los topes
+  // de un plan más chico (Basic Gratis).
+  @AllowWhenReadOnly()
   @Patch(':id/status')
   toggleStatus(@Param('id') id: string, @Body() dto: ToggleStatusDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.usersService.toggleStatus(id, dto, actor);

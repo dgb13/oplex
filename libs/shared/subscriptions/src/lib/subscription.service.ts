@@ -292,7 +292,7 @@ export class SubscriptionService {
     const subscription = await this.getCurrentForTenant();
     if (subscription.status === 'EXPIRED' || subscription.status === 'CANCELLED') {
       throw new ForbiddenException(
-        'Tu período de prueba venció - actualizá tu plan para seguir usando Oplex',
+        'Tu cuenta está en sólo lectura. Para volver a cargar, elegí un plan en Planes y facturación.',
       );
     }
     return subscription;

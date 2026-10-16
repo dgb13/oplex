@@ -51,6 +51,12 @@ function isPublicAuthRequest(url: unknown): boolean {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Cuenta en sólo lectura (ver SubscriptionReadOnlyGuard en la API): el
+    // aviso con "Ver planes" lo muestra ReadOnlyNotice, en AppShell. El
+    // error sigue su curso igual, para que cada pantalla corte su "guardando".
+    if (typeof window !== 'undefined' && error?.response?.status === 403 && error?.response?.data?.code === 'SUBSCRIPTION_READ_ONLY') {
+      window.dispatchEvent(new Event('oplex:read-only'));
+    }
     if (typeof window !== 'undefined' && error?.response?.status === 401 && !isPublicAuthRequest(error?.config?.url)) {
       const adminToken = localStorage.getItem('adminToken');
       const membershipHomeToken = localStorage.getItem('membershipHomeToken');

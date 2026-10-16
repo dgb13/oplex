@@ -3,10 +3,13 @@ import { CurrentUser } from '@plexo/auth';
 import type { AuthenticatedUser } from '@plexo/types';
 import { RequestWhatsAppLinkDto } from './dto/request-whatsapp-link.dto.js';
 import { WhatsAppLinkService } from './whatsapp-link.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 // Sin @Public(): requiere sesión, igual que /profile - la vinculación
 // arranca con el usuario YA logueado con su contraseña real (sección 3.3
 // del plan), WhatsApp por sí solo nunca alcanza para probar identidad.
+// Parte de Mi perfil: anda aunque la cuenta esté en sólo lectura.
+@AllowWhenReadOnly()
 @Controller('whatsapp-link')
 export class WhatsAppLinkController {
   constructor(private readonly whatsAppLinkService: WhatsAppLinkService) {}

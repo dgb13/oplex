@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import InvoiceDetailPanel from '@/components/InvoiceDetailPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,9 @@ export default function GestionTab() {
         <p className="text-xs text-muted-foreground">
           {rows.length} factura{rows.length !== 1 ? 's' : ''}
         </p>
-        <Button onClick={() => setNewInvoiceOpen(true)}>+ Nueva factura</Button>
+        <ReadOnlyLock>
+          <Button onClick={() => setNewInvoiceOpen(true)}>+ Nueva factura</Button>
+        </ReadOnlyLock>
       </div>
 
       <Input

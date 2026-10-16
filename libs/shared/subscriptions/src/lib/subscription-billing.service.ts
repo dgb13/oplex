@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   getTenantDb,
   getTenantId,
+  getUserId,
   PrismaService,
   type Plan,
   type SubscriptionPayment,
@@ -14,13 +15,14 @@ import {
   SUBSCRIPTION_MONTH_OPTIONS,
   type SubscriptionPaymentMethodValue,
 } from './subscription-pricing.js';
+import { SubscriptionNoticeService } from './subscription-notice.service.js';
 
 /** Días que una transferencia avisada mantiene activa la cuenta mientras
  * Oplex la confirma (regla aprobada con el usuario, 2026-10-03). */
 export const TRANSFER_PROVISIONAL_DAYS = 3;
 /** Días de gracia con la cuenta funcionando después de un vencimiento sin
- * pago, antes de pasar a sólo lectura. */
-export const GRACE_DAYS = 5;
+ * pago, antes de pasar a sólo lectura (Términos 5.4; decidido 2026-10-15). */
+export const GRACE_DAYS = 10;
 
 export type SubscriptionPaymentWithPlan = SubscriptionPayment & { plan: Plan };
 
@@ -69,7 +71,10 @@ export interface RecordPaymentInput {
  */
 @Injectable()
 export class SubscriptionBillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notices: SubscriptionNoticeService,
+  ) {}
 
   async getOverview(): Promise<BillingOverview> {
     const db = getTenantDb();
@@ -78,6 +83,22 @@ export class SubscriptionBillingService {
       db.subscriptionPayment.findMany({ include: { plan: true }, orderBy: { createdAt: 'desc' }, take: 24 }),
     ]);
     return { subscription, payments, pendingPayment: payments.find((p) => p.status === 'PENDING') ?? null };
+  }
+
+  async hasPendingPayment(): Promise<boolean> {
+    return (await getTenantDb().subscriptionPayment.count({ where: { status: 'PENDING' } })) > 0;
+  }
+
+  /** Usuarios propios activos (no los contadores externos ni los
+   * desactivados, así "desactivá los que sobran" libera el lugar) y clientes
+   * activos: lo que cuentan los topes de cada plan. */
+  async getUsage(): Promise<{ users: number; clients: number }> {
+    const db = getTenantDb();
+    const [users, clients] = await Promise.all([
+      db.user.count({ where: { isExternalAccountant: { not: true }, status: 'ACTIVE' } }),
+      db.company.count({ where: { active: true, roles: { some: { role: 'CUSTOMER' } } } }),
+    ]);
+    return { users, clients };
   }
 
   /** El tenant avisa que transfirió. Queda PENDING hasta que Oplex lo
@@ -94,6 +115,8 @@ export class SubscriptionBillingService {
     const now = new Date();
     const periodStart = await this.nextPeriodStart(now);
     const charge = computeSubscriptionCharge(plan, 'TRANSFER', input.months);
+    const userId = getUserId();
+    const reporter = userId ? await db.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }) : null;
     const payment = await db.subscriptionPayment.create({
       data: {
         tenantId: getTenantId(),
@@ -110,6 +133,7 @@ export class SubscriptionBillingService {
         total: charge.total,
         reference: input.reference?.trim() || null,
         receiptUrl: input.receiptUrl ?? null,
+        reportedBy: reporter ? reporter.name?.trim() || reporter.email : null,
       },
       include: { plan: true },
     });
@@ -117,12 +141,14 @@ export class SubscriptionBillingService {
     // Cobertura provisoria: nunca acorta lo que ya estaba cubierto.
     const subscription = await this.getSubscription();
     const coveredUntil = latest(subscription.currentPeriodEnd, subscription.trialEndsAt, addDaysUtc(now, TRANSFER_PROVISIONAL_DAYS));
-    if (subscription.status !== 'ACTIVE' || !subscription.currentPeriodEnd || subscription.currentPeriodEnd < now) {
+    const extend = subscription.status !== 'ACTIVE' || !subscription.currentPeriodEnd || subscription.currentPeriodEnd < now;
+    if (extend) {
       await db.tenantSubscription.update({
         where: { tenantId: getTenantId() },
         data: { status: 'ACTIVE', currentPeriodEnd: coveredUntil, graceEndsAt: null },
       });
     }
+    await this.notices.notifyOplexNewTransfer(payment, extend ? coveredUntil : (subscription.currentPeriodEnd as Date));
     return payment;
   }
 
@@ -174,15 +200,17 @@ export class SubscriptionBillingService {
       include: { plan: true },
     });
     await this.activate(pending.planId, periodEnd, pending.method);
+    await this.notices.sendPaymentConfirmed(payment);
     return payment;
   }
 
-  async rejectPayment(paymentId: string, reviewedBy: string): Promise<SubscriptionPaymentWithPlan> {
+  /** note: motivo que escribe Oplex, le llega al cliente en el mail. */
+  async rejectPayment(paymentId: string, reviewedBy: string, note?: string): Promise<SubscriptionPaymentWithPlan> {
     const db = getTenantDb();
     await this.findPending(paymentId);
     const payment = await db.subscriptionPayment.update({
       where: { id: paymentId },
-      data: { status: 'REJECTED', reviewedAt: new Date(), reviewedBy },
+      data: { status: 'REJECTED', reviewedAt: new Date(), reviewedBy, reviewNote: note?.trim() || null },
       include: { plan: true },
     });
 
@@ -203,6 +231,8 @@ export class SubscriptionBillingService {
         data: { status: 'EXPIRED', currentPeriodEnd: paidUntil, graceEndsAt: null },
       });
     }
+    const readOnlyNow = !(paidUntil && paidUntil > now) && !(subscription.trialEndsAt && subscription.trialEndsAt > now);
+    await this.notices.sendPaymentRejected(payment, readOnlyNow);
     return payment;
   }
 
@@ -216,7 +246,7 @@ export class SubscriptionBillingService {
     const base = subscription.trialEndsAt && subscription.trialEndsAt > now ? subscription.trialEndsAt : now;
     await getTenantDb().tenantSubscription.update({
       where: { tenantId: getTenantId() },
-      data: { status: 'TRIALING', trialEndsAt: addDaysUtc(base, days), graceEndsAt: null },
+      data: { status: 'TRIALING', trialEndsAt: addDaysUtc(base, days), graceEndsAt: null, trialEndingNoticeSentAt: null },
     });
   }
 
@@ -251,11 +281,7 @@ export class SubscriptionBillingService {
     if (!plan || !plan.isActive) {
       throw new NotFoundException('Ese plan no existe o no está a la venta');
     }
-    const db = getTenantDb();
-    const [users, clients] = await Promise.all([
-      db.user.count({ where: { isExternalAccountant: { not: true } } }),
-      db.company.count({ where: { active: true, roles: { some: { role: 'CUSTOMER' } } } }),
-    ]);
+    const { users, clients } = await this.getUsage();
     if (users > plan.maxUsers) {
       throw new BadRequestException(
         `El plan ${plan.name} permite ${plan.maxUsers} usuario${plan.maxUsers === 1 ? '' : 's'} y hoy tenés ${users}. Desactivá los que sobran antes de cambiar.`,
@@ -270,13 +296,21 @@ export class SubscriptionBillingService {
   }
 
   /** Cambia de plan sin tocar fechas: los topes nuevos aplican ya y el precio
-   * nuevo desde el próximo cobro (regla aprobada, sin prorrateo). */
+   * nuevo desde el próximo cobro (regla aprobada, sin prorrateo). Un plan
+   * gratis, en cambio, deja la cuenta activa sin vencimiento: es la salida
+   * de una prueba vencida sin pagar (mockup aprobado 2026-10-15). */
   async changePlan(planKey: string): Promise<void> {
     const plan = await this.prisma.plan.findUnique({ where: { key: planKey } });
     if (!plan || !plan.isActive) {
       throw new NotFoundException('Ese plan no existe o no está a la venta');
     }
-    await getTenantDb().tenantSubscription.update({ where: { tenantId: getTenantId() }, data: { planId: plan.id } });
+    const free = Number(plan.priceMonthly) <= 0;
+    await getTenantDb().tenantSubscription.update({
+      where: { tenantId: getTenantId() },
+      data: free
+        ? { planId: plan.id, status: 'ACTIVE', currentPeriodEnd: null, graceEndsAt: null, paymentMethod: null }
+        : { planId: plan.id },
+    });
   }
 
   /** Cron diario (ver SubscriptionsSchedulerService): ACTIVE vencido pasa a
@@ -286,6 +320,16 @@ export class SubscriptionBillingService {
     const subscription = await getTenantDb().tenantSubscription.findUnique({ where: { tenantId: getTenantId() } });
     if (!subscription) return null;
     if (subscription.status === 'ACTIVE' && subscription.currentPeriodEnd && subscription.currentPeriodEnd < now) {
+      // Nunca pagó nada: lo que vencía era sólo el crédito provisorio de una
+      // transferencia que nadie confirmó (desde una prueba vencida). Vuelve
+      // a sólo lectura, sin días de gracia.
+      if (!(await this.lastPaidPeriodEnd())) {
+        await getTenantDb().tenantSubscription.update({
+          where: { tenantId: getTenantId() },
+          data: { status: 'EXPIRED', graceEndsAt: null },
+        });
+        return 'EXPIRED';
+      }
       await getTenantDb().tenantSubscription.update({
         where: { tenantId: getTenantId() },
         data: { status: 'PAST_DUE', graceEndsAt: addDaysUtc(subscription.currentPeriodEnd, GRACE_DAYS) },

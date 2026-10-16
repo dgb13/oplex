@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { accountingApi, type AccountType } from '@/lib/accounting';
@@ -38,7 +39,9 @@ export default function AccountsTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{accounts?.length ?? 0} cuentas</p>
-        <Button onClick={() => setNewOpen(true)}>+ Nueva cuenta</Button>
+        <ReadOnlyLock>
+          <Button onClick={() => setNewOpen(true)}>+ Nueva cuenta</Button>
+        </ReadOnlyLock>
       </div>
 
       <Card>

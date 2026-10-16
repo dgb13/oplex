@@ -24,6 +24,7 @@ import { CreatePersonDto } from './dto/create-person.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { UpdatePersonDto } from './dto/update-person.dto.js';
 import { PersonAvatarService } from './person-avatar.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 // Todos los que pueden escribir ALGÚN tipo de empresa; la regla por tipo
 // (clientes Ventas, proveedores Compras/Inventario...) la aplica
@@ -107,8 +108,15 @@ export class CompaniesController {
 
   @AuditEntity('company', { labelFields: ['name'] })
   @Roles(...WRITE_ROLES)
+  // En sólo lectura sólo se puede desactivar (para entrar en los clientes
+  // de un plan más chico), no editar.
+  @AllowWhenReadOnly((req) => isOnlyDeactivation(req.body))
   @Patch(':id')
   updateCompany(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCompanyDto) {
     return this.companiesService.updateCompany(id, dto);
   }
+}
+
+function isOnlyDeactivation(body: unknown): boolean {
+  return typeof body === 'object' && body !== null && Object.keys(body).length === 1 && (body as { active?: unknown }).active === false;
 }

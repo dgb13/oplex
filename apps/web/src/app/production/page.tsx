@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock, useReadOnly } from '@/components/ReadOnlyLock';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -97,6 +98,7 @@ function KpiCardSkeleton() {
 
 export default function ProductionDashboardPage() {
   const gate = useProductionGate();
+  const readOnly = useReadOnly();
   const ordersQuery = useQuery({
     queryKey: ['production-orders'],
     queryFn: productionApi.listOrders,
@@ -125,7 +127,13 @@ export default function ProductionDashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Producción</h1>
         {gate.enabled && (
-          <Button render={<Link href="/production/orders/new">Nueva orden</Link>} nativeButton={false} />
+          readOnly ? (
+            <ReadOnlyLock>
+              <Button>Nueva orden</Button>
+            </ReadOnlyLock>
+          ) : (
+            <Button render={<Link href="/production/orders/new">Nueva orden</Link>} nativeButton={false} />
+          )
         )}
       </div>
 

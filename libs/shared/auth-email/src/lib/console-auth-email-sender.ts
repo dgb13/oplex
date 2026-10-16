@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   AuthEmailSender,
+  SendHtmlNoticePayload,
   SendInvitationPayload,
   SendLegalNoticePayload,
   SendMembershipNoticePayload,
@@ -35,6 +36,10 @@ export class ConsoleAuthEmailSender implements AuthEmailSender {
 
   async sendLegalNotice(payload: SendLegalNoticePayload): Promise<void> {
     this.logger.log(`[stub] legal notice for ${payload.to}: ${payload.subject}`);
+  }
+
+  async sendHtmlNotice(payload: SendHtmlNoticePayload): Promise<void> {
+    this.logger.log(`[stub] notice for ${payload.to}: ${payload.subject}`);
   }
 
   async sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void> {

@@ -575,6 +575,9 @@ export interface SubscriptionPaymentRow {
   receiptUrl: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
+  // Motivo del rechazo (le llega al cliente) y quién avisó la transferencia.
+  reviewNote: string | null;
+  reportedBy: string | null;
   createdAt: string;
   plan: { key: string; name: string };
 }
@@ -608,8 +611,8 @@ export const adminSubscriptionsApi = {
     api.post(`/admin/subscriptions/${tenantId}/payments`, dto).then((r) => r.data),
   confirm: (tenantId: string, paymentId: string) =>
     api.post(`/admin/subscriptions/${tenantId}/payments/${paymentId}/confirm`).then((r) => r.data),
-  reject: (tenantId: string, paymentId: string) =>
-    api.post(`/admin/subscriptions/${tenantId}/payments/${paymentId}/reject`).then((r) => r.data),
+  reject: (tenantId: string, paymentId: string, note?: string) =>
+    api.post(`/admin/subscriptions/${tenantId}/payments/${paymentId}/reject`, { note: note || undefined }).then((r) => r.data),
   extendTrial: (tenantId: string, days: number) =>
     api.post(`/admin/subscriptions/${tenantId}/extend-trial`, { days }).then((r) => r.data),
   changePlan: (tenantId: string, planKey: string) =>

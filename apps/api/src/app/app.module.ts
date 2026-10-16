@@ -22,7 +22,7 @@ import { ReportsFinancialModule } from '@plexo/reports-financial';
 import { ReportsPnlModule } from '@plexo/reports-pnl';
 import { ReportsPurchasesModule } from '@plexo/reports-purchases';
 import { ReportsSalesModule } from '@plexo/reports-sales';
-import { SubscriptionModule } from '@plexo/subscriptions';
+import { SubscriptionModule, SubscriptionReadOnlyGuard } from '@plexo/subscriptions';
 import { TaxesModule } from '@plexo/taxes';
 import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { AdminModule } from './admin/admin.module.js';
@@ -119,11 +119,14 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
   providers: [
     AppService,
     // Order matters: JwtAuthGuard populates request.user before the other
-    // three read it. Nest always runs global guards in this registration order.
+    // four read it. Nest always runs global guards in this registration order.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: ModuleAccessGuard },
     { provide: APP_GUARD, useClass: MustChangePasswordGuard },
+    // Cuenta vencida = sólo lectura: frena toda escritura salvo las
+    // marcadas con @AllowWhenReadOnly (ver SubscriptionReadOnlyGuard).
+    { provide: APP_GUARD, useClass: SubscriptionReadOnlyGuard },
   ],
 })
 export class AppModule {}

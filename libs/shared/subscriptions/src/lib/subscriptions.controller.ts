@@ -3,6 +3,7 @@ import { Roles } from '@plexo/auth';
 import type { FastifyRequest } from 'fastify';
 import '@fastify/multipart';
 import { ChangeOwnPlanDto, ReportTransferDto } from './dto/report-transfer.dto.js';
+import { AllowWhenReadOnly } from './read-only.guard.js';
 import { SubscriptionBillingService } from './subscription-billing.service.js';
 import { SubscriptionReceiptService } from './subscription-receipt.service.js';
 import { SubscriptionService } from './subscription.service.js';
@@ -12,7 +13,9 @@ const BILLING_ROLES = ['OWNER', 'ADMIN'] as const;
 
 // Auth normal, sin @Roles en las lecturas - cualquier usuario logueado
 // necesita esto para que el frontend pueda mostrar el aviso de prueba o de
-// cobro vencido, no sólo OWNER/ADMIN.
+// cobro vencido, no sólo OWNER/ADMIN. Pagar y cambiar de plan tienen que
+// andar justamente cuando la cuenta está en sólo lectura.
+@AllowWhenReadOnly()
 @Controller('subscriptions')
 export class SubscriptionsController {
   constructor(
@@ -21,16 +24,26 @@ export class SubscriptionsController {
     private readonly receipts: SubscriptionReceiptService,
   ) {}
 
+  /** hasPendingPayment: para la banda "Recibimos tu aviso de transferencia". */
   @Get('me')
-  getCurrent() {
-    return this.subscriptionService.getCurrentForTenant();
+  async getCurrent() {
+    const [subscription, hasPendingPayment] = await Promise.all([
+      this.subscriptionService.getCurrentForTenant(),
+      this.billing.hasPendingPayment(),
+    ]);
+    return { ...subscription, hasPendingPayment };
   }
 
-  /** Estado, pagos y la cuenta de Oplex para transferir. */
+  /** Estado, pagos, la cuenta de Oplex para transferir y el uso actual
+   * (usuarios y clientes) para saber si entra en un plan más chico. */
   @Get('me/billing')
   async getBilling() {
-    const [overview, oplexBank] = await Promise.all([this.billing.getOverview(), this.billing.getOplexBankDetails()]);
-    return { ...overview, oplexBank };
+    const [overview, oplexBank, usage] = await Promise.all([
+      this.billing.getOverview(),
+      this.billing.getOplexBankDetails(),
+      this.billing.getUsage(),
+    ]);
+    return { ...overview, oplexBank, usage };
   }
 
   @Roles(...BILLING_ROLES)

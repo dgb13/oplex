@@ -38,6 +38,17 @@ export interface SendLegalNoticePayload {
   replyTo?: string;
 }
 
+// Aviso con diseño (HTML + texto plano): los de la suscripción al cliente y
+// los internos a facturacion@ (ver SubscriptionNoticeService).
+export interface SendHtmlNoticePayload {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  /** A quién le llega si responden - por defecto soporte@oplex.com.ar. */
+  replyTo?: string;
+}
+
 /**
  * Mismo patrón puerto/adaptador que EmailSender de Facturación
  * (libs/modules/invoicing/src/lib/email-sender.port.ts) - SignupService y
@@ -49,6 +60,7 @@ export interface AuthEmailSender {
   sendInvitation(payload: SendInvitationPayload): Promise<void>;
   sendMembershipNotice(payload: SendMembershipNoticePayload): Promise<void>;
   sendLegalNotice(payload: SendLegalNoticePayload): Promise<void>;
+  sendHtmlNotice(payload: SendHtmlNoticePayload): Promise<void>;
 }
 
 export const AUTH_EMAIL_SENDER = Symbol('AUTH_EMAIL_SENDER');

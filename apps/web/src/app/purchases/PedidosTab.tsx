@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { resolveUploadUrl } from '@/lib/inventory';
 import {
   describeQuoteRequestStatus,
@@ -46,13 +47,15 @@ export default function PedidosTab() {
         >
           Pedir a varios proveedores
         </button>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-        >
-          Nuevo pedido
-        </button>
+        <ReadOnlyLock>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+          >
+            Nuevo pedido
+          </button>
+        </ReadOnlyLock>
       </div>
 
       {isLoading ? (

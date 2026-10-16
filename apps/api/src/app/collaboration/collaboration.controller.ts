@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query
 import { CollaborationService, type NotificationFilter } from './collaboration.service.js';
 import { CreateCommentDto } from './dto/create-comment.dto.js';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 // Sin @Roles a propósito: todo usuario de la empresa tiene su campana, y
 // cada consulta ya se limita a lo suyo (ver CollaborationService).
@@ -20,12 +21,14 @@ export class CollaborationController {
     return this.collaboration.unreadCount();
   }
 
+  @AllowWhenReadOnly()
   @Post('notifications/read-all')
   @HttpCode(204)
   markAllRead() {
     return this.collaboration.markAllRead();
   }
 
+  @AllowWhenReadOnly()
   @Post('notifications/:id/read')
   @HttpCode(204)
   markRead(@Param('id', ParseUUIDPipe) id: string) {
@@ -37,6 +40,7 @@ export class CollaborationController {
     return this.collaboration.getPreferences();
   }
 
+  @AllowWhenReadOnly()
   @Put('notifications/preferences')
   setPreferences(@Body() dto: UpdateNotificationPreferencesDto) {
     return this.collaboration.setPreferences(dto.muted);

@@ -2,6 +2,7 @@ import { Controller, Post } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
 import { ArcaConnectionService } from './arca-connection.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 @Controller('invoicing/arca')
 export class ArcaConnectionController {
@@ -9,6 +10,7 @@ export class ArcaConnectionController {
 
   // Mismos roles que pueden cargar el certificado (Preferencias).
   @Roles('OWNER', 'ADMIN')
+  @AllowWhenReadOnly() // sólo prueba la conexión
   @Post('check')
   // WSAA + WSFE pueden tardar más que el timeout por defecto (5 s).
   @LongRunningTransaction(45_000)

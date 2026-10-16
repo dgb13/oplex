@@ -3,6 +3,7 @@ import { OPLEX_SUPPORT_EMAIL } from '@plexo/types';
 import { Resend } from 'resend';
 import type {
   AuthEmailSender,
+  SendHtmlNoticePayload,
   SendInvitationPayload,
   SendLegalNoticePayload,
   SendMembershipNoticePayload,
@@ -38,6 +39,20 @@ export class ResendAuthEmailSender implements AuthEmailSender {
     });
     if (error) {
       this.logger.error(`Failed to email legal notice to ${payload.to}: ${error.message}`);
+    }
+  }
+
+  async sendHtmlNotice(payload: SendHtmlNoticePayload): Promise<void> {
+    const { error } = await this.resend.emails.send({
+      from: this.from,
+      to: payload.to,
+      replyTo: payload.replyTo ?? OPLEX_SUPPORT_EMAIL,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+    });
+    if (error) {
+      this.logger.error(`Failed to email "${payload.subject}" to ${payload.to}: ${error.message}`);
     }
   }
 

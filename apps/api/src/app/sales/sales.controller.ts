@@ -7,6 +7,7 @@ import { CreateSaleDto } from './dto/create-sale.dto.js';
 import { DeliverPendingDto } from './dto/deliver-pending.dto.js';
 import { StockCheckDto } from './dto/stock-check.dto.js';
 import { SalesService } from './sales.service.js';
+import { AllowWhenReadOnly } from '@plexo/subscriptions';
 
 // Pedir CAE a ARCA (WSAA + WSFE) puede tardar bastante más que el
 // timeout por defecto de la transacción por request (5 s) - en
@@ -44,6 +45,7 @@ export class SalesController {
 
   // Antes de emitir: qué falta en el depósito (para el aviso de Nueva factura).
   @Roles('OWNER', 'ADMIN', 'SALES')
+  @AllowWhenReadOnly() // sólo consulta stock
   @Post('stock-check')
   checkStock(@Body() dto: StockCheckDto) {
     return this.salesService.checkStock(dto);

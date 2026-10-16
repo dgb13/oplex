@@ -40,5 +40,5 @@ Si trabajás en una empresa con más usuarios, el Dueño o un Administrador tamb
 | **Esperá un momento antes de pedir otro código** | Pediste códigos muy seguido. | Esperá a que termine la cuenta regresiva del botón. |
 | **Link inválido** / **El link de recuperación es inválido o expiró** | El link para cambiar la contraseña ya se usó o venció. | Pedí uno nuevo con **¿Olvidaste tu contraseña?** |
 | **La invitación es inválida o expiró** | La invitación al equipo ya se usó o venció. | Pedile al Dueño o a un Administrador que te invite de nuevo. Ver [Invitar a tu equipo](/documentacion/primeros-pasos/invitar-a-tu-equipo). |
-| **Tu período de prueba venció - actualizá tu plan para seguir usando Oplex** | Terminaron los 15 días de prueba sin elegir un plan. | El Dueño tiene que elegir un plan. Ver [Planes y facturación](/documentacion/cuenta/planes-y-facturacion). |
+| **Tu cuenta está en sólo lectura** | Terminaron los 15 días de prueba (o venció el plan) sin pagar. | El Dueño tiene que pagar el plan o pasar a Basic Gratis. Ver [Planes y facturación](/documentacion/cuenta/planes-y-facturacion). |
 | Después de cambiar la contraseña te saca de Oplex | Es normal: hay que entrar de nuevo con la contraseña nueva. | Ingresá otra vez. |

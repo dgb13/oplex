@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { accountingApi, type AccountingAccount } from '@/lib/accounting';
@@ -31,7 +32,9 @@ export default function JournalTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{entries.length} asiento{entries.length !== 1 ? 's' : ''}</p>
-        <Button onClick={() => setNewOpen(true)}>+ Nuevo asiento</Button>
+        <ReadOnlyLock>
+          <Button onClick={() => setNewOpen(true)}>+ Nuevo asiento</Button>
+        </ReadOnlyLock>
       </div>
 
       <Card>

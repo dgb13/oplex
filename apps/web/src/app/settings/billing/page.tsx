@@ -103,7 +103,19 @@ export default function BillingPage() {
     <div className="flex max-w-6xl flex-col gap-6">
       <h1 className="text-xl font-semibold">Planes y facturación</h1>
 
-      <StatusCard billing={billing} canManage={canManage} onPay={() => setCheckoutPlan(currentPlan)} />
+      {subscription.status === 'EXPIRED' && !pendingPayment ? (
+        <ExpiredCard
+          billing={billing}
+          plans={plans}
+          canManage={canManage}
+          onPay={setCheckoutPlan}
+          onSwitch={setPlanToSwitch}
+        />
+      ) : pendingPayment ? (
+        <PendingCard billing={billing} />
+      ) : (
+        <StatusCard billing={billing} canManage={canManage} onPay={() => setCheckoutPlan(currentPlan)} />
+      )}
 
       {notice && (
         <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/40 dark:text-green-400">{notice}</p>
@@ -249,6 +261,157 @@ function StatusCard({ billing, canManage, onPay }: { billing: BillingOverview; c
   );
 }
 
+/** Prueba terminada (o plan vencido) sin pagar: las dos salidas, pagar el
+ * plan o seguir gratis, con el chequeo de topes de Basic Gratis (mockup
+ * aprobado 2026-10-15, pantalla C). */
+function ExpiredCard({
+  billing,
+  plans,
+  canManage,
+  onPay,
+  onSwitch,
+}: {
+  billing: BillingOverview;
+  plans: Plan[];
+  canManage: boolean;
+  onPay: (plan: Plan) => void;
+  onSwitch: (plan: Plan) => void;
+}) {
+  const { subscription, usage } = billing;
+  const fromTrial = subscription.trialEndsAt != null && subscription.currentPeriodEnd == null;
+  const paidPlans = plans.filter((plan) => Number(plan.priceMonthly) > 0);
+  const paidPlan = Number(subscription.plan.priceMonthly) > 0 ? subscription.plan : paidPlans[0];
+  const freePlan = plans.find((plan) => Number(plan.priceMonthly) === 0);
+  const extraUsers = freePlan ? usage.users - freePlan.maxUsers : 0;
+  const extraClients = freePlan?.maxClients != null ? usage.clients - freePlan.maxClients : 0;
+  const fitsFree = extraUsers <= 0 && extraClients <= 0;
+
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-base font-semibold">
+          {fromTrial ? `Tu prueba del Plan ${subscription.plan.name} terminó` : `Tu Plan ${subscription.plan.name} venció`}
+        </h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_PILL['EXPIRED'].className}`}>Sólo lectura</span>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Todo lo que cargaste está guardado. {canManage ? 'Elegí cómo seguir:' : 'Pedile al dueño de la cuenta que elija cómo seguir.'}
+      </p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {paidPlan && (
+          <div className="flex flex-col gap-2 rounded-xl border-2 border-primary p-4">
+            <span className="text-xs font-semibold tracking-wide text-primary uppercase">Recomendado</span>
+            <h3 className="text-base font-semibold">Seguir con el Plan {paidPlan.name}</h3>
+            <p className="text-sm text-muted-foreground">
+              $ {Number(paidPlan.priceMonthly).toLocaleString('es-AR')} + IVA por mes · {paidPlan.maxUsers} usuario
+              {paidPlan.maxUsers === 1 ? '' : 's'} · {paidPlan.maxMonthlyInvoices.toLocaleString('es-AR')} facturas por mes
+            </p>
+            <p className="text-sm text-muted-foreground">Transferís, avisás y la cuenta vuelve a funcionar en el momento.</p>
+            {canManage && (
+              <Button className="mt-1 self-start" onClick={() => onPay(paidPlan)}>
+                Pagar Plan {paidPlan.name}
+              </Button>
+            )}
+          </div>
+        )}
+        {freePlan && (
+          <div className="flex flex-col gap-2 rounded-xl border p-4">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Sin costo</span>
+            <h3 className="text-base font-semibold">Seguir gratis con {freePlan.name}</h3>
+            <p className="text-sm text-muted-foreground">
+              {freePlan.maxUsers} usuario{freePlan.maxUsers === 1 ? '' : 's'} ·{' '}
+              {freePlan.maxClients == null ? 'clientes ilimitados' : `${freePlan.maxClients.toLocaleString('es-AR')} clientes`} ·{' '}
+              {freePlan.maxMonthlyInvoices.toLocaleString('es-AR')} facturas por mes
+              {!freePlan.productionModuleEnabled && !freePlan.storefrontEnabled ? ' · sin Producción ni Tienda' : ''}
+            </p>
+            {!fitsFree && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[13px] leading-snug text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                {extraUsers > 0 && (
+                  <>
+                    Hoy tenés <b>{usage.users} usuarios</b> activos y {freePlan.name} permite {freePlan.maxUsers}. Desactivá {extraUsers} en{' '}
+                    <Link href="/settings/team" className="font-medium underline">
+                      Equipo
+                    </Link>{' '}
+                    y volvé acá.{' '}
+                  </>
+                )}
+                {extraClients > 0 ? (
+                  <>
+                    Tenés <b>{usage.clients} clientes</b> activos y permite {freePlan.maxClients}. Desactivá {extraClients} en{' '}
+                    <Link href="/clients" className="font-medium underline">
+                      Clientes
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>Tus clientes ({usage.clients}) entran.</>
+                )}
+              </div>
+            )}
+            {canManage && (
+              <Button variant="outline" className="mt-1 self-start" disabled={!fitsFree} onClick={() => onSwitch(freePlan)}>
+                Pasar a {freePlan.name}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        ¿Preferís llevarte tus datos? Podés exportarlos desde cada pantalla (Excel y PDF). Nada se borra mientras la cuenta exista.
+      </p>
+    </section>
+  );
+}
+
+/** Transferencia avisada esperando que Oplex la confirme (pantalla D). */
+function PendingCard({ billing }: { billing: BillingOverview }) {
+  const { subscription } = billing;
+  const payment = billing.pendingPayment as SubscriptionPayment;
+  const facts: [string, string][] = [
+    ['Plan', `${payment.plan.name} · ${monthsLabel(payment.months)}`],
+    ['Importe avisado', formatPesos(payment.total)],
+  ];
+  if (payment.reference) facts.push(['N° de operación', payment.reference]);
+  if (subscription.currentPeriodEnd) {
+    facts.push(['Funciona hasta', `${formatDate(subscription.currentPeriodEnd)} (o hasta que confirmemos)`]);
+  }
+  const reportedAt = new Date(payment.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border p-5">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold">Tu suscripción</h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_PILL['PAST_DUE'].className}`}>Esperando confirmación</span>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-8 gap-y-3 md:grid-cols-4">
+        {facts.map(([label, value]) => (
+          <div key={label} className="flex flex-col">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="text-sm font-medium tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <ol className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <li className="flex flex-col gap-1 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900/60 dark:bg-green-950/30">
+          <strong className="text-sm text-green-700 dark:text-green-400">1 · Avisaste la transferencia</strong>
+          <span className="text-[13px] text-muted-foreground">
+            {formatDate(payment.createdAt)} a las {reportedAt}
+            {payment.receiptUrl ? ', con el comprobante.' : '.'}
+          </span>
+        </li>
+        <li className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <strong className="text-sm text-amber-800 dark:text-amber-300">2 · La verificamos en el banco</strong>
+          <span className="text-[13px] text-muted-foreground">Normalmente dentro del día hábil.</span>
+        </li>
+        <li className="flex flex-col gap-1 rounded-lg border p-3">
+          <strong className="text-sm">3 · Te avisamos por mail</strong>
+          <span className="text-[13px] text-muted-foreground">Queda &quot;Pago hasta {formatDate(payment.periodEnd)}&quot;.</span>
+        </li>
+      </ol>
+    </section>
+  );
+}
+
 function SwitchPlanDialog({
   plan,
   currentPlan,
@@ -319,6 +482,9 @@ function PaymentsCard({ payments }: { payments: SubscriptionPayment[] }) {
                         {' '}
                         ({formatDate(p.periodStart)} al {formatDate(p.periodEnd)})
                       </span>
+                    )}
+                    {p.status === 'REJECTED' && p.reviewNote && (
+                      <span className="block text-xs text-muted-foreground">Motivo: {p.reviewNote}</span>
                     )}
                   </td>
                   <td className="py-2 pr-4">{METHOD_LABEL[p.method]}</td>
