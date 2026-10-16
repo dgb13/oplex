@@ -198,13 +198,15 @@ export default function VatBookTab() {
                   key={entry.id}
                   className={`border-b border-border/50 ${entry.isCreditNote ? 'text-red-600 dark:text-red-400' : ''}`}
                 >
-                  <td className="p-3 whitespace-nowrap">{entry.date}</td>
+                  <td className="p-3 whitespace-nowrap">{entry.date.split('-').reverse().join('/')}</td>
                   <td className="p-3 whitespace-nowrap">{entry.documentType}</td>
                   <td className="p-3 whitespace-nowrap font-mono text-xs">{numberLabel(entry)}</td>
                   <td className="p-3">{entry.counterpartyName}</td>
                   <td className="p-3 whitespace-nowrap">{entry.counterpartyDocType}</td>
                   <td className="p-3 whitespace-nowrap">{entry.counterpartyTaxId ?? '—'}</td>
-                  <td className="p-3 whitespace-nowrap">{entry.taxCondition ?? '—'}</td>
+                  <td className="p-3 whitespace-nowrap">
+                    {entry.taxCondition ?? (entry.counterpartyDocType === 'CF' ? 'Consumidor Final' : '—')}
+                  </td>
                   <td className={tdClass}>{money(entry.netTaxed)}</td>
                   <td className={tdClass}>{money(entry.netExempt)}</td>
                   <td className={tdClass}>{money(entry.netUntaxed)}</td>
