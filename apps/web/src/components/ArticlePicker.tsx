@@ -1,6 +1,6 @@
 'use client';
 
-import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
+import { buildVariantLabel, inventoryApi, resolveUploadUrl, stockUnitLabel, type Article } from '@/lib/inventory';
 import {
   Combobox,
   ComboboxButton,
@@ -29,7 +29,13 @@ export interface ArticlePickerOption {
   taxKind: 'GRAVADO' | 'EXENTO' | 'NO_GRAVADO';
   isManufactured: boolean;
   measurementType: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+  // Opcionales: el alta rápida de un artículo arma la opción a mano.
+  unitOfMeasure?: string;
+  stockUnit?: string;
 }
+
+const MONEY_FORMAT = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const STOCK_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
 function flattenOptions(articles: Article[]): ArticlePickerOption[] {
   return articles.flatMap((article) =>
@@ -47,6 +53,8 @@ function flattenOptions(articles: Article[]): ArticlePickerOption[] {
       taxKind: article.taxKind,
       isManufactured: article.isManufactured,
       measurementType: article.measurementType,
+      unitOfMeasure: article.unitOfMeasure,
+      stockUnit: stockUnitLabel(article),
     })),
   );
 }
@@ -174,6 +182,8 @@ export default function ArticlePicker({
         value={value || null}
         onChange={(id: string | null) => onChange(id ?? '', id ? (options.find((o) => o.id === id) ?? null) : null)}
         disabled={disabled || isEmpty}
+        // Se abre al tocar el campo, no sólo con la flechita.
+        immediate
       >
         <div className={`relative ${className ?? ''}`}>
           <div className="relative">
@@ -242,8 +252,11 @@ export default function ArticlePicker({
                       <p className="truncate text-xs text-slate-500">{option.sku}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-slate-700 dark:text-slate-300">${option.unitPrice.toFixed(2)}</p>
-                      <p className="text-xs text-slate-500">Stock: {option.totalStock}</p>
+                      <p className="text-slate-700 dark:text-slate-300">${MONEY_FORMAT.format(option.unitPrice)}</p>
+                      <p className="text-xs text-slate-500">
+                        Stock: {STOCK_FORMAT.format(option.totalStock)}
+                        {option.stockUnit ? ` ${option.stockUnit}` : ''}
+                      </p>
                     </div>
                   </ComboboxOption>
                 );
