@@ -95,6 +95,8 @@ function slugPart(value: string): string {
 // saturan el pool de conexiones de Prisma, además de una grilla inmanejable.
 const MAX_VARIANT_COMBOS = 30;
 
+const STOCK_QTY = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
 /** Producto cartesiano de los valores de cada atributo usable (nombre no
  * vacío + al menos un valor cargado) - "Color: Rojo,Verde" + "Talle: S,M"
  * da las 4 combinaciones Rojo/S, Rojo/M, Verde/S, Verde/M. Atributos sin
@@ -278,7 +280,26 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   // El precio sugerido sale del costo REAL (sin IVA para RI, con IVA para
   // Monotributo/Exento): así queda en la misma base que el precio de venta
   // (neto para RI, final para quien factura C).
-  const realCost = costInput.trim() !== '' ? realUnitCost(Number(costInput), costIncludesVat, vatRate, taxCondition) : null;
+  // Un artículo por peso/volumen guarda costo y stock en su unidad base
+  // (gr/ml), pero se compra por presentación (la bolsa de 25 kg): el costo
+  // se carga por presentación, igual que en Compras (GoodsReceiptService
+  // divide por purchaseSize), y acá se pasa a costo por gr/ml. Antes se
+  // tomaba tal cual: $20.000 "por bolsa" quedaban como $20.000 el gramo.
+  const packSize = measurementType === 'CONTINUOUS' && Number(purchaseSize) > 0 ? Number(purchaseSize) : null;
+  const costPerStockUnit =
+    costInput.trim() === '' ? undefined : packSize ? Number(costInput) / packSize : Number(costInput);
+  const stockUnit =
+    measurementType === 'CONTINUOUS'
+      ? baseUnit
+      : measurementType === 'SURFACE_2D'
+        ? 'm²'
+        : measurementType === 'LINEAL_1D'
+          ? null
+          : unitOfMeasure === 'KG'
+            ? 'kg'
+            : 'un.';
+  const realCost =
+    costPerStockUnit !== undefined ? realUnitCost(costPerStockUnit, costIncludesVat, vatRate, taxCondition) : null;
   const suggestedPrice =
     realCost !== null && effectiveMarkup != null && !Number.isNaN(effectiveMarkup)
       ? realCost * (1 + effectiveMarkup / 100)
@@ -439,8 +460,8 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
         const variant = await inventoryApi.createArticleVariant({
           articleId,
           sku: sku.trim(),
-          unitPrice: Number(priceInput),
-          costPrice: costInput.trim() === '' ? undefined : Number(costInput),
+          unitPrice: priceInput.trim() === '' ? 0 : Number(priceInput),
+          costPrice: costPerStockUnit,
           costIncludesVat,
         });
 
@@ -460,7 +481,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               articleVariantId: variant.id,
               type: 'PURCHASE_IN',
               quantity: stockQuantity,
-              unitCost: Number(costInput),
+              unitCost: costPerStockUnit,
               costIncludesVat,
             });
           }
@@ -493,7 +514,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
             articleId: articleIdForRows,
             sku: row.sku.trim(),
             unitPrice: Number(row.price),
-            costPrice: costInput.trim() === '' ? undefined : Number(costInput),
+            costPrice: costPerStockUnit,
           costIncludesVat,
             attributes: row.values,
           });
@@ -510,7 +531,7 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                 articleVariantId: variant.id,
                 type: 'PURCHASE_IN',
                 quantity: stockQ,
-                unitCost: Number(costInput),
+                unitCost: costPerStockUnit,
               costIncludesVat,
               });
             }
@@ -598,7 +619,8 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
         setTab('variant');
         return;
       }
-      if (priceInput.trim() === '' || Number(priceInput) <= 0) {
+      // Vacío vale: un insumo (harina, levadura) no se vende - queda en $0.
+      if (priceInput.trim() !== '' && !(Number(priceInput) >= 0)) {
         setError('Ingresá un precio de venta válido');
         setTab('pricing');
         return;
@@ -964,7 +986,14 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               <div className={`grid ${hasVariants ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                 <label className="flex flex-col gap-1">
                   <span className="flex flex-wrap items-center justify-between gap-1.5 text-sm text-muted-foreground">
-                    Costo inicial
+                    <span>
+                      Costo inicial
+                      {packSize ? (
+                        <span className="text-xs"> por presentación ({STOCK_QTY.format(packSize)} {baseUnit})</span>
+                      ) : (
+                        stockUnit && <span className="text-xs"> por {stockUnit}</span>
+                      )}
+                    </span>
                     <CostVatToggle includesVat={costIncludesVat} onChange={setCostIncludesVat} />
                   </span>
                   <input
@@ -1006,11 +1035,17 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                       value={priceInput}
                       onChange={(e) => setPriceInput(e.target.value)}
                       className={inputClass}
+                      placeholder="Vacío si es un insumo"
                     />
                   </label>
                 )}
               </div>
 
+              {packSize && costPerStockUnit !== undefined && costPerStockUnit > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Equivale a {formatMoney(costPerStockUnit)} por {baseUnit} - el stock se valoriza por {baseUnit}.
+                </p>
+              )}
               {costInput.trim() !== '' && Number(costInput) > 0 && (
                 <RealCostNote
                   amount={Number(costInput)}
@@ -1278,7 +1313,9 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
               {noWarehousesHint}
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm text-muted-foreground">Stock inicial</span>
+                  <span className="text-sm text-muted-foreground">
+                    Stock inicial{stockUnit && <span className="text-xs"> (en {stockUnit})</span>}
+                  </span>
                   <input
                     type="number"
                     min={0}
@@ -1288,6 +1325,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
                     className={inputClass}
                     placeholder="0"
                   />
+                  {packSize && stockQuantity > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      ≈ {STOCK_QTY.format(stockQuantity / packSize)} presentaciones de {STOCK_QTY.format(packSize)}{' '}
+                      {baseUnit}
+                    </span>
+                  )}
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-sm text-muted-foreground">Stock mínimo para alertas</span>

@@ -139,6 +139,32 @@ export class BomService {
     return bom;
   }
 
+  /**
+   * Costo promedio actual (por unidad de stock: gr, mm, un.) de cada
+   * insumo, ponderado entre depósitos - mismo cálculo que
+   * InventoryService.getArticleSheet. Lo usa Recetas para mostrar cuánto
+   * sale fabricar una unidad antes de la primera orden (el costo real
+   * sigue siendo el que calcula completeOrder). null = sin costo cargado.
+   */
+  async averageCosts(articleVariantIds: string[]): Promise<Record<string, number | null>> {
+    const ledgers = await getTenantDb().stockLedger.findMany({
+      where: { articleVariantId: { in: articleVariantIds } },
+      select: { articleVariantId: true, quantity: true, avgUnitCost: true },
+    });
+    const costs: Record<string, number | null> = {};
+    for (const id of articleVariantIds) {
+      const rows = ledgers.filter((l) => l.articleVariantId === id && l.avgUnitCost !== null);
+      const totalQty = rows.reduce((sum, l) => sum + Math.max(Number(l.quantity), 0), 0);
+      costs[id] =
+        rows.length === 0
+          ? null
+          : totalQty > 0
+            ? rows.reduce((sum, l) => sum + Math.max(Number(l.quantity), 0) * Number(l.avgUnitCost), 0) / totalQty
+            : Number(rows[0].avgUnitCost);
+    }
+    return costs;
+  }
+
   async getActiveBom(outputArticleVariantId: string): Promise<BomDetail | null> {
     return getTenantDb().billOfMaterials.findFirst({
       where: { outputArticleVariantId, isActive: true },
