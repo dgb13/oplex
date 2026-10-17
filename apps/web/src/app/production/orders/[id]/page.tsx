@@ -95,6 +95,61 @@ function computeInsumoRows(order: {
   });
 }
 
+interface ReservationRow {
+  inputArticleVariantId: string;
+  warehouseId: string;
+  status: ReservationStatus;
+  quantity: number;
+}
+
+/** Una fila por insumo y estado: la receta reserva una vez por línea, y el
+ * mismo tubo en 4 medidas distintas eran 4 filas iguales sin el largo. */
+function groupReservations(
+  reservations: { inputArticleVariantId: string; warehouseId: string; status: ReservationStatus; quantityReserved: string }[],
+): ReservationRow[] {
+  const rows = new Map<string, ReservationRow>();
+  for (const r of reservations) {
+    const key = `${r.inputArticleVariantId}|${r.warehouseId}|${r.status}`;
+    const row = rows.get(key) ?? { inputArticleVariantId: r.inputArticleVariantId, warehouseId: r.warehouseId, status: r.status, quantity: 0 };
+    row.quantity += Number(r.quantityReserved);
+    rows.set(key, row);
+  }
+  return Array.from(rows.values());
+}
+
+interface ConsumptionRow {
+  inputArticleVariantId: string;
+  // Cortes de barra: cuántos cortes de este largo. 0 para el resto, que
+  // se suma en `quantity`.
+  cuts: number;
+  quantity: number;
+  waste: number;
+  cost: number;
+}
+
+/** Los cortes de un mismo largo van juntos ("4 × 1.120 mm"): antes era
+ * una fila por corte, 25 filas para una mesa. */
+function groupConsumptions(
+  consumptions: { inputArticleVariantId: string; stockPieceId: string | null; quantityConsumed: string; wasteAmount: string; cost: string }[],
+): ConsumptionRow[] {
+  const rows = new Map<string, ConsumptionRow>();
+  for (const c of consumptions) {
+    const isCut = c.stockPieceId !== null;
+    const key = isCut ? `${c.inputArticleVariantId}|${Number(c.quantityConsumed)}` : c.inputArticleVariantId;
+    const row = rows.get(key) ?? { inputArticleVariantId: c.inputArticleVariantId, cuts: 0, quantity: 0, waste: 0, cost: 0 };
+    if (isCut) {
+      row.cuts += 1;
+      row.quantity = Number(c.quantityConsumed);
+    } else {
+      row.quantity += Number(c.quantityConsumed);
+    }
+    row.waste += Number(c.wasteAmount);
+    row.cost += Number(c.cost);
+    rows.set(key, row);
+  }
+  return Array.from(rows.values());
+}
+
 /** Barra que anima su ancho desde 0% al montar - Tailwind/CSS transition
  * no dispara si el elemento ya nace en su ancho final, así que arranca en
  * 0 y un microtask después pasa a `pct`, dando el efecto de "llenado". */
@@ -122,6 +177,7 @@ export default function ProductionOrderDetailPage() {
   const [error, setError] = useState('');
   const [confirmWarehouseId, setConfirmWarehouseId] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const orderQuery = useQuery({
     queryKey: ['production-order', id],
@@ -211,6 +267,9 @@ export default function ProductionOrderDetailPage() {
   function useAction(fn: () => Promise<unknown>) {
     return useMutation({
       mutationFn: fn,
+      // El aviso es del intento anterior: no queda pegado después de, por
+      // ejemplo, un "Reintentar reserva" que sí funcionó.
+      onMutate: () => setError(''),
       onSuccess: invalidate,
       onError: (err: AxiosError<{ message?: string | string[] }>) => {
         const message = err.response?.data?.message ?? 'La acción no se pudo completar';
@@ -457,20 +516,42 @@ export default function ProductionOrderDetailPage() {
                       {startMutation.isPending ? 'Iniciando...' : 'Iniciar producción'}
                     </Button>
                   )}
-                  <Button
-                    variant={order.status === 'PLANNED' ? 'outline' : 'default'}
-                    onClick={() => completeMutation.mutate()}
-                    disabled={completeMutation.isPending}
-                  >
-                    {completeMutation.isPending ? 'Completando...' : 'Completar orden'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => cancelMutation.mutate()}
-                    disabled={cancelMutation.isPending}
-                  >
-                    Cancelar orden
-                  </Button>
+                  {/* Con faltante el backend la rechaza: se completa recién
+                      cuando "Reintentar reserva" cubre todo. */}
+                  {!order.isShortOnMaterials && (
+                    <Button
+                      variant={order.status === 'PLANNED' ? 'outline' : 'default'}
+                      onClick={() => completeMutation.mutate()}
+                      disabled={completeMutation.isPending}
+                    >
+                      {completeMutation.isPending ? 'Completando...' : 'Completar orden'}
+                    </Button>
+                  )}
+                  {confirmingCancel ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-sm">
+                      <span>¿Cancelar la orden? Se liberan los insumos reservados.</span>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => cancelMutation.mutate(undefined, { onSettled: () => setConfirmingCancel(false) })}
+                        disabled={cancelMutation.isPending}
+                      >
+                        {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmingCancel(false)}>
+                        No
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" onClick={() => setConfirmingCancel(true)}>
+                      Cancelar orden
+                    </Button>
+                  )}
+                  {order.isShortOnMaterials && (
+                    <p className="w-full text-xs text-muted-foreground">
+                      Se puede completar cuando estén reservados todos los insumos.
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -558,7 +639,7 @@ export default function ProductionOrderDetailPage() {
               </CardHeader>
               <CardContent>
                 <SimpleTable
-                  rows={order.reservations}
+                  rows={groupReservations(order.reservations)}
                   columns={[
                     {
                       header: 'Insumo',
@@ -567,7 +648,7 @@ export default function ProductionOrderDetailPage() {
                     { header: 'Depósito', render: (r) => warehouseLookup[r.warehouseId] ?? r.warehouseId },
                     {
                       header: 'Cantidad',
-                      render: (r) => formatQuantity(r.quantityReserved, lookup[r.inputArticleVariantId]?.stockUnit),
+                      render: (r) => formatQuantity(r.quantity, lookup[r.inputArticleVariantId]?.stockUnit),
                     },
                     { header: 'Estado', render: (r) => RESERVATION_STATUS_LABELS[r.status] ?? r.status },
                   ]}
@@ -583,7 +664,7 @@ export default function ProductionOrderDetailPage() {
               </CardHeader>
               <CardContent>
                 <SimpleTable
-                  rows={order.consumptions}
+                  rows={groupConsumptions(order.consumptions)}
                   columns={[
                     {
                       header: 'Insumo',
@@ -591,11 +672,14 @@ export default function ProductionOrderDetailPage() {
                     },
                     {
                       header: 'Cantidad',
-                      render: (r) => formatQuantity(r.quantityConsumed, lookup[r.inputArticleVariantId]?.stockUnit),
+                      render: (r) => {
+                        const quantity = formatQuantity(r.quantity, lookup[r.inputArticleVariantId]?.stockUnit);
+                        return r.cuts > 0 ? `${r.cuts} × ${quantity}` : quantity;
+                      },
                     },
                     {
                       header: 'Merma',
-                      render: (r) => formatQuantity(r.wasteAmount, lookup[r.inputArticleVariantId]?.stockUnit),
+                      render: (r) => formatQuantity(r.waste, lookup[r.inputArticleVariantId]?.stockUnit),
                     },
                     { header: 'Costo', render: (r) => formatMoney(r.cost) },
                   ]}
