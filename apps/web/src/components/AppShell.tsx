@@ -373,7 +373,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <UserMenu />
             </div>
           </header>
-          <main className="relative flex-1 overflow-y-auto p-6">
+          {/* pb-24: deja pasar el final de la página por encima del botón
+              flotante del Asistente (abajo a la derecha, 80px) - si no,
+              tapaba el botón de guardar de pantallas como Recetas. */}
+          <main className="relative flex-1 overflow-y-auto px-6 pb-24 pt-6">
             <AmbientBackground />
             <div className="relative z-10">{children}</div>
           </main>

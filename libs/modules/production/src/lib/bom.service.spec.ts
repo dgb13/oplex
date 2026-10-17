@@ -218,3 +218,25 @@ describe('BomService.create - insumos por medida', () => {
     expect(created[0]).toMatchObject({ quantity: 2400, length: 1200, cutsCount: 2 });
   });
 });
+
+describe('BomService.averageCosts', () => {
+  it('weights the average cost by stock across warehouses and returns null without cost', async () => {
+    const db = makeDb({
+      stockLedger: {
+        findMany: jest.fn().mockResolvedValue([
+          { articleVariantId: 'harina', quantity: '300', avgUnitCost: '0.8' },
+          { articleVariantId: 'harina', quantity: '100', avgUnitCost: '1.2' },
+          { articleVariantId: 'sal', quantity: '0', avgUnitCost: '1' },
+          { articleVariantId: 'agua', quantity: '50', avgUnitCost: null },
+        ]),
+      },
+    });
+    const service = new BomService();
+
+    const costs = await runAsTenant(db, () => service.averageCosts(['harina', 'sal', 'agua']));
+
+    expect(costs['harina']).toBeCloseTo(0.9);
+    expect(costs['sal']).toBe(1);
+    expect(costs['agua']).toBeNull();
+  });
+});

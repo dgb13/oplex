@@ -32,6 +32,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProductionPlanGateBanner, useProductionGate } from '../ProductionPlanGate';
 
+const MONEY_FORMAT = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+
 interface LineDraft {
   inputArticleVariantId: string;
   quantity: string;
@@ -269,6 +271,29 @@ export default function BomPage() {
     retry: false,
   });
 
+  // Costo estimado de la receta mientras se arma: costo promedio actual de
+  // cada insumo × cantidad × (1 + merma) - lo mismo que se reserva. El
+  // costo real lo fija completeOrder con el stock que efectivamente sale.
+  const inputIds = useMemo(
+    () => [...new Set(lines.map((l) => l.inputArticleVariantId).filter(Boolean))].sort(),
+    [lines],
+  );
+  const inputCostsQuery = useQuery({
+    queryKey: ['production-input-costs', inputIds],
+    queryFn: () => productionApi.getInputCosts(inputIds),
+    enabled: gate.enabled && inputIds.length > 0,
+  });
+  const lineCosts = lines.map((line) => {
+    if (!line.inputArticleVariantId) return null;
+    const unitCost = inputCostsQuery.data?.[line.inputArticleVariantId];
+    const qty = lineQuantity(line, lookup[line.inputArticleVariantId]?.measurementType);
+    if (unitCost == null || qty === null) return null;
+    return qty * (1 + (Number(line.expectedWastePercent) || 0) / 100) * unitCost;
+  });
+  const chosenLines = lines.filter((l) => l.inputArticleVariantId).length;
+  const pricedLines = lineCosts.filter((c) => c !== null).length;
+  const recipeCost = lineCosts.reduce<number>((sum, c) => sum + (c ?? 0), 0);
+
   // Al elegir un producto con receta activa, se precarga como punto de
   // partida para la nueva versión (BomService.create SIEMPRE crea una
   // versión nueva, nunca pisa la existente - ver el service). Un producto
@@ -480,7 +505,10 @@ export default function BomPage() {
                               placeholder="Insumo..."
                             />
                             {article && line.inputArticleVariantId && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">SKU {article.sku}</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                SKU {article.sku}
+                                {lineCosts[i] !== null && <> · ≈ {MONEY_FORMAT.format(lineCosts[i] ?? 0)}</>}
+                              </p>
                             )}
                           </div>
 
@@ -561,7 +589,21 @@ export default function BomPage() {
                     </p>
                   )}
 
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    {chosenLines > 0 && pricedLines > 0 ? (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Costo estimado por unidad: </span>
+                        <span className="font-semibold tabular-nums">{MONEY_FORMAT.format(recipeCost)}</span>
+                        {pricedLines < chosenLines && (
+                          <span className="block text-xs text-muted-foreground">
+                            Sin contar {chosenLines - pricedLines === 1 ? '1 insumo' : `${chosenLines - pricedLines} insumos`}{' '}
+                            sin costo cargado.
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span />
+                    )}
                     <Button type="submit" disabled={mutation.isPending}>
                       <Save className="h-4 w-4" />
                       {mutation.isPending

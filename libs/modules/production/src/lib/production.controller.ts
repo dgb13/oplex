@@ -40,6 +40,20 @@ export class ProductionController {
     return this.bomService.create(dto);
   }
 
+  // ?ids=uuid,uuid - costo promedio de los insumos de una receta (ver
+  // BomService.averageCosts). Antes que 'bom/:articleVariantId' por
+  // legibilidad, no hay choque de rutas.
+  @Get('input-costs')
+  async getInputCosts(@Query('ids') ids = '') {
+    await this.subscriptionService.assertCanUseProduction();
+    const list = [...new Set(ids.split(',').map((s) => s.trim()).filter(Boolean))];
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (list.length > 200 || list.some((id) => !uuid.test(id))) {
+      throw new BadRequestException('ids inválidos');
+    }
+    return this.bomService.averageCosts(list);
+  }
+
   @Get('bom/:articleVariantId')
   async getActiveBom(@Param('articleVariantId', ParseUUIDPipe) articleVariantId: string) {
     await this.subscriptionService.assertCanUseProduction();

@@ -209,6 +209,11 @@ export const productionApi = {
   listBomVersions: (articleVariantId: string) =>
     api.get<BomSummary[]>(`/production/bom/${articleVariantId}/versions`).then((r) => r.data),
   createBom: (dto: CreateBomInput) => api.post<Bom>('/production/bom', dto).then((r) => r.data),
+  // Costo promedio por unidad de stock de cada insumo (null = sin costo).
+  getInputCosts: (articleVariantIds: string[]) =>
+    api
+      .get<Record<string, number | null>>('/production/input-costs', { params: { ids: articleVariantIds.join(',') } })
+      .then((r) => r.data),
   computeProducible: (articleVariantId: string, warehouseId: string) =>
     api
       .get<ProducibleResult>('/production/producible', { params: { articleVariantId, warehouseId } })
