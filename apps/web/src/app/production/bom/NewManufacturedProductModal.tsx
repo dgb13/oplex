@@ -106,6 +106,8 @@ export default function NewManufacturedProductModal({
         taxKind: 'GRAVADO',
         isManufactured: true,
         measurementType: 'DISCRETE',
+        unitOfMeasure: sellUnit,
+        stockUnit: sellUnit === 'KG' ? 'kg' : 'un.',
       };
     },
     onSuccess: (option) => {

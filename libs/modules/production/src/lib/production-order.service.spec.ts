@@ -37,6 +37,9 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     },
     productionConsumption: { create: jest.fn((args) => Promise.resolve({ id: 'consumption-1', ...args.data })) },
     productionOutput: { create: jest.fn((args) => Promise.resolve({ id: 'output-1', ...args.data })) },
+    articleVariant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ article: { measurementType: 'DISCRETE', unitOfMeasure: 'UNIT' } }),
+    },
     ...overrides,
   };
 }
@@ -90,6 +93,30 @@ describe('ProductionOrderService.create', () => {
         }),
       }),
     );
+  });
+});
+
+describe('ProductionOrderService.create (cantidad)', () => {
+  it('rechaza media unidad de un producto que se fabrica por unidad', async () => {
+    const db = makeDb();
+    const service = makeService({ db });
+
+    await expect(
+      runAsTenant(db, () => service.create({ outputArticleVariantId: 'variant-prepizza', quantity: 1.5 })),
+    ).rejects.toThrow('número entero');
+    expect(db.productionOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('acepta decimales en un producto que se vende por kilo', async () => {
+    const db = makeDb({
+      articleVariant: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ article: { measurementType: 'DISCRETE', unitOfMeasure: 'KG' } }),
+      },
+    });
+    const service = makeService({ db });
+
+    await runAsTenant(db, () => service.create({ outputArticleVariantId: 'variant-dulce', quantity: 2.5 }));
+    expect(db.productionOrder.create).toHaveBeenCalled();
   });
 });
 

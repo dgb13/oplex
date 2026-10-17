@@ -1,10 +1,51 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, getTenantId, type BillOfMaterials, type BomByproduct, type BomLine } from '@plexo/database';
-import type { CreateBomDto } from './dto/create-bom.dto.js';
+import type { CreateBomDto, CreateBomLineDto } from './dto/create-bom.dto.js';
 
 export type BomDetail = BillOfMaterials & { lines: BomLine[]; byproducts: BomByproduct[] };
 
 const DETAIL_INCLUDE = { lines: true, byproducts: true } as const;
+
+type MeasurementType = 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+
+/**
+ * La cantidad de un insumo por largo o por medida sale de sus medidas, no
+ * se carga aparte: al confirmar se reserva `quantity`, pero al completar
+ * se corta largo × cortes (cut-plan.ts). Cargadas por separado podían no
+ * coincidir (cantidad 1 con 2 cortes de 1200 reservaba 1 mm y después
+ * cortaba 2400, comiéndose lo reservado por otras órdenes). Para unidades
+ * y gr/ml, largo/ancho/cortes no significan nada y se descartan.
+ */
+export function normalizeBomLine(line: CreateBomLineDto, measurementType: MeasurementType | undefined): CreateBomLineDto {
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+  switch (measurementType) {
+    case 'LINEAL_1D': {
+      // Sin largo, la cantidad es el largo de un corte (buildCutList).
+      const length = line.length ?? line.quantity;
+      const cutsCount = line.cutsCount ?? 1;
+      return { ...line, length, width: undefined, cutsCount, quantity: round3(length * cutsCount) };
+    }
+    case 'SURFACE_2D': {
+      if (!line.length || !line.width) return { ...line, cutsCount: undefined };
+      const cutsCount = line.cutsCount ?? 1;
+      return { ...line, cutsCount, quantity: round3((line.length * line.width * cutsCount) / 1_000_000) };
+    }
+    case 'DISCRETE':
+    case 'CONTINUOUS':
+      return { ...line, length: undefined, width: undefined, cutsCount: undefined };
+    default:
+      return line;
+  }
+}
+
+async function normalizeLines(lines: CreateBomLineDto[]): Promise<CreateBomLineDto[]> {
+  const variants = await getTenantDb().articleVariant.findMany({
+    where: { id: { in: lines.map((l) => l.inputArticleVariantId) } },
+    select: { id: true, article: { select: { measurementType: true } } },
+  });
+  const typeById = new Map(variants.map((v) => [v.id, v.article.measurementType as MeasurementType]));
+  return lines.map((line) => normalizeBomLine(line, typeById.get(line.inputArticleVariantId)));
+}
 
 /**
  * Recetas versionadas (ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase
@@ -47,6 +88,8 @@ export class BomService {
       );
     }
 
+    const lines = await normalizeLines(dto.lines);
+
     // Lock primero, mismo motivo que InvoicingService.createCreditNote /
     // GoodsReceiptService.create: dos altas de receta concurrentes para el
     // mismo artículo no deben poder desactivar/crear en paralelo y terminar
@@ -70,7 +113,7 @@ export class BomService {
         name: dto.name,
         version: (previousActive?.version ?? 0) + 1,
         isActive: true,
-        lines: { createMany: { data: dto.lines.map((line) => ({ tenantId, ...line })) } },
+        lines: { createMany: { data: lines.map((line) => ({ tenantId, ...line })) } },
         byproducts: dto.byproducts?.length
           ? { createMany: { data: dto.byproducts.map((byproduct) => ({ tenantId, ...byproduct })) } }
           : undefined,

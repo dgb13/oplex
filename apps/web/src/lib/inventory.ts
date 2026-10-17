@@ -76,6 +76,7 @@ export interface ArticleVariantLookupEntry {
   // Unidad en la que están las cantidades de stock/reservas/consumos de
   // este artículo (ver stockUnitLabel) - "gr", "mm", "un.", etc.
   stockUnit: string;
+  measurementType: Article['measurementType'];
   // Cuántas unidades de stock trae UNA unidad de compra (horma de 4000 gr,
   // barra de 6000 mm) - mismo factor que GoodsReceiptsService aplica al
   // recibir. null = se compra en la misma unidad en que se stockea.
@@ -118,6 +119,7 @@ export function buildArticleVariantLookup(articles: Article[]): Record<string, A
         preferredSupplierId: article.preferredSupplierId,
         preferredSupplierName: article.preferredSupplierName,
         stockUnit: stockUnitLabel(article),
+        measurementType: article.measurementType,
         purchaseUnitSize:
           article.measurementType === 'CONTINUOUS'
             ? article.purchaseSize

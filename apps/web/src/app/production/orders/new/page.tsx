@@ -1,6 +1,6 @@
 'use client';
 
-import ArticlePicker from '@/components/ArticlePicker';
+import ArticlePicker, { type ArticlePickerOption } from '@/components/ArticlePicker';
 import InsumoThumb from '@/components/InsumoThumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +32,9 @@ export default function NewProductionOrderPage() {
   const gate = useProductionGate();
 
   const [outputArticleVariantId, setOutputArticleVariantId] = useState('');
+  const [outputOption, setOutputOption] = useState<ArticlePickerOption | null>(null);
+  // 1,5 mesas no existe; 1,5 kg de un producto que se vende por kilo sí.
+  const byUnit = !outputOption || (outputOption.measurementType === 'DISCRETE' && outputOption.unitOfMeasure !== 'KG');
   const [warehouseId, setWarehouseId] = useState('');
   const [quantity, setQuantity] = useState('1');
   // Hoy por defecto - se puede programar para más adelante (la semana que
@@ -46,6 +49,11 @@ export default function NewProductionOrderPage() {
     queryFn: inventoryApi.listWarehouses,
     enabled: gate.enabled,
   });
+  // Con un solo depósito no hay nada que elegir.
+  const onlyWarehouseId = warehousesQuery.data?.length === 1 ? warehousesQuery.data[0].id : '';
+  useEffect(() => {
+    if (onlyWarehouseId) setWarehouseId((current) => current || onlyWarehouseId);
+  }, [onlyWarehouseId]);
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
     queryFn: () => inventoryApi.listArticles(),
@@ -94,6 +102,10 @@ export default function NewProductionOrderPage() {
       setError('Ingresá una cantidad válida');
       return;
     }
+    if (byUnit && !Number.isInteger(Number(quantity))) {
+      setError('Este producto se fabrica por unidad: ingresá una cantidad entera');
+      return;
+    }
     mutation.mutate();
   }
 
@@ -124,7 +136,10 @@ export default function NewProductionOrderPage() {
                 <label className="text-sm text-muted-foreground">Producto a fabricar</label>
                 <ArticlePicker
                   value={outputArticleVariantId}
-                  onChange={(id) => setOutputArticleVariantId(id)}
+                  onChange={(id, option) => {
+                    setOutputArticleVariantId(id);
+                    setOutputOption(option);
+                  }}
                   placeholder="Buscar producto..."
                 />
               </div>
@@ -144,8 +159,8 @@ export default function NewProductionOrderPage() {
                   <label className="text-sm text-muted-foreground">Cantidad a producir</label>
                   <Input
                     type="number"
-                    min={1}
-                    step={1}
+                    min={byUnit ? 1 : undefined}
+                    step={byUnit ? 1 : 'any'}
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                   />

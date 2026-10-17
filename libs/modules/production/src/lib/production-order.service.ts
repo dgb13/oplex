@@ -53,6 +53,15 @@ export class ProductionOrderService {
   async create(dto: CreateProductionOrderDto): Promise<ProductionOrder> {
     const db = getTenantDb();
     const bom = await this.bomService.getActiveBomOrThrow(dto.outputArticleVariantId);
+    // 1,5 mesas no existe; 1,5 kg de dulce de leche sí.
+    const { article } = await db.articleVariant.findUniqueOrThrow({
+      where: { id: dto.outputArticleVariantId },
+      select: { article: { select: { measurementType: true, unitOfMeasure: true } } },
+    });
+    const byUnit = article.measurementType === 'DISCRETE' && article.unitOfMeasure !== 'KG';
+    if (byUnit && !Number.isInteger(dto.quantity)) {
+      throw new BadRequestException('Este producto se fabrica por unidad: la cantidad tiene que ser un número entero');
+    }
     const number = await this.numbering.nextNumber();
 
     return db.productionOrder.create({
@@ -347,7 +356,7 @@ export class ProductionOrderService {
     }
     if (order.isShortOnMaterials) {
       throw new BadRequestException(
-        'A esta orden todavía le faltan insumos - volvé a confirmarla cuando haya stock suficiente',
+        'A esta orden todavía le faltan insumos - cuando haya stock, tocá "Reintentar reserva" y después completala',
       );
     }
     return order;

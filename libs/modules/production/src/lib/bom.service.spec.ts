@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { tenantContextStorage } from '@plexo/database';
-import { BomService } from './bom.service.js';
+import { BomService, normalizeBomLine } from './bom.service.js';
 
 function runAsTenant<T>(db: Record<string, unknown>, fn: () => T): T {
   return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
@@ -27,6 +27,7 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     // comentario en BomService.create.
     articleVariant: {
       findUniqueOrThrow: jest.fn().mockResolvedValue({ articleId: 'article-output' }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     article: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -161,5 +162,59 @@ describe('BomService.getActiveBomOrThrow', () => {
     await expect(runAsTenant(db, () => service.getActiveBomOrThrow('variant-x'))).rejects.toThrow(
       NotFoundException,
     );
+  });
+});
+
+describe('normalizeBomLine', () => {
+  const line = { inputArticleVariantId: 'v', quantity: 1 };
+
+  it('1D: la cantidad es largo × cortes, aunque se haya cargado otra', () => {
+    expect(normalizeBomLine({ ...line, length: 1200, cutsCount: 2 }, 'LINEAL_1D')).toMatchObject({
+      quantity: 2400,
+      length: 1200,
+      cutsCount: 2,
+    });
+  });
+
+  it('1D sin largo: la cantidad es el largo de un corte', () => {
+    expect(normalizeBomLine({ ...line, quantity: 800 }, 'LINEAL_1D')).toMatchObject({
+      quantity: 800,
+      length: 800,
+      cutsCount: 1,
+    });
+  });
+
+  it('2D: la cantidad es largo × ancho × piezas, en m²', () => {
+    expect(normalizeBomLine({ ...line, length: 1200, width: 600 }, 'SURFACE_2D').quantity).toBe(0.72);
+    expect(normalizeBomLine({ ...line, length: 80, width: 80, cutsCount: 4 }, 'SURFACE_2D').quantity).toBe(0.026);
+  });
+
+  it('unidades y gr/ml: descarta largo, ancho y cortes', () => {
+    expect(normalizeBomLine({ ...line, quantity: 200, cutsCount: 1, length: 5 }, 'CONTINUOUS')).toEqual({
+      ...line,
+      quantity: 200,
+      length: undefined,
+      width: undefined,
+      cutsCount: undefined,
+    });
+  });
+});
+
+describe('BomService.create - insumos por medida', () => {
+  it('guarda la cantidad calculada con las medidas del insumo', async () => {
+    const db = makeDb();
+    db.articleVariant.findMany.mockResolvedValue([{ id: 'variant-tubo', article: { measurementType: 'LINEAL_1D' } }]);
+    const service = new BomService();
+
+    await runAsTenant(db, () =>
+      service.create({
+        outputArticleVariantId: 'variant-output',
+        name: 'Marco',
+        lines: [{ inputArticleVariantId: 'variant-tubo', quantity: 1, length: 1200, cutsCount: 2 }],
+      }),
+    );
+
+    const created = db.billOfMaterials.create.mock.calls[0][0].data.lines.createMany.data;
+    expect(created[0]).toMatchObject({ quantity: 2400, length: 1200, cutsCount: 2 });
   });
 });
