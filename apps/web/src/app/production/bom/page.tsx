@@ -45,6 +45,43 @@ function emptyLine(): LineDraft {
   return { inputArticleVariantId: '', quantity: '', length: '', width: '', cutsCount: '', expectedWastePercent: '' };
 }
 
+type MeasurementType = 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+
+const QUANTITY_FORMAT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
+/** Lo que lleva la línea en la unidad de stock del insumo. Por largo o por
+ * medida sale de las medidas (mismo cálculo que normalizeBomLine en el
+ * backend): cargada aparte, la cantidad podía no coincidir con los cortes.
+ * null mientras falte algún dato. */
+function lineQuantity(line: LineDraft, type: MeasurementType | undefined): number | null {
+  const cuts = Number(line.cutsCount) || 1;
+  if (type === 'LINEAL_1D') {
+    const length = Number(line.length);
+    return length > 0 ? length * cuts : null;
+  }
+  if (type === 'SURFACE_2D') {
+    const length = Number(line.length);
+    const width = Number(line.width);
+    return length > 0 && width > 0 ? Math.round((length * width * cuts) / 1000) / 1000 : null;
+  }
+  const quantity = Number(line.quantity);
+  return quantity > 0 ? quantity : null;
+}
+
+/** La cantidad calculada, en el lugar del campo Cantidad. */
+function ComputedQuantity({ value, unit }: { value: number | null; unit: string | undefined }) {
+  return (
+    <div className="flex w-28 flex-col gap-0.5">
+      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <Hash className="h-3 w-3" /> Total
+      </span>
+      <span className="flex h-8 items-center rounded-lg border border-dashed px-2 text-sm tabular-nums text-muted-foreground">
+        {value === null ? '—' : `${QUANTITY_FORMAT.format(value)}${unit ? ` ${unit}` : ''}`}
+      </span>
+    </div>
+  );
+}
+
 function ThumbOrIcon({ imageUrl, icon: Icon }: { imageUrl?: string | null; icon: typeof Package }) {
   const src = imageUrl ? resolveUploadUrl(imageUrl) : null;
   return (
@@ -258,10 +295,10 @@ export default function BomPage() {
   const mutation = useMutation({
     mutationFn: () => {
       const parsedLines: CreateBomLineInput[] = lines
-        .filter((l) => l.inputArticleVariantId && l.quantity)
+        .filter((l) => l.inputArticleVariantId)
         .map((l) => ({
           inputArticleVariantId: l.inputArticleVariantId,
-          quantity: Number(l.quantity),
+          quantity: lineQuantity(l, lookup[l.inputArticleVariantId]?.measurementType) ?? 0,
           length: l.length ? Number(l.length) : undefined,
           width: l.width ? Number(l.width) : undefined,
           cutsCount: l.cutsCount ? Number(l.cutsCount) : undefined,
@@ -287,9 +324,22 @@ export default function BomPage() {
       setError('Ingresá un nombre para la receta');
       return;
     }
-    const validLines = lines.filter((l) => l.inputArticleVariantId && l.quantity);
-    if (validLines.length === 0) {
+    const chosen = lines.filter((l) => l.inputArticleVariantId);
+    if (chosen.length === 0) {
       setError('Agregá al menos un insumo con cantidad');
+      return;
+    }
+    // Antes una línea con insumo pero sin cantidad se descartaba sin avisar.
+    const incomplete = chosen.find((l) => lineQuantity(l, lookup[l.inputArticleVariantId]?.measurementType) === null);
+    if (incomplete) {
+      const insumo = lookup[incomplete.inputArticleVariantId];
+      const what =
+        insumo?.measurementType === 'LINEAL_1D'
+          ? 'el largo'
+          : insumo?.measurementType === 'SURFACE_2D'
+            ? 'el largo y el ancho'
+            : 'la cantidad';
+      setError(`Falta ${what} de ${insumo?.articleName ?? 'un insumo'}`);
       return;
     }
     mutation.mutate();
@@ -304,10 +354,15 @@ export default function BomPage() {
   // las pruebas manuales).
   useEffect(() => {
     if (!error) return;
-    if (name.trim() && lines.some((l) => l.inputArticleVariantId && l.quantity)) {
+    const chosen = lines.filter((l) => l.inputArticleVariantId);
+    if (
+      name.trim() &&
+      chosen.length > 0 &&
+      chosen.every((l) => lineQuantity(l, lookup[l.inputArticleVariantId]?.measurementType) !== null)
+    ) {
       setError('');
     }
-  }, [name, lines, error]);
+  }, [name, lines, error, lookup]);
 
   if (gate.isLoading) {
     return null;
@@ -401,11 +456,12 @@ export default function BomPage() {
                   <div className="flex flex-col gap-2">
                     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Package className="h-3.5 w-3.5" /> Insumos
-                      <span className="text-xs">(largo/ancho/cortes sólo hacen falta para artículos por metro o por pieza)</span>
+                      <span className="text-xs">(los que se compran por metro o por plancha se cargan con sus medidas)</span>
                     </p>
                     {lines.map((line, i) => {
                       const article = lookup[line.inputArticleVariantId];
-                      const isPiece = line.length !== '' || line.width !== '' || line.cutsCount !== '';
+                      const measurementType = line.inputArticleVariantId ? article?.measurementType : undefined;
+                      const isMeasured = measurementType === 'LINEAL_1D' || measurementType === 'SURFACE_2D';
                       return (
                         <div
                           key={i}
@@ -415,7 +471,7 @@ export default function BomPage() {
                             size="lg"
                             imageUrl={line.inputArticleVariantId ? article?.imageUrl : null}
                             name={article?.articleName}
-                            icon={isPiece ? Ruler : Package}
+                            icon={isMeasured ? Ruler : Package}
                           />
                           <div className="min-w-[220px] flex-1">
                             <ArticlePicker
@@ -428,34 +484,45 @@ export default function BomPage() {
                             )}
                           </div>
 
-                          <NumberField
-                            label="Cantidad"
-                            icon={Hash}
-                            value={line.quantity}
-                            onChange={(v) => updateLine(i, { quantity: v })}
-                            className="w-20"
-                          />
-                          <NumberField
-                            label="Largo (mm)"
-                            icon={Ruler}
-                            value={line.length}
-                            onChange={(v) => updateLine(i, { length: v })}
-                            className="w-20"
-                          />
-                          <NumberField
-                            label="Ancho (mm)"
-                            icon={Ruler}
-                            value={line.width}
-                            onChange={(v) => updateLine(i, { width: v })}
-                            className="w-20"
-                          />
-                          <NumberField
-                            label="Cortes"
-                            icon={Scissors}
-                            value={line.cutsCount}
-                            onChange={(v) => updateLine(i, { cutsCount: v })}
-                            className="w-16"
-                          />
+                          {/* Largo/ancho/cortes sólo para lo que se compra por
+                              metro o por plancha; ahí el total sale de las
+                              medidas. Para unidades y gr/ml, la cantidad. */}
+                          {isMeasured ? (
+                            <>
+                              <NumberField
+                                label="Largo (mm)"
+                                icon={Ruler}
+                                value={line.length}
+                                onChange={(v) => updateLine(i, { length: v })}
+                                className="w-20"
+                              />
+                              {measurementType === 'SURFACE_2D' && (
+                                <NumberField
+                                  label="Ancho (mm)"
+                                  icon={Ruler}
+                                  value={line.width}
+                                  onChange={(v) => updateLine(i, { width: v })}
+                                  className="w-20"
+                                />
+                              )}
+                              <NumberField
+                                label={measurementType === 'SURFACE_2D' ? 'Piezas' : 'Cortes'}
+                                icon={Scissors}
+                                value={line.cutsCount}
+                                onChange={(v) => updateLine(i, { cutsCount: v })}
+                                className="w-16"
+                              />
+                              <ComputedQuantity value={lineQuantity(line, measurementType)} unit={article?.stockUnit} />
+                            </>
+                          ) : (
+                            <NumberField
+                              label={article?.stockUnit ? `Cantidad (${article.stockUnit})` : 'Cantidad'}
+                              icon={Hash}
+                              value={line.quantity}
+                              onChange={(v) => updateLine(i, { quantity: v })}
+                              className="w-24"
+                            />
+                          )}
                           <NumberField
                             label="Merma %"
                             icon={Percent}
