@@ -1,5 +1,6 @@
 'use client';
 
+import { supplyNotice } from '@/components/sales/SalesLinesEditor';
 import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
 import { formatPaidAt, posApi } from '@/lib/pos';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
@@ -42,7 +43,8 @@ function sellsByUnit(article: Article): boolean {
 }
 
 function flatten(articles: Article[], warehouseId: string | undefined): ProductOption[] {
-  return articles.filter(sellsByUnit).flatMap((article) =>
+  // Los insumos no se venden (Article.isSupply): no se listan en Caja.
+  return articles.filter((a) => sellsByUnit(a) && !a.isSupply).flatMap((article) =>
     article.variants.map((variant) => {
       const row = variant.stockByWarehouse.find((r) => r.warehouseId === warehouseId);
       const reserved = row?.reserved ?? 0;
@@ -130,16 +132,18 @@ function PosSellScreen() {
     });
   }, [products, search]);
   // Lo buscado existe pero se vende por medida: decirlo en vez de "sin artículos".
-  const byMeasureMatches = useMemo(() => {
+  // Lo mismo con un insumo: decir que no se vende y dónde se cambia.
+  const { byMeasureMatches, supplyMatches } = useMemo(() => {
     const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return [];
-    return (articlesQuery.data ?? [])
-      .filter((a) => !sellsByUnit(a))
-      .filter((a) => {
-        const haystack = `${a.name} ${a.variants.map((v) => v.sku).join(' ')}`.toLowerCase();
-        return words.every((w) => haystack.includes(w));
-      })
-      .map((a) => a.name);
+    if (words.length === 0) return { byMeasureMatches: [], supplyMatches: [] };
+    const found = (articlesQuery.data ?? []).filter((a) => {
+      const haystack = `${a.name} ${a.variants.map((v) => v.sku).join(' ')}`.toLowerCase();
+      return words.every((w) => haystack.includes(w));
+    });
+    return {
+      byMeasureMatches: found.filter((a) => !a.isSupply && !sellsByUnit(a)).map((a) => a.name),
+      supplyMatches: found.filter((a) => a.isSupply).map((a) => a.name),
+    };
   }, [articlesQuery.data, search]);
 
   // Emisor Monotributo/Exento: factura C, sin IVA (mismo criterio que el
@@ -378,7 +382,9 @@ function PosSellScreen() {
               <p className="col-span-full text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
                 {byMeasureMatches.length > 0
                   ? `${byMeasureMatches.slice(0, 3).join(', ')}${byMeasureMatches.length > 3 ? '…' : ''}: ${byMeasureMatches.length === 1 ? 'se vende' : 'se venden'} por largo o por medida y no se ${byMeasureMatches.length === 1 ? 'cobra' : 'cobran'} desde Caja.`
-                  : 'Sin artículos que coincidan'}
+                  : supplyMatches.length > 0
+                    ? supplyNotice(supplyMatches)
+                    : 'Sin artículos que coincidan'}
               </p>
             )}
           </div>

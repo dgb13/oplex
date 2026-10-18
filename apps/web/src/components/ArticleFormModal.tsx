@@ -43,6 +43,7 @@ export interface ArticleFormInitial {
   categoryId?: string;
   isService?: boolean;
   isPublished?: boolean;
+  isSupply?: boolean;
   hasVariants?: boolean;
   measurementType?: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
   purchaseSize?: string;
@@ -199,6 +200,8 @@ export default function ArticleFormModal({ onClose, onSaved, initial = {} }: Pro
   // BomService.create() lo termina fijando en true solo apenas exista una
   // (ver ArticlePicker, prop `filter`, usado en production/bom/page.tsx).
   const [isManufactured, setIsManufactured] = useState(false);
+  // Insumo: no se vende (ver Article.isSupply). Tildarlo lo saca del catálogo.
+  const [isSupply, setIsSupply] = useState(initial.isSupply ?? false);
 
   // "Medida comercial" - discriminador de cómo se mide/consume el stock
   // (measurementType) + los campos propios de cada tipo. Fijo una vez
@@ -470,6 +473,7 @@ export default function ArticleFormModal({ onClose, onSaved, initial = {} }: Pro
           isPublished,
           hasVariants,
           isManufactured,
+          isSupply: !isService && isSupply,
           measurementType,
           taxDefinitionId: taxDefinitionId || undefined,
           // Sólo se mandan los campos del tipo elegido - el resto queda
@@ -853,6 +857,26 @@ export default function ArticleFormModal({ onClose, onSaved, initial = {} }: Pro
                   className="h-5 w-5 accent-primary"
                 />
               </label>
+
+              {!isService && (
+                <label className="flex items-center justify-between rounded-lg border border p-3">
+                  <span className="text-sm  ">
+                    Es un insumo
+                    <span className="block text-xs text-muted-foreground">
+                      Se usa para fabricar y no se vende: no aparece en Caja ni en facturas
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isSupply}
+                    onChange={(e) => {
+                      setIsSupply(e.target.checked);
+                      if (e.target.checked) setIsPublished(false);
+                    }}
+                    className="h-5 w-5 accent-primary"
+                  />
+                </label>
+              )}
 
               <label className="flex items-center justify-between rounded-lg border border p-3">
                 <span className="text-sm  ">

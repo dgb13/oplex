@@ -28,6 +28,8 @@ interface ArticleOption {
   totalStock: number;
   unit: string;
   isService: boolean;
+  // Insumo (no se vende): no aparece al buscar, sólo en el aviso de abajo.
+  isSupply: boolean;
   taxKind: SalesLine['taxKind'];
   taxRate: number;
 }
@@ -44,10 +46,20 @@ function flattenArticles(articles: Article[]): ArticleOption[] {
       totalStock: variant.totalStock,
       unit: stockUnitLabel(article),
       isService: article.isService,
+      isSupply: article.isSupply,
       taxKind: article.taxKind,
       taxRate: article.taxRate ?? 0,
     })),
   );
+}
+
+/** "Harina 000 es un insumo y no se vende...": quien lo busca para venderlo
+ * se entera por qué no aparece y dónde se cambia. */
+export function supplyNotice(names: string[]): string {
+  const unique = [...new Set(names)];
+  const one = unique.length === 1;
+  const list = `${unique.slice(0, 3).join(', ')}${unique.length > 3 ? '…' : ''}`;
+  return `${list} ${one ? 'es un insumo y no se vende' : 'son insumos y no se venden'}. Si ${one ? 'lo' : 'los'} vendés, destildá "Insumo" en Inventario → Detalles.`;
 }
 
 /** "2*mesa" / "2 x mesa" = agregar 2 de una (atajo típico de caja). */
@@ -125,11 +137,13 @@ export default function SalesLinesEditor({
   // sobre el valor del input EN ESE MOMENTO: un lector de código de barras
   // tipea el SKU y manda Enter antes de que React vuelva a renderizar, y
   // con los resultados del render anterior no agregaba nada.
-  function findMatches(text: string): ArticleOption[] {
+  // `supplies`: busca entre los insumos, para avisar por qué no aparecen.
+  function findMatches(text: string, supplies = false): ArticleOption[] {
     const normalized = text.trim().toLowerCase();
     if (!normalized) return [];
     const words = normalized.split(/\s+/);
     const found = options.filter((o) => {
+      if (o.isSupply !== supplies) return false;
       const haystack =
         `${o.name} ${o.sku} ${o.variantLabel ?? ''}`.toLowerCase();
       return words.every((w) => haystack.includes(w));
@@ -140,6 +154,7 @@ export default function SalesLinesEditor({
     return found.slice(0, 8);
   }
   const matches = findMatches(searchText);
+  const supplyMatches = matches.length === 0 ? findMatches(searchText, true) : [];
 
   function updateLine(key: string, patch: Partial<SalesLine>) {
     onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -508,7 +523,7 @@ export default function SalesLinesEditor({
                     <p className="px-3 py-2 text-sm text-muted-foreground">Cargando artículos...</p>
                   ) : matches.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">
-                  Sin artículos que coincidan
+                  {supplyMatches.length > 0 ? supplyNotice(supplyMatches.map((o) => o.name)) : 'Sin artículos que coincidan'}
                 </p>
               ) : (
                 matches.map((o, i) => (

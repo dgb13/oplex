@@ -128,6 +128,8 @@ export interface ArticleListItem {
   // ofrecer la primera vez). Usado por ArticlePicker en modo `filter` para
   // no mezclar insumos con productos terminados en ese selector.
   isManufactured: boolean;
+  // Insumo elegido por el usuario: no se vende (ver Article.isSupply).
+  isSupply: boolean;
   // Discriminador de medida/consumo de stock + su "medida comercial" (ver el
   // comentario de measurementType en schema.prisma) - null en los campos
   // que no le corresponden al tipo elegido. InventoryService.listArticles
@@ -224,6 +226,7 @@ export class InventoryService {
         isPublished: dto.isPublished,
         hasVariants: dto.hasVariants,
         isManufactured: dto.isManufactured,
+        isSupply: dto.isSupply,
         measurementType: dto.measurementType,
         purchaseSize: dto.purchaseSize,
         baseUnit: dto.baseUnit,
@@ -318,6 +321,7 @@ export class InventoryService {
         isService: dto.isService,
         isPublished: dto.isPublished,
         isManufactured: dto.isManufactured,
+        isSupply: dto.isSupply,
         preferredSupplierId: dto.preferredSupplierId,
         taxDefinitionId: dto.taxDefinitionId,
         markupPercent: dto.markupPercent,
@@ -447,6 +451,7 @@ export class InventoryService {
         attachmentZipUrl: article.attachmentZipUrl,
         hasVariants: article.hasVariants,
         isManufactured: article.isManufactured,
+        isSupply: article.isSupply,
         measurementType: article.measurementType,
         purchaseSize: article.purchaseSize?.toNumber() ?? null,
         baseUnit: article.baseUnit,

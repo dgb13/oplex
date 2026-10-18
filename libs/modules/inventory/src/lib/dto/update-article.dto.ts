@@ -58,6 +58,11 @@ export class UpdateArticleDto {
   @IsBoolean()
   isManufactured?: boolean;
 
+  // Insumo: se usa para fabricar y no se vende (ver Article.isSupply).
+  @IsOptional()
+  @IsBoolean()
+  isSupply?: boolean;
+
   // Unidad "simple" (UNIT/KG/etc.) - distinta de measurementType, que
   // queda fija una vez creado el artículo (ver el comentario de ese campo
   // en schema.prisma). Esta sí se puede corregir después (típicamente un

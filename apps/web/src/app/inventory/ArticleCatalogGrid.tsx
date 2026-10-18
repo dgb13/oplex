@@ -25,7 +25,7 @@ export interface CatalogCardRow {
   // Fabricados y servicios no se compran - sin "Agregar" al carrito (mismo
   // criterio que AddToCartIconButton en la vista tabla).
   isService: boolean;
-  isPublished: boolean;
+  isSupply: boolean;
   isManufactured: boolean;
 }
 
@@ -123,7 +123,7 @@ function ArticleCard({
         <p className="text-xs text-muted-foreground">{row.sku}</p>
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="text-sm font-semibold">
-            <SalePrice unitPrice={row.unitPrice} isService={row.isService} isPublished={row.isPublished} />
+            <SalePrice unitPrice={row.unitPrice} isSupply={row.isSupply} />
           </span>
           <span className="text-xs text-muted-foreground">
             Stock: {row.totalStock}

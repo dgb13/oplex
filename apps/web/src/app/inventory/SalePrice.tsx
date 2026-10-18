@@ -1,18 +1,8 @@
-/** Precio de venta de una variante en Inventario. En $0 no se muestra
- * "$0.00", que confunde: si el artículo no está en el catálogo es un
- * insumo (se usa para fabricar, no se vende); si está publicado o es un
- * servicio, le falta el precio. */
-export default function SalePrice({
-  unitPrice,
-  isService,
-  isPublished,
-}: {
-  unitPrice: number;
-  isService: boolean;
-  isPublished: boolean;
-}) {
-  if (unitPrice > 0) return <>${unitPrice.toFixed(2)}</>;
-  if (!isService && !isPublished) {
+/** Precio de venta de una variante en Inventario. Un insumo (lo marca el
+ * usuario, ver Article.isSupply) no se vende y no muestra precio; un
+ * artículo a la venta en $0 avisa que le falta, en vez de "$0.00". */
+export default function SalePrice({ unitPrice, isSupply }: { unitPrice: number; isSupply: boolean }) {
+  if (isSupply) {
     return (
       <span
         title="No se vende: se usa para fabricar"
@@ -22,6 +12,7 @@ export default function SalePrice({
       </span>
     );
   }
+  if (unitPrice > 0) return <>${unitPrice.toFixed(2)}</>;
   return (
     <span
       title="Está a la venta pero no tiene precio cargado"

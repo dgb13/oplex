@@ -1390,6 +1390,11 @@ model Article {
   // habilita producir, este flag es sólo para que el catálogo/la UI (Fase
   // 6) puedan filtrar "productos fabricados" sin tener que hacer un join.
   isManufactured      Boolean         @default(false)
+  // Insumo: se usa para fabricar y no se vende (alta guiada, "Un insumo").
+  // Lo elige el usuario, no se deduce del precio: el listado de Inventario
+  // muestra "Insumo" en vez de un precio de venta, y la venta (Caja,
+  // facturas, cotizaciones) no lo ofrece. Se cambia en "Detalles".
+  isSupply            Boolean         @default(false)
   // LINEAL_1D: largo de la "medida comercial"/presentación con la que
   // nace una StockPiece FULL_STOCK nueva (mm) - ver
   // StockPieceService.createFullStockPiece.

@@ -158,6 +158,9 @@ export interface Article {
   // en InventoryService.listArticles (backend). Usado por ArticlePicker en
   // modo `filter` para el selector "Producto a fabricar" de Recetas.
   isManufactured: boolean;
+  // Insumo: se usa para fabricar y no se vende - lo elige el usuario (alta
+  // guiada "Un insumo", o "Detalles"). Caja y facturas no lo ofrecen.
+  isSupply: boolean;
   // "Medida comercial" (ver ArticleFormModal, sección "Tipo de medición") -
   // measurementType queda fijo desde el alta; de los demás, sólo
   // commercialLength se puede corregir después (ArticleDetailsModal, ver
@@ -252,6 +255,7 @@ export interface UpdateArticleInput {
   isService?: boolean;
   isPublished?: boolean;
   isManufactured?: boolean;
+  isSupply?: boolean;
   // null clears it, undefined/omitted leaves it untouched.
   preferredSupplierId?: string | null;
   markupPercent?: number | null;
@@ -282,6 +286,7 @@ export interface CreateArticleInput {
   isPublished?: boolean;
   hasVariants?: boolean;
   isManufactured?: boolean;
+  isSupply?: boolean;
   measurementType?: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
   purchaseSize?: number;
   baseUnit?: string;

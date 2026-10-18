@@ -40,6 +40,7 @@ interface VariantRow {
   isService: boolean;
   isPublished: boolean;
   isManufactured: boolean;
+  isSupply: boolean;
   active: boolean;
   unitOfMeasure: string;
   measurementType: Article['measurementType'];
@@ -124,6 +125,7 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       isService: article.isService,
       isPublished: article.isPublished,
       isManufactured: article.isManufactured,
+      isSupply: article.isSupply,
       active: article.active,
       unitOfMeasure: article.unitOfMeasure,
       measurementType: article.measurementType,
@@ -433,7 +435,7 @@ export default function InventoryPage() {
                 totalStock: row.totalStock,
                 active: row.active,
                 isService: row.isService,
-                isPublished: row.isPublished,
+                isSupply: row.isSupply,
                 isManufactured: row.isManufactured,
               }))}
               onDetails={setDetailsArticleId}
@@ -592,7 +594,7 @@ export default function InventoryPage() {
                             title="Ver historial de precios"
                             className="hover:underline hover:decoration-dotted"
                           >
-                            <SalePrice unitPrice={row.unitPrice} isService={row.isService} isPublished={row.isPublished} />
+                            <SalePrice unitPrice={row.unitPrice} isSupply={row.isSupply} />
                           </button>
                         </td>
                         {warehouses.map((w) => (
@@ -678,6 +680,7 @@ export default function InventoryPage() {
             isService: detailsRow.isService,
             isPublished: detailsRow.isPublished,
             isManufactured: detailsRow.isManufactured,
+            isSupply: detailsRow.isSupply,
             active: detailsRow.active,
           }}
           categories={categories}
