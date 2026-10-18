@@ -20,7 +20,7 @@ import { useTaxOptions } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, LayoutGrid, List, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import ArticleFormModal from '@/components/ArticleFormModal';
+import GuidedArticleModal from '@/components/GuidedArticleModal';
 import ArticleCatalogGrid from './ArticleCatalogGrid';
 import AddToCartIconButton from './AddToCartIconButton';
 import ArticleDetailsModal from './ArticleDetailsModal';
@@ -654,7 +654,7 @@ export default function InventoryPage() {
       )}
 
       {creatingArticle && (
-        <ArticleFormModal onClose={() => setCreatingArticle(false)} />
+        <GuidedArticleModal onClose={() => setCreatingArticle(false)} />
       )}
 
       {creatingWarehouse && (

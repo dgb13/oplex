@@ -1484,6 +1484,9 @@ model ArticleImage {
   articleId String
   article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
   url       String
+  // Fuente de una foto sugerida al dar de alta (Open Food Facts pide
+  // citarla). Null en una foto subida por el usuario.
+  credit    String?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 

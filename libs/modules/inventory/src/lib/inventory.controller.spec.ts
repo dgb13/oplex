@@ -3,6 +3,7 @@ import type { ArticleImageService } from './article-image.service.js';
 import type { ArticleImportService } from './article-import.service.js';
 import { InventoryController } from './inventory.controller.js';
 import type { InventoryService } from './inventory.service.js';
+import type { PhotoSuggestionsService } from './photo-suggestions.service.js';
 
 describe('InventoryController.recordMovement', () => {
   function makeController(inventoryService: Partial<InventoryService> = {}) {
@@ -11,6 +12,7 @@ describe('InventoryController.recordMovement', () => {
       {} as ArticleImportService,
       {} as ArticleImageService,
       {} as ArticleAttachmentsService,
+      {} as PhotoSuggestionsService,
     );
   }
 

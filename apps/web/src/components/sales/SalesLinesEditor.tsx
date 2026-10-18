@@ -1,8 +1,7 @@
 'use client';
 
-import ArticleFormModal, {
-  type CreatedArticleVariantRef,
-} from '@/components/ArticleFormModal';
+import { type CreatedArticleVariantRef } from '@/components/ArticleFormModal';
+import GuidedArticleModal from '@/components/GuidedArticleModal';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { computeLineTotals } from '@/components/VatLineSummary';
 import VatRateSelect from '@/components/VatRateSelect';
@@ -585,7 +584,7 @@ export default function SalesLinesEditor({
       </div>
 
       {creatingArticle && (
-        <ArticleFormModal
+        <GuidedArticleModal
           onClose={() => setCreatingArticle(false)}
           onSaved={handleArticleCreated}
         />

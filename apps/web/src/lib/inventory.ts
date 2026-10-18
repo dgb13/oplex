@@ -266,6 +266,13 @@ export interface UpdateArticleInput {
   commercialLength?: number;
 }
 
+export interface PhotoSuggestion {
+  thumbUrl: string;
+  url: string;
+  source: 'off' | 'pexels';
+  credit: string;
+}
+
 export interface CreateArticleInput {
   name: string;
   unitOfMeasure: string;
@@ -449,6 +456,19 @@ export const inventoryApi = {
     api.post<Category>('/inventory/categories', dto).then((r) => r.data),
   recordMovement: (dto: RecordStockMovementInput) =>
     api.post('/inventory/movements', dto).then((r) => r.data),
+  // Stock inicial de un artículo por largo: crea una pieza por barra.
+  recordInitialBars: (dto: {
+    warehouseId: string;
+    articleVariantId: string;
+    bars: number;
+    costPerBar: number;
+    costIncludesVat?: boolean;
+  }) => api.post('/inventory/initial-bars', dto).then((r) => r.data),
+  // Fotos sugeridas del alta guiada (Open Food Facts + Pexels).
+  searchPhotoSuggestions: (q: string) =>
+    api.get<PhotoSuggestion[]>('/inventory/photo-suggestions', { params: { q } }).then((r) => r.data),
+  saveSuggestedImage: (articleId: string, photo: { url: string; credit: string }) =>
+    api.post(`/inventory/articles/${articleId}/suggested-image`, photo).then((r) => r.data),
   uploadArticleImage: (articleId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);

@@ -503,6 +503,7 @@ export default function BomPage() {
                               value={line.inputArticleVariantId}
                               onChange={(id) => updateLine(i, { inputArticleVariantId: id })}
                               placeholder="Insumo..."
+                              createAs="insumo"
                             />
                             {article && line.inputArticleVariantId && (
                               <p className="mt-1 text-[11px] text-muted-foreground">

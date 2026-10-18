@@ -6,6 +6,7 @@ import { ArticleImportService } from './article-import.service.js';
 import { CategoryAiService, IMPORT_ANTHROPIC_CLIENT } from './import/category-ai.service.js';
 import { InventoryController } from './inventory.controller.js';
 import { InventoryService } from './inventory.service.js';
+import { PhotoSuggestionsService } from './photo-suggestions.service.js';
 
 @Module({
   controllers: [InventoryController],
@@ -15,6 +16,7 @@ import { InventoryService } from './inventory.service.js';
     ArticleImageService,
     ArticleAttachmentsService,
     CategoryAiService,
+    PhotoSuggestionsService,
     {
       provide: IMPORT_ANTHROPIC_CLIENT,
       // Sin clave configurada la sugerencia con IA responde 503 y el resto anda igual.
