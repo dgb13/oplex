@@ -25,6 +25,7 @@ import type { UpdateArticleDto } from './dto/update-article.dto.js';
 import type { CreateArticleVariantDto } from './dto/create-article-variant.dto.js';
 import type { CreateCategoryDto } from './dto/create-category.dto.js';
 import type { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
+import type { RecordInitialBarsDto } from './dto/record-initial-bars.dto.js';
 import type { RecordStockMovementDto } from './dto/record-stock-movement.dto.js';
 import type { SetMinimumStockDto } from './dto/set-minimum-stock.dto.js';
 import { computeStockDelta } from './stock-movement.domain.js';
@@ -127,6 +128,8 @@ export interface ArticleListItem {
   // ofrecer la primera vez). Usado por ArticlePicker en modo `filter` para
   // no mezclar insumos con productos terminados en ese selector.
   isManufactured: boolean;
+  // Insumo elegido por el usuario: no se vende (ver Article.isSupply).
+  isSupply: boolean;
   // Discriminador de medida/consumo de stock + su "medida comercial" (ver el
   // comentario de measurementType en schema.prisma) - null en los campos
   // que no le corresponden al tipo elegido. InventoryService.listArticles
@@ -223,6 +226,7 @@ export class InventoryService {
         isPublished: dto.isPublished,
         hasVariants: dto.hasVariants,
         isManufactured: dto.isManufactured,
+        isSupply: dto.isSupply,
         measurementType: dto.measurementType,
         purchaseSize: dto.purchaseSize,
         baseUnit: dto.baseUnit,
@@ -317,6 +321,7 @@ export class InventoryService {
         isService: dto.isService,
         isPublished: dto.isPublished,
         isManufactured: dto.isManufactured,
+        isSupply: dto.isSupply,
         preferredSupplierId: dto.preferredSupplierId,
         taxDefinitionId: dto.taxDefinitionId,
         markupPercent: dto.markupPercent,
@@ -446,6 +451,7 @@ export class InventoryService {
         attachmentZipUrl: article.attachmentZipUrl,
         hasVariants: article.hasVariants,
         isManufactured: article.isManufactured,
+        isSupply: article.isSupply,
         measurementType: article.measurementType,
         purchaseSize: article.purchaseSize?.toNumber() ?? null,
         baseUnit: article.baseUnit,
@@ -687,6 +693,55 @@ export class InventoryService {
         ...(dto.autoReplenish !== undefined ? { autoReplenish: dto.autoReplenish } : {}),
       },
     });
+  }
+
+  /** Stock inicial de un artículo por largo: cada barra entra como pieza
+   * propia (para los recortes de Producción) y el stock se lleva en mm con
+   * el costo por mm - igual que GoodsReceiptsService al recibir una compra y
+   * que la importación de artículos. El movimiento manual de barras sigue
+   * bloqueado (ver recordMovement, blockManualLineal1D): acá sí se crean
+   * las piezas. */
+  async recordInitialBars(dto: RecordInitialBarsDto) {
+    const db = getTenantDb();
+    const variant = await db.articleVariant.findUniqueOrThrow({
+      where: { id: dto.articleVariantId },
+      select: { articleId: true, article: { select: { measurementType: true, commercialLength: true } } },
+    });
+    const length = variant.article.commercialLength;
+    if (variant.article.measurementType !== 'LINEAL_1D' || !length || length.lte(0)) {
+      throw new BadRequestException('Este artículo no se compra en barras con un largo cargado');
+    }
+    const costPerBar =
+      dto.costIncludesVat === undefined
+        ? new Prisma.Decimal(dto.costPerBar)
+        : await this.toRealCost(variant.articleId, dto.costPerBar, dto.costIncludesVat);
+    const costPerMm = costPerBar.div(length);
+    const movement = await this.recordMovement({
+      warehouseId: dto.warehouseId,
+      articleVariantId: dto.articleVariantId,
+      type: 'PURCHASE_IN',
+      quantity: length.mul(dto.bars).toNumber(),
+      unitCost: costPerMm.toNumber(),
+      sourceType: 'INITIAL_STOCK',
+    });
+    // Copia de StockPieceService.createFullStockPiece (@plexo/production):
+    // un módulo no importa el Service de otro.
+    const tenantId = getTenantId();
+    for (let i = 0; i < dto.bars; i++) {
+      await db.stockPiece.create({
+        data: {
+          tenantId,
+          articleVariantId: dto.articleVariantId,
+          warehouseId: dto.warehouseId,
+          originalLength: length,
+          currentLength: length,
+          status: 'AVAILABLE',
+          sourceType: 'FULL_STOCK',
+          unitCost: costPerMm,
+        },
+      });
+    }
+    return movement;
   }
 
   /**

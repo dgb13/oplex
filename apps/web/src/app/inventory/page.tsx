@@ -20,7 +20,7 @@ import { useTaxOptions } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, LayoutGrid, List, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import ArticleFormModal from '@/components/ArticleFormModal';
+import GuidedArticleModal from '@/components/GuidedArticleModal';
 import ArticleCatalogGrid from './ArticleCatalogGrid';
 import AddToCartIconButton from './AddToCartIconButton';
 import ArticleDetailsModal from './ArticleDetailsModal';
@@ -28,6 +28,7 @@ import ArticleImageModal from './ArticleImageModal';
 import ArticlePriceHistoryModal from './ArticlePriceHistoryModal';
 import ArticleSupplierModal from './ArticleSupplierModal';
 import StockAlertsPanel from './StockAlertsPanel';
+import SalePrice from './SalePrice';
 import StockMovementModal from './StockMovementModal';
 import WarehouseFormModal from './WarehouseFormModal';
 
@@ -39,6 +40,7 @@ interface VariantRow {
   isService: boolean;
   isPublished: boolean;
   isManufactured: boolean;
+  isSupply: boolean;
   active: boolean;
   unitOfMeasure: string;
   measurementType: Article['measurementType'];
@@ -123,6 +125,7 @@ function flattenVariants(articles: Article[]): VariantRow[] {
       isService: article.isService,
       isPublished: article.isPublished,
       isManufactured: article.isManufactured,
+      isSupply: article.isSupply,
       active: article.active,
       unitOfMeasure: article.unitOfMeasure,
       measurementType: article.measurementType,
@@ -432,6 +435,7 @@ export default function InventoryPage() {
                 totalStock: row.totalStock,
                 active: row.active,
                 isService: row.isService,
+                isSupply: row.isSupply,
                 isManufactured: row.isManufactured,
               }))}
               onDetails={setDetailsArticleId}
@@ -461,7 +465,7 @@ export default function InventoryPage() {
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Precio"
+                      label="Precio de venta"
                       sortKey="unitPrice"
                       currentSort={sort}
                       onSort={handleSort}
@@ -590,7 +594,7 @@ export default function InventoryPage() {
                             title="Ver historial de precios"
                             className="hover:underline hover:decoration-dotted"
                           >
-                            ${row.unitPrice.toFixed(2)}
+                            <SalePrice unitPrice={row.unitPrice} isSupply={row.isSupply} />
                           </button>
                         </td>
                         {warehouses.map((w) => (
@@ -654,7 +658,7 @@ export default function InventoryPage() {
       )}
 
       {creatingArticle && (
-        <ArticleFormModal onClose={() => setCreatingArticle(false)} />
+        <GuidedArticleModal onClose={() => setCreatingArticle(false)} />
       )}
 
       {creatingWarehouse && (
@@ -676,6 +680,7 @@ export default function InventoryPage() {
             isService: detailsRow.isService,
             isPublished: detailsRow.isPublished,
             isManufactured: detailsRow.isManufactured,
+            isSupply: detailsRow.isSupply,
             active: detailsRow.active,
           }}
           categories={categories}

@@ -25,11 +25,20 @@ export const IMPORT_FIELDS = [
   'barLength',
   'sheetWidth',
   'sheetLength',
+  'supply',
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 export type ImportFieldOrSkip = ImportField | 'skip';
 
 export const REQUIRED_FIELDS: ImportField[] = ['sku', 'name', 'price'];
+
+/** Columnas que faltan elegir. Con la columna Insumo, el precio deja de ser
+ * obligatorio: un listado de materias primas puede no traerlo (las filas que
+ * no son insumo igual lo piden, una por una). */
+export function missingRequiredFields(mapping: ImportFieldOrSkip[]): ImportField[] {
+  const required = mapping.includes('supply') ? REQUIRED_FIELDS.filter((f) => f !== 'price') : REQUIRED_FIELDS;
+  return required.filter((f) => !mapping.includes(f));
+}
 
 export const FIELD_LABELS: Record<ImportField, string> = {
   sku: 'Código (SKU)',
@@ -49,6 +58,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   barLength: 'Largo comercial (barra)',
   sheetWidth: 'Ancho de la plancha',
   sheetLength: 'Largo de la plancha',
+  supply: 'Insumo (no se vende)',
 };
 
 /** Encabezados habituales de cada campo, ya normalizados (sin acentos, en
@@ -71,11 +81,21 @@ const SYNONYMS: Record<ImportField, string[]> = {
   barLength: ['largo de la barra', 'largo barra', 'largo comercial', 'largo', 'longitud', 'largo m', 'largo mm', 'medida comercial'],
   sheetWidth: ['ancho de la plancha', 'ancho plancha', 'ancho chapa', 'ancho'],
   sheetLength: ['largo de la plancha', 'largo plancha', 'largo chapa', 'alto plancha', 'alto'],
+  supply: ['insumo', 'es insumo', 'materia prima', 'no se vende', 'uso interno'],
 };
 
 /** Sugiere el campo para cada encabezado sin repetir campos. */
 export function suggestMapping(headers: string[]): ImportFieldOrSkip[] {
   return suggestFields(headers, IMPORT_FIELDS, SYNONYMS);
+}
+
+/** "Sí"/"No" de la columna Insumo: true, false, o null si no se entiende.
+ * Vacío es No. También vale escribir "insumo" o marcar con una X. */
+export function parseYesNo(raw: string): boolean | null {
+  const text = valueKey(raw);
+  if (/^(si|s|x|1|true|verdadero|yes|y|insumo)$/.test(text)) return true;
+  if (/^(|no|n|0|false|falso|-)$/.test(text)) return false;
+  return null;
 }
 
 export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2';

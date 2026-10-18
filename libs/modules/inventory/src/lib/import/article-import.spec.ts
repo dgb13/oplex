@@ -1,6 +1,15 @@
 import { buildPlan, detectHeaderRow, isPrivateAddress, NO_TAX, type ImportOptions, type Refs } from '../article-import.service.js';
 import { parseCsv } from '@plexo/spreadsheet-import';
-import { directImageUrl, guessLengthUnit, guessTax, guessUnit, parseNumber, suggestMapping } from './import-fields.js';
+import {
+  directImageUrl,
+  guessLengthUnit,
+  guessTax,
+  guessUnit,
+  missingRequiredFields,
+  parseNumber,
+  parseYesNo,
+  suggestMapping,
+} from './import-fields.js';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { CategoryAiService } from './category-ai.service.js';
 
@@ -101,7 +110,7 @@ describe('buildPlan', () => {
 
     expect(byRow[2]).toMatchObject({ status: 'new', price: 3237.5, taxId: 'iva21', unit: 'UNIT', stock: 48, cost: 1850 });
     expect(byRow[3]).toMatchObject({ status: 'update', oldPrice: 3150, price: 3710 });
-    expect(byRow[4].messages).toEqual(['Falta el precio de venta']);
+    expect(byRow[4].messages).toEqual(['Falta el precio de venta (si no se vende, marcalo como insumo)']);
     expect(byRow[5].messages[0]).toContain('también en la fila 6');
     expect(byRow[6].messages[0]).toContain('también en la fila 5');
     expect(byRow[7].messages).toEqual(['Unidad "ROLLO" no reconocida: elegí a qué unidad corresponde']);
@@ -242,6 +251,47 @@ describe('barras, planchas y fotos', () => {
       expect(isPrivateAddress(ip)).toBe(true);
     }
     expect(isPrivateAddress('8.8.8.8')).toBe(false);
+  });
+});
+
+describe('columna Insumo', () => {
+  const header = ['Código', 'Nombre', 'Precio', 'Costo', 'Insumo'];
+  const base: ImportOptions = { mapping: suggestMapping(header), onExisting: 'update', pricesIncludeVat: false };
+
+  it('reconoce la columna y entiende Sí/No como se escribe', () => {
+    expect(base.mapping).toEqual(['sku', 'name', 'price', 'cost', 'supply']);
+    expect(['Sí', 'si', 'X', '1', 'insumo'].map(parseYesNo)).toEqual([true, true, true, true, true]);
+    expect(['No', '', '0', '-'].map(parseYesNo)).toEqual([false, false, false, false]);
+    expect(parseYesNo('a veces')).toBeNull();
+  });
+
+  it('un insumo no pide precio de venta; lo que se vende sí', () => {
+    const grid = [
+      header,
+      ['HAR-000', 'Harina 000', null, 20000, 'Sí'],
+      ['PRE-PIZ', 'Prepizza', null, 900, 'No'],
+    ];
+    const [supply, product] = buildPlan(grid, 0, base, refs()).rows;
+    expect(supply).toMatchObject({ status: 'new', isSupply: true, price: 0 });
+    expect(product.status).toBe('error');
+    expect(product.messages[0]).toContain('marcalo como insumo');
+  });
+
+  it('un valor que no se entiende es un error de la fila', () => {
+    const grid = [header, ['HAR-000', 'Harina 000', 100, 20000, 'quizás']];
+    expect(buildPlan(grid, 0, base, refs()).rows[0].messages).toContain('Insumo "quizás" no se entiende: escribí Sí o No');
+  });
+
+  it('con la columna Insumo, el precio deja de ser obligatorio', () => {
+    expect(missingRequiredFields(['sku', 'name', 'supply'])).toEqual([]);
+    expect(missingRequiredFields(['sku', 'name'])).toEqual(['price']);
+  });
+
+  it('sin la columna, el artículo no cambia (null) y el precio en 0 sugiere marcarlo', () => {
+    const grid = [['Código', 'Nombre', 'Precio'], ['SAL-FIN', 'Sal fina', 0]];
+    const row = buildPlan(grid, 0, { mapping: ['sku', 'name', 'price'], onExisting: 'update', pricesIncludeVat: false }, refs()).rows[0];
+    expect(row.isSupply).toBeNull();
+    expect(row.messages[0]).toContain('marcalo como insumo');
   });
 });
 

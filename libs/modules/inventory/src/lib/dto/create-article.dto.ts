@@ -41,6 +41,11 @@ export class CreateArticleDto {
   @IsBoolean()
   isManufactured?: boolean;
 
+  // Insumo: se usa para fabricar y no se vende (ver Article.isSupply).
+  @IsOptional()
+  @IsBoolean()
+  isSupply?: boolean;
+
   // Discriminador de cómo se mide/consume el stock (ver el comentario del
   // campo en schema.prisma) - existe desde la Fase 4 de Producción pero
   // hasta ahora ningún endpoint lo dejaba cargar, siempre quedaba en el

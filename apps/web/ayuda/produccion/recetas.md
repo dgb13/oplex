@@ -18,7 +18,7 @@ La receta dice qué insumos lleva cada producto que fabricás y en qué cantidad
 1. Andá a **Producción › Recetas**. Se abre la pantalla **Recetas de producción**.
 2. Elegí el producto en **Producto a fabricar**. Sólo aparecen los artículos marcados como fabricables. Si el producto todavía no existe, tocá **Nuevo producto fabricable** (ver más abajo).
 3. Escribí el **Nombre de la receta**. Si el producto ya tenía receta, el formulario se completa con la receta activa para que la uses de punto de partida.
-4. Cargá cada insumo en una línea. Buscalo en **Insumo...** y completá **Cantidad**: es lo que lleva **una** unidad del producto, en la unidad de stock del insumo (unidades, gramos, mililitros o milímetros).
+4. Cargá cada insumo en una línea. Buscalo en **Insumo...** y completá **Cantidad**: es lo que lleva **una** unidad del producto, en la unidad de stock del insumo (unidades, gramos, mililitros o milímetros). Si el insumo todavía no existe, escribí su nombre y tocá **+ Crear "…" como insumo**: se abre el alta de artículos y, al guardar, el insumo queda puesto en la línea.
 5. Si el insumo se corta de una barra, completá también **Largo (mm)** (el largo de cada corte) y **Cortes** (cuántos cortes de ese largo lleva una unidad). Los campos de largo, ancho y cortes sólo hacen falta para artículos por metro o por pieza.
 6. Si se pierde material en el proceso, completá **Merma %**. Oplex suma ese porcentaje a lo que reserva para cada orden.
 7. Tocá **Agregar insumo** para sumar otra línea, o el tachito para quitar una.

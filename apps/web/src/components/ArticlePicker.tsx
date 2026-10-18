@@ -11,7 +11,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Plus, ShoppingBasket } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import ArticleFormModal, { type CreatedArticleVariantRef } from './ArticleFormModal';
+import { type CreatedArticleVariantRef } from './ArticleFormModal';
+import GuidedArticleModal from './GuidedArticleModal';
 
 export interface ArticlePickerOption {
   id: string; // articleVariantId
@@ -76,6 +77,8 @@ interface ArticlePickerProps {
   // "Producto a fabricar" porque tiene su propio alta ("Nuevo producto
   // fabricable"), pensada para un producto con receta.
   allowCreate?: boolean;
+  // 'insumo': el alta desde acá no pregunta qué es (Recetas, insumos).
+  createAs?: 'insumo';
 }
 
 /** Selector de artículo/variante compartido, con búsqueda por nombre/SKU e
@@ -97,6 +100,7 @@ export default function ArticlePicker({
   className,
   filter,
   allowCreate = true,
+  createAs,
 }: ArticlePickerProps) {
   const articlesQuery = useQuery({
     queryKey: ['inventory-articles'],
@@ -104,6 +108,8 @@ export default function ArticlePicker({
   });
   const [query, setQuery] = useState('');
   const [creatingArticle, setCreatingArticle] = useState(false);
+  // Lo tipeado al tocar "+ Crear" desde una búsqueda sin resultados.
+  const [createName, setCreateName] = useState('');
 
   const allOptions = useMemo(() => flattenOptions(articlesQuery.data ?? []), [articlesQuery.data]);
   const options = useMemo(() => (filter ? allOptions.filter(filter) : allOptions), [allOptions, filter]);
@@ -200,7 +206,10 @@ export default function ArticlePicker({
             {allowCreate && (
               <button
                 type="button"
-                onClick={() => setCreatingArticle(true)}
+                onClick={() => {
+                  setCreateName('');
+                  setCreatingArticle(true);
+                }}
                 title="Nuevo artículo"
                 className="absolute inset-y-0 right-7 flex items-center px-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
               >
@@ -216,7 +225,23 @@ export default function ArticlePicker({
             className="z-[60] mt-1 max-h-72 w-[var(--input-width)] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-1 shadow-xl focus:outline-none"
           >
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-slate-500">Sin artículos que coincidan</p>
+              <>
+                <p className="px-3 py-2 text-sm text-slate-500">
+                  {query.trim() ? 'No hay ningún artículo con ese nombre.' : 'Sin artículos que coincidan'}
+                </p>
+                {allowCreate && query.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateName(query.trim());
+                      setCreatingArticle(true);
+                    }}
+                    className="w-full border-t border-slate-200 dark:border-slate-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-left text-sm font-semibold text-indigo-700 dark:text-indigo-300"
+                  >
+                    + Crear “{query.trim()}”{createAs === 'insumo' ? ' como insumo' : ''}
+                  </button>
+                )}
+              </>
             ) : (
               filtered.map((option) => {
                 const belowMinimum = option.minimumStock !== null && option.totalStock < option.minimumStock;
@@ -267,7 +292,13 @@ export default function ArticlePicker({
       </Combobox>
 
       {creatingArticle && (
-        <ArticleFormModal onClose={() => setCreatingArticle(false)} onSaved={handleArticleCreated} />
+        <GuidedArticleModal
+          onClose={() => setCreatingArticle(false)}
+          onSaved={handleArticleCreated}
+          initialName={createName}
+          fixedKind={createAs}
+          saveLabel={createAs === 'insumo' ? 'Crear y usar en la receta' : 'Crear y usar'}
+        />
       )}
     </>
   );

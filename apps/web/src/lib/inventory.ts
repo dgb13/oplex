@@ -158,6 +158,9 @@ export interface Article {
   // en InventoryService.listArticles (backend). Usado por ArticlePicker en
   // modo `filter` para el selector "Producto a fabricar" de Recetas.
   isManufactured: boolean;
+  // Insumo: se usa para fabricar y no se vende - lo elige el usuario (alta
+  // guiada "Un insumo", o "Detalles"). Caja y facturas no lo ofrecen.
+  isSupply: boolean;
   // "Medida comercial" (ver ArticleFormModal, sección "Tipo de medición") -
   // measurementType queda fijo desde el alta; de los demás, sólo
   // commercialLength se puede corregir después (ArticleDetailsModal, ver
@@ -252,6 +255,7 @@ export interface UpdateArticleInput {
   isService?: boolean;
   isPublished?: boolean;
   isManufactured?: boolean;
+  isSupply?: boolean;
   // null clears it, undefined/omitted leaves it untouched.
   preferredSupplierId?: string | null;
   markupPercent?: number | null;
@@ -266,6 +270,13 @@ export interface UpdateArticleInput {
   commercialLength?: number;
 }
 
+export interface PhotoSuggestion {
+  thumbUrl: string;
+  url: string;
+  source: 'off' | 'pexels';
+  credit: string;
+}
+
 export interface CreateArticleInput {
   name: string;
   unitOfMeasure: string;
@@ -275,6 +286,7 @@ export interface CreateArticleInput {
   isPublished?: boolean;
   hasVariants?: boolean;
   isManufactured?: boolean;
+  isSupply?: boolean;
   measurementType?: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
   purchaseSize?: number;
   baseUnit?: string;
@@ -449,6 +461,19 @@ export const inventoryApi = {
     api.post<Category>('/inventory/categories', dto).then((r) => r.data),
   recordMovement: (dto: RecordStockMovementInput) =>
     api.post('/inventory/movements', dto).then((r) => r.data),
+  // Stock inicial de un artículo por largo: crea una pieza por barra.
+  recordInitialBars: (dto: {
+    warehouseId: string;
+    articleVariantId: string;
+    bars: number;
+    costPerBar: number;
+    costIncludesVat?: boolean;
+  }) => api.post('/inventory/initial-bars', dto).then((r) => r.data),
+  // Fotos sugeridas del alta guiada (Open Food Facts + Pexels).
+  searchPhotoSuggestions: (q: string) =>
+    api.get<PhotoSuggestion[]>('/inventory/photo-suggestions', { params: { q } }).then((r) => r.data),
+  saveSuggestedImage: (articleId: string, photo: { url: string; credit: string }) =>
+    api.post(`/inventory/articles/${articleId}/suggested-image`, photo).then((r) => r.data),
   uploadArticleImage: (articleId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);

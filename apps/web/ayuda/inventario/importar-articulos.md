@@ -37,7 +37,7 @@ Si arrancás de cero, tocá **Descargar planilla modelo**: te bajás una planill
 5. **Si el archivo trae existencia, elegí el Depósito para el stock.** Si todavía no tenés depósitos, Oplex crea uno llamado "Depósito principal".
 6. **Tocá Continuar.**
 
-Los campos que podés asignar son: **Código (SKU)**, **Nombre**, **Precio de venta**, **Costo**, **Categoría**, **Marca**, **IVA**, **Stock inicial**, **Proveedor**, **Unidad de medida**, **Descripción larga**, **Color**, **Talle**, **Foto (link)**, **Largo comercial (barra)**, **Ancho de la plancha** y **Largo de la plancha**.
+Los campos que podés asignar son: **Código (SKU)**, **Nombre**, **Precio de venta**, **Costo**, **Categoría**, **Marca**, **IVA**, **Stock inicial**, **Proveedor**, **Unidad de medida**, **Descripción larga**, **Color**, **Talle**, **Foto (link)**, **Largo comercial (barra)**, **Ancho de la plancha**, **Largo de la plancha** e **Insumo**.
 
 > [!NOTA]
 > Las categorías y los proveedores que no existan se crean solos. Si varias filas tienen el mismo nombre con distinto **Color** o **Talle**, quedan como variantes de un mismo artículo (por ejemplo, los guantes de trabajo en talles M, L y XL).
@@ -64,6 +64,16 @@ La importación corre en segundo plano y te muestra el avance. Al terminar ves c
 
 La existencia del archivo se carga sólo en los artículos **nuevos**, y necesita el **costo** en la misma fila. En los artículos que ya existían, el stock no cambia: para eso están los [movimientos de stock](/documentacion/inventario/depositos-y-movimientos) y las compras.
 
+## Insumos
+
+Si importás materias primas o cosas que usás para fabricar y no vendés (harina, caños, tornillos), agregá una columna **Insumo** con **Sí** en esas filas. Vale también una **X**. Vacío o **No** quiere decir que se vende.
+
+- Un insumo no lleva precio de venta: si la fila trae uno, no se usa.
+- Con la columna **Insumo**, el **Precio de venta** deja de ser obligatorio. Lo piden sólo las filas que se venden.
+- Los insumos no aparecen en Caja, facturas ni cotizaciones, y en Inventario dicen **Insumo** en lugar del precio.
+- Al actualizar artículos que ya existen, la columna cambia si son insumo o no. Sin la columna, eso no se toca.
+- **Exportar artículos** trae la columna **Insumo**, así podés corregirla en Excel y volver a subir.
+
 ## Barras y planchas
 
 - **Barras** (caños, perfiles, tubos): si el archivo tiene la columna **Largo comercial (barra)**, el artículo queda como barra, con piezas y recortes para Producción. Cada artículo usa su propio largo. El precio queda por barra entera. Si tu archivo trae el precio, el costo y la existencia por metro, elegí **Por metro** en **En las barras, el precio y la existencia son**, y Oplex los pasa a barra (precio × largo; la existencia en metros ÷ largo, que tiene que dar barras enteras).
@@ -86,8 +96,9 @@ Si hay artículos nuevos sin categoría, en la revisión aparece **✨ Sugerir c
 | Ese archivo es de Excel viejo (.xls). Abrilo en Excel y guardalo como .xlsx, o como CSV. | El formato .xls no se lee. | Guardalo como .xlsx o CSV y subilo de nuevo. |
 | El archivo tiene más de 20.000 filas: dividilo en partes | Te pasaste del máximo. | Partí el archivo en dos o más y subilos de a uno. |
 | No se pudo leer el archivo de Excel. ¿Está dañado o protegido con contraseña? | El archivo está roto o tiene contraseña. | Sacale la contraseña o exportalo de nuevo. |
-| Falta indicar qué columna es ... | No asignaste una columna obligatoria. | En **Columnas**, asigná **Código (SKU)**, **Nombre** y **Precio de venta**. |
-| Falta el precio de venta | La fila no tiene precio. | Completalo en el Excel. |
+| Falta indicar qué columna es ... | No asignaste una columna obligatoria. | En **Columnas**, asigná **Código (SKU)**, **Nombre** y **Precio de venta** (o **Insumo**, si tu lista es de materias primas). |
+| Falta el precio de venta (si no se vende, marcalo como insumo) | La fila no tiene precio. | Completalo en el Excel, o poné **Sí** en la columna **Insumo** si no lo vendés. |
+| Insumo "quizás" no se entiende: escribí Sí o No | La columna Insumo tiene otro valor. | Poné **Sí** o **No** (vacío también es No). |
 | Para cargar el stock inicial falta el costo | La fila tiene existencia pero no costo. | Agregá el costo o sacá la existencia. |
 | Código repetido en el archivo (también en la fila 12) | Dos filas tienen el mismo código. | Dejá una sola o cambiá uno de los códigos. |
 | Unidad "ROLLO" no reconocida: elegí a qué unidad corresponde | Oplex no conoce esa unidad. | Elegila en **Valores a confirmar**. |

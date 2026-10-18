@@ -31,6 +31,7 @@ interface Props {
     isService: boolean;
     isPublished: boolean;
     isManufactured: boolean;
+    isSupply: boolean;
     active: boolean;
   };
   categories: Category[];
@@ -94,6 +95,7 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
   const [isService, setIsService] = useState(article.isService);
   const [isPublished, setIsPublished] = useState(article.isPublished);
   const [isManufactured, setIsManufactured] = useState(article.isManufactured);
+  const [isSupply, setIsSupply] = useState(article.isSupply);
   // Unidad bloqueada si algo ya guarda cantidades del artículo (stock,
   // recetas, comprobantes...) - el backend lo rechaza igual, esto es para
   // deshabilitar el selector y explicar por qué. Siempre fresco al abrir.
@@ -154,6 +156,8 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
     if (isService !== article.isService) articlePatch.isService = isService;
     if (isPublished !== article.isPublished) articlePatch.isPublished = isPublished;
     if (isManufactured !== article.isManufactured) articlePatch.isManufactured = isManufactured;
+    // Un servicio nunca es insumo, aunque la casilla haya quedado tildada.
+    if ((isSupply && !isService) !== article.isSupply) articlePatch.isSupply = isSupply && !isService;
     if (commercialLengthChanged) articlePatch.commercialLength = commercialLengthValue;
     const variantSkus: Array<{ id: string; sku: string }> = [];
     const variantPrices: Array<{ id: string; price: number }> = [];
@@ -189,6 +193,7 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
     isService,
     isPublished,
     isManufactured,
+    isSupply,
     commercialLengthChanged,
     commercialLengthValue,
     taxDefinitionId,
@@ -419,6 +424,20 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
                   <input type="checkbox" checked={isManufactured} onChange={(e) => setIsManufactured(e.target.checked)} className="h-4 w-4 accent-primary" />
                   Se fabrica
                 </label>
+                {!isService && (
+                  <label className="flex items-center gap-2 text-sm" title="Se usa para fabricar y no se vende: no aparece en Caja ni en facturas">
+                    <input
+                      type="checkbox"
+                      checked={isSupply}
+                      onChange={(e) => {
+                        setIsSupply(e.target.checked);
+                        if (e.target.checked) setIsPublished(false);
+                      }}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Es un insumo (no se vende)
+                  </label>
+                )}
               </div>
             </div>
           )}

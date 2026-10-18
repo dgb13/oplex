@@ -85,17 +85,19 @@ export class ArticleImageService {
   }
 
   /** "Cambiar la foto" de antes (ficha, importación): reemplaza la principal
-   * y deja las demás como están. Sin fotos, la agrega como principal. */
-  async setImage(articleId: string, mimeType: string, buffer: Buffer): Promise<Article> {
+   * y deja las demás como están. Sin fotos, la agrega como principal.
+   * `credit` es la fuente de una foto sugerida (ver PhotoSuggestionsService);
+   * una foto propia no lleva. */
+  async setImage(articleId: string, mimeType: string, buffer: Buffer, credit: string | null = null): Promise<Article> {
     await this.findArticle(articleId);
     const images = await this.ensureRows(articleId);
     const url = await this.saveFile(mimeType, buffer);
     const db = getTenantDb();
     const main = images[0];
     if (main) {
-      await db.articleImage.update({ where: { id: main.id }, data: { url } });
+      await db.articleImage.update({ where: { id: main.id }, data: { url, credit } });
     } else {
-      await db.articleImage.create({ data: { tenantId: getTenantId(), articleId, url, sortOrder: 0 } });
+      await db.articleImage.create({ data: { tenantId: getTenantId(), articleId, url, credit, sortOrder: 0 } });
     }
     await this.syncMain(articleId);
     if (main) {

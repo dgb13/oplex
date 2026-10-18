@@ -33,8 +33,9 @@ import {
   guessTax,
   guessUnit,
   valueKey,
+  missingRequiredFields,
   parseNumber,
-  REQUIRED_FIELDS,
+  parseYesNo,
   suggestMapping,
   type ImportField,
   type ImportFieldOrSkip,
@@ -109,7 +110,10 @@ export interface PlanRow {
   supplier: string | null;
   unit: UnitValue;
   taxId: string | null;
-  /** Precio de venta neto (sin IVA) que se va a guardar. */
+  /** Insumo (no se vende, ver Article.isSupply). null = el archivo no
+   * trae la columna: al actualizar no se toca, al crear queda en No. */
+  isSupply: boolean | null;
+  /** Precio de venta neto (sin IVA) que se va a guardar. En un insumo, 0. */
   price: number | null;
   oldPrice: number | null;
   cost: number | null;
@@ -235,7 +239,7 @@ export class ArticleImportService {
       newCategories: plan.newCategories,
       newSuppliers: plan.newSuppliers,
       existingSuppliers: plan.existingSuppliers,
-      missingRequired: REQUIRED_FIELDS.filter((f) => !options.mapping.includes(f)).map((f) => FIELD_LABELS[f]),
+      missingRequired: missingRequiredFields(options.mapping).map((f) => FIELD_LABELS[f]),
       lengthUnitSuggested: plan.lengthUnitSuggested,
       uncategorizedNew: plan.rows.filter((r) => r.status === 'new' && !r.category).length,
     };
@@ -278,8 +282,9 @@ export class ArticleImportService {
     const { grid, headerRow } = await this.load(importId);
     const refs = await this.loadRefs();
     const plan = buildPlan(grid, headerRow, options, refs);
-    if (REQUIRED_FIELDS.some((f) => !options.mapping.includes(f))) {
-      throw new BadRequestException('Faltan columnas obligatorias: Código, Nombre y Precio de venta');
+    const missing = missingRequiredFields(options.mapping);
+    if (missing.length > 0) {
+      throw new BadRequestException(`Faltan columnas obligatorias: ${missing.map((f) => FIELD_LABELS[f]).join(', ')}`);
     }
     const hasStock = plan.rows.some((r) => r.status === 'new' && r.stock);
     if (hasStock && !options.warehouseId) {
@@ -372,6 +377,7 @@ export class ArticleImportService {
         color: v.color ?? '',
         size: v.size ?? '',
         description: v.article.description ?? '',
+        supply: v.article.isSupply ? 'Sí' : 'No',
       });
     }
     return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -395,6 +401,7 @@ export class ArticleImportService {
       color: 'Negro',
       size: '',
       description: '',
+      supply: 'No',
       cost: 9000,
       stock: 10,
     });
@@ -407,6 +414,7 @@ export class ArticleImportService {
       'Categoría y Proveedor se crean solos si no existen.',
       'Stock inicial necesita el Costo y se carga sólo en artículos nuevos.',
       'Mismo Nombre con distinto Color o Talle = variantes de un mismo artículo.',
+      'Insumo: Sí si lo usás para fabricar y no lo vendés (harina, caños). No lleva precio de venta y no aparece en Caja ni en facturas. Vacío o No = se vende.',
       'No hace falta usar esta planilla: Oplex también lee la lista exportada de tu sistema anterior.',
     ].forEach((line) => help.addRow([line]));
     return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -498,6 +506,7 @@ export class ArticleImportService {
       categoryId: categoryId ?? undefined,
       taxDefinitionId: first.taxId ?? undefined,
       hasVariants: group.length > 1,
+      isSupply: first.isSupply ?? false,
       measurementType: first.measurementType,
       commercialLength: first.barLengthMm ?? undefined,
       sheetWidth: first.sheetWidthMm ?? undefined,
@@ -540,6 +549,8 @@ export class ArticleImportService {
         ...(categoryId ? { categoryId } : {}),
         ...(row.taxId ? { taxDefinitionId: row.taxId } : {}),
         ...(supplierId ? { preferredSupplierId: supplierId } : {}),
+        // Pasar a insumo lo saca del catálogo, como en el alta y en Detalles.
+        ...(row.isSupply !== null ? { isSupply: row.isSupply, ...(row.isSupply ? { isPublished: false } : {}) } : {}),
       },
     });
     if (row.brand !== null || row.color !== null || row.size !== null) {
@@ -707,6 +718,7 @@ const EXPORT_COLUMNS = [
   { header: 'Color', key: 'color', width: 12 },
   { header: 'Talle', key: 'size', width: 10 },
   { header: 'Descripción larga', key: 'description', width: 40 },
+  { header: 'Insumo', key: 'supply', width: 10 },
 ];
 
 const UNIT_EXPORT: Record<string, string> = { UNIT: 'UN', KG: 'KG', LTR: 'LT', MM: 'MM', M2: 'M2' };
@@ -755,10 +767,19 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
     const taxId = chosenTax === NO_TAX ? null : chosenTax;
     if (taxKey && !chosenTax) messages.push(`IVA "${taxRaw}" no reconocido: elegí a qué impuesto corresponde`);
 
+    const supplyRaw = text(cells, 'supply') ?? '';
+    const isSupply = col('supply') >= 0 ? parseYesNo(supplyRaw) : null;
+    if (col('supply') >= 0 && isSupply === null) messages.push(`Insumo "${supplyRaw}" no se entiende: escribí Sí o No`);
+
     const rawPrice = number(cells, 'price');
     let price = rawPrice;
-    if (rawPrice === null) messages.push('Falta el precio de venta');
-    else if (rawPrice <= 0) messages.push('El precio de venta tiene que ser mayor a 0');
+    const preWarnings: string[] = [];
+    if (isSupply) {
+      // Un insumo no se vende: no lleva precio de venta.
+      if (rawPrice !== null && rawPrice > 0) preWarnings.push('Es insumo: el precio de venta no se usa');
+      price = 0;
+    } else if (rawPrice === null) messages.push('Falta el precio de venta (si no se vende, marcalo como insumo)');
+    else if (rawPrice <= 0) messages.push('El precio de venta tiene que ser mayor a 0 (si no se vende, marcalo como insumo)');
     // Monotributo/Exento facturan C: su precio de venta ya es el final, no
     // se le saca IVA aunque el archivo diga que lo incluye.
     if (price !== null && options.pricesIncludeVat && taxId && isVatRecoverable(refs.taxCondition) !== false) {
@@ -820,7 +841,7 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       }
     }
 
-    const warnings: string[] = [];
+    const warnings: string[] = [...preWarnings];
     const photo = text(cells, 'imageUrl');
     const imageUrl = photo && /^https?:\/\//i.test(photo) ? directImageUrl(photo) : null;
     if (photo && !imageUrl) warnings.push('El link de la foto no empieza con http: se importa sin foto');
@@ -849,6 +870,7 @@ export function buildPlan(grid: Cell[][], headerRow: number, options: ImportOpti
       supplier,
       unit: unit ?? 'UNIT',
       taxId,
+      isSupply,
       price,
       oldPrice: existing ? existing.unitPrice : null,
       cost,

@@ -27,9 +27,12 @@ import { AssignTaxToArticlesDto } from './dto/assign-tax-to-articles.dto.js';
 import { ReorderArticleImagesDto } from './dto/reorder-article-images.dto.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
+import { RecordInitialBarsDto } from './dto/record-initial-bars.dto.js';
 import { RecordStockMovementDto } from './dto/record-stock-movement.dto.js';
+import { SaveSuggestedPhotoDto } from './dto/save-suggested-photo.dto.js';
 import { SetMinimumStockDto } from './dto/set-minimum-stock.dto.js';
 import { InventoryService } from './inventory.service.js';
+import { PhotoSuggestionsService } from './photo-suggestions.service.js';
 
 const WRITE_ROLES = ['OWNER', 'ADMIN', 'INVENTORY'] as const;
 
@@ -41,6 +44,7 @@ export class InventoryController {
     private readonly articleImportService: ArticleImportService,
     private readonly articleImageService: ArticleImageService,
     private readonly articleAttachmentsService: ArticleAttachmentsService,
+    private readonly photoSuggestionsService: PhotoSuggestionsService,
   ) {}
 
   @Roles(...WRITE_ROLES)
@@ -248,6 +252,27 @@ export class InventoryController {
       );
     }
     return this.inventoryService.recordMovement(dto, { blockManualLineal1D: true });
+  }
+
+  // Stock inicial en barras desde el alta guiada (crea las piezas).
+  @Roles(...WRITE_ROLES)
+  @Post('initial-bars')
+  recordInitialBars(@Body() dto: RecordInitialBarsDto) {
+    return this.inventoryService.recordInitialBars(dto);
+  }
+
+  // Fotos sugeridas para el alta guiada (Open Food Facts + Pexels).
+  @Roles(...WRITE_ROLES)
+  @Get('photo-suggestions')
+  searchPhotoSuggestions(@Query('q') q = '') {
+    return this.photoSuggestionsService.search(q);
+  }
+
+  @AuditEntity('article', { labelFields: ['name'] })
+  @Roles(...WRITE_ROLES)
+  @Post('articles/:id/suggested-image')
+  saveSuggestedImage(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveSuggestedPhotoDto) {
+    return this.photoSuggestionsService.saveSuggested(id, dto.url, dto.credit);
   }
 
   @Get('reorder-suggestions')
