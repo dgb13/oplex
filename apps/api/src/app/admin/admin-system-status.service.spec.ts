@@ -28,6 +28,8 @@ const ALL_MANAGED_VARS = [
   'APPLE_PRIVATE_KEY',
   'RESEND_API_KEY',
   'EMAIL_FROM',
+  'PIXABAY_API_KEY',
+  'PEXELS_API_KEY',
   'BACKUP_STORAGE_DIR',
   'ANTHROPIC_ASSISTANT_API_KEY',
   'ANTHROPIC_API_KEY',
@@ -148,6 +150,25 @@ describe('AdminSystemStatusService.getStatus', () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-ant-y';
     const both = await service.getStatus();
     expect(both.find((s) => s.key === 'ai')).toEqual({ key: 'ai', label: 'Inteligencia artificial (Anthropic)', configured: true });
+  });
+
+  it('reports suggested photos as configured with either the Pixabay or the Pexels key', async () => {
+    const service = new AdminSystemStatusService(makePrisma(), makeSubscriptionService(), makeArcaPadron(), new AdminAiStatusService({} as never), makeConstanciaLink());
+
+    const none = await service.getStatus();
+    expect(none.find((s) => s.key === 'stockPhotos')).toEqual({
+      key: 'stockPhotos',
+      label: 'Fotos sugeridas de artículos (Pixabay)',
+      configured: false,
+      detail: 'Falta: PIXABAY_API_KEY (sin clave sólo se sugieren fotos de Open Food Facts)',
+    });
+
+    process.env['PEXELS_API_KEY'] = 'x';
+    expect((await service.getStatus()).find((s) => s.key === 'stockPhotos')?.configured).toBe(true);
+
+    delete process.env['PEXELS_API_KEY'];
+    process.env['PIXABAY_API_KEY'] = 'x';
+    expect((await service.getStatus()).find((s) => s.key === 'stockPhotos')?.configured).toBe(true);
   });
 
   it('reports WhatsApp as configured only when all 4 Meta Cloud API vars are set', async () => {

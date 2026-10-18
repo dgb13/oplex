@@ -261,7 +261,7 @@ export class InventoryController {
     return this.inventoryService.recordInitialBars(dto);
   }
 
-  // Fotos sugeridas para el alta guiada (Open Food Facts + Pexels).
+  // Fotos sugeridas para el alta guiada (Open Food Facts + Pixabay o Pexels).
   @Roles(...WRITE_ROLES)
   @Get('photo-suggestions')
   searchPhotoSuggestions(@Query('q') q = '') {

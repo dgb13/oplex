@@ -3,7 +3,7 @@ import type { ArticleImage } from '@plexo/database';
 import { downloadImage } from './article-import.service.js';
 import { ArticleImageService } from './article-image.service.js';
 
-export type PhotoSource = 'off' | 'pexels';
+export type PhotoSource = 'off' | 'pixabay' | 'pexels';
 
 export interface PhotoSuggestion {
   // Miniatura para elegir y foto más grande para guardar.
@@ -17,10 +17,20 @@ export interface PhotoSuggestion {
 const PER_SOURCE = 3;
 const TIMEOUT_MS = 8_000;
 const USER_AGENT = 'Oplex/1.0 (soporte@oplex.com.ar)';
+// Pixabay pide guardar cada búsqueda 24 h; sus links de foto vencen a las
+// 24 h, así que se guardan un poco menos para no ofrecer links vencidos.
+const PIXABAY_CACHE_MS = 23 * 60 * 60 * 1000;
+const PIXABAY_CACHE_MAX = 500;
 
 // Sólo se guardan fotos de estos servidores: la foto elegida viaja desde el
 // navegador, y sin esta lista la API bajaría cualquier link que le manden.
-const ALLOWED_HOSTS = ['images.openfoodfacts.org', 'static.openfoodfacts.org', 'images.pexels.com'];
+const ALLOWED_HOSTS = [
+  'images.openfoodfacts.org',
+  'static.openfoodfacts.org',
+  'pixabay.com',
+  'cdn.pixabay.com',
+  'images.pexels.com',
+];
 
 interface OffHit {
   product_name?: string;
@@ -28,6 +38,13 @@ interface OffHit {
   countries_tags?: string[];
   image_front_url?: string;
   image_front_small_url?: string;
+}
+
+interface PixabayHit {
+  tags?: string;
+  user?: string;
+  webformatURL?: string;
+  largeImageURL?: string;
 }
 
 interface PexelsPhoto {
@@ -39,20 +56,22 @@ interface PexelsPhoto {
  * guiada de artículos"). Dos fuentes con licencia que permite usarlas
  * también en la tienda online:
  * - Open Food Facts: envases reales de supermercado (CC BY-SA, se cita).
- * - Pexels: fotos genéricas (licencia libre). Sólo con PEXELS_API_KEY.
+ * - Fotos genéricas (licencia libre): Pixabay con PIXABAY_API_KEY o, si no
+ *   hay, Pexels con PEXELS_API_KEY (Pexels pausó las claves nuevas).
  * Primero va la fuente que mejor le va al nombre: si Open Food Facts
- * encuentra la marca escrita en el nombre, sus fotos; si no, Pexels. */
+ * encuentra la marca escrita en el nombre, sus fotos; si no, las genéricas. */
 @Injectable()
 export class PhotoSuggestionsService {
   private readonly logger = new Logger(PhotoSuggestionsService.name);
+  private readonly pixabayCache = new Map<string, { at: number; photos: PhotoSuggestion[] }>();
 
   constructor(private readonly articleImageService: ArticleImageService) {}
 
   async search(rawQuery: string): Promise<PhotoSuggestion[]> {
     const query = rawQuery.trim().slice(0, 80);
     if (query.length < 2) return [];
-    const [off, pexels] = await Promise.all([this.searchOff(query), this.searchPexels(query)]);
-    const [first, second] = off.brandMatch ? [off.photos, pexels] : [pexels, off.photos];
+    const [off, stock] = await Promise.all([this.searchOff(query), this.searchStock(query)]);
+    const [first, second] = off.brandMatch ? [off.photos, stock] : [stock, off.photos];
     // 3 de cada una; si una trae menos, la otra completa los lugares libres.
     const picked = [...first.slice(0, PER_SOURCE), ...second.slice(0, PER_SOURCE)];
     const spare = [...first.slice(PER_SOURCE), ...second.slice(PER_SOURCE)];
@@ -121,6 +140,51 @@ export class PhotoSuggestionsService {
       };
     });
     return { photos, brandMatch };
+  }
+
+  private searchStock(query: string): Promise<PhotoSuggestion[]> {
+    return process.env.PIXABAY_API_KEY ? this.searchPixabay(query, process.env.PIXABAY_API_KEY) : this.searchPexels(query);
+  }
+
+  private async searchPixabay(query: string, key: string): Promise<PhotoSuggestion[]> {
+    const cacheKey = plain(query);
+    const cached = this.pixabayCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < PIXABAY_CACHE_MS) return cached.photos;
+    const params = new URLSearchParams({ key, q: query, lang: 'es', image_type: 'photo', safesearch: 'true', per_page: '20' });
+    const data = await this.getJson<{ hits?: PixabayHit[] }>(`https://pixabay.com/api/?${params}`);
+    if (!data) return [];
+    // Pixabay trae todo lo que tenga la palabra en alguna etiqueta ("martillo"
+    // trae un pájaro "martillo amarillo"): primero las fotos donde la palabra
+    // es de las primeras etiquetas, que es de lo que trata la foto.
+    const words = plain(query).split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    const score = (h: PixabayHit) => {
+      const tags = (h.tags ?? '').split(',').map(plain);
+      return words.reduce((sum, w) => {
+        const i = tags.findIndex((t) => t === w || t === `${w}s` || t.startsWith(`${w} `));
+        if (i === 0) return sum + 3;
+        if (i === 1) return sum + 2;
+        if (i > 1) return sum + 1.5;
+        return sum + (tags.some((t) => t.includes(w)) ? 1 : 0);
+      }, 0);
+    };
+    const photos = (data.hits ?? [])
+      .filter((h): h is PixabayHit & { webformatURL: string; largeImageURL: string } => !!h.webformatURL && !!h.largeImageURL)
+      .map((h, i) => ({ h, i, s: score(h) }))
+      .filter((r) => r.s > 0)
+      .sort((a, b) => b.s - a.s || a.i - b.i)
+      .slice(0, PER_SOURCE * 2)
+      .map(({ h }) => ({
+        thumbUrl: h.webformatURL,
+        url: h.largeImageURL,
+        source: 'pixabay' as const,
+        credit: `Foto de ${h.user || 'un autor'} en Pixabay`,
+      }));
+    if (this.pixabayCache.size >= PIXABAY_CACHE_MAX) {
+      const oldest = this.pixabayCache.keys().next().value;
+      if (oldest !== undefined) this.pixabayCache.delete(oldest);
+    }
+    this.pixabayCache.set(cacheKey, { at: Date.now(), photos });
+    return photos;
   }
 
   private async searchPexels(query: string): Promise<PhotoSuggestion[]> {

@@ -273,7 +273,7 @@ export interface UpdateArticleInput {
 export interface PhotoSuggestion {
   thumbUrl: string;
   url: string;
-  source: 'off' | 'pexels';
+  source: 'off' | 'pixabay' | 'pexels';
   credit: string;
 }
 
@@ -469,7 +469,7 @@ export const inventoryApi = {
     costPerBar: number;
     costIncludesVat?: boolean;
   }) => api.post('/inventory/initial-bars', dto).then((r) => r.data),
-  // Fotos sugeridas del alta guiada (Open Food Facts + Pexels).
+  // Fotos sugeridas del alta guiada (Open Food Facts + Pixabay o Pexels).
   searchPhotoSuggestions: (q: string) =>
     api.get<PhotoSuggestion[]>('/inventory/photo-suggestions', { params: { q } }).then((r) => r.data),
   saveSuggestedImage: (articleId: string, photo: { url: string; credit: string }) =>

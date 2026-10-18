@@ -582,7 +582,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
                 type="button"
                 onClick={() => setPicked(i)}
                 aria-pressed={picked === i}
-                aria-label={`Foto sugerida ${i + 1}, ${s.source === 'off' ? 'Open Food Facts' : 'Pexels'}`}
+                aria-label={`Foto sugerida ${i + 1}, ${SOURCE_LABELS[s.source]}`}
                 className={`relative flex w-[calc((100%-1rem)/3)] shrink-0 snap-start flex-col overflow-hidden rounded-lg border-2 bg-card text-left ${
                   picked === i ? 'border-primary' : 'border-transparent'
                 }`}
@@ -593,7 +593,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
                     s.source === 'off' ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'
                   }`}
                 >
-                  {s.source === 'off' ? 'Open Food Facts' : 'Pexels'}
+                  {SOURCE_LABELS[s.source]}
                 </span>
                 {picked === i && (
                   <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
@@ -966,11 +966,17 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
   );
 }
 
+const SOURCE_LABELS: Record<PhotoSuggestion['source'], string> = {
+  off: 'Open Food Facts',
+  pixabay: 'Pixabay',
+  pexels: 'Pexels',
+};
+
 function describeSources(list: PhotoSuggestion[]): string {
-  const off = list.filter((s) => s.source === 'off').length;
-  const pexels = list.length - off;
-  const parts = [off > 0 ? `${off} de Open Food Facts` : '', pexels > 0 ? `${pexels} de Pexels` : ''].filter(Boolean);
-  return parts.join(' y ');
+  const sources = (Object.keys(SOURCE_LABELS) as PhotoSuggestion['source'][])
+    .map((source) => ({ source, count: list.filter((s) => s.source === source).length }))
+    .filter((s) => s.count > 0);
+  return sources.map((s) => `${s.count} de ${SOURCE_LABELS[s.source]}`).join(' y ');
 }
 
 function Question({ n, title, hint, children }: { n: number; title: string; hint?: string; children: React.ReactNode }) {

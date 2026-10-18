@@ -165,6 +165,7 @@ export class AdminSystemStatusService {
       await this.checkArcaPadron(),
       await this.checkConstanciaLink(),
       this.checkGroup('email', 'Email transaccional (Resend)', ['RESEND_API_KEY', 'EMAIL_FROM']),
+      this.checkStockPhotos(),
       // Las dos claves de Anthropic (chat y lectura de documentos), separadas a
       // propósito para ver el gasto por separado - el detalle (modelos,
       // prueba sin costo, uso, fallas) es AdminAiStatusService.
@@ -321,6 +322,19 @@ export class AdminSystemStatusService {
       label: 'ARCA · Padrón de contribuyentes',
       configured: status.configured,
       detail: status.configured ? undefined : 'Falta cargar el certificado de Oplex',
+    };
+  }
+
+  /** Fotos genéricas del alta guiada de artículos: alcanza con una de las
+   * dos claves (PhotoSuggestionsService usa Pixabay y, si no hay, Pexels).
+   * Sin ninguna el alta anda igual, sólo sugiere fotos de Open Food Facts. */
+  private checkStockPhotos(): SystemStatusItem {
+    const configured = isSet('PIXABAY_API_KEY') || isSet('PEXELS_API_KEY');
+    return {
+      key: 'stockPhotos',
+      label: 'Fotos sugeridas de artículos (Pixabay)',
+      configured,
+      detail: configured ? undefined : 'Falta: PIXABAY_API_KEY (sin clave sólo se sugieren fotos de Open Food Facts)',
     };
   }
 
