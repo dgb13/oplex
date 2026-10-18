@@ -28,6 +28,7 @@ import ArticleImageModal from './ArticleImageModal';
 import ArticlePriceHistoryModal from './ArticlePriceHistoryModal';
 import ArticleSupplierModal from './ArticleSupplierModal';
 import StockAlertsPanel from './StockAlertsPanel';
+import SalePrice from './SalePrice';
 import StockMovementModal from './StockMovementModal';
 import WarehouseFormModal from './WarehouseFormModal';
 
@@ -432,6 +433,7 @@ export default function InventoryPage() {
                 totalStock: row.totalStock,
                 active: row.active,
                 isService: row.isService,
+                isPublished: row.isPublished,
                 isManufactured: row.isManufactured,
               }))}
               onDetails={setDetailsArticleId}
@@ -461,7 +463,7 @@ export default function InventoryPage() {
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Precio"
+                      label="Precio de venta"
                       sortKey="unitPrice"
                       currentSort={sort}
                       onSort={handleSort}
@@ -590,7 +592,7 @@ export default function InventoryPage() {
                             title="Ver historial de precios"
                             className="hover:underline hover:decoration-dotted"
                           >
-                            ${row.unitPrice.toFixed(2)}
+                            <SalePrice unitPrice={row.unitPrice} isService={row.isService} isPublished={row.isPublished} />
                           </button>
                         </td>
                         {warehouses.map((w) => (

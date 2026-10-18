@@ -9,6 +9,7 @@ import { cartApi, CART_QUERY_KEY } from '@/lib/inventoryCart';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, ShoppingBasket } from 'lucide-react';
 import { useState } from 'react';
+import SalePrice from './SalePrice';
 
 export interface CatalogCardRow {
   articleId: string;
@@ -24,6 +25,7 @@ export interface CatalogCardRow {
   // Fabricados y servicios no se compran - sin "Agregar" al carrito (mismo
   // criterio que AddToCartIconButton en la vista tabla).
   isService: boolean;
+  isPublished: boolean;
   isManufactured: boolean;
 }
 
@@ -121,7 +123,7 @@ function ArticleCard({
         <p className="text-xs text-muted-foreground">{row.sku}</p>
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="text-sm font-semibold">
-            ${row.unitPrice.toFixed(2)}
+            <SalePrice unitPrice={row.unitPrice} isService={row.isService} isPublished={row.isPublished} />
           </span>
           <span className="text-xs text-muted-foreground">
             Stock: {row.totalStock}
