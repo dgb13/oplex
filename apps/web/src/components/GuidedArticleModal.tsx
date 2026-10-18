@@ -1,6 +1,6 @@
 'use client';
 
-import ArticleFormModal, { type CreatedArticleVariantRef } from '@/components/ArticleFormModal';
+import ArticleFormModal, { type ArticleFormInitial, type CreatedArticleVariantRef } from '@/components/ArticleFormModal';
 import { CostVatToggle } from '@/components/CostVat';
 import ImageCropper from '@/components/ImageCropper';
 import Select from '@/components/ui/Select';
@@ -223,7 +223,8 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
   const [errors, setErrors] = useState<string[]>([]);
   const [serverError, setServerError] = useState('');
   const [savedNames, setSavedNames] = useState<string[]>([]);
-  const [advanced, setAdvanced] = useState(false);
+  // Con valor, se muestra el formulario completo arrancando con eso.
+  const [advanced, setAdvanced] = useState<ArticleFormInitial | null>(null);
   const progress = useRef<Progress>({});
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -442,6 +443,44 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
     });
   }
 
+  /** Pasa lo cargado al formulario completo, en sus unidades (ver
+   * ArticleFormInitial). La foto sugerida no viaja: se guarda bajándola
+   * desde la API, y el formulario completo sólo sube archivos. */
+  function openFullForm(withVariants: boolean) {
+    const d = draft;
+    const per = perPurchaseUnit(d);
+    const toStock = (v: string) => (num(v) > 0 && per > 0 ? String(Number((num(v) * per).toFixed(4))) : '');
+    // El formulario completo toma el costo por presentación en bolsas y
+    // bidones, pero por mm o m² en barras y planchas.
+    const perLength = d.how === 'bar' || d.how === 'sheet';
+    const cost = perLength && num(d.cost) > 0 && per > 0 ? String(Number((num(d.cost) / per).toFixed(6))) : d.cost;
+    setAdvanced({
+      name: d.name.trim(),
+      categoryId: d.categoryId,
+      isService: d.kind === 'servicio',
+      isPublished: d.catalog,
+      hasVariants: withVariants,
+      measurementType:
+        d.how === 'pack' ? 'CONTINUOUS' : d.how === 'bar' ? 'LINEAL_1D' : d.how === 'sheet' ? 'SURFACE_2D' : 'DISCRETE',
+      purchaseSize: d.how === 'pack' && per > 0 ? String(per) : undefined,
+      baseUnit: d.how === 'pack' ? PACK_UNITS[d.packUnit].base : undefined,
+      commercialLength: d.how === 'bar' ? d.barLength : undefined,
+      sheetWidth: d.how === 'sheet' ? d.sheetWidth : undefined,
+      sheetLength: d.how === 'sheet' ? d.sheetLength : undefined,
+      preferredSupplierId: d.supplierId,
+      cost,
+      price: d.price,
+      taxDefinitionId,
+      sku: d.name.trim() ? code : '',
+      unitOfMeasure: d.how === 'kilo' ? 'KG' : 'UNIT',
+      warehouseId,
+      // Las barras no tienen stock inicial en el formulario completo.
+      stock: d.how === 'bar' ? '' : toStock(d.have),
+      minimumStock: toStock(d.min),
+      imageFile: photo?.kind === 'own' ? photo.file : undefined,
+    });
+  }
+
   function updateTrackEdges() {
     const el = trackRef.current;
     if (!el) return;
@@ -450,7 +489,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
   useEffect(updateTrackEdges, [suggestions.length]);
 
   if (advanced) {
-    return <ArticleFormModal onClose={onClose} onSaved={onSaved} />;
+    return <ArticleFormModal onClose={onClose} onSaved={onSaved} initial={advanced} />;
   }
 
   const trimmedName = draft.name.trim();
@@ -626,6 +665,16 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
                 {HOWS[draft.kind].map((h) => (
                   <Choice key={h.id} title={h.title} hint={h.hint} active={draft.how === h.id} onClick={() => set('how', h.id)} />
                 ))}
+                {/* Cada talle/color es una variante con su código y su stock:
+                    eso lo arma el formulario completo, que abre ya preparado. */}
+                {draft.kind === 'producto' && (
+                  <Choice
+                    title="En talles o colores"
+                    hint="Ropa, calzado. Stock por talle y color."
+                    active={false}
+                    onClick={() => openFullForm(true)}
+                  />
+                )}
               </Choices>
             </Question>
           )}
@@ -850,10 +899,12 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3.5">
-          {!fixedKind && (
+          {/* Con el artículo ya creado en un intento fallido, el formulario
+              completo lo duplicaría: se termina acá. */}
+          {!fixedKind && !progress.current.articleId && (
             <button
               type="button"
-              onClick={() => setAdvanced(true)}
+              onClick={() => openFullForm(false)}
               className="mr-auto text-xs text-muted-foreground hover:text-foreground"
               title="Para variantes por talle o color, folleto y adjuntos"
             >

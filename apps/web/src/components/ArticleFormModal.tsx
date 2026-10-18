@@ -30,6 +30,36 @@ interface Props {
   // artículo") - el picker arma su propia opción a partir de esto y llama
   // a su propio onChange, en vez de esperar el refetch de la lista.
   onSaved?: (created: CreatedArticleVariantRef) => void;
+  // Lo ya cargado en el alta guiada al pasar a "Formulario completo" (o al
+  // elegir "En talles o colores"): no se vuelve a escribir nada.
+  initial?: ArticleFormInitial;
+}
+
+/** Valores de arranque, en las unidades de este formulario: costo por
+ * presentación para peso/volumen y por mm/m² para barras/planchas, stock
+ * en la unidad de stock (gr/ml, m², unidades). */
+export interface ArticleFormInitial {
+  name?: string;
+  categoryId?: string;
+  isService?: boolean;
+  isPublished?: boolean;
+  hasVariants?: boolean;
+  measurementType?: 'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D';
+  purchaseSize?: string;
+  baseUnit?: string;
+  commercialLength?: string;
+  sheetWidth?: string;
+  sheetLength?: string;
+  preferredSupplierId?: string;
+  cost?: string;
+  price?: string;
+  taxDefinitionId?: string;
+  sku?: string;
+  unitOfMeasure?: string;
+  warehouseId?: string;
+  stock?: string;
+  minimumStock?: string;
+  imageFile?: File;
 }
 
 type Tab = 'general' | 'pricing' | 'variant' | 'stock' | 'media';
@@ -145,24 +175,25 @@ function comboKey(combo: { name: string; value: string }[]): string {
  * `status`/`error`, así que un segundo click en "Crear artículo" sólo
  * reprocesa las filas que no quedaron en `done`.
  */
-export default function ArticleFormModal({ onClose, onSaved }: Props) {
+export default function ArticleFormModal({ onClose, onSaved, initial = {} }: Props) {
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({ queryKey: ['tenant-settings'], queryFn: tenantSettingsApi.get });
   const categoriesQuery = useQuery({ queryKey: ['inventory-categories'], queryFn: inventoryApi.listCategories });
   const warehousesQuery = useQuery({ queryKey: ['inventory-warehouses'], queryFn: inventoryApi.listWarehouses });
   const suppliersQuery = useQuery({ queryKey: ['companies', 'SUPPLIER'], queryFn: () => companiesApi.list('SUPPLIER') });
 
-  const [tab, setTab] = useState<Tab>('general');
+  // Con variantes y nombre ya escrito, se arranca donde falta completar.
+  const [tab, setTab] = useState<Tab>(initial.hasVariants && initial.name ? 'variant' : 'general');
 
   // Datos generales
-  const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [name, setName] = useState(initial.name ?? '');
+  const [categoryId, setCategoryId] = useState(initial.categoryId ?? '');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [description, setDescription] = useState('');
-  const [isService, setIsService] = useState(false);
-  const [isPublished, setIsPublished] = useState(true);
-  const [hasVariants, setHasVariants] = useState(false);
+  const [isService, setIsService] = useState(initial.isService ?? false);
+  const [isPublished, setIsPublished] = useState(initial.isPublished ?? true);
+  const [hasVariants, setHasVariants] = useState(initial.hasVariants ?? false);
   // Sólo hace falta tildarlo a mano para poder elegir este producto como
   // "Producto a fabricar" en Recetas ANTES de cargarle su primera receta -
   // BomService.create() lo termina fijando en true solo apenas exista una
@@ -174,27 +205,27 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   // creado el artículo, no hay UPDATE para esto (ver UpdateArticleInput) -
   // cambiarlo con stock/piezas/BOM ya cargados rompería su interpretación.
   const [measurementType, setMeasurementType] = useState<'DISCRETE' | 'CONTINUOUS' | 'LINEAL_1D' | 'SURFACE_2D'>(
-    'DISCRETE',
+    initial.measurementType ?? 'DISCRETE',
   );
-  const [purchaseSize, setPurchaseSize] = useState('');
-  const [baseUnit, setBaseUnit] = useState('gr');
-  const [commercialLength, setCommercialLength] = useState('');
+  const [purchaseSize, setPurchaseSize] = useState(initial.purchaseSize ?? '');
+  const [baseUnit, setBaseUnit] = useState(initial.baseUnit ?? 'gr');
+  const [commercialLength, setCommercialLength] = useState(initial.commercialLength ?? '');
   const [minUsableLength, setMinUsableLength] = useState('');
-  const [sheetWidth, setSheetWidth] = useState('');
-  const [sheetLength, setSheetLength] = useState('');
+  const [sheetWidth, setSheetWidth] = useState(initial.sheetWidth ?? '');
+  const [sheetLength, setSheetLength] = useState(initial.sheetLength ?? '');
 
   // Precios y proveedor
-  const [preferredSupplierId, setPreferredSupplierId] = useState('');
+  const [preferredSupplierId, setPreferredSupplierId] = useState(initial.preferredSupplierId ?? '');
   const [creatingSupplier, setCreatingSupplier] = useState(false);
-  const [costInput, setCostInput] = useState('');
+  const [costInput, setCostInput] = useState(initial.cost ?? '');
   const [costIncludesVat, setCostIncludesVat] = useCostIncludesVat();
   const [markupInput, setMarkupInput] = useState('');
-  const [priceInput, setPriceInput] = useState('');
+  const [priceInput, setPriceInput] = useState(initial.price ?? '');
   // IVA del artículo: arranca en IVA 21% (la alícuota general) apenas
   // cargan las opciones.
   const taxOptionsQuery = useTaxOptions();
   const taxOptions = taxOptionsQuery.data ?? [];
-  const [taxDefinitionId, setTaxDefinitionId] = useState('');
+  const [taxDefinitionId, setTaxDefinitionId] = useState(initial.taxDefinitionId ?? '');
   useEffect(() => {
     if (taxDefinitionId === '' && taxOptions.length > 0) {
       setTaxDefinitionId(taxOptions.find((t) => t.code === 'IVA21')?.id ?? taxOptions[0].id);
@@ -203,26 +234,30 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
   const vatRate = taxOptionRate(taxOptions.find((t) => t.id === taxDefinitionId));
 
   // Variante / identificación - modo simple (hasVariants=false)
-  const [sku, setSku] = useState('');
-  const [unitOfMeasure, setUnitOfMeasure] = useState<string>('UNIT');
+  const [sku, setSku] = useState(initial.sku ?? '');
+  const [unitOfMeasure, setUnitOfMeasure] = useState<string>(initial.unitOfMeasure ?? 'UNIT');
 
   // Variantes - modo matriz (hasVariants=true)
-  const [variantAttributes, setVariantAttributes] = useState<AttributeDraft[]>([]);
-  const [attributeDrafts, setAttributeDrafts] = useState<string[]>([]);
-  const [skuBase, setSkuBase] = useState('');
+  // Desde "En talles o colores" ya vienen los dos atributos más comunes,
+  // vacíos: el que no se usa no genera combinaciones (ver cartesianCombos).
+  const [variantAttributes, setVariantAttributes] = useState<AttributeDraft[]>(() =>
+    initial.hasVariants ? [{ name: 'Talle', values: [] }, { name: 'Color', values: [] }] : [],
+  );
+  const [attributeDrafts, setAttributeDrafts] = useState<string[]>(() => (initial.hasVariants ? ['', ''] : []));
+  const [skuBase, setSkuBase] = useState(initial.sku ?? '');
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
 
   // Stock inicial y alertas
-  const [warehouseId, setWarehouseId] = useState('');
-  const [stockInput, setStockInput] = useState('');
-  const [minimumStockInput, setMinimumStockInput] = useState('');
+  const [warehouseId, setWarehouseId] = useState(initial.warehouseId ?? '');
+  const [stockInput, setStockInput] = useState(initial.stock ?? '');
+  const [minimumStockInput, setMinimumStockInput] = useState(initial.minimumStock ?? '');
 
   // Adjuntos - se suben recién después de crear el artículo (necesitan
   // su id), así que hasta entonces sólo quedan guardados acá. `imageFile`
   // es siempre el resultado YA recortado (ver ImageCropper) - el archivo
   // elegido en crudo vive aparte en `pendingCropFile` hasta que se aplica
   // o se cancela el recorte, nunca llega a subirse tal cual.
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(initial.imageFile ?? null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [brochureFile, setBrochureFile] = useState<File | null>(null);
@@ -235,6 +270,12 @@ export default function ArticleFormModal({ onClose, onSaved }: Props) {
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     };
   }, [imagePreviewUrl]);
+
+  // La foto subida en el alta guiada: la miniatura se arma acá y no en el
+  // useState, porque el efecto de arriba la revocaría al montar (Strict Mode).
+  useEffect(() => {
+    if (initial.imageFile) setImagePreviewUrl(URL.createObjectURL(initial.imageFile));
+  }, []);
 
   function handleImageCropApplied(cropped: File) {
     setImageFile(cropped);
