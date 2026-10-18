@@ -114,6 +114,8 @@ function plural(word: string, k: number): string {
   return /[aeiou]$/.test(word) ? word + 's' : word + 'es';
 }
 
+const CODE_SKIP_WORDS = new Set(['DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'CON', 'SIN', 'PARA', 'POR', 'EN', 'X']);
+
 /** "Harina 000" -> "HAR-000": código corto y legible, editable en "Más datos". */
 function suggestCode(name: string): string {
   const words = name
@@ -121,7 +123,8 @@ function suggestCode(name: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toUpperCase()
     .split(/[^A-Z0-9]+/)
-    .filter(Boolean);
+    // "Nivel de aluminio" -> NIV-ALU, no NIV-DE.
+    .filter((w) => w && !CODE_SKIP_WORDS.has(w));
   return words
     .slice(0, 2)
     .map((w) => w.slice(0, 3))
@@ -793,7 +796,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
                               : '¿Cuántas unidades tenés?'
                     }
                     error={errors.includes('las barras, en números enteros')}
-                    help={draft.how === 'bar' ? undefined : 'Puede ser con decimales: 2,5'}
+                    help={draft.how === 'bar' || draft.how === 'unit' ? undefined : 'Puede ser con decimales: 2,5'}
                   >
                     <NumberInput value={draft.have} onChange={(v) => set('have', v)} placeholder="0" />
                   </Field>
