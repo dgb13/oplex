@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { UserAvatar } from '@/components/UserAvatar';
-import { activityLogApi } from '@/lib/activityLog';
 import { profileApi, type UserProfile } from '@/lib/profile';
 import { disconnectSocket } from '@/lib/socket';
 import { whatsAppLinkApi, type WhatsAppLinkRequestResult } from '@/lib/whatsappLink';
@@ -45,54 +44,9 @@ export default function ProfilePage() {
           />
           <PasswordCard />
           <WhatsAppLinkCard />
-          <ActivityCard />
         </>
       )}
     </div>
-  );
-}
-
-/** Formats a small set of relative-time buckets ("hace 2 horas") without
- * pulling in a date library for a handful of cases. */
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return 'recién';
-  if (minutes < 60) return `hace ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  return `hace ${days} día${days === 1 ? '' : 's'}`;
-}
-
-function ActivityCard() {
-  const { data: entries, isLoading } = useQuery({
-    queryKey: ['profile-activity'],
-    queryFn: activityLogApi.getMine,
-  });
-
-  return (
-    <Card>
-      <CardContent>
-        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Últimas acciones</h2>
-        {isLoading || !entries ? (
-          <p className="text-sm text-muted-foreground">Cargando...</p>
-        ) : entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay actividad registrada.</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {entries.map((entry) => (
-              <li key={entry.id} className="flex items-center justify-between gap-4">
-                <span>{entry.action}</span>
-                <span className="whitespace-nowrap text-xs text-muted-foreground">
-                  {formatRelative(entry.occurredAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
