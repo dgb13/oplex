@@ -22,6 +22,10 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 const REQUIRED: ImportFieldOrSkip[] = ['sku', 'name', 'price'];
+// Igual que missingRequiredFields en el backend: con la columna Insumo, el
+// precio no es obligatorio (lo piden sólo las filas que se venden).
+const missingRequired = (mapping: ImportFieldOrSkip[]) =>
+  REQUIRED.filter((f) => !mapping.includes(f) && !(f === 'price' && mapping.includes('supply')));
 // Igual que NO_TAX en ArticleImportService: el artículo queda sin alícuota.
 const NO_TAX = '__none__';
 const formatMoney = (n: number | null) =>
@@ -262,7 +266,7 @@ function ColumnsStep(props: {
   const { analysis, mapping, setMapping } = props;
   const { data: warehouses } = useQuery({ queryKey: ['warehouses'], queryFn: inventoryApi.listWarehouses });
   const recognized = analysis.columns.filter((c) => c.suggested !== 'skip').length;
-  const missing = REQUIRED.filter((f) => !mapping.includes(f));
+  const missing = missingRequired(mapping);
   const usesStock = mapping.includes('stock');
   const usesCost = mapping.includes('cost');
   const { condition: taxCondition } = useTaxCondition();
@@ -610,7 +614,11 @@ function ReviewStep({
                   {r.status === 'update' && r.oldPrice !== null && r.price !== r.oldPrice && (
                     <span className="mr-1 text-muted-foreground line-through">{formatMoney(r.oldPrice)}</span>
                   )}
-                  {formatMoney(r.price)}
+                  {r.isSupply ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Insumo</span>
+                  ) : (
+                    formatMoney(r.price)
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <StatusPill status={r.status} labels={STATUS_LABELS} />

@@ -19,7 +19,8 @@ export type ImportField =
   | 'imageUrl'
   | 'barLength'
   | 'sheetWidth'
-  | 'sheetLength';
+  | 'sheetLength'
+  | 'supply';
 export type ImportFieldOrSkip = ImportField | 'skip';
 export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2';
 export type LengthUnit = 'm' | 'cm' | 'mm';
@@ -42,6 +43,7 @@ export const IMPORT_FIELD_OPTIONS: { value: ImportFieldOrSkip; label: string }[]
   { value: 'barLength', label: 'Largo comercial (barra)' },
   { value: 'sheetWidth', label: 'Ancho de la plancha' },
   { value: 'sheetLength', label: 'Largo de la plancha' },
+  { value: 'supply', label: 'Insumo (Sí/No)' },
   { value: 'skip', label: 'No importar' },
 ];
 
@@ -91,6 +93,8 @@ export interface PlanRow {
   sku: string;
   name: string;
   category: string | null;
+  // Insumo (no se vende): sin precio de venta. null = sin columna Insumo.
+  isSupply: boolean | null;
   price: number | null;
   oldPrice: number | null;
   stock: number | null;
