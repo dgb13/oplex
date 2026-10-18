@@ -305,7 +305,7 @@ export default function ArticleDetailsModal({ article, categories, onClose }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
