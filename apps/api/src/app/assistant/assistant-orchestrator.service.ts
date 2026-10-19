@@ -4,6 +4,8 @@ import type { AuthenticatedUser } from '@plexo/types';
 import { AiEventsService } from '../ai-events/ai-events.service.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import type { AssistantAccess } from './assistant-access.service.js';
+import { actionByTool } from './assistant-actions.catalog.js';
+import { AssistantActionsService, type ActionTurn } from './assistant-actions.service.js';
 import type { HistoryMessage } from './assistant-conversation.service.js';
 import { executeAssistantTool, labelForTool, toolsForAccess } from './assistant-tools.catalog.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
@@ -25,7 +27,7 @@ const MAX_TOOL_CALL_ROUNDS = 4;
 // asumiendo un "hoy" propio en vez del real).
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10);
-  return `Sos el asistente de IA de Oplex, un ERP para pymes argentinas. Hoy es ${today}. Respondés preguntas del usuario sobre SUS PROPIOS datos de negocio (ventas, cuentas a cobrar, caja, stock, costos, compras) usando exclusivamente las herramientas disponibles - nunca inventes ni calcules un número que no haya salido de una herramienta, citalo tal cual te lo devolvió. Para preguntas con fechas relativas ("este mes", "este año", "últimos 3 meses") calculá el rango vos mismo a partir de la fecha de hoy de arriba, nunca asumas otro año. Si una herramienta te devuelve un error de permiso, o no tenés ninguna herramienta para lo que te piden, explicáselo al usuario en una frase, sin tecnicismos: puede que su rol no tenga ese tema habilitado en Preferencias › Asistente. Respondé siempre en español rioplatense, corto y directo - esto no es un chat de charla libre, es una consulta de datos de negocio.`;
+  return `Sos el asistente de IA de Oplex, un ERP para pymes argentinas. Hoy es ${today}. Respondés preguntas del usuario sobre SUS PROPIOS datos de negocio (ventas, cuentas a cobrar, caja, stock, costos, compras) usando exclusivamente las herramientas disponibles - nunca inventes ni calcules un número que no haya salido de una herramienta, citalo tal cual te lo devolvió. Para preguntas con fechas relativas ("este mes", "este año", "últimos 3 meses") calculá el rango vos mismo a partir de la fecha de hoy de arriba, nunca asumas otro año. Si una herramienta te devuelve un error de permiso, o no tenés ninguna herramienta para lo que te piden, explicáselo al usuario en una frase, sin tecnicismos: puede que su rol no tenga ese tema habilitado en Preferencias › Asistente. Si tenés herramientas de acción (agendar, cargar un cliente...), usalas sólo cuando la persona lo pide explícitamente, con los datos que dio - nunca inventes un dato que falta, preguntalo. Esas herramientas no hacen nada solas: devuelven un resumen y si hay que pedir confirmación; contáselo tal cual, sin decir que ya está hecho si el estado no es "hecha". Respondé siempre en español rioplatense, corto y directo - esto no es un chat de charla libre, es una consulta de datos de negocio.`;
 }
 
 /**
@@ -43,6 +45,7 @@ export class AssistantOrchestratorService {
   constructor(
     @Inject(ASSISTANT_ANTHROPIC_CLIENT) private readonly anthropic: Anthropic,
     private readonly assistantToolsService: AssistantToolsService,
+    private readonly assistantActionsService: AssistantActionsService,
     @Optional() private readonly aiEvents?: AiEventsService,
   ) {}
 
@@ -59,10 +62,11 @@ export class AssistantOrchestratorService {
     access: AssistantAccess,
     history: HistoryMessage[],
     userMessage: string,
+    turn: ActionTurn,
   ): Promise<{ text: string; toolNames: string[] }> {
     let text = '';
     const toolNames = new Set<string>();
-    for await (const chunk of this.chatStream(user, access, history, userMessage)) {
+    for await (const chunk of this.chatStream(user, access, history, userMessage, turn)) {
       if (chunk.type === 'text') {
         text += chunk.text;
       } else if (chunk.type === 'tool_start') {
@@ -89,6 +93,7 @@ export class AssistantOrchestratorService {
     access: AssistantAccess,
     history: HistoryMessage[],
     userMessage: string,
+    turn: ActionTurn,
   ): AsyncGenerator<AssistantStreamChunk> {
     const tools = toolsForAccess(access);
     // El historial persistido (Fase 3) sólo tiene el texto final de cada
@@ -158,6 +163,16 @@ export class AssistantOrchestratorService {
       const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
       for (const t of toolUses) {
         const input = t.inputJson ? JSON.parse(t.inputJson) : {};
+        // Una herramienta de acción no ejecuta nada acá: propone, y el
+        // servicio de acciones decide si espera el "SÍ" (etapa 3).
+        if (actionByTool(t.name)) {
+          const outcome = await this.assistantActionsService.propose(user, access, t.name, input, turn);
+          if (outcome.card) {
+            yield { type: 'tool_result', tool: t.name, data: outcome.card };
+          }
+          toolResults.push({ type: 'tool_result', tool_use_id: t.id, content: outcome.content, is_error: outcome.isError });
+          continue;
+        }
         const result = await executeAssistantTool(this.assistantToolsService, user, access, t.name, input);
         if (!result.isError) {
           // Mismo dato que se le manda a Claude en el tool_result de abajo,

@@ -1,4 +1,4 @@
-import { IsBoolean, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsObject, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 
 export class UpdateAssistantConfigDto {
   @IsOptional()
@@ -19,4 +19,33 @@ export class UpdateAssistantConfigDto {
   @IsOptional()
   @IsObject()
   topicsByRole?: Record<string, string[]>;
+
+  /** { "<acción>": "OFF" | "DRAFT" | "DIRECT" } - un nivel que la acción no
+   * admite cae a su default (normalizeActionLevels). */
+  @IsOptional()
+  @IsObject()
+  actionLevels?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
+  actionRoles?: Record<string, string[]>;
+
+  /** null = sin tope. */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(0)
+  maxQuoteAmountWhatsapp?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  maxActionsPerDay?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  confirmExpiryMinutes?: number;
 }

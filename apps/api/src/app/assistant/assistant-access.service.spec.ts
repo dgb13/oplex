@@ -11,6 +11,8 @@ import {
   accessFromConfig,
   AssistantAccessService,
   blockedTopicFor,
+  normalizeActionLevels,
+  normalizeActionRoles,
   normalizeTopicsByRole,
   type AssistantTenantConfigView,
 } from './assistant-access.service.js';
@@ -21,7 +23,18 @@ function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
 }
 
 function config(overrides: Partial<AssistantTenantConfigView> = {}): AssistantTenantConfigView {
-  return { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, topicsByRole: DEFAULT_TOPICS_BY_ROLE, ...overrides };
+  return {
+    webEnabled: true,
+    whatsappEnabled: true,
+    salesOwnDataOnly: true,
+    topicsByRole: DEFAULT_TOPICS_BY_ROLE,
+    actionLevels: normalizeActionLevels(null),
+    actionRoles: normalizeActionRoles(null),
+    maxQuoteAmountWhatsapp: null,
+    maxActionsPerDay: 40,
+    confirmExpiryMinutes: 10,
+    ...overrides,
+  };
 }
 
 describe('normalizeTopicsByRole', () => {
@@ -55,7 +68,8 @@ describe('accessFromConfig', () => {
 
     expect([...access.allowedTopics].sort()).toEqual(['ayuda', 'caja', 'compras', 'costos', 'deudas', 'stock', 'ventas']);
     expect(access.allowedTools).toEqual(
-      new Set(['ventas_por_articulo', 'deuda_por_cliente', 'saldo_caja', 'stock_articulo', 'costo_articulo', 'compras_resumen']),
+      // + el recordatorio, que viene prendido en Borrador por defecto.
+      new Set(['ventas_por_articulo', 'deuda_por_cliente', 'saldo_caja', 'stock_articulo', 'costo_articulo', 'compras_resumen', 'crear_recordatorio']),
     );
     expect(access.scope).toEqual({});
   });
@@ -64,7 +78,7 @@ describe('accessFromConfig', () => {
     const access = accessFromConfig(config(), { sub: 'u', role: 'INVENTORY' });
 
     expect([...access.allowedTopics].sort()).toEqual(['ayuda', 'compras', 'stock']);
-    expect(access.allowedTools).toEqual(new Set(['stock_articulo', 'compras_resumen']));
+    expect(access.allowedTools).toEqual(new Set(['stock_articulo', 'compras_resumen', 'crear_recordatorio']));
   });
 
   it('scopes SALES to its own invoices only when "salesOwnDataOnly" is on', () => {

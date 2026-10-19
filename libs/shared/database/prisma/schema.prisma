@@ -4182,9 +4182,73 @@ model AssistantTenantConfig {
   // { "<tema>": ["SALES", "ACCOUNTANT", ...] } - OWNER/ADMIN nunca figuran
   // (siempre tienen todo). Se valida y normaliza en AssistantAccessService.
   topicsByRole     Json
+  // Acciones (etapa 3): { "<acción>": "OFF" | "DRAFT" | "DIRECT" } y
+  // { "<acción>": ["SALES", ...] }. Mismo criterio que topicsByRole: se
+  // validan contra el catálogo en código (assistant-actions.catalog.ts).
+  actionLevels           Json     @default("{}")
+  actionRoles            Json     @default("{}")
+  // null = sin tope. Sólo aplica a cotizaciones pedidas por WhatsApp.
+  maxQuoteAmountWhatsapp Decimal? @db.Decimal(14, 2)
+  maxActionsPerDay       Int      @default(40)
+  confirmExpiryMinutes   Int      @default(10)
   updatedAt        DateTime @updatedAt
 
   @@map("assistant_tenant_config")
+}
+
+enum AssistantActionKind {
+  REMINDER_CREATE
+  CUSTOMER_CREATE
+  QUOTE_CREATE
+  QUOTE_EMAIL
+  PAYMENT_LINK
+  INVOICE_PREPARE
+}
+
+enum AssistantActionStatus {
+  // Borrador: espera el "SÍ" de quien la pidió hasta expiresAt.
+  PENDING_CONFIRMATION
+  DONE
+  EXPIRED
+  CANCELLED
+  UNDONE
+  FAILED
+}
+
+// Una fila por acción que el asistente propuso o hizo (etapa 3 de
+// docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md). El modelo
+// sólo PROPONE (payload); la ejecución la hace el servidor al confirmar o, en
+// nivel Directa, en el momento. Es lo que muestra el Historial y lo que se
+// deshace.
+model AssistantAction {
+  id                String                @id @default(uuid())
+  tenantId          String
+  conversationId    String
+  // La pregunta (role USER) que la originó - el Historial pagina por pregunta.
+  questionMessageId String?
+  userId            String
+  channel           AssistantChannel
+  kind              AssistantActionKind
+  // DRAFT | DIRECT, el nivel que regía al proponerla.
+  level             String
+  status            AssistantActionStatus
+  payload           Json
+  summary           String
+  // Lo que se creó, para mostrarlo y deshacerlo (ej. "calendarEvent"/id).
+  entityType        String?
+  entityId          String?
+  expiresAt         DateTime?
+  confirmedAt       DateTime?
+  undoneAt          DateTime?
+  undoneByUserId    String?
+  errorMessage      String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, questionMessageId])
+  @@map("assistant_actions")
 }
 
 // Agenda (ver docs/planesdemodulos/plan-agenda.md) - la ÚNICA tabla propia del módulo. El

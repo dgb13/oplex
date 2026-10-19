@@ -71,6 +71,15 @@ export interface AssistantHistoryEntry {
   blockedTopic: string | null;
   tools: string[];
   feedback: AssistantMessageFeedback | null;
+  action: {
+    id: string;
+    label: string;
+    level: string;
+    status: AssistantActionStatus;
+    summary: string;
+    errorMessage: string | null;
+    undoable: boolean;
+  } | null;
 }
 
 export interface AssistantHistoryPage {
@@ -83,10 +92,12 @@ export interface AssistantHistoryStats {
   whatsappToday: number;
   withoutDataToday: number;
   blockedToday: number;
+  actionsDoneToday: number;
+  actionsPendingNow: number;
 }
 
 export const assistantHistoryApi = {
-  list: (params: { channel?: AssistantChannel; blocked?: boolean; before?: string }) =>
+  list: (params: { channel?: AssistantChannel; blocked?: boolean; actions?: boolean; before?: string }) =>
     api.get<AssistantHistoryPage>('/assistant/history', { params }).then((r) => r.data),
   stats: () => api.get<AssistantHistoryStats>('/assistant/history/stats').then((r) => r.data),
 };
@@ -109,12 +120,30 @@ export interface AssistantConfigTopic {
   cells: AssistantConfigCell[];
 }
 
+export interface AssistantConfigAction {
+  id: string;
+  label: string;
+  hint: string;
+  rule: string | null;
+  level: AssistantActionLevel;
+  allowedLevels: AssistantActionLevel[];
+  roles: AssistantConfigCell[];
+}
+
+export interface AssistantConfigLimits {
+  maxQuoteAmountWhatsapp: number | null;
+  maxActionsPerDay: number;
+  confirmExpiryMinutes: number;
+}
+
 export interface AssistantConfig {
   webEnabled: boolean;
   whatsappEnabled: boolean;
   salesOwnDataOnly: boolean;
   roles: AssistantConfigurableRole[];
   topics: AssistantConfigTopic[];
+  actions: AssistantConfigAction[];
+  limits: AssistantConfigLimits;
 }
 
 export interface UpdateAssistantConfig {
@@ -122,7 +151,42 @@ export interface UpdateAssistantConfig {
   whatsappEnabled?: boolean;
   salesOwnDataOnly?: boolean;
   topicsByRole?: Record<string, AssistantConfigurableRole[]>;
+  actionLevels?: Record<string, AssistantActionLevel>;
+  actionRoles?: Record<string, AssistantConfigurableRole[]>;
+  maxQuoteAmountWhatsapp?: number | null;
+  maxActionsPerDay?: number;
+  confirmExpiryMinutes?: number;
 }
+
+// Acciones (etapa 3): el asistente propone y el servidor ejecuta. La tarjeta
+// viaja como `data` de un tool_result y queda guardada en el mensaje.
+export type AssistantActionStatus = 'PENDING_CONFIRMATION' | 'DONE' | 'EXPIRED' | 'CANCELLED' | 'UNDONE' | 'FAILED';
+export type AssistantActionLevel = 'OFF' | 'DRAFT' | 'DIRECT';
+
+export interface AssistantActionCard {
+  type: 'assistant_action';
+  id: string;
+  label: string;
+  status: AssistantActionStatus;
+  summary: string;
+  expiresAt: string | null;
+}
+
+export function isActionCard(data: unknown): data is AssistantActionCard {
+  return !!data && typeof data === 'object' && (data as { type?: unknown }).type === 'assistant_action';
+}
+
+export interface AssistantActionReply {
+  reply: string;
+  card: AssistantActionCard;
+  messageId: string;
+}
+
+export const assistantActionsApi = {
+  confirm: (id: string) => api.post<AssistantActionReply>(`/assistant/actions/${id}/confirm`).then((r) => r.data),
+  cancel: (id: string) => api.post<AssistantActionReply>(`/assistant/actions/${id}/cancel`).then((r) => r.data),
+  undo: (id: string) => api.post<AssistantActionCard>(`/assistant/actions/${id}/undo`).then((r) => r.data),
+};
 
 export const assistantConfigApi = {
   get: () => api.get<AssistantConfig>('/assistant/config').then((r) => r.data),

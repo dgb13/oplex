@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
+  AssistantActionStatus,
   AssistantChannel,
   AssistantIntent,
   AssistantMessageRole,
@@ -10,6 +11,7 @@ import {
   withTenantContext,
   type UserRole,
 } from '@plexo/database';
+import { actionByKind } from './assistant-actions.catalog.js';
 import { ASSISTANT_TOOL_TITLES } from './assistant-tools.catalog.js';
 import { topicById } from './assistant-topics.js';
 
@@ -49,6 +51,20 @@ export interface AssistantHistoryEntry {
   blockedTopic: string | null;
   tools: string[];
   feedback: 'UP' | 'DOWN' | null;
+  // Acción que propuso o hizo el asistente en este turno (etapa 3), la más
+  // reciente si hubo más de una.
+  action: AssistantHistoryAction | null;
+}
+
+export interface AssistantHistoryAction {
+  id: string;
+  label: string;
+  level: string;
+  status: AssistantActionStatus;
+  summary: string;
+  errorMessage: string | null;
+  // Sólo las hechas que tienen cómo deshacerse (recordatorio, cliente).
+  undoable: boolean;
 }
 
 export interface AssistantHistoryPage {
@@ -63,11 +79,14 @@ export interface AssistantHistoryStats {
   whatsappToday: number;
   withoutDataToday: number;
   blockedToday: number;
+  actionsDoneToday: number;
+  actionsPendingNow: number;
 }
 
 export interface ListHistoryParams {
   channel?: AssistantChannel;
   onlyBlocked?: boolean;
+  onlyActions?: boolean;
   before?: Date;
   limit?: number;
 }
@@ -130,11 +149,26 @@ export class AssistantHistoryService {
     const db = getTenantDb();
     const limit = Math.min(Math.max(params.limit ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
 
+    // "Sólo acciones": preguntas que originaron una acción. AssistantAction
+    // no tiene relación declarada con el mensaje (questionMessageId es un id
+    // suelto), así que se resuelve en dos pasos.
+    let actionQuestionIds: string[] | undefined;
+    if (params.onlyActions) {
+      const rows = await db.assistantAction.findMany({
+        where: { questionMessageId: { not: null }, ...(params.before ? { createdAt: { lt: params.before } } : {}) },
+        orderBy: { createdAt: 'desc' },
+        take: (limit + 1) * 3,
+        select: { questionMessageId: true },
+      });
+      actionQuestionIds = [...new Set(rows.map((r) => r.questionMessageId as string))];
+    }
+
     const questions = await db.assistantMessage.findMany({
       where: {
         role: AssistantMessageRole.USER,
         ...(params.channel ? { channel: params.channel } : {}),
         ...(params.onlyBlocked ? { blockedTopic: { not: null } } : {}),
+        ...(actionQuestionIds ? { id: { in: actionQuestionIds } } : {}),
         ...(params.before ? { createdAt: { lt: params.before } } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -174,6 +208,13 @@ export class AssistantHistoryService {
     });
     const userById = new Map(users.map((u) => [u.id, u]));
 
+    const actions = await db.assistantAction.findMany({
+      where: { questionMessageId: { in: page.map((q) => q.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    // La última de cada pregunta pisa a las anteriores.
+    const actionByQuestion = new Map(actions.map((a) => [a.questionMessageId, a]));
+
     const entries = page.map((question): AssistantHistoryEntry => {
       const thread = byConversation.get(question.conversationId) ?? [];
       const index = thread.findIndex((m) => m.id === question.id);
@@ -192,6 +233,20 @@ export class AssistantHistoryService {
         blockedTopic: question.blockedTopic ? (topicById(question.blockedTopic)?.label ?? question.blockedTopic) : null,
         tools: toolNamesOf(reply?.toolCalls ?? null).map((name) => ASSISTANT_TOOL_TITLES[name] ?? name),
         feedback: reply?.feedback ?? null,
+        action: (() => {
+          const a = actionByQuestion.get(question.id);
+          if (!a) return null;
+          return {
+            id: a.id,
+            label: actionByKind(a.kind)?.label ?? a.kind,
+            level: a.level,
+            status: a.status,
+            summary: a.summary,
+            errorMessage: a.errorMessage,
+            undoable:
+              a.status === AssistantActionStatus.DONE && !!a.entityId && (a.kind === 'REMINDER_CREATE' || a.kind === 'CUSTOMER_CREATE'),
+          };
+        })(),
       };
     });
 
@@ -201,7 +256,7 @@ export class AssistantHistoryService {
   async statsToday(now = new Date()): Promise<AssistantHistoryStats> {
     const db = getTenantDb();
     const since = startOfArgentinaDay(now);
-    const [questionsToday, whatsappToday, withoutDataToday, blockedToday] = await Promise.all([
+    const [questionsToday, whatsappToday, withoutDataToday, blockedToday, actionsDoneToday, actionsPendingNow] = await Promise.all([
       db.assistantMessage.count({ where: { role: AssistantMessageRole.USER, createdAt: { gte: since } } }),
       db.assistantMessage.count({
         where: { role: AssistantMessageRole.USER, channel: AssistantChannel.WHATSAPP, createdAt: { gte: since } },
@@ -217,8 +272,12 @@ export class AssistantHistoryService {
       db.assistantMessage.count({
         where: { role: AssistantMessageRole.USER, blockedTopic: { not: null }, createdAt: { gte: since } },
       }),
+      db.assistantAction.count({ where: { status: AssistantActionStatus.DONE, createdAt: { gte: since } } }),
+      db.assistantAction.count({
+        where: { status: AssistantActionStatus.PENDING_CONFIRMATION, expiresAt: { gt: now } },
+      }),
     ]);
-    return { questionsToday, whatsappToday, withoutDataToday, blockedToday };
+    return { questionsToday, whatsappToday, withoutDataToday, blockedToday, actionsDoneToday, actionsPendingNow };
   }
 
   /** Borra lo que tenga más de RETENTION_MONTHS, tenant por tenant (mismo
@@ -236,6 +295,7 @@ export class AssistantHistoryService {
         const deleted = await withTenantContext(this.prisma, tenantId, async () => {
           const db = getTenantDb();
           const messages = await db.assistantMessage.deleteMany({ where: { createdAt: { lt: cutoff } } });
+          await db.assistantAction.deleteMany({ where: { createdAt: { lt: cutoff } } });
           await db.assistantConversation.deleteMany({ where: { createdAt: { lt: cutoff }, messages: { none: {} } } });
           return messages.count;
         });

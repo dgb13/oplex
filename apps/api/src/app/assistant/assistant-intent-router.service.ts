@@ -6,7 +6,10 @@ import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.j
 
 const MAX_TOKENS = 80;
 
-export type AssistantIntent = 'ayuda' | 'datos';
+// 'accion' (etapa 3): pide que el asistente HAGA algo (agendar, cargar un
+// cliente...). Va al orquestador, igual que 'datos'; se separa sólo para no
+// mandarlo a la ayuda ni bloquearlo por tema.
+export type AssistantIntent = 'ayuda' | 'datos' | 'accion';
 
 // Tema de una pregunta de datos, para negarla de entrada si la persona no
 // tiene ese tema (AssistantAccessService). 'otro' = no encaja en ninguno:
@@ -22,16 +25,16 @@ export interface AssistantClassification {
 const CLASSIFY_TOOL: Anthropic.Tool = {
   name: 'classify_intent',
   description:
-    'Clasifica la pregunta del usuario de un ERP: "ayuda" si es sobre CÓMO USAR el sistema (dónde está algo, cómo se hace un paso), "datos" si es sobre SUS PROPIOS datos de negocio (ventas, clientes, caja, cualquier número real del tenant).',
+    'Clasifica el mensaje del usuario de un ERP: "ayuda" si pregunta CÓMO USAR el sistema (dónde está algo, cómo se hace un paso), "datos" si pregunta por SUS PROPIOS datos de negocio (ventas, clientes, caja, cualquier número real del tenant), "accion" si le pide al asistente que HAGA algo por él (recordame, agendá, cargá un cliente, armá, mandá).',
   input_schema: {
     type: 'object',
     properties: {
-      intent: { type: 'string', enum: ['ayuda', 'datos'] },
+      intent: { type: 'string', enum: ['ayuda', 'datos', 'accion'] },
       topic: {
         type: 'string',
         enum: [...DATA_TOPICS],
         description:
-          'Sólo para intent "datos": ventas (facturado, ventas por artículo o período), deudas (lo que deben los clientes, vencidas), caja (dinero en caja), stock (existencias, mínimos, precio de venta), costos (costo de compra, margen, remarca), compras (proveedores, deuda con proveedores, órdenes de compra), otro (ninguno de esos). Para intent "ayuda", "otro".',
+          'Sólo para intent "datos" (para "ayuda" y "accion", "otro"): ventas (facturado, ventas por artículo o período), deudas (lo que deben los clientes, vencidas), caja (dinero en caja), stock (existencias, mínimos, precio de venta), costos (costo de compra, margen, remarca), compras (proveedores, deuda con proveedores, órdenes de compra), otro (ninguno de esos).',
       },
     },
     required: ['intent', 'topic'],
@@ -78,7 +81,10 @@ export class AssistantIntentRouterService {
       // sin poder contestar nada útil.
       // Mismo criterio para el tema: ante cualquier valor raro, 'otro' (no
       // bloquea; el filtro de herramientas sigue protegiendo los datos).
-      return intent === 'ayuda' ? { intent: 'ayuda', topic: 'otro' } : { intent: 'datos', topic };
+      if (intent === 'ayuda' || intent === 'accion') {
+        return { intent, topic: 'otro' };
+      }
+      return { intent: 'datos', topic };
     } catch (err) {
       this.logger.error('Falló la clasificación de intención', err instanceof Error ? err.stack : err);
       await this.aiEvents?.record('ASSISTANT_HELP', false, err instanceof Error ? err.message : String(err));

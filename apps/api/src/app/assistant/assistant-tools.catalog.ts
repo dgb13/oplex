@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { AssistantAccess } from './assistant-access.service.js';
+import { ASSISTANT_ACTIONS } from './assistant-actions.catalog.js';
 import type { AssistantToolsService, VentasPorArticuloParams } from './assistant-tools.service.js';
 import { topicForTool } from './assistant-topics.js';
 
@@ -81,6 +82,8 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   stock_articulo: 'Consultando stock…',
   costo_articulo: 'Consultando costos…',
   compras_resumen: 'Consultando compras…',
+  crear_recordatorio: 'Preparando el recordatorio…',
+  cargar_cliente: 'Preparando el alta del cliente…',
 };
 
 // Nombre corto de cada herramienta para el detalle del Historial de
@@ -93,6 +96,8 @@ export const ASSISTANT_TOOL_TITLES: Record<string, string> = {
   stock_articulo: 'stock y precio de artículos',
   costo_articulo: 'costo y remarca de artículos',
   compras_resumen: 'compras y deuda con proveedores',
+  crear_recordatorio: 'agendar recordatorio',
+  cargar_cliente: 'cargar cliente',
 };
 
 export function labelForTool(toolName: string): string {
@@ -172,7 +177,10 @@ function dispatch(
 }
 
 /** Las herramientas que se le ofrecen al modelo en este turno: sólo las de
- * los temas que la persona tiene permitidos. */
+ * los temas que la persona tiene permitidos, más las acciones que puede
+ * pedir (que no ejecutan nada: proponen, ver AssistantActionsService). */
 export function toolsForAccess(access: AssistantAccess): Anthropic.Tool[] {
-  return ASSISTANT_TOOLS.filter((tool) => access.allowedTools.has(tool.name));
+  return [...ASSISTANT_TOOLS, ...ASSISTANT_ACTIONS.map((action) => action.tool)].filter((tool) =>
+    access.allowedTools.has(tool.name),
+  );
 }

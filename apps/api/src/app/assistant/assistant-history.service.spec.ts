@@ -1,5 +1,10 @@
 import { tenantContextStorage } from '@plexo/database';
 import type { PrismaService } from '@plexo/database';
+
+jest.mock('@plexo/companies', () => ({
+  COMPANY_ROLE_EDITORS: { CUSTOMER: ['OWNER', 'ADMIN', 'SALES'], SUPPLIER: [], BRANCH: [] },
+}));
+
 import { AssistantHistoryService, startOfArgentinaDay } from './assistant-history.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
@@ -25,12 +30,13 @@ function message(overrides: Record<string, unknown>) {
   };
 }
 
-function makeDb(questions: unknown[], nearby: unknown[], users: unknown[] = []) {
+function makeDb(questions: unknown[], nearby: unknown[], users: unknown[] = [], actions: unknown[] = []) {
   return {
     assistantMessage: {
       findMany: jest.fn().mockResolvedValueOnce(questions).mockResolvedValueOnce(nearby),
     },
     user: { findMany: jest.fn().mockResolvedValue(users) },
+    assistantAction: { findMany: jest.fn().mockResolvedValue(actions) },
   };
 }
 
@@ -127,6 +133,34 @@ describe('AssistantHistoryService', () => {
         1,
         expect.objectContaining({ where: { role: 'USER', blockedTopic: { not: null } } }),
       );
+    });
+
+    it('attaches the action the turn produced, undoable only when done and reversible', async () => {
+      const q = message({ id: 'q' });
+      const r = message({ id: 'r', role: 'ASSISTANT', intent: 'DATOS', createdAt: t('2026-10-19T12:00:02Z') });
+      const act = {
+        id: 'act-1',
+        questionMessageId: 'q',
+        kind: 'REMINDER_CREATE',
+        level: 'DRAFT',
+        status: 'DONE',
+        summary: 'Recordatorio “Llamar a Pérez”',
+        errorMessage: null,
+        entityId: 'ev-1',
+      };
+      const db = makeDb([q], [q, r], [], [act]);
+
+      const page = await runInTenant(db, () => service.list());
+
+      expect(page.entries[0].action).toEqual({
+        id: 'act-1',
+        label: 'Agendar recordatorio o tarea',
+        level: 'DRAFT',
+        status: 'DONE',
+        summary: 'Recordatorio “Llamar a Pérez”',
+        errorMessage: null,
+        undoable: true,
+      });
     });
 
     it('returns a cursor when there are more questions than the page size', async () => {

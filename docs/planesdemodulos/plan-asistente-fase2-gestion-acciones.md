@@ -214,6 +214,16 @@ nunca crea nada por su cuenta; llama a `AssistantActionsService.propose(kind, in
 Orden interno: recordatorio y cliente primero (internos, fáciles de probar), después
 cotización y correo, después link de pago y al final preparar factura.
 
+Notas de la implementación (parte 1, 2026-10-19):
+- El clasificador suma la intención `accion` ("recordame…", "cargá un cliente…") para que
+  esos pedidos vayan al orquestador y no a la ayuda ni a un bloqueo por tema.
+- "Deshacer" un cliente lo **desactiva** (no lo borra): sale de las listas y, si ya se usó
+  en un documento, ese documento no queda apuntando a la nada.
+- Por WhatsApp el contexto arrancaba sin rol; se completa al identificar a la persona,
+  porque los servicios que reusan las acciones validan el rol desde el contexto.
+- La pantalla sólo muestra las acciones que ya tienen ejecutor; las demás se suman cuando
+  estén hechas.
+
 ### Etapa 4: Resumen de la mañana (EN PAUSA, decisión 2026-10-19)
 
 - Cron diario 08:00 (hora de Argentina) en `apps/api/src/app/scheduler/`.

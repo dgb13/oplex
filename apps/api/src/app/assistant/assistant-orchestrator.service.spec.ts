@@ -8,7 +8,13 @@ jest.mock('@plexo/payables', () => ({}));
 jest.mock('@plexo/purchases', () => ({}));
 jest.mock('@plexo/inventory', () => ({}));
 
-import { accessFromConfig, type AssistantAccess } from './assistant-access.service.js';
+import {
+  accessFromConfig,
+  normalizeActionLevels,
+  normalizeActionRoles,
+  type AssistantAccess,
+} from './assistant-access.service.js';
+import type { ActionTurn, AssistantActionsService } from './assistant-actions.service.js';
 import { AssistantOrchestratorService } from './assistant-orchestrator.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 
@@ -23,9 +29,11 @@ function makeUser(): AuthenticatedUser {
   };
 }
 
+const TURN: ActionTurn = { conversationId: 'conv-1', questionMessageId: 'q-1', channel: 'WEB' };
+
 // Dueño: todos los temas.
 const FULL: AssistantAccess = accessFromConfig(
-  { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
+  { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
   { sub: 'user-1', role: 'OWNER' },
 );
 
@@ -71,15 +79,16 @@ describe('AssistantOrchestratorService', () => {
     const stream = jest.fn();
     const anthropic = { messages: { stream } } as unknown as Anthropic;
     const toolsService = { ventasPorArticulo: jest.fn(), deudaPorCliente: jest.fn(), saldoCaja: jest.fn() } as unknown as AssistantToolsService;
-    const service = new AssistantOrchestratorService(anthropic, toolsService);
-    return { service, stream, toolsService };
+    const actionsService = { propose: jest.fn() } as unknown as AssistantActionsService;
+    const service = new AssistantOrchestratorService(anthropic, toolsService, actionsService);
+    return { service, stream, toolsService, actionsService };
   }
 
   it('returns the text answer directly when Claude does not need any tool', async () => {
     const { service, stream } = makeService();
     stream.mockReturnValue(fakeStream(textStreamEvents('Facturaste $10.000 este mes.')));
 
-    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto facturé este mes?');
+    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto facturé este mes?', TURN);
 
     expect(reply).toEqual({ text: 'Facturaste $10.000 este mes.', toolNames: [] });
     expect(stream).toHaveBeenCalledTimes(1);
@@ -90,7 +99,7 @@ describe('AssistantOrchestratorService', () => {
     stream.mockReturnValue(fakeStream(textStreamEvents('Hola')));
 
     const chunks = [];
-    for await (const chunk of service.chatStream(makeUser(), FULL, [], 'saludo')) {
+    for await (const chunk of service.chatStream(makeUser(), FULL, [], 'saludo', TURN)) {
       chunks.push(chunk);
     }
 
@@ -109,7 +118,7 @@ describe('AssistantOrchestratorService', () => {
       .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'saldo_caja', {})))
       .mockReturnValueOnce(fakeStream(textStreamEvents('Tenés 2 cajas abiertas.')));
 
-    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto tengo en caja?');
+    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto tengo en caja?', TURN);
 
     expect(reply).toEqual({ text: 'Tenés 2 cajas abiertas.', toolNames: ['saldo_caja'] });
     expect(toolsService.saldoCaja).toHaveBeenCalledTimes(1);
@@ -132,7 +141,7 @@ describe('AssistantOrchestratorService', () => {
       .mockReturnValueOnce(fakeStream(textStreamEvents('Tenés 2 cajas abiertas.')));
 
     const chunks = [];
-    for await (const chunk of service.chatStream(makeUser(), FULL, [], '¿Cuánto tengo en caja?')) {
+    for await (const chunk of service.chatStream(makeUser(), FULL, [], '¿Cuánto tengo en caja?', TURN)) {
       chunks.push(chunk);
     }
 
@@ -146,7 +155,7 @@ describe('AssistantOrchestratorService', () => {
       .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'saldo_caja', {})))
       .mockReturnValueOnce(fakeStream(textStreamEvents('No tenés permiso para ver la caja.')));
 
-    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto tengo en caja?');
+    const reply = await service.chat(makeUser(), FULL, [], '¿Cuánto tengo en caja?', TURN);
 
     expect(reply).toEqual({ text: 'No tenés permiso para ver la caja.', toolNames: ['saldo_caja'] });
     const secondCallMessages = stream.mock.calls[1][0].messages;
@@ -159,7 +168,7 @@ describe('AssistantOrchestratorService', () => {
     (toolsService.saldoCaja as jest.Mock).mockResolvedValue({});
     stream.mockImplementation(() => fakeStream(toolUseStreamEvents('tool-x', 'saldo_caja', {})));
 
-    const reply = await service.chat(makeUser(), FULL, [], 'pregunta rara');
+    const reply = await service.chat(makeUser(), FULL, [], 'pregunta rara', TURN);
 
     expect(reply.text).toMatch(/no pude/i);
     expect(reply.toolNames).toEqual(['saldo_caja']);
@@ -174,7 +183,7 @@ describe('AssistantOrchestratorService', () => {
       { role: 'assistant' as const, content: 'Facturaste $10.000 este mes.' },
     ];
 
-    await service.chat(makeUser(), FULL, history, '¿y subió respecto al anterior?');
+    await service.chat(makeUser(), FULL, history, '¿y subió respecto al anterior?', TURN);
 
     const messages = stream.mock.calls[0][0].messages;
     expect(messages).toEqual([
@@ -188,11 +197,11 @@ describe('AssistantOrchestratorService', () => {
     const { service, stream } = makeService();
     stream.mockReturnValue(fakeStream(textStreamEvents('Hola.')));
     const salesOnlyStock = accessFromConfig(
-      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, topicsByRole: { ventas: [], deudas: [], caja: [], stock: ['SALES'], costos: [], compras: [], ayuda: [] } },
+      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: ['SALES'], costos: [], compras: [], ayuda: [] } },
       { sub: 'user-2', role: 'SALES' },
     );
 
-    await service.chat(makeUser(), salesOnlyStock, [], 'hola');
+    await service.chat(makeUser(), salesOnlyStock, [], 'hola', TURN);
 
     expect(stream.mock.calls[0][0].tools.map((t: { name: string }) => t.name)).toEqual(['stock_articulo']);
   });
@@ -201,11 +210,11 @@ describe('AssistantOrchestratorService', () => {
     const { service, stream } = makeService();
     stream.mockReturnValue(fakeStream(textStreamEvents('No tengo cómo consultar eso.')));
     const viewer = accessFromConfig(
-      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: ['VIEWER'] } },
+      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: ['VIEWER'] } },
       { sub: 'user-3', role: 'VIEWER' },
     );
 
-    await service.chat(makeUser(), viewer, [], '¿cuánto vendimos?');
+    await service.chat(makeUser(), viewer, [], '¿cuánto vendimos?', TURN);
 
     expect(stream.mock.calls[0][0]).not.toHaveProperty('tools');
   });
@@ -213,18 +222,50 @@ describe('AssistantOrchestratorService', () => {
   it('refuses a tool_use for a tool outside the allowed topics without calling the service', async () => {
     const { service, stream, toolsService } = makeService();
     const noCaja = accessFromConfig(
-      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, topicsByRole: { ventas: ['SALES'], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
+      { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: ['SALES'], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
       { sub: 'user-2', role: 'SALES' },
     );
     stream
       .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'saldo_caja', {})))
       .mockReturnValueOnce(fakeStream(textStreamEvents('No tenés permiso.')));
 
-    await service.chat(makeUser(), noCaja, [], '¿Cuánto tengo en caja?');
+    await service.chat(makeUser(), noCaja, [], '¿Cuánto tengo en caja?', TURN);
 
     expect(toolsService.saldoCaja).not.toHaveBeenCalled();
     const secondCallMessages = stream.mock.calls[1][0].messages;
     expect(secondCallMessages[secondCallMessages.length - 1].content[0]).toMatchObject({ type: 'tool_result', is_error: true });
+  });
+
+  it('routes an action tool to the actions service (never runs it directly) and emits its card', async () => {
+    const { service, stream, actionsService } = makeService();
+    const card = { type: 'assistant_action', id: 'act-1', label: 'Agendar', status: 'PENDING_CONFIRMATION', summary: 'x', expiresAt: null };
+    (actionsService.propose as jest.Mock).mockResolvedValue({ content: '{"estado":"esperando_confirmacion"}', isError: false, card });
+    const withReminder = accessFromConfig(
+      {
+        webEnabled: true,
+        whatsappEnabled: true,
+        salesOwnDataOnly: true,
+        actionLevels: normalizeActionLevels({ recordatorio: 'DRAFT' }),
+        actionRoles: normalizeActionRoles(null),
+        maxQuoteAmountWhatsapp: null,
+        maxActionsPerDay: 40,
+        confirmExpiryMinutes: 10,
+        topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] },
+      },
+      { sub: 'user-2', role: 'SALES' },
+    );
+    stream
+      .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'crear_recordatorio', { titulo: 'x', fecha: '2099-01-01' })))
+      .mockReturnValueOnce(fakeStream(textStreamEvents('¿Lo confirmo?')));
+
+    const chunks = [];
+    for await (const chunk of service.chatStream(makeUser(), withReminder, [], 'recordame x', TURN)) {
+      chunks.push(chunk);
+    }
+
+    expect(stream.mock.calls[0][0].tools.map((t: { name: string }) => t.name)).toEqual(['crear_recordatorio']);
+    expect(actionsService.propose).toHaveBeenCalledWith(makeUser(), withReminder, 'crear_recordatorio', { titulo: 'x', fecha: '2099-01-01' }, TURN);
+    expect(chunks).toContainEqual({ type: 'tool_result', tool: 'crear_recordatorio', data: card });
   });
 
   it('wraps an Anthropic API failure as a 503', async () => {
@@ -233,6 +274,6 @@ describe('AssistantOrchestratorService', () => {
       throw new Error('network boom');
     });
 
-    await expect(service.chat(makeUser(), FULL, [], 'hola')).rejects.toThrow(/no está disponible/);
+    await expect(service.chat(makeUser(), FULL, [], 'hola', TURN)).rejects.toThrow(/no está disponible/);
   });
 });
