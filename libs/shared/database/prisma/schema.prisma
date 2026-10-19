@@ -4135,9 +4135,16 @@ model AssistantMessage {
   // 3 (sección 7 del plan) - insumo para priorizar qué artículos de ayuda
   // faltan o qué herramienta de datos agregar, no dispara nada automático.
   feedback       AssistantMessageFeedback?
+  // Por dónde entró el turno - se guarda en la pregunta Y en la respuesta.
+  // null = mensajes de antes de esta columna (el Historial los muestra sin
+  // canal). Ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md.
+  channel        AssistantChannel?
   createdAt      DateTime               @default(now())
 
   @@index([tenantId, conversationId, createdAt])
+  // Historial de Preferencias › Asistente: todos los mensajes del tenant,
+  // más recientes primero, sin importar la conversación.
+  @@index([tenantId, role, createdAt])
   // Usado por el reporte cross-tenant de "preguntas sin responder" en
   // Admin (AssistantSettingsService.getUnansweredQuestions) - ese query
   // filtra por role+intent+createdAt sin scopear por tenant a propósito.
@@ -4148,6 +4155,11 @@ model AssistantMessage {
 enum AssistantMessageFeedback {
   UP
   DOWN
+}
+
+enum AssistantChannel {
+  WEB
+  WHATSAPP
 }
 
 // Agenda (ver docs/planesdemodulos/plan-agenda.md) - la ÚNICA tabla propia del módulo. El

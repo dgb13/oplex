@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Logger, Param, Patch, Post, Res } from '@nestjs/common';
 import { CurrentUser } from '@plexo/auth';
-import { AssistantIntent, LongRunningTransaction } from '@plexo/database';
+import { AssistantChannel, AssistantIntent, LongRunningTransaction } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyReply } from 'fastify';
@@ -91,7 +91,7 @@ export class AssistantController {
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, 'USER', dto.message);
+    await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
 
     const intent = await this.assistantIntentRouterService.classify(dto.message);
     let reply: string;
@@ -106,6 +106,7 @@ export class AssistantController {
 
     const saved = await this.assistantConversationService.appendMessage(
       conversationId,
+      AssistantChannel.WEB,
       'ASSISTANT',
       reply,
       toolCalls,
@@ -138,7 +139,7 @@ export class AssistantController {
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, 'USER', dto.message);
+    await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
     const intent = await this.assistantIntentRouterService.classify(dto.message);
 
     // hijack() le avisa a Fastify que esta respuesta se maneja 100% a mano
@@ -193,6 +194,7 @@ export class AssistantController {
       }
       const saved = await this.assistantConversationService.appendMessage(
         conversationId,
+        AssistantChannel.WEB,
         'ASSISTANT',
         fullText.trim(),
         toolCallsForPersist.length ? toolCallsForPersist : undefined,

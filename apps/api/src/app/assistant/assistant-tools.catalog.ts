@@ -61,6 +61,16 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   stock_articulo: 'Consultando stock…',
 };
 
+// Nombre corto de cada herramienta para el detalle del Historial de
+// Preferencias › Asistente ("Herramientas: deuda por cliente") - distinto
+// del de arriba, que es un gerundio para mientras corre.
+export const ASSISTANT_TOOL_TITLES: Record<string, string> = {
+  ventas_por_articulo: 'ventas por artículo',
+  deuda_por_cliente: 'deuda por cliente',
+  saldo_caja: 'saldo de caja',
+  stock_articulo: 'stock y precio de artículos',
+};
+
 export function labelForTool(toolName: string): string {
   return ASSISTANT_TOOL_LABELS[toolName] ?? 'Consultando…';
 }

@@ -51,6 +51,41 @@ export const assistantApi = {
     api.patch(`/assistant/messages/${messageId}/feedback`, { feedback }).then((r) => r.data),
 };
 
+// Historial de Preferencias › Asistente (docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md,
+// etapa 1) - sólo OWNER/ADMIN, cruza a todos los usuarios de la empresa.
+export type AssistantChannel = 'WEB' | 'WHATSAPP';
+export type AssistantHistoryStatus = 'ANSWERED_WITH_DATA' | 'ANSWERED_WITHOUT_DATA' | 'HELP' | 'NO_REPLY';
+
+export interface AssistantHistoryEntry {
+  id: string;
+  createdAt: string;
+  /** null = mensaje de antes de que se guardara el canal. */
+  channel: AssistantChannel | null;
+  user: { id: string; name: string; role: string | null };
+  question: string;
+  answer: string | null;
+  status: AssistantHistoryStatus;
+  tools: string[];
+  feedback: AssistantMessageFeedback | null;
+}
+
+export interface AssistantHistoryPage {
+  entries: AssistantHistoryEntry[];
+  nextCursor: string | null;
+}
+
+export interface AssistantHistoryStats {
+  questionsToday: number;
+  whatsappToday: number;
+  withoutDataToday: number;
+}
+
+export const assistantHistoryApi = {
+  list: (params: { channel?: AssistantChannel; before?: string }) =>
+    api.get<AssistantHistoryPage>('/assistant/history', { params }).then((r) => r.data),
+  stats: () => api.get<AssistantHistoryStats>('/assistant/history/stats').then((r) => r.data),
+};
+
 export type AssistantStreamEvent =
   | { type: 'text'; text: string }
   | { type: 'tool_start'; tool: string; label: string }

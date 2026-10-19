@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { isPlatformAdminEmail } from '@plexo/auth';
-import { AssistantIntent as PersistedAssistantIntent, getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
+import { AssistantChannel, AssistantIntent as PersistedAssistantIntent, getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser, ModuleAccessClaim } from '@plexo/types';
 import {
@@ -213,13 +213,14 @@ export class WhatsAppWebhookService {
       await this.assistantConversationService.assertNotRateLimited(identity);
 
       const { conversationId, history } = await this.assistantConversationService.getRecentHistory(identity);
-      await this.assistantConversationService.appendMessage(conversationId, 'USER', text);
+      await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WHATSAPP, 'USER', text);
 
       const intent = await this.assistantIntentRouterService.classify(text);
       const { text: reply, toolNames } = await this.answer(identity, intent, history, text);
 
       await this.assistantConversationService.appendMessage(
         conversationId,
+        AssistantChannel.WHATSAPP,
         'ASSISTANT',
         reply,
         toolNames.length ? toolNames.map((tool) => ({ tool })) : undefined,

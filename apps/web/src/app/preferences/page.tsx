@@ -23,6 +23,7 @@ import {
 } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import Link from 'next/link';
 import { useState } from 'react';
 import CurrencySettings from './CurrencySettings';
 import DocumentBrandingCard from './DocumentBrandingCard';
@@ -107,9 +108,34 @@ export default function PreferencesPage() {
           <WithholdingAgentCard settings={settings} />
           <InventoryPricingCard settings={settings} />
           <ReplenishmentCard />
+          <AssistantCard />
         </>
       )}
     </div>
+  );
+}
+
+/** Puerta de entrada a Preferencias › Asistente - pantalla propia porque es
+ * mucho más que una tarjeta (historial, y en las próximas etapas temas por
+ * rol y acciones, ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md). */
+function AssistantCard() {
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="mb-1 text-sm font-medium text-muted-foreground">Asistente de IA</h2>
+          <p className="text-sm text-muted-foreground">
+            Qué le preguntó cada persona de la empresa al asistente y qué respondió, por la web y por WhatsApp.
+          </p>
+        </div>
+        <Link
+          href="/preferences/assistant"
+          className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-muted"
+        >
+          Ver historial
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 
