@@ -1,6 +1,6 @@
 ---
 title: Preferencias
-summary: Todo lo que se configura en Preferencias: documentos, emails a clientes, monedas, Mercado Pago, PDF de la factura, retenciones, remarca y reposición automática.
+summary: Todo lo que se configura en Preferencias: documentos, emails a clientes, monedas, Mercado Pago, PDF de la factura, retenciones, remarca, reposición automática y el Asistente de IA.
 minutes: 7
 roles: Dueño, Administrador
 ---
@@ -88,6 +88,10 @@ El **% de remarca** sugerido para los artículos que no tienen uno propio. Escri
 ## Reposición automática de stock
 
 Todos los días, a la madrugada, Oplex genera un pedido de cotización por proveedor para los artículos marcados como **Automático** en Inventario que quedaron bajo el mínimo. Con **Ejecutar reposición ahora** lo corrés en el momento, sin esperar a la madrugada. Ver [Stock mínimo](/documentacion/inventario/stock-minimo).
+
+## Asistente de IA
+
+La tarjeta **Asistente de IA** lleva, con **Configurar**, a **Preferencias › Asistente**: el historial de todo lo que se le preguntó, de qué temas puede hablar con cada rol y qué acciones puede hacer. Ver [Asistente: historial, permisos y acciones](/documentacion/equipo/asistente-configuracion).
 
 ## Si algo sale mal
 

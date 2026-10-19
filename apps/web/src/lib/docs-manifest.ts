@@ -143,7 +143,7 @@ export const DOCS_CHAPTERS: DocsChapter[] = [
     number: 9,
     title: 'Trabajo en equipo',
     description: 'Agenda, avisos, menciones y tareas, asistente de IA y contadores.',
-    articles: ['agenda', 'notificaciones-y-tareas', 'asistente-ia', 'contadores'],
+    articles: ['agenda', 'notificaciones-y-tareas', 'asistente-ia', 'asistente-configuracion', 'contadores'],
   },
   {
     slug: 'cuenta',
