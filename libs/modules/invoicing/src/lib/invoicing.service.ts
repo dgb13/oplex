@@ -39,7 +39,7 @@ import type { CreateCurrencyDto } from './dto/create-currency.dto.js';
 import type { CreateInvoiceDto } from './dto/create-invoice.dto.js';
 import type { RecordExchangeRateDto } from './dto/record-exchange-rate.dto.js';
 import type { RecordReceiptDto } from './dto/record-receipt.dto.js';
-import { EMAIL_SENDER, type EmailSender } from './email-sender.port.js';
+import { EMAIL_SENDER, type EmailSender, type PaymentLinkEmailPayload } from './email-sender.port.js';
 import {
   ELECTRONIC_INVOICING,
   type AuthorizedVoucher,
@@ -258,6 +258,14 @@ export class InvoicingService {
    * entirely; the extra round trips are irrelevant next to a
    * user-initiated "view this one invoice" click.
    */
+  /** Manda al cliente el link de pago (Mercado Pago) de una factura - lo usa
+   * el asistente (etapa 3 de plan-asistente-fase2-gestion-acciones.md). El
+   * link lo genera MercadoPagoPaymentService; acá sólo sale el correo, por el
+   * mismo remitente que el mail de factura emitida. Lanza si no salió. */
+  async emailPaymentLink(payload: PaymentLinkEmailPayload): Promise<void> {
+    await this.emailSender.sendPaymentLinkEmail(payload);
+  }
+
   async getInvoice(id: string): Promise<InvoiceDetail> {
     const db = getTenantDb();
     const invoice = await db.invoice.findUnique({

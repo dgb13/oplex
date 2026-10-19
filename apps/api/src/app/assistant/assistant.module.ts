@@ -3,10 +3,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CalendarModule } from '@plexo/calendar';
 import { CompaniesModule } from '@plexo/companies';
 import { InventoryModule } from '@plexo/inventory';
+import { InvoicingModule } from '@plexo/invoicing';
+import { MercadoPagoModule } from '@plexo/mercadopago';
 import { PayablesModule } from '@plexo/payables';
 import { PosModule } from '@plexo/pos';
 import { PurchasesModule } from '@plexo/purchases';
 import { QuotesModule } from '@plexo/quotes';
+import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { ReceivablesModule } from '@plexo/receivables';
 import { ReportsSalesModule } from '@plexo/reports-sales';
 import { SubscriptionModule } from '@plexo/subscriptions';
@@ -37,6 +40,9 @@ import { AssistantToolsService } from './assistant-tools.service.js';
     CalendarModule,
     CompaniesModule,
     QuotesModule,
+    InvoicingModule,
+    MercadoPagoModule,
+    TenantSettingsModule,
   ],
   controllers: [AssistantController, AdminAssistantSettingsController, AssistantHistoryController, AssistantConfigController],
   providers: [

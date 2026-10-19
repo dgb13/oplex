@@ -2,7 +2,10 @@ import { BadRequestException, ForbiddenException, HttpException, Injectable, Log
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CalendarEventService } from '@plexo/calendar';
 import { CompaniesService, type CreateCompanyDto, type UpdateCompanyDto } from '@plexo/companies';
+import { InvoicingService } from '@plexo/invoicing';
+import { MercadoPagoPaymentService } from '@plexo/mercadopago';
 import { QuoteService, type CreateQuoteDto } from '@plexo/quotes';
+import { resolveEmailFrom, TenantSettingsService } from '@plexo/tenant-settings';
 import {
   AssistantActionStatus,
   getTenantDb,
@@ -11,6 +14,7 @@ import {
   withTenantContext,
   type AssistantAction,
   type AssistantChannel,
+  type DocumentLetter,
   type Prisma,
 } from '@plexo/database';
 import type { AuthenticatedUser } from '@plexo/types';
@@ -100,6 +104,18 @@ function formatCuit(digits: string): string {
   return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
 }
 
+/** "120" → número 00000120; "A 3-120" o "A 00003-00000120" → con letra y
+ * punto de venta. Mismo relleno con ceros que guarda Invoice. */
+export function parseInvoiceReference(raw: string): { letter?: string; pointOfSale?: string; number: string } | null {
+  const letter = /^\s*(?:factura\s+)?([abcm])\b/i.exec(raw)?.[1]?.toUpperCase();
+  const groups = raw.match(/\d+/g);
+  if (!groups) return null;
+  if (groups.length >= 2) {
+    return { letter, pointOfSale: groups[groups.length - 2].padStart(5, '0'), number: groups[groups.length - 1].padStart(8, '0') };
+  }
+  return { letter, number: groups[0].padStart(8, '0') };
+}
+
 function errorText(err: unknown): string {
   // Errores de Prisma (P2002 = dato repetido, etc.): el texto crudo es
   // ilegible para quien pidió la acción y no le dice qué hacer.
@@ -154,6 +170,9 @@ export class AssistantActionsService {
     private readonly calendarEventService: CalendarEventService,
     private readonly companiesService: CompaniesService,
     private readonly quoteService: QuoteService,
+    private readonly paymentService: MercadoPagoPaymentService,
+    private readonly invoicingService: InvoicingService,
+    private readonly tenantSettingsService: TenantSettingsService,
   ) {}
 
   async propose(
@@ -454,6 +473,8 @@ export class AssistantActionsService {
         return this.prepareQuote(input, access, turn);
       case 'QUOTE_EMAIL':
         return this.prepareQuoteEmail(input);
+      case 'PAYMENT_LINK':
+        return this.preparePaymentLink(input);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -469,6 +490,8 @@ export class AssistantActionsService {
         return this.executeQuote(action.payload as unknown as QuotePayload);
       case 'QUOTE_EMAIL':
         return this.executeQuoteEmail(action.payload as unknown as QuoteEmailPayload);
+      case 'PAYMENT_LINK':
+        return this.executePaymentLink(action.payload as unknown as PaymentLinkPayload);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -768,6 +791,88 @@ export class AssistantActionsService {
     };
   }
 
+  // ── Link de pago ────────────────────────────────────────────────────────
+
+  private async preparePaymentLink(input: unknown): Promise<Prepared> {
+    const raw = str(input, 'factura');
+    const customerText = str(input, 'cliente');
+    const parsed = parseInvoiceReference(raw);
+    if (!parsed) {
+      throw new BadRequestException('Falta el número de la factura.');
+    }
+    const candidates = await getTenantDb().invoice.findMany({
+      where: {
+        number: parsed.number,
+        ...(parsed.pointOfSale ? { pointOfSale: parsed.pointOfSale } : {}),
+        ...(parsed.letter ? { documentLetter: parsed.letter as DocumentLetter } : {}),
+        ...(customerText ? { customer: { name: { contains: customerText, mode: 'insensitive' as const } } } : {}),
+        status: { not: 'CANCELLED' as const },
+      },
+      include: { customer: { select: { name: true, email: true } }, currency: { select: { code: true } } },
+      orderBy: { issueDate: 'desc' },
+      take: 6,
+    });
+    const label = (i: (typeof candidates)[number]) => `Factura ${i.documentLetter} ${i.pointOfSale}-${i.number}`;
+    if (candidates.length === 0) {
+      throw new BadRequestException(`No encontré la factura "${raw}"${customerText ? ` de ${customerText}` : ''}.`);
+    }
+    if (candidates.length > 1) {
+      throw new BadRequestException(
+        `Hay más de una factura con ese número: ${candidates.map((i) => `${label(i)} (${i.customer.name})`).join(', ')}. ¿Cuál?`,
+      );
+    }
+    const invoice = candidates[0];
+    const balance = Number(invoice.balanceDue);
+    if (!(balance > 0)) {
+      throw new BadRequestException(`La ${label(invoice)} no tiene saldo pendiente.`);
+    }
+    if (!invoice.customer.email) {
+      throw new BadRequestException(`${invoice.customer.name} no tiene email cargado: cargalo en su ficha para poder mandarle el link.`);
+    }
+    const payload: PaymentLinkPayload = {
+      invoiceId: invoice.id,
+      invoiceLabel: label(invoice),
+      customerName: invoice.customer.name,
+      email: invoice.customer.email,
+      currencyCode: invoice.currency.code,
+    };
+    return {
+      payload: payload as unknown as Record<string, unknown>,
+      summary: `Link de Mercado Pago de la ${label(invoice)} (${invoice.customer.name}, saldo ${invoice.currency.code} ${formatMoney(balance)}) por correo a ${invoice.customer.email}`,
+    };
+  }
+
+  private async executePaymentLink(payload: PaymentLinkPayload): Promise<Executed> {
+    // Reusa un link pendiente por el mismo saldo si ya existía
+    // (createPaymentLink no duplica). El monto es el saldo de AHORA, no el
+    // de la vista previa: si entró un pago en el medio, el link es por lo
+    // que falta.
+    const intent = await this.paymentService.createPaymentLink({ documentType: 'INVOICE', documentId: payload.invoiceId });
+    if (!intent.initPoint) {
+      throw new BadRequestException('Mercado Pago no devolvió el link de pago.');
+    }
+    const [settings, tenant] = await Promise.all([
+      this.tenantSettingsService.getSettings(),
+      getTenantDb().tenant.findUnique({ where: { id: getTenantId() }, select: { name: true } }),
+    ]);
+    const amount = formatMoney(Number(intent.amount));
+    await this.invoicingService.emailPaymentLink({
+      to: payload.email,
+      invoiceLabel: payload.invoiceLabel,
+      amount,
+      currencyCode: payload.currencyCode,
+      url: intent.initPoint,
+      businessName: tenant?.name ?? 'Tu proveedor',
+      from: resolveEmailFrom(settings),
+    });
+    return {
+      entityType: 'paymentIntent',
+      entityId: intent.id,
+      entityLabel: `Link de pago de la ${payload.invoiceLabel}`,
+      done: `se mandó a ${payload.email} el link de pago de la ${payload.invoiceLabel} por ${payload.currencyCode} ${amount}`,
+    };
+  }
+
   // ── Búsquedas por nombre ────────────────────────────────────────────────
 
   /** Cliente activo por CUIT o por nombre. Más de una coincidencia =
@@ -895,6 +1000,14 @@ interface QuotePayload {
   lines: Array<{ articleVariantId: string; label: string; quantity: number; unitPrice: number }>;
   notes: string | null;
   sendEmail: boolean;
+}
+
+interface PaymentLinkPayload {
+  invoiceId: string;
+  invoiceLabel: string;
+  customerName: string;
+  email: string;
+  currencyCode: string;
 }
 
 interface QuoteEmailPayload {

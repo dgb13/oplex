@@ -10,16 +10,18 @@ import type { ConfigurableRole } from './assistant-topics.js';
  * la vista previa y ejecuta (AssistantActionsService). Ninguna herramienta
  * de acción crea nada por su cuenta.
  *
- * Sólo figuran las acciones ya implementadas - las demás del mockup (link
- * de pago, preparar factura) se suman acá cuando tienen su ejecutor, nunca
- * antes (no se muestra en la pantalla algo que no hace nada).
+ * Sólo figuran las acciones ya implementadas - "preparar factura" se suma
+ * acá cuando tenga su ejecutor, nunca antes (no se muestra en la pantalla
+ * algo que no hace nada).
  */
 export type AssistantActionLevel = 'OFF' | 'DRAFT' | 'DIRECT';
 
-export type AssistantActionId = 'recordatorio' | 'cliente' | 'cotizacion' | 'correo';
+export type AssistantActionId = 'recordatorio' | 'cliente' | 'cotizacion' | 'correo' | 'link';
 
 // Mismo WRITE_ROLES que QuoteController (crear y enviar cotizaciones).
 const QUOTE_WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
+// Mismo WRITE_ROLES que MercadoPagoPaymentLinksController.
+const PAYMENT_LINK_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
 
 export interface AssistantActionDef {
   id: AssistantActionId;
@@ -150,6 +152,32 @@ export const ASSISTANT_ACTIONS: AssistantActionDef[] = [
       },
     },
   },
+  {
+    id: 'link',
+    kind: 'PAYMENT_LINK',
+    label: 'Mandar link de pago',
+    hint: 'Link de Mercado Pago por el saldo de una factura, al correo del cliente.',
+    allowedLevels: ['OFF', 'DRAFT'],
+    // Decisión del usuario (2026-10-19): el link le llega al cliente para
+    // que lo pague él. Por correo, porque el número de WhatsApp es el de
+    // Oplex y no puede escribirle a terceros.
+    rule: 'Sale a un cliente: siempre pide “SÍ”. Va por correo al email de la ficha del cliente.',
+    capableRoles: PAYMENT_LINK_ROLES,
+    moduleName: 'Mercado Pago',
+    tool: {
+      name: 'mandar_link_de_pago',
+      description:
+        'Propone mandarle al cliente, por correo, el link de Mercado Pago para pagar el saldo de una factura. NO lo manda: el sistema busca la factura y pide confirmación. Si hay varias facturas con ese número, preguntá cuál (letra, punto de venta o cliente).',
+      input_schema: {
+        type: 'object',
+        properties: {
+          factura: { type: 'string', description: 'Número de factura como lo dijo, ej. "120", "A 3-120" o "00003-00000120".' },
+          cliente: { type: 'string', description: 'Nombre del cliente, si lo dijo (sirve para distinguir facturas).' },
+        },
+        required: ['factura'],
+      },
+    },
+  },
 ];
 
 // Lo que se ve si la empresa nunca tocó la pantalla: todo apagado salvo el
@@ -160,6 +188,7 @@ export const DEFAULT_ACTION_LEVELS: Record<AssistantActionId, AssistantActionLev
   cliente: 'OFF',
   cotizacion: 'OFF',
   correo: 'OFF',
+  link: 'OFF',
 };
 
 // Roles que pueden pedirla, del mockup aprobado (OWNER/ADMIN siempre).
@@ -168,6 +197,7 @@ export const DEFAULT_ACTION_ROLES: Record<AssistantActionId, ConfigurableRole[]>
   cliente: ['SALES'],
   cotizacion: ['SALES'],
   correo: ['SALES'],
+  link: ['SALES'],
 };
 
 export function actionById(id: string): AssistantActionDef | undefined {

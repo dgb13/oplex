@@ -30,9 +30,25 @@ export interface OverdueAlertEmailPayload {
  * later is one new class + one line in InvoicingModule, not a change to
  * InvoicingService.
  */
+// Link de pago de Mercado Pago de una factura, pedido desde el asistente
+// (docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md, etapa 3).
+export interface PaymentLinkEmailPayload {
+  to: string;
+  // "Factura A 00003-00000120"
+  invoiceLabel: string;
+  amount: string;
+  currencyCode: string;
+  url: string;
+  businessName: string;
+  from?: string;
+}
+
 export interface EmailSender {
   sendInvoiceEmail(payload: InvoiceEmailPayload): Promise<void>;
   sendOverdueAlertEmail(payload: OverdueAlertEmailPayload): Promise<void>;
+  /** A diferencia de los otros dos, LANZA si no se pudo mandar: quien lo
+   * pidió tiene que enterarse de que al cliente no le llegó nada. */
+  sendPaymentLinkEmail(payload: PaymentLinkEmailPayload): Promise<void>;
 }
 
 export const EMAIL_SENDER = Symbol('EMAIL_SENDER');

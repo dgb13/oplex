@@ -9,13 +9,19 @@ jest.mock('@plexo/payables', () => ({}));
 jest.mock('@plexo/purchases', () => ({}));
 jest.mock('@plexo/calendar', () => ({}));
 jest.mock('@plexo/quotes', () => ({}));
+jest.mock('@plexo/invoicing', () => ({}));
+jest.mock('@plexo/mercadopago', () => ({}));
+jest.mock('@plexo/tenant-settings', () => ({ resolveEmailFrom: () => undefined }));
 jest.mock('@plexo/companies', () => ({
   COMPANY_ROLE_EDITORS: { CUSTOMER: ['OWNER', 'ADMIN', 'SALES'], SUPPLIER: [], BRANCH: [] },
 }));
 
 import type { CalendarEventService } from '@plexo/calendar';
 import type { CompaniesService } from '@plexo/companies';
+import type { InvoicingService } from '@plexo/invoicing';
+import type { MercadoPagoPaymentService } from '@plexo/mercadopago';
 import type { QuoteService } from '@plexo/quotes';
+import type { TenantSettingsService } from '@plexo/tenant-settings';
 import {
   accessFromConfig,
   normalizeActionLevels,
@@ -23,7 +29,7 @@ import {
   type AssistantAccess,
   type AssistantAccessService,
 } from './assistant-access.service.js';
-import { AssistantActionsService, type ActionTurn } from './assistant-actions.service.js';
+import { AssistantActionsService, parseInvoiceReference, type ActionTurn } from './assistant-actions.service.js';
 import { DEFAULT_TOPICS_BY_ROLE } from './assistant-topics.js';
 
 const TURN: ActionTurn = { conversationId: 'conv-1', questionMessageId: 'q-1', channel: 'WHATSAPP' };
@@ -111,8 +117,22 @@ function makeService(resolvedAccess: AssistantAccess = access({ recordatorio: 'D
     cancel: jest.fn(),
   } as unknown as QuoteService;
   const accessService = { resolve: jest.fn().mockResolvedValue(resolvedAccess) } as unknown as AssistantAccessService;
-  const service = new AssistantActionsService({} as PrismaService, accessService, calendar, companies, quotes);
-  return { service, calendar, companies, quotes, accessService };
+  const payments = {
+    createPaymentLink: jest.fn().mockResolvedValue({ id: 'pi-1', initPoint: 'https://mpago.la/abc', amount: '54300' }),
+  } as unknown as MercadoPagoPaymentService;
+  const invoicing = { emailPaymentLink: jest.fn().mockResolvedValue(undefined) } as unknown as InvoicingService;
+  const tenantSettings = { getSettings: jest.fn().mockResolvedValue({}) } as unknown as TenantSettingsService;
+  const service = new AssistantActionsService(
+    {} as PrismaService,
+    accessService,
+    calendar,
+    companies,
+    quotes,
+    payments,
+    invoicing,
+    tenantSettings,
+  );
+  return { service, calendar, companies, quotes, payments, invoicing, accessService };
 }
 
 describe('AssistantActionsService', () => {
@@ -597,6 +617,98 @@ describe('AssistantActionsService', () => {
 
       (quotes.get as jest.Mock).mockResolvedValue({ sentAt: new Date() });
       await expect(run(db, () => service.undo(makeUser(), 'act-1'))).rejects.toThrow(/ya se le mandó al cliente/);
+    });
+  });
+
+  describe('payment link', () => {
+    const INVOICE = {
+      id: 'inv-120',
+      documentLetter: 'B',
+      pointOfSale: '00003',
+      number: '00000120',
+      balanceDue: '54300',
+      customer: { name: 'Kiosco Sol', email: 'pagos@kioscosol.com' },
+      currency: { code: 'ARS' },
+    };
+
+    it('reads "120", "A 3-120" and "00003-00000120" the way invoices are stored', () => {
+      expect(parseInvoiceReference('120')).toEqual({ letter: undefined, number: '00000120' });
+      expect(parseInvoiceReference('A 3-120')).toEqual({ letter: 'A', pointOfSale: '00003', number: '00000120' });
+      expect(parseInvoiceReference('factura b 00003-00000120')).toEqual({ letter: 'B', pointOfSale: '00003', number: '00000120' });
+      expect(parseInvoiceReference('la de ayer')).toBeNull();
+    });
+
+    it('proposes emailing the link for the current balance, without creating anything yet', async () => {
+      const { service, payments, invoicing } = makeService();
+      const db = makeDb({ invoice: { findMany: jest.fn().mockResolvedValue([INVOICE]) } });
+
+      await run(db, () => service.propose(makeUser(), access({ link: 'DRAFT' }), 'mandar_link_de_pago', { factura: '120' }, TURN));
+
+      expect(db.invoice.findMany.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({ number: '00000120', status: { not: 'CANCELLED' } }),
+      );
+      expect(db.assistantAction.create.mock.calls[0][0].data.summary).toBe(
+        'Link de Mercado Pago de la Factura B 00003-00000120 (Kiosco Sol, saldo ARS 54.300,00) por correo a pagos@kioscosol.com',
+      );
+      expect(payments.createPaymentLink).not.toHaveBeenCalled();
+      expect(invoicing.emailPaymentLink).not.toHaveBeenCalled();
+    });
+
+    it('asks which invoice when the number repeats, and refuses one without balance or customer email', async () => {
+      const { service } = makeService();
+      const two = makeDb({
+        invoice: { findMany: jest.fn().mockResolvedValue([INVOICE, { ...INVOICE, id: 'x', documentLetter: 'A', customer: { name: 'Delta', email: 'd@x.com' } }]) },
+      });
+      const ambiguous = await run(two, () => service.propose(makeUser(), access({ link: 'DRAFT' }), 'mandar_link_de_pago', { factura: '120' }, TURN));
+      expect(ambiguous.content).toMatch(/Factura B 00003-00000120 \(Kiosco Sol\), Factura A 00003-00000120 \(Delta\)/);
+
+      const paid = makeDb({ invoice: { findMany: jest.fn().mockResolvedValue([{ ...INVOICE, balanceDue: '0' }]) } });
+      const noBalance = await run(paid, () => service.propose(makeUser(), access({ link: 'DRAFT' }), 'mandar_link_de_pago', { factura: '120' }, TURN));
+      expect(noBalance.content).toMatch(/no tiene saldo pendiente/);
+
+      const noMail = makeDb({ invoice: { findMany: jest.fn().mockResolvedValue([{ ...INVOICE, customer: { name: 'Kiosco Sol', email: null } }]) } });
+      const withoutEmail = await run(noMail, () => service.propose(makeUser(), access({ link: 'DRAFT' }), 'mandar_link_de_pago', { factura: '120' }, TURN));
+      expect(withoutEmail.content).toMatch(/no tiene email cargado/);
+    });
+
+    it('on "SÍ" creates the Mercado Pago link and emails it to the customer', async () => {
+      const { service, payments, invoicing } = makeService(access({ link: 'DRAFT' }));
+      const db = makeDb({ tenant: { findUnique: jest.fn().mockResolvedValue({ name: 'Ferretería Demo' }) } });
+      db.assistantAction.findUnique.mockResolvedValue(
+        action({
+          kind: 'PAYMENT_LINK',
+          payload: { invoiceId: 'inv-120', invoiceLabel: 'Factura B 00003-00000120', customerName: 'Kiosco Sol', email: 'pagos@kioscosol.com', currencyCode: 'ARS' },
+        }),
+      );
+
+      const result = await run(db, () => service.confirm(makeUser(), 'act-1'));
+
+      expect(payments.createPaymentLink).toHaveBeenCalledWith({ documentType: 'INVOICE', documentId: 'inv-120' });
+      expect(invoicing.emailPaymentLink).toHaveBeenCalledWith({
+        to: 'pagos@kioscosol.com',
+        invoiceLabel: 'Factura B 00003-00000120',
+        amount: '54.300,00',
+        currencyCode: 'ARS',
+        url: 'https://mpago.la/abc',
+        businessName: 'Ferretería Demo',
+        from: undefined,
+      });
+      expect(result.reply).toMatch(/se mandó a pagos@kioscosol\.com el link de pago/);
+    });
+
+    it('reports it as not done when Mercado Pago is not connected', async () => {
+      const { service, payments, invoicing } = makeService(access({ link: 'DRAFT' }));
+      (payments.createPaymentLink as jest.Mock).mockRejectedValue(new Error('Esta empresa todavía no vinculó una cuenta de Mercado Pago'));
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(
+        action({ kind: 'PAYMENT_LINK', payload: { invoiceId: 'inv-120', invoiceLabel: 'F', customerName: 'K', email: 'k@x.com', currencyCode: 'ARS' } }),
+      );
+
+      const result = await run(db, () => service.confirm(makeUser(), 'act-1'));
+
+      expect(result.card.status).toBe('FAILED');
+      expect(result.reply).toMatch(/no vinculó una cuenta de Mercado Pago/);
+      expect(invoicing.emailPaymentLink).not.toHaveBeenCalled();
     });
   });
 });
