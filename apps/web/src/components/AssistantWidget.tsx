@@ -206,6 +206,12 @@ export default function AssistantWidget() {
     usage && usage.quota != null && usage.quota > 0 ? Math.max(0, Math.min(100, Math.round((usage.used / usage.quota) * 100))) : 0;
   const usageCritical = usagePercent >= 80;
 
+  // La empresa apagó el asistente en la web (Preferencias › Asistente): ni
+  // el botón se muestra. `=== false` a propósito: mientras carga, se ve.
+  if (settings?.webEnabled === false) {
+    return null;
+  }
+
   return (
     <>
       {open && (

@@ -4139,6 +4139,11 @@ model AssistantMessage {
   // null = mensajes de antes de esta columna (el Historial los muestra sin
   // canal). Ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md.
   channel        AssistantChannel?
+  // Tema que se negó por permisos (ver AssistantAccessService) - se marca en
+  // la pregunta Y en la respuesta fija que se le devolvió. null = no se
+  // bloqueó nada. String (no enum): el catálogo de temas vive en código
+  // (assistant-topics.ts) y sumar uno no debería pedir una migración.
+  blockedTopic   String?
   createdAt      DateTime               @default(now())
 
   @@index([tenantId, conversationId, createdAt])
@@ -4160,6 +4165,26 @@ enum AssistantMessageFeedback {
 enum AssistantChannel {
   WEB
   WHATSAPP
+}
+
+// Configuración del asistente que decide cada empresa (Preferencias ›
+// Asistente) - distinta de PlatformSettings (nombre, rate limit), que es de
+// Oplex. Sin fila = los defaults explícitos de AssistantAccessService, que
+// son los mismos que muestra la pantalla; la fila se crea al primer cambio.
+// Ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md.
+model AssistantTenantConfig {
+  id               String   @id @default(uuid())
+  tenantId         String   @unique
+  webEnabled       Boolean  @default(true)
+  whatsappEnabled  Boolean  @default(true)
+  // Rol Ventas: ventas y deudas sólo de las facturas que emitió esa persona.
+  salesOwnDataOnly Boolean  @default(true)
+  // { "<tema>": ["SALES", "ACCOUNTANT", ...] } - OWNER/ADMIN nunca figuran
+  // (siempre tienen todo). Se valida y normaliza en AssistantAccessService.
+  topicsByRole     Json
+  updatedAt        DateTime @updatedAt
+
+  @@map("assistant_tenant_config")
 }
 
 // Agenda (ver docs/planesdemodulos/plan-agenda.md) - la ÚNICA tabla propia del módulo. El

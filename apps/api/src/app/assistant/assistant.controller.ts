@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Logger, Param, Patch, Post, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Logger, Param, Patch, Post, Res } from '@nestjs/common';
 import { CurrentUser } from '@plexo/auth';
 import { AssistantChannel, AssistantIntent, LongRunningTransaction } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
@@ -7,11 +7,19 @@ import type { FastifyReply } from 'fastify';
 import type { OutgoingHttpHeaders } from 'node:http';
 import { SendAssistantMessageDto } from './dto/send-assistant-message.dto.js';
 import { SetMessageFeedbackDto } from './dto/set-message-feedback.dto.js';
+import {
+  AssistantAccessService,
+  blockedTopicFor,
+  blockedTopicReply,
+  WEB_DISABLED_MESSAGE,
+  type AssistantAccess,
+} from './assistant-access.service.js';
 import { AssistantConversationService } from './assistant-conversation.service.js';
 import { AssistantHelpService } from './assistant-help.service.js';
 import { AssistantIntentRouterService } from './assistant-intent-router.service.js';
 import { AssistantOrchestratorService } from './assistant-orchestrator.service.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
+import type { AssistantStreamChunk } from './assistant-stream.types.js';
 
 // Hasta 4 vueltas de tool use (MAX_TOOL_CALL_ROUNDS en el orquestador),
 // cada una una llamada real a Claude - sin esto, TenantContextInterceptor
@@ -36,11 +44,27 @@ export class AssistantController {
     private readonly assistantHelpService: AssistantHelpService,
     private readonly assistantOrchestratorService: AssistantOrchestratorService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly assistantAccessService: AssistantAccessService,
   ) {}
 
+  // `webEnabled`: el widget se oculta si la empresa apagó el asistente en la
+  // web (Preferencias › Asistente). El POST igual lo vuelve a chequear.
   @Get('settings')
-  getSettings() {
-    return this.assistantSettingsService.getSettings();
+  async getSettings() {
+    const [settings, config] = await Promise.all([
+      this.assistantSettingsService.getSettings(),
+      this.assistantAccessService.getConfig(),
+    ]);
+    return { ...settings, webEnabled: config.webEnabled };
+  }
+
+  /** Canal web prendido + permisos del turno, ANTES de gastar en Claude. */
+  private async resolveWebAccess(user: AuthenticatedUser): Promise<AssistantAccess> {
+    const access = await this.assistantAccessService.resolve(user);
+    if (!access.webEnabled) {
+      throw new ForbiddenException(WEB_DISABLED_MESSAGE);
+    }
+    return access;
   }
 
   // Cupo mensual restante - el widget lo pinta como una línea fina bajo el
@@ -88,18 +112,23 @@ export class AssistantController {
   @Post('message')
   async sendMessage(@CurrentUser() user: AuthenticatedUser, @Body() dto: SendAssistantMessageDto) {
     await this.subscriptionService.assertCanUseAssistant();
+    const access = await this.resolveWebAccess(user);
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
+    const question = await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
 
-    const intent = await this.assistantIntentRouterService.classify(dto.message);
+    const { intent, topic } = await this.assistantIntentRouterService.classify(dto.message);
+    const blocked = blockedTopicFor(access, { intent, topic });
     let reply: string;
     let toolCalls: Array<{ tool: string }> | undefined;
-    if (intent === 'ayuda') {
+    if (blocked) {
+      reply = blockedTopicReply(blocked);
+      await this.assistantConversationService.markBlocked(question.id, blocked);
+    } else if (intent === 'ayuda') {
       reply = await this.assistantHelpService.answer(history, dto.message);
     } else {
-      const result = await this.assistantOrchestratorService.chat(user, history, dto.message);
+      const result = await this.assistantOrchestratorService.chat(user, access, history, dto.message);
       reply = result.text;
       toolCalls = result.toolNames.length ? result.toolNames.map((tool) => ({ tool })) : undefined;
     }
@@ -111,6 +140,7 @@ export class AssistantController {
       reply,
       toolCalls,
       intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
+      blocked ?? undefined,
     );
     return { reply, messageId: saved.id };
   }
@@ -136,11 +166,16 @@ export class AssistantController {
     @Res({ passthrough: false }) reply: FastifyReply,
   ): Promise<void> {
     await this.subscriptionService.assertCanUseAssistant();
+    const access = await this.resolveWebAccess(user);
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
-    const intent = await this.assistantIntentRouterService.classify(dto.message);
+    const question = await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
+    const { intent, topic } = await this.assistantIntentRouterService.classify(dto.message);
+    const blocked = blockedTopicFor(access, { intent, topic });
+    if (blocked) {
+      await this.assistantConversationService.markBlocked(question.id, blocked);
+    }
 
     // hijack() le avisa a Fastify que esta respuesta se maneja 100% a mano
     // de acá en adelante - sin esto, Fastify no sabe que `reply.raw` ya fue
@@ -180,10 +215,11 @@ export class AssistantController {
     // la página, no sólo mientras se recibe el stream en vivo.
     const toolCallsForPersist: Array<{ tool: string; data: unknown }> = [];
     try {
-      const chunks =
-        intent === 'ayuda'
+      const chunks = blocked
+        ? singleTextChunk(blockedTopicReply(blocked))
+        : intent === 'ayuda'
           ? this.assistantHelpService.answerStream(history, dto.message)
-          : this.assistantOrchestratorService.chatStream(user, history, dto.message);
+          : this.assistantOrchestratorService.chatStream(user, access, history, dto.message);
       for await (const chunk of chunks) {
         if (chunk.type === 'text') {
           fullText += chunk.text;
@@ -199,6 +235,7 @@ export class AssistantController {
         fullText.trim(),
         toolCallsForPersist.length ? toolCallsForPersist : undefined,
         intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
+        blocked ?? undefined,
       );
       send('done', { type: 'done', messageId: saved.id });
     } catch (err) {
@@ -212,4 +249,10 @@ export class AssistantController {
       reply.raw.end();
     }
   }
+}
+
+// La respuesta fija de un tema bloqueado viaja por el mismo stream que una
+// respuesta de Claude, así el widget no necesita un caso aparte.
+async function* singleTextChunk(text: string): AsyncGenerator<AssistantStreamChunk> {
+  yield { type: 'text', text };
 }

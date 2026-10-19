@@ -98,10 +98,18 @@ export class AssistantConversationService {
     content: string,
     toolCalls?: unknown,
     intent?: AssistantIntent,
+    blockedTopic?: string,
   ) {
     return getTenantDb().assistantMessage.create({
-      data: { tenantId: getTenantId(), conversationId, channel, role, content, toolCalls: toolCalls ?? undefined, intent },
+      data: { tenantId: getTenantId(), conversationId, channel, role, content, toolCalls: toolCalls ?? undefined, intent, blockedTopic },
     });
+  }
+
+  // La pregunta se guarda ANTES de clasificarla (si la IA falla, igual queda
+  // registrada) - por eso el bloqueo se marca después, sobre la fila ya
+  // creada. Sirve para el filtro "Bloqueadas" del Historial.
+  markBlocked(messageId: string, blockedTopic: string) {
+    return getTenantDb().assistantMessage.update({ where: { id: messageId }, data: { blockedTopic } });
   }
 
   async setFeedback(user: AuthenticatedUser, messageId: string, feedback: 'UP' | 'DOWN') {

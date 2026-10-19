@@ -1,13 +1,32 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { getTenantDb } from '@plexo/database';
 import { InventoryService } from '@plexo/inventory';
+import { PayablesService } from '@plexo/payables';
 import { CashSessionsService, type DailyPosition } from '@plexo/pos';
+import { PurchaseOrderService } from '@plexo/purchases';
 import { ReceivablesService, type CustomerAging } from '@plexo/receivables';
 import { ReportsSalesService } from '@plexo/reports-sales';
 import type { AuthenticatedUser } from '@plexo/types';
 
-const RECEIVABLES_READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'SALES'] as const;
-const POS_READ_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
+export const RECEIVABLES_READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'SALES'] as const;
+export const POS_READ_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
+// Mismo READ_ROLES que PayablesController (GET /payables/aging).
+export const PAYABLES_READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'INVENTORY', 'PURCHASES'] as const;
 const REPORTS_SALES_MODULE = 'reports-sales';
+
+// Tope de artículos por consulta de costos: cada uno es una ficha completa
+// (stock por depósito + último costo) - una búsqueda muy amplia ("a") no
+// debería traer el inventario entero.
+const COST_LOOKUP_LIMIT = 5;
+const SUPPLIER_DEBT_LIMIT = 15;
+
+/** Hasta dónde puede ver la persona dentro de lo que el tema le permite -
+ * hoy sólo "Ventas ve sólo sus propias ventas y clientes"
+ * (AssistantAccessService). */
+export interface AssistantDataScope {
+  // Sólo facturas emitidas por este usuario. undefined = toda la empresa.
+  onlyIssuedBy?: string;
+}
 
 export interface VentasPorArticuloParams {
   desde?: string;
@@ -61,20 +80,23 @@ export class AssistantToolsService {
     private readonly receivablesService: ReceivablesService,
     private readonly cashSessionsService: CashSessionsService,
     private readonly inventoryService: InventoryService,
+    private readonly payablesService: PayablesService,
+    private readonly purchaseOrderService: PurchaseOrderService,
   ) {}
 
-  async ventasPorArticulo(user: AuthenticatedUser, params: VentasPorArticuloParams = {}) {
+  async ventasPorArticulo(user: AuthenticatedUser, params: VentasPorArticuloParams = {}, scope: AssistantDataScope = {}) {
     assertModuleAccess(user, REPORTS_SALES_MODULE, 'ventas_por_articulo');
     const rows = await this.reportsSalesService.getSalesByProduct(
       params.desde ? new Date(params.desde) : undefined,
       params.hasta ? new Date(params.hasta) : undefined,
+      scope.onlyIssuedBy,
     );
     return params.limite ? rows.slice(0, params.limite) : rows;
   }
 
-  async deudaPorCliente(user: AuthenticatedUser): Promise<CustomerAging[]> {
+  async deudaPorCliente(user: AuthenticatedUser, scope: AssistantDataScope = {}): Promise<CustomerAging[]> {
     assertRole(user, RECEIVABLES_READ_ROLES, 'deuda_por_cliente');
-    return this.receivablesService.getAgingReport();
+    return this.receivablesService.getAgingReport(new Date(), scope.onlyIssuedBy);
   }
 
   async saldoCaja(user: AuthenticatedUser): Promise<DailyPosition> {
@@ -101,4 +123,83 @@ export class AssistantToolsService {
       })),
     }));
   }
+
+  // Sin assertRole a propósito, mismo criterio que stockArticulo: la ficha
+  // del artículo (GET /inventory/articles/:id/sheet, que es de donde sale el
+  // costo en la pantalla de Inventario) no tiene @Roles. Quién lo puede
+  // preguntar por el asistente lo decide el tema "Costos y márgenes".
+  //
+  // La remarca se calcula igual que en Inventario (precio = costo × (1 +
+  // remarca)): costo y precio están en la misma base. Se usa el último
+  // costo de compra, el mismo que muestra "Costo actual" en el historial de
+  // precios; el promedio ponderado va aparte, sin mezclarlos.
+  async costoArticulo(_user: AuthenticatedUser, nombreOSku: string) {
+    const articles = (await this.inventoryService.listArticles({ search: nombreOSku })).slice(0, COST_LOOKUP_LIMIT);
+    return Promise.all(
+      articles.map(async (article) => {
+        const sheet = await this.inventoryService.getArticleSheet(article.id);
+        return {
+          nombre: article.name,
+          variantes: sheet.variants.map((v) => {
+            const ultimoCosto = v.lastCost?.amount ?? null;
+            return {
+              sku: v.sku,
+              variante: v.label,
+              precioVenta: v.unitPrice,
+              ultimoCosto,
+              fechaUltimoCosto: v.lastCost?.at ?? null,
+              costoPromedioPonderado: v.avgUnitCost,
+              gananciaPorUnidad: ultimoCosto !== null ? round2(v.unitPrice - ultimoCosto) : null,
+              remarcaSobreCostoPorcentaje:
+                ultimoCosto !== null && ultimoCosto > 0 ? round2((v.unitPrice / ultimoCosto - 1) * 100) : null,
+            };
+          }),
+        };
+      }),
+    );
+  }
+
+  async comprasResumen(user: AuthenticatedUser) {
+    assertRole(user, PAYABLES_READ_ROLES, 'compras_resumen');
+    const [aging, sentOrders] = await Promise.all([
+      this.payablesService.getAgingReport(),
+      this.purchaseOrderService.list('SENT'),
+    ]);
+    // El listado de órdenes no trae el nombre del artículo de cada línea (sólo
+    // articleVariantId) - una sola consulta para todas, en vez de pedir el
+    // detalle completo de cada orden.
+    const pendingVariantIds = [
+      ...new Set(sentOrders.flatMap((o) => o.lines.filter((l) => l.pendingQuantity.gt(0)).map((l) => l.articleVariantId))),
+    ];
+    const variants = pendingVariantIds.length
+      ? await getTenantDb().articleVariant.findMany({
+          where: { id: { in: pendingVariantIds } },
+          select: { id: true, sku: true, article: { select: { name: true } } },
+        })
+      : [];
+    const variantById = new Map(variants.map((v) => [v.id, v]));
+    const pendingOrders = sentOrders
+      .map((order) => ({
+        numero: order.number,
+        proveedor: order.supplier.name,
+        moneda: order.currency.code,
+        total: order.total,
+        lineasPendientes: order.lines
+          .filter((line) => line.pendingQuantity.gt(0))
+          .map((line) => {
+            const variant = variantById.get(line.articleVariantId);
+            return { articulo: variant?.article.name ?? null, sku: variant?.sku ?? null, cantidadPendiente: line.pendingQuantity };
+          }),
+      }))
+      .filter((order) => order.lineasPendientes.length > 0);
+    return {
+      deudaConProveedores: aging.slice(0, SUPPLIER_DEBT_LIMIT),
+      proveedoresConDeuda: aging.length,
+      ordenesDeCompraPendientesDeRecibir: pendingOrders,
+    };
+  }
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

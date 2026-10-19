@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { InventoryModule } from '@plexo/inventory';
+import { PayablesModule } from '@plexo/payables';
 import { PosModule } from '@plexo/pos';
+import { PurchasesModule } from '@plexo/purchases';
 import { ReceivablesModule } from '@plexo/receivables';
 import { ReportsSalesModule } from '@plexo/reports-sales';
 import { SubscriptionModule } from '@plexo/subscriptions';
 import { AdminAssistantSettingsController } from './admin-assistant-settings.controller.js';
 import { AssistantController } from './assistant.controller.js';
+import { AssistantAccessService } from './assistant-access.service.js';
+import { AssistantConfigController } from './assistant-config.controller.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import { AssistantConversationService } from './assistant-conversation.service.js';
 import { AssistantHelpService } from './assistant-help.service.js';
@@ -18,9 +22,10 @@ import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 
 @Module({
-  imports: [ReportsSalesModule, ReceivablesModule, PosModule, InventoryModule, SubscriptionModule],
-  controllers: [AssistantController, AdminAssistantSettingsController, AssistantHistoryController],
+  imports: [ReportsSalesModule, ReceivablesModule, PosModule, InventoryModule, PayablesModule, PurchasesModule, SubscriptionModule],
+  controllers: [AssistantController, AdminAssistantSettingsController, AssistantHistoryController, AssistantConfigController],
   providers: [
+    AssistantAccessService,
     AssistantSettingsService,
     AssistantConversationService,
     AssistantToolsService,
@@ -47,6 +52,7 @@ import { AssistantToolsService } from './assistant-tools.service.js';
     AssistantHelpService,
     AssistantHistoryService,
     AssistantOrchestratorService,
+    AssistantAccessService,
   ],
 })
 export class AssistantModule {}

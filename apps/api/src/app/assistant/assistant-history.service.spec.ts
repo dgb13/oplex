@@ -18,6 +18,7 @@ function message(overrides: Record<string, unknown>) {
     intent: null,
     toolCalls: null,
     feedback: null,
+    blockedTopic: null,
     createdAt: t('2026-10-19T12:00:00Z'),
     conversation: { userId: 'user-1' },
     ...overrides,
@@ -112,6 +113,20 @@ describe('AssistantHistoryService', () => {
       const page2 = await runInTenant(makeDb([q2], [q2, withTool]), () => service.list());
 
       expect(page2.entries[0]).toEqual(expect.objectContaining({ status: 'ANSWERED_WITH_DATA', tools: ['saldo de caja'] }));
+    });
+
+    it('marks a question denied by topic permissions as BLOCKED, with the topic name', async () => {
+      const q = message({ id: 'q', blockedTopic: 'ventas' });
+      const r = message({ id: 'r', role: 'ASSISTANT', intent: 'DATOS', blockedTopic: 'ventas', createdAt: t('2026-10-19T12:00:01Z') });
+      const db = makeDb([q], [q, r]);
+
+      const page = await runInTenant(db, () => service.list({ onlyBlocked: true }));
+
+      expect(page.entries[0]).toEqual(expect.objectContaining({ status: 'BLOCKED', blockedTopic: 'Ventas y facturación' }));
+      expect(db.assistantMessage.findMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ where: { role: 'USER', blockedTopic: { not: null } } }),
+      );
     });
 
     it('returns a cursor when there are more questions than the page size', async () => {

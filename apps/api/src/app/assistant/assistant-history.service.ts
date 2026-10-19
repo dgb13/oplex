@@ -11,6 +11,7 @@ import {
   type UserRole,
 } from '@plexo/database';
 import { ASSISTANT_TOOL_TITLES } from './assistant-tools.catalog.js';
+import { topicById } from './assistant-topics.js';
 
 const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 100;
@@ -32,8 +33,9 @@ const ARGENTINA_OFFSET_MS = -3 * 60 * 60_000;
  *   (casi siempre "no tengo cómo responder eso" - mismo criterio que el
  *   reporte de "sin responder" de /admin).
  * - HELP: pregunta de uso del sistema.
- * - NO_REPLY: no hay respuesta guardada (falló la IA o se cortó el pedido). */
-export type AssistantHistoryStatus = 'ANSWERED_WITH_DATA' | 'ANSWERED_WITHOUT_DATA' | 'HELP' | 'NO_REPLY';
+ * - NO_REPLY: no hay respuesta guardada (falló la IA o se cortó el pedido).
+ * - BLOCKED: el tema no está permitido para el rol (AssistantAccessService). */
+export type AssistantHistoryStatus = 'ANSWERED_WITH_DATA' | 'ANSWERED_WITHOUT_DATA' | 'HELP' | 'NO_REPLY' | 'BLOCKED';
 
 export interface AssistantHistoryEntry {
   id: string;
@@ -43,6 +45,8 @@ export interface AssistantHistoryEntry {
   question: string;
   answer: string | null;
   status: AssistantHistoryStatus;
+  // Nombre del tema negado, sólo si status === 'BLOCKED'.
+  blockedTopic: string | null;
   tools: string[];
   feedback: 'UP' | 'DOWN' | null;
 }
@@ -58,10 +62,12 @@ export interface AssistantHistoryStats {
   questionsToday: number;
   whatsappToday: number;
   withoutDataToday: number;
+  blockedToday: number;
 }
 
 export interface ListHistoryParams {
   channel?: AssistantChannel;
+  onlyBlocked?: boolean;
   before?: Date;
   limit?: number;
 }
@@ -85,7 +91,13 @@ function toolNamesOf(toolCalls: Prisma.JsonValue | null): string[] {
   return [...new Set(names)];
 }
 
-function statusOf(reply: { intent: AssistantIntent | null; toolCalls: Prisma.JsonValue | null } | null): AssistantHistoryStatus {
+function statusOf(
+  question: { blockedTopic: string | null },
+  reply: { intent: AssistantIntent | null; toolCalls: Prisma.JsonValue | null } | null,
+): AssistantHistoryStatus {
+  if (question.blockedTopic) {
+    return 'BLOCKED';
+  }
   if (!reply) {
     return 'NO_REPLY';
   }
@@ -122,6 +134,7 @@ export class AssistantHistoryService {
       where: {
         role: AssistantMessageRole.USER,
         ...(params.channel ? { channel: params.channel } : {}),
+        ...(params.onlyBlocked ? { blockedTopic: { not: null } } : {}),
         ...(params.before ? { createdAt: { lt: params.before } } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -175,7 +188,8 @@ export class AssistantHistoryService {
         user: { id: question.conversation.userId, name: user?.name || user?.email || 'Usuario eliminado', role: user?.role ?? null },
         question: question.content,
         answer: reply?.content ?? null,
-        status: statusOf(reply),
+        status: statusOf(question, reply),
+        blockedTopic: question.blockedTopic ? (topicById(question.blockedTopic)?.label ?? question.blockedTopic) : null,
         tools: toolNamesOf(reply?.toolCalls ?? null).map((name) => ASSISTANT_TOOL_TITLES[name] ?? name),
         feedback: reply?.feedback ?? null,
       };
@@ -187,7 +201,7 @@ export class AssistantHistoryService {
   async statsToday(now = new Date()): Promise<AssistantHistoryStats> {
     const db = getTenantDb();
     const since = startOfArgentinaDay(now);
-    const [questionsToday, whatsappToday, withoutDataToday] = await Promise.all([
+    const [questionsToday, whatsappToday, withoutDataToday, blockedToday] = await Promise.all([
       db.assistantMessage.count({ where: { role: AssistantMessageRole.USER, createdAt: { gte: since } } }),
       db.assistantMessage.count({
         where: { role: AssistantMessageRole.USER, channel: AssistantChannel.WHATSAPP, createdAt: { gte: since } },
@@ -200,8 +214,11 @@ export class AssistantHistoryService {
           createdAt: { gte: since },
         },
       }),
+      db.assistantMessage.count({
+        where: { role: AssistantMessageRole.USER, blockedTopic: { not: null }, createdAt: { gte: since } },
+      }),
     ]);
-    return { questionsToday, whatsappToday, withoutDataToday };
+    return { questionsToday, whatsappToday, withoutDataToday, blockedToday };
   }
 
   /** Borra lo que tenga más de RETENTION_MONTHS, tenant por tenant (mismo

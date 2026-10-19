@@ -125,14 +125,15 @@ function AssistantCard() {
         <div>
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">Asistente de IA</h2>
           <p className="text-sm text-muted-foreground">
-            Qué le preguntó cada persona de la empresa al asistente y qué respondió, por la web y por WhatsApp.
+            Qué le preguntó cada persona al asistente, de qué temas puede hablar con cada rol y si responde por la web y por
+            WhatsApp.
           </p>
         </div>
         <Link
           href="/preferences/assistant"
           className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-muted"
         >
-          Ver historial
+          Configurar
         </Link>
       </CardContent>
     </Card>

@@ -34,8 +34,12 @@ export class AssistantHistoryController {
 
   @Roles(...HISTORY_ROLES)
   @Get()
-  list(@Query('channel') channel?: string, @Query('before') before?: string) {
-    return this.assistantHistoryService.list({ channel: parseChannel(channel), before: parseBefore(before) });
+  list(@Query('channel') channel?: string, @Query('blocked') blocked?: string, @Query('before') before?: string) {
+    return this.assistantHistoryService.list({
+      channel: parseChannel(channel),
+      onlyBlocked: blocked === 'true',
+      before: parseBefore(before),
+    });
   }
 
   @Roles(...HISTORY_ROLES)

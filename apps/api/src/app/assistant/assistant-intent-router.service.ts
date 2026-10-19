@@ -4,9 +4,20 @@ import { AiEventsService } from '../ai-events/ai-events.service.js';
 import { ASSISTANT_HELP_DEFAULT_MODEL } from './assistant-help.service.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 
-const MAX_TOKENS = 50;
+const MAX_TOKENS = 80;
 
 export type AssistantIntent = 'ayuda' | 'datos';
+
+// Tema de una pregunta de datos, para negarla de entrada si la persona no
+// tiene ese tema (AssistantAccessService). 'otro' = no encaja en ninguno:
+// pasa al orquestador, que igual sólo recibe las herramientas permitidas.
+const DATA_TOPICS = ['ventas', 'deudas', 'caja', 'stock', 'costos', 'compras', 'otro'] as const;
+export type AssistantDataTopic = (typeof DATA_TOPICS)[number];
+
+export interface AssistantClassification {
+  intent: AssistantIntent;
+  topic: AssistantDataTopic;
+}
 
 const CLASSIFY_TOOL: Anthropic.Tool = {
   name: 'classify_intent',
@@ -14,8 +25,16 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
     'Clasifica la pregunta del usuario de un ERP: "ayuda" si es sobre CÓMO USAR el sistema (dónde está algo, cómo se hace un paso), "datos" si es sobre SUS PROPIOS datos de negocio (ventas, clientes, caja, cualquier número real del tenant).',
   input_schema: {
     type: 'object',
-    properties: { intent: { type: 'string', enum: ['ayuda', 'datos'] } },
-    required: ['intent'],
+    properties: {
+      intent: { type: 'string', enum: ['ayuda', 'datos'] },
+      topic: {
+        type: 'string',
+        enum: [...DATA_TOPICS],
+        description:
+          'Sólo para intent "datos": ventas (facturado, ventas por artículo o período), deudas (lo que deben los clientes, vencidas), caja (dinero en caja), stock (existencias, mínimos, precio de venta), costos (costo de compra, margen, remarca), compras (proveedores, deuda con proveedores, órdenes de compra), otro (ninguno de esos). Para intent "ayuda", "otro".',
+      },
+    },
+    required: ['intent', 'topic'],
   },
 };
 
@@ -36,7 +55,7 @@ export class AssistantIntentRouterService {
     @Optional() private readonly aiEvents?: AiEventsService,
   ) {}
 
-  async classify(message: string): Promise<AssistantIntent> {
+  async classify(message: string): Promise<AssistantClassification> {
     try {
       const response = await this.anthropic.messages.create({
         model: process.env.ANTHROPIC_ASSISTANT_HELP_MODEL || ASSISTANT_HELP_DEFAULT_MODEL,
@@ -48,14 +67,18 @@ export class AssistantIntentRouterService {
       const toolUse = response.content.find(
         (block): block is Anthropic.Messages.ToolUseBlock => block.type === 'tool_use',
       );
-      const intent = (toolUse?.input as { intent?: string } | undefined)?.intent;
+      const input = toolUse?.input as { intent?: string; topic?: string } | undefined;
+      const intent = input?.intent;
+      const topic = DATA_TOPICS.find((t) => t === input?.topic) ?? 'otro';
       // Default a "datos" ante cualquier resultado inesperado (el modelo no
       // devolvió el enum esperado) - AssistantOrchestratorService ya sabe
       // responder con naturalidad "no tengo esa herramienta" si la
       // pregunta en realidad era de ayuda, mientras que lo inverso
       // (mandar una pregunta de datos reales al servicio de ayuda) la deja
       // sin poder contestar nada útil.
-      return intent === 'ayuda' ? 'ayuda' : 'datos';
+      // Mismo criterio para el tema: ante cualquier valor raro, 'otro' (no
+      // bloquea; el filtro de herramientas sigue protegiendo los datos).
+      return intent === 'ayuda' ? { intent: 'ayuda', topic: 'otro' } : { intent: 'datos', topic };
     } catch (err) {
       this.logger.error('Falló la clasificación de intención', err instanceof Error ? err.stack : err);
       await this.aiEvents?.record('ASSISTANT_HELP', false, err instanceof Error ? err.message : String(err));

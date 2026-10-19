@@ -1,6 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { AuthenticatedUser } from '@plexo/types';
+import type { AssistantAccess } from './assistant-access.service.js';
 import type { AssistantToolsService, VentasPorArticuloParams } from './assistant-tools.service.js';
+import { topicForTool } from './assistant-topics.js';
 
 /**
  * Catálogo de herramientas ofrecido a Claude (docs/planesdemodulos/plan-asistente-ia-conversacional.md,
@@ -47,6 +49,24 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       required: ['nombreOSku'],
     },
   },
+  {
+    name: 'costo_articulo',
+    description:
+      'Busca artículos por nombre o SKU (coincidencia parcial, hasta 5) y devuelve, por variante, el precio de venta, el último costo de compra (con su fecha), el costo promedio ponderado, la ganancia por unidad y la remarca sobre el costo en %. Usar para preguntas como "cuánto me cuesta X", "qué margen le saco a X" o "a cuánto lo compré". Si ultimoCosto es null, todavía no hay ninguna compra registrada de esa variante: decilo, no lo estimes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombreOSku: { type: 'string', description: 'Texto a buscar en el nombre o SKU del artículo, ej. "cemento".' },
+      },
+      required: ['nombreOSku'],
+    },
+  },
+  {
+    name: 'compras_resumen',
+    description:
+      'Devuelve la deuda con proveedores (antigüedad de saldos de Cuentas a Pagar, los 15 mayores y cuántos proveedores tienen deuda) y las órdenes de compra enviadas que todavía tienen mercadería pendiente de recibir, con lo que falta de cada artículo. Usar para preguntas como "cuánto le debemos a los proveedores", "a quién le debo" o "qué compras faltan llegar".',
+    input_schema: { type: 'object', properties: {} },
+  },
 ];
 
 // Etiqueta liviana en español que el widget muestra mientras la
@@ -59,6 +79,8 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   deuda_por_cliente: 'Consultando cuentas a cobrar…',
   saldo_caja: 'Consultando caja…',
   stock_articulo: 'Consultando stock…',
+  costo_articulo: 'Consultando costos…',
+  compras_resumen: 'Consultando compras…',
 };
 
 // Nombre corto de cada herramienta para el detalle del Historial de
@@ -69,6 +91,8 @@ export const ASSISTANT_TOOL_TITLES: Record<string, string> = {
   deuda_por_cliente: 'deuda por cliente',
   saldo_caja: 'saldo de caja',
   stock_articulo: 'stock y precio de artículos',
+  costo_articulo: 'costo y remarca de artículos',
+  compras_resumen: 'compras y deuda con proveedores',
 };
 
 export function labelForTool(toolName: string): string {
@@ -99,11 +123,22 @@ export interface ToolExecutionResult {
 export async function executeAssistantTool(
   toolsService: AssistantToolsService,
   user: AuthenticatedUser,
+  access: AssistantAccess,
   toolName: string,
   input: unknown,
 ): Promise<ToolExecutionResult> {
+  // El orquestador ya le ofrece al modelo sólo las herramientas permitidas
+  // (toolsForAccess) - esto es la segunda capa, por si alguna vez llega
+  // igual un tool_use de una que no estaba en la lista.
+  if (!access.allowedTools.has(toolName)) {
+    const topic = topicForTool(toolName);
+    return {
+      content: `Sin permiso para consultar "${topic?.label ?? toolName}" con el rol de esta persona en esta empresa.`,
+      isError: true,
+    };
+  }
   try {
-    const result = await dispatch(toolsService, user, toolName, input);
+    const result = await dispatch(toolsService, user, access, toolName, input);
     return { content: JSON.stringify(result), isError: false, raw: result };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido ejecutando la herramienta';
@@ -114,19 +149,30 @@ export async function executeAssistantTool(
 function dispatch(
   toolsService: AssistantToolsService,
   user: AuthenticatedUser,
+  access: AssistantAccess,
   toolName: string,
   input: unknown,
 ): Promise<unknown> {
   switch (toolName) {
     case 'ventas_por_articulo':
-      return toolsService.ventasPorArticulo(user, (input ?? {}) as VentasPorArticuloParams);
+      return toolsService.ventasPorArticulo(user, (input ?? {}) as VentasPorArticuloParams, access.scope);
     case 'deuda_por_cliente':
-      return toolsService.deudaPorCliente(user);
+      return toolsService.deudaPorCliente(user, access.scope);
     case 'saldo_caja':
       return toolsService.saldoCaja(user);
     case 'stock_articulo':
       return toolsService.stockArticulo(user, (input as { nombreOSku?: string } | undefined)?.nombreOSku ?? '');
+    case 'costo_articulo':
+      return toolsService.costoArticulo(user, (input as { nombreOSku?: string } | undefined)?.nombreOSku ?? '');
+    case 'compras_resumen':
+      return toolsService.comprasResumen(user);
     default:
       throw new Error(`Herramienta desconocida: "${toolName}"`);
   }
+}
+
+/** Las herramientas que se le ofrecen al modelo en este turno: sólo las de
+ * los temas que la persona tiene permitidos. */
+export function toolsForAccess(access: AssistantAccess): Anthropic.Tool[] {
+  return ASSISTANT_TOOLS.filter((tool) => access.allowedTools.has(tool.name));
 }

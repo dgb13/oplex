@@ -112,9 +112,11 @@ export class ReceivablesService {
    * refreshOverdueStatuses), so a report that trusted it could show a
    * customer as current when they're actually 60 days late.
    */
-  async getAgingReport(asOf: Date = new Date()): Promise<CustomerAging[]> {
+  // `issuedByUserId`: sólo las facturas que emitió esa persona (asistente,
+  // "Ventas ve sólo sus propios clientes"). Sin él, toda la empresa.
+  async getAgingReport(asOf: Date = new Date(), issuedByUserId?: string): Promise<CustomerAging[]> {
     const invoices = await getTenantDb().invoice.findMany({
-      where: { balanceDue: { gt: 0 } },
+      where: { balanceDue: { gt: 0 }, issuedByUserId },
       include: { customer: true },
     });
 
