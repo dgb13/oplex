@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import ArcaUnregisteredModal, { voucherLabel } from './ArcaUnregisteredModal';
+import AssistantInvoiceDraft from './AssistantInvoiceDraft';
 import GestionTab from './GestionTab';
 import ResumenTab from './ResumenTab';
 
@@ -35,6 +36,9 @@ function InvoicingScreen() {
   // El aviso de la campana llega con ?arca=pendientes.
   const arcaOpen = canSeeArca && searchParams.get('arca') === 'pendientes';
 
+  // El link que devuelve el asistente al preparar una factura.
+  const assistantDraftId = searchParams.get('asistente');
+
   function setArcaOpen(open: boolean) {
     router.replace(open ? '/invoicing?arca=pendientes' : '/invoicing', { scroll: false });
   }
@@ -42,6 +46,9 @@ function InvoicingScreen() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Facturación</h1>
+      {assistantDraftId && (
+        <AssistantInvoiceDraft actionId={assistantDraftId} onClose={() => router.replace('/invoicing', { scroll: false })} />
+      )}
 
       <div className="flex gap-2 border-b">
         {TABS.map((t) => (

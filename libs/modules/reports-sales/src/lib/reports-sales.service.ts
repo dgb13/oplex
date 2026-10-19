@@ -127,14 +127,17 @@ export class ReportsSalesService {
       .sort((a, b) => b.totalSales.cmp(a.totalSales));
   }
 
-  async getSalesByProduct(from?: Date, to?: Date): Promise<ProductSales[]> {
+  // `issuedByUserId`: sólo las facturas (y sus notas de crédito) que emitió
+  // esa persona - lo usa el asistente para "Ventas ve sólo sus propias
+  // ventas" (AssistantAccessService). Sin él, toda la empresa, como siempre.
+  async getSalesByProduct(from?: Date, to?: Date, issuedByUserId?: string): Promise<ProductSales[]> {
     const range = defaultRange(from, to);
     const db = getTenantDb();
 
     const grouped = await db.invoiceLine.groupBy({
       by: ['articleVariantId'],
       where: {
-        invoice: { issueDate: { gte: range.from, lte: range.to }, status: { not: 'CANCELLED' } },
+        invoice: { issueDate: { gte: range.from, lte: range.to }, status: { not: 'CANCELLED' }, issuedByUserId },
       },
       _sum: { quantity: true, lineTotal: true },
     });
@@ -144,7 +147,12 @@ export class ReportsSalesService {
     // itself doesn't carry one. Small per-tenant/per-period dataset, same
     // in-memory aggregation trade-off the rest of this report already makes.
     const creditNoteLines = await db.creditNoteLine.findMany({
-      where: { creditNote: { issueDate: { gte: range.from, lte: range.to } } },
+      where: {
+        creditNote: {
+          issueDate: { gte: range.from, lte: range.to },
+          ...(issuedByUserId ? { invoice: { issuedByUserId } } : {}),
+        },
+      },
       select: { quantity: true, lineTotal: true, invoiceLine: { select: { articleVariantId: true } } },
     });
     const creditedByVariant = new Map<string, { quantity: Prisma.Decimal; lineTotal: Prisma.Decimal }>();

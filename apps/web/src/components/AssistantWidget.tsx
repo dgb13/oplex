@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   assistantApi,
   FALLBACK_ASSISTANT_NAME,
+  isActionCard,
+  type AssistantActionReply,
   streamAssistantMessage,
   type AssistantMessageFeedback,
   type AssistantToolCall,
@@ -11,6 +13,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import AssistantActionCard from './AssistantActionCard';
 import AssistantToolChart from './AssistantToolChart';
 
 interface ChatMessage {
@@ -194,6 +198,19 @@ export default function AssistantWidget() {
     });
   }
 
+  // Confirmar/Cancelar de una tarjeta: se actualiza la tarjeta en su
+  // mensaje y se agrega la respuesta del servidor como un mensaje más.
+  function handleActionResolved(result: AssistantActionReply) {
+    setMessages((prev) => [
+      ...prev.map((m) =>
+        m.toolCalls?.some((c) => isActionCard(c.data) && c.data.id === result.card.id)
+          ? { ...m, toolCalls: m.toolCalls.map((c) => (isActionCard(c.data) && c.data.id === result.card.id ? { ...c, data: result.card } : c)) }
+          : m,
+      ),
+      { id: result.messageId, role: 'assistant', text: result.reply, feedback: null },
+    ]);
+  }
+
   function handleFeedback(messageId: string, feedback: AssistantMessageFeedback) {
     setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, feedback } : m)));
     feedbackMutation.mutate({ messageId, feedback });
@@ -205,6 +222,12 @@ export default function AssistantWidget() {
   const usagePercent =
     usage && usage.quota != null && usage.quota > 0 ? Math.max(0, Math.min(100, Math.round((usage.used / usage.quota) * 100))) : 0;
   const usageCritical = usagePercent >= 80;
+
+  // La empresa apagó el asistente en la web (Preferencias › Asistente): ni
+  // el botón se muestra. `=== false` a propósito: mientras carga, se ve.
+  if (settings?.webEnabled === false) {
+    return null;
+  }
 
   return (
     <>
@@ -266,13 +289,13 @@ export default function AssistantWidget() {
               </div>
             )}
             {messages.map((m, i) => (
-              <MessageBubble key={m.id ?? i} message={m} onFeedback={handleFeedback} />
+              <MessageBubble key={m.id ?? i} message={m} onFeedback={handleFeedback} onActionResolved={handleActionResolved} />
             ))}
             {isStreaming && (
               <div className="flex flex-col items-start gap-1">
                 {streamingText ? (
                   <div className={ASSISTANT_BUBBLE_CLASS}>
-                    <ReactMarkdown>{streamingText}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
                   </div>
                 ) : (
                   <div className="rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm italic text-slate-500 dark:text-slate-400">
@@ -324,10 +347,18 @@ export default function AssistantWidget() {
 function MessageBubble({
   message,
   onFeedback,
+  onActionResolved,
 }: {
   message: ChatMessage;
   onFeedback: (messageId: string, feedback: AssistantMessageFeedback) => void;
+  onActionResolved: (result: AssistantActionReply) => void;
 }) {
+  // Las respuestas a un Confirmar/"SÍ" ('confirmar_accion') ya dicen el
+  // resultado en el texto: la tarjeta se muestra sólo en la propuesta.
+  const actionCards = (message.toolCalls ?? [])
+    .filter((c) => c.tool !== 'confirmar_accion')
+    .map((c) => c.data)
+    .filter(isActionCard);
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -347,9 +378,12 @@ function MessageBubble({
   return (
     <div className="flex flex-col items-start gap-1">
       <div className={ASSISTANT_BUBBLE_CLASS}>
-        <ReactMarkdown>{message.text}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
       </div>
       {message.toolCalls && message.toolCalls.length > 0 && <AssistantToolChart toolCalls={message.toolCalls} />}
+      {actionCards.map((card) => (
+        <AssistantActionCard key={card.id} card={card} onResolved={onActionResolved} />
+      ))}
       {message.id && (
         <div className="flex items-center gap-1 pl-1">
           <button

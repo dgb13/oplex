@@ -4135,9 +4135,21 @@ model AssistantMessage {
   // 3 (sección 7 del plan) - insumo para priorizar qué artículos de ayuda
   // faltan o qué herramienta de datos agregar, no dispara nada automático.
   feedback       AssistantMessageFeedback?
+  // Por dónde entró el turno - se guarda en la pregunta Y en la respuesta.
+  // null = mensajes de antes de esta columna (el Historial los muestra sin
+  // canal). Ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md.
+  channel        AssistantChannel?
+  // Tema que se negó por permisos (ver AssistantAccessService) - se marca en
+  // la pregunta Y en la respuesta fija que se le devolvió. null = no se
+  // bloqueó nada. String (no enum): el catálogo de temas vive en código
+  // (assistant-topics.ts) y sumar uno no debería pedir una migración.
+  blockedTopic   String?
   createdAt      DateTime               @default(now())
 
   @@index([tenantId, conversationId, createdAt])
+  // Historial de Preferencias › Asistente: todos los mensajes del tenant,
+  // más recientes primero, sin importar la conversación.
+  @@index([tenantId, role, createdAt])
   // Usado por el reporte cross-tenant de "preguntas sin responder" en
   // Admin (AssistantSettingsService.getUnansweredQuestions) - ese query
   // filtra por role+intent+createdAt sin scopear por tenant a propósito.
@@ -4148,6 +4160,95 @@ model AssistantMessage {
 enum AssistantMessageFeedback {
   UP
   DOWN
+}
+
+enum AssistantChannel {
+  WEB
+  WHATSAPP
+}
+
+// Configuración del asistente que decide cada empresa (Preferencias ›
+// Asistente) - distinta de PlatformSettings (nombre, rate limit), que es de
+// Oplex. Sin fila = los defaults explícitos de AssistantAccessService, que
+// son los mismos que muestra la pantalla; la fila se crea al primer cambio.
+// Ver docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md.
+model AssistantTenantConfig {
+  id               String   @id @default(uuid())
+  tenantId         String   @unique
+  webEnabled       Boolean  @default(true)
+  whatsappEnabled  Boolean  @default(true)
+  // Rol Ventas: ventas y deudas sólo de las facturas que emitió esa persona.
+  salesOwnDataOnly Boolean  @default(true)
+  // { "<tema>": ["SALES", "ACCOUNTANT", ...] } - OWNER/ADMIN nunca figuran
+  // (siempre tienen todo). Se valida y normaliza en AssistantAccessService.
+  topicsByRole     Json
+  // Acciones (etapa 3): { "<acción>": "OFF" | "DRAFT" | "DIRECT" } y
+  // { "<acción>": ["SALES", ...] }. Mismo criterio que topicsByRole: se
+  // validan contra el catálogo en código (assistant-actions.catalog.ts).
+  actionLevels           Json     @default("{}")
+  actionRoles            Json     @default("{}")
+  // null = sin tope. Sólo aplica a cotizaciones pedidas por WhatsApp.
+  maxQuoteAmountWhatsapp Decimal? @db.Decimal(14, 2)
+  maxActionsPerDay       Int      @default(40)
+  confirmExpiryMinutes   Int      @default(10)
+  updatedAt        DateTime @updatedAt
+
+  @@map("assistant_tenant_config")
+}
+
+enum AssistantActionKind {
+  REMINDER_CREATE
+  CUSTOMER_CREATE
+  QUOTE_CREATE
+  QUOTE_EMAIL
+  PAYMENT_LINK
+  INVOICE_PREPARE
+}
+
+enum AssistantActionStatus {
+  // Borrador: espera el "SÍ" de quien la pidió hasta expiresAt.
+  PENDING_CONFIRMATION
+  DONE
+  EXPIRED
+  CANCELLED
+  UNDONE
+  FAILED
+}
+
+// Una fila por acción que el asistente propuso o hizo (etapa 3 de
+// docs/planesdemodulos/plan-asistente-fase2-gestion-acciones.md). El modelo
+// sólo PROPONE (payload); la ejecución la hace el servidor al confirmar o, en
+// nivel Directa, en el momento. Es lo que muestra el Historial y lo que se
+// deshace.
+model AssistantAction {
+  id                String                @id @default(uuid())
+  tenantId          String
+  conversationId    String
+  // La pregunta (role USER) que la originó - el Historial pagina por pregunta.
+  questionMessageId String?
+  userId            String
+  channel           AssistantChannel
+  kind              AssistantActionKind
+  // DRAFT | DIRECT, el nivel que regía al proponerla.
+  level             String
+  status            AssistantActionStatus
+  payload           Json
+  summary           String
+  // Lo que se creó, para mostrarlo y deshacerlo (ej. "calendarEvent"/id).
+  entityType        String?
+  entityId          String?
+  expiresAt         DateTime?
+  confirmedAt       DateTime?
+  undoneAt          DateTime?
+  undoneByUserId    String?
+  errorMessage      String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, questionMessageId])
+  @@map("assistant_actions")
 }
 
 // Agenda (ver docs/planesdemodulos/plan-agenda.md) - la ÚNICA tabla propia del módulo. El

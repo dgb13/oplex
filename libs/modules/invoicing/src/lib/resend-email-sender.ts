@@ -4,6 +4,7 @@ import type {
   EmailSender,
   InvoiceEmailPayload,
   OverdueAlertEmailPayload,
+  PaymentLinkEmailPayload,
 } from './email-sender.port.js';
 import { buildOverdueEmailCopy } from './overdue-email-templates.js';
 
@@ -54,6 +55,27 @@ export class ResendEmailSender implements EmailSender {
       this.logger.error(
         `Failed to email overdue alert for invoice ${payload.invoiceNumber} to ${payload.to}: ${error.message}`,
       );
+    }
+  }
+
+  async sendPaymentLinkEmail(payload: PaymentLinkEmailPayload): Promise<void> {
+    const { error } = await this.resend.emails.send({
+      from: payload.from ?? this.from,
+      to: payload.to,
+      subject: `Link de pago - ${payload.invoiceLabel}`,
+      text:
+        `Hola,
+
+${payload.businessName} te manda el link para pagar la ${payload.invoiceLabel} ` +
+        `por ${payload.currencyCode} ${payload.amount} con Mercado Pago:
+
+${payload.url}
+
+` +
+        `Si ya la pagaste, no tenés que hacer nada.`,
+    });
+    if (error) {
+      throw new Error(`No se pudo mandar el correo a ${payload.to}: ${error.message}`);
     }
   }
 }

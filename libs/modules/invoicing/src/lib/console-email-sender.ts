@@ -3,6 +3,7 @@ import type {
   EmailSender,
   InvoiceEmailPayload,
   OverdueAlertEmailPayload,
+  PaymentLinkEmailPayload,
 } from './email-sender.port.js';
 import { buildOverdueEmailCopy } from './overdue-email-templates.js';
 
@@ -14,6 +15,12 @@ export class ConsoleEmailSender implements EmailSender {
   async sendInvoiceEmail(payload: InvoiceEmailPayload): Promise<void> {
     this.logger.log(
       `[stub] would email invoice ${payload.invoiceNumber} (total ${payload.total}) to ${payload.to} from ${payload.from ?? '(default sender)'}`,
+    );
+  }
+
+  async sendPaymentLinkEmail(payload: PaymentLinkEmailPayload): Promise<void> {
+    this.logger.log(
+      `[stub] would email payment link for ${payload.invoiceLabel} (${payload.currencyCode} ${payload.amount}) to ${payload.to}: ${payload.url}`,
     );
   }
 

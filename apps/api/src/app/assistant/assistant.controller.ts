@@ -1,17 +1,26 @@
-import { Body, Controller, Get, Logger, Param, Patch, Post, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Logger, Param, ParseUUIDPipe, Patch, Post, Res } from '@nestjs/common';
 import { CurrentUser } from '@plexo/auth';
-import { AssistantIntent, LongRunningTransaction } from '@plexo/database';
+import { AssistantChannel, AssistantIntent, LongRunningTransaction } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser } from '@plexo/types';
 import type { FastifyReply } from 'fastify';
 import type { OutgoingHttpHeaders } from 'node:http';
 import { SendAssistantMessageDto } from './dto/send-assistant-message.dto.js';
 import { SetMessageFeedbackDto } from './dto/set-message-feedback.dto.js';
+import {
+  AssistantAccessService,
+  blockedTopicFor,
+  blockedTopicReply,
+  WEB_DISABLED_MESSAGE,
+  type AssistantAccess,
+} from './assistant-access.service.js';
+import { AssistantActionsService, type ActionReply, type AssistantActionCard } from './assistant-actions.service.js';
 import { AssistantConversationService } from './assistant-conversation.service.js';
 import { AssistantHelpService } from './assistant-help.service.js';
 import { AssistantIntentRouterService } from './assistant-intent-router.service.js';
 import { AssistantOrchestratorService } from './assistant-orchestrator.service.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
+import type { AssistantStreamChunk } from './assistant-stream.types.js';
 
 // Hasta 4 vueltas de tool use (MAX_TOOL_CALL_ROUNDS en el orquestador),
 // cada una una llamada real a Claude - sin esto, TenantContextInterceptor
@@ -36,11 +45,28 @@ export class AssistantController {
     private readonly assistantHelpService: AssistantHelpService,
     private readonly assistantOrchestratorService: AssistantOrchestratorService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly assistantAccessService: AssistantAccessService,
+    private readonly assistantActionsService: AssistantActionsService,
   ) {}
 
+  // `webEnabled`: el widget se oculta si la empresa apagó el asistente en la
+  // web (Preferencias › Asistente). El POST igual lo vuelve a chequear.
   @Get('settings')
-  getSettings() {
-    return this.assistantSettingsService.getSettings();
+  async getSettings() {
+    const [settings, config] = await Promise.all([
+      this.assistantSettingsService.getSettings(),
+      this.assistantAccessService.getConfig(),
+    ]);
+    return { ...settings, webEnabled: config.webEnabled };
+  }
+
+  /** Canal web prendido + permisos del turno, ANTES de gastar en Claude. */
+  private async resolveWebAccess(user: AuthenticatedUser): Promise<AssistantAccess> {
+    const access = await this.assistantAccessService.resolve(user);
+    if (!access.webEnabled) {
+      throw new ForbiddenException(WEB_DISABLED_MESSAGE);
+    }
+    return access;
   }
 
   // Cupo mensual restante - el widget lo pinta como una línea fina bajo el
@@ -58,7 +84,61 @@ export class AssistantController {
   @Get('conversation')
   async getConversation(@CurrentUser() user: AuthenticatedUser) {
     const messages = await this.assistantConversationService.listMessages(user);
-    return { messages };
+    // Las tarjetas de acciones se guardaron con el estado de ese momento -
+    // se reemplazan por el actual (una "esperando" pudo confirmarse o vencer).
+    const cardIds = messages.flatMap((m) => actionCardsOf(m.toolCalls).map((c) => c.id));
+    const current = await this.assistantActionsService.currentCards(cardIds);
+    return {
+      messages: messages.map((m) =>
+        Array.isArray(m.toolCalls) && cardIds.length
+          ? {
+              ...m,
+              toolCalls: m.toolCalls.map((call) => {
+                const card = actionCardsOf([call])[0];
+                return card && current.has(card.id) ? { ...(call as object), data: current.get(card.id) } : call;
+              }),
+            }
+          : m,
+      ),
+    };
+  }
+
+  // Botones de la tarjeta de una acción en el widget. La respuesta se guarda
+  // en la conversación como un mensaje más del asistente.
+  @Post('actions/:id/confirm')
+  async confirmAction(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.persistActionReply(user, await this.assistantActionsService.confirm(user, id));
+  }
+
+  @Post('actions/:id/cancel')
+  async cancelAction(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.persistActionReply(user, await this.assistantActionsService.cancel(user, id));
+  }
+
+  // Desde el Historial (Dueño/Admin o quien la pidió - lo valida el servicio).
+  @Post('actions/:id/undo')
+  undoAction(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.assistantActionsService.undo(user, id);
+  }
+
+  // Nueva factura (/invoicing?asistente=<id>) lee de acá lo que preparó el
+  // asistente. Emitir la factura sigue siendo el POST /sales de siempre.
+  @Get('actions/:id/invoice-draft')
+  getInvoiceDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.assistantActionsService.getInvoiceDraft(user, id);
+  }
+
+  private async persistActionReply(user: AuthenticatedUser, result: ActionReply) {
+    const conversation = await this.assistantConversationService.getOrCreateActive(user);
+    const saved = await this.assistantConversationService.appendMessage(
+      conversation.id,
+      AssistantChannel.WEB,
+      'ASSISTANT',
+      result.reply,
+      [{ tool: 'confirmar_accion', data: result.card }],
+      AssistantIntent.DATOS,
+    );
+    return { reply: result.reply, card: result.card, messageId: saved.id };
   }
 
   // "Nueva conversación" a mano - arranca un hilo aparte, el anterior
@@ -88,28 +168,53 @@ export class AssistantController {
   @Post('message')
   async sendMessage(@CurrentUser() user: AuthenticatedUser, @Body() dto: SendAssistantMessageDto) {
     await this.subscriptionService.assertCanUseAssistant();
+    const access = await this.resolveWebAccess(user);
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, 'USER', dto.message);
+    const question = await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
 
-    const intent = await this.assistantIntentRouterService.classify(dto.message);
+    // "SÍ"/"NO" suelto con una acción esperando: se resuelve sin la IA.
+    const short = await this.assistantActionsService.handleShortReply(user, dto.message);
+    if (short) {
+      const saved = await this.assistantConversationService.appendMessage(
+        conversationId,
+        AssistantChannel.WEB,
+        'ASSISTANT',
+        short.reply,
+        [{ tool: 'confirmar_accion', data: short.card }],
+        AssistantIntent.DATOS,
+      );
+      return { reply: short.reply, messageId: saved.id };
+    }
+
+    const { intent, topic } = await this.assistantIntentRouterService.classify(dto.message);
+    const blocked = blockedTopicFor(access, { intent, topic });
     let reply: string;
     let toolCalls: Array<{ tool: string }> | undefined;
-    if (intent === 'ayuda') {
+    if (blocked) {
+      reply = blockedTopicReply(blocked);
+      await this.assistantConversationService.markBlocked(question.id, blocked);
+    } else if (intent === 'ayuda') {
       reply = await this.assistantHelpService.answer(history, dto.message);
     } else {
-      const result = await this.assistantOrchestratorService.chat(user, history, dto.message);
+      const result = await this.assistantOrchestratorService.chat(user, access, history, dto.message, {
+        conversationId,
+        questionMessageId: question.id,
+        channel: AssistantChannel.WEB,
+      });
       reply = result.text;
       toolCalls = result.toolNames.length ? result.toolNames.map((tool) => ({ tool })) : undefined;
     }
 
     const saved = await this.assistantConversationService.appendMessage(
       conversationId,
+      AssistantChannel.WEB,
       'ASSISTANT',
       reply,
       toolCalls,
       intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
+      blocked ?? undefined,
     );
     return { reply, messageId: saved.id };
   }
@@ -135,11 +240,21 @@ export class AssistantController {
     @Res({ passthrough: false }) reply: FastifyReply,
   ): Promise<void> {
     await this.subscriptionService.assertCanUseAssistant();
+    const access = await this.resolveWebAccess(user);
     await this.assistantConversationService.assertNotRateLimited(user);
 
     const { conversationId, history } = await this.assistantConversationService.getRecentHistory(user);
-    await this.assistantConversationService.appendMessage(conversationId, 'USER', dto.message);
-    const intent = await this.assistantIntentRouterService.classify(dto.message);
+    const question = await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WEB, 'USER', dto.message);
+    // "SÍ"/"NO" suelto con una acción esperando: se resuelve sin la IA (y sin
+    // clasificar), pero viaja por el mismo stream que cualquier respuesta.
+    const short = await this.assistantActionsService.handleShortReply(user, dto.message);
+    const { intent, topic } = short
+      ? { intent: 'accion' as const, topic: 'otro' as const }
+      : await this.assistantIntentRouterService.classify(dto.message);
+    const blocked = short ? null : blockedTopicFor(access, { intent, topic });
+    if (blocked) {
+      await this.assistantConversationService.markBlocked(question.id, blocked);
+    }
 
     // hijack() le avisa a Fastify que esta respuesta se maneja 100% a mano
     // de acá en adelante - sin esto, Fastify no sabe que `reply.raw` ya fue
@@ -179,10 +294,17 @@ export class AssistantController {
     // la página, no sólo mientras se recibe el stream en vivo.
     const toolCallsForPersist: Array<{ tool: string; data: unknown }> = [];
     try {
-      const chunks =
-        intent === 'ayuda'
-          ? this.assistantHelpService.answerStream(history, dto.message)
-          : this.assistantOrchestratorService.chatStream(user, history, dto.message);
+      const chunks = short
+        ? shortReplyChunks(short)
+        : blocked
+          ? singleTextChunk(blockedTopicReply(blocked))
+          : intent === 'ayuda'
+            ? this.assistantHelpService.answerStream(history, dto.message)
+            : this.assistantOrchestratorService.chatStream(user, access, history, dto.message, {
+                conversationId,
+                questionMessageId: question.id,
+                channel: AssistantChannel.WEB,
+              });
       for await (const chunk of chunks) {
         if (chunk.type === 'text') {
           fullText += chunk.text;
@@ -193,10 +315,12 @@ export class AssistantController {
       }
       const saved = await this.assistantConversationService.appendMessage(
         conversationId,
+        AssistantChannel.WEB,
         'ASSISTANT',
         fullText.trim(),
         toolCallsForPersist.length ? toolCallsForPersist : undefined,
         intent === 'ayuda' ? AssistantIntent.AYUDA : AssistantIntent.DATOS,
+        blocked ?? undefined,
       );
       send('done', { type: 'done', messageId: saved.id });
     } catch (err) {
@@ -210,4 +334,27 @@ export class AssistantController {
       reply.raw.end();
     }
   }
+}
+
+// La respuesta fija de un tema bloqueado viaja por el mismo stream que una
+// respuesta de Claude, así el widget no necesita un caso aparte.
+async function* singleTextChunk(text: string): AsyncGenerator<AssistantStreamChunk> {
+  yield { type: 'text', text };
+}
+
+async function* shortReplyChunks(result: ActionReply): AsyncGenerator<AssistantStreamChunk> {
+  yield { type: 'tool_result', tool: 'confirmar_accion', data: result.card };
+  yield { type: 'text', text: result.reply };
+}
+
+function actionCardsOf(toolCalls: unknown): AssistantActionCard[] {
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+  return toolCalls
+    .map((call) => (call && typeof call === 'object' ? (call as { data?: unknown }).data : null))
+    .filter(
+      (data): data is AssistantActionCard =>
+        !!data && typeof data === 'object' && (data as { type?: unknown }).type === 'assistant_action',
+    );
 }

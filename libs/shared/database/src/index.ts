@@ -111,5 +111,6 @@ export type {
   LegalAcceptance,
   LegalRequest,
   DocumentComment,
+  AssistantAction,
 } from './generated/client.js';
 export * from './generated/enums.js';

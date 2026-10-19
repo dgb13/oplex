@@ -1,8 +1,23 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { isPlatformAdminEmail } from '@plexo/auth';
-import { AssistantIntent as PersistedAssistantIntent, getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
+import {
+  AssistantChannel,
+  AssistantIntent as PersistedAssistantIntent,
+  getTenantDb,
+  PrismaService,
+  tenantContextStorage,
+  withTenantContext,
+} from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
 import type { AuthenticatedUser, ModuleAccessClaim } from '@plexo/types';
+import {
+  AssistantAccessService,
+  blockedTopicFor,
+  blockedTopicReply,
+  WHATSAPP_DISABLED_MESSAGE,
+  type AssistantAccess,
+} from '../assistant/assistant-access.service.js';
+import { AssistantActionsService, type ActionTurn } from '../assistant/assistant-actions.service.js';
 import {
   AssistantConversationService,
   type HistoryMessage,
@@ -79,6 +94,8 @@ export class WhatsAppWebhookService {
     private readonly assistantIntentRouterService: AssistantIntentRouterService,
     private readonly assistantHelpService: AssistantHelpService,
     private readonly assistantOrchestratorService: AssistantOrchestratorService,
+    private readonly assistantAccessService: AssistantAccessService,
+    private readonly assistantActionsService: AssistantActionsService,
   ) {}
 
   verifySignature(rawBody: Buffer | undefined, signatureHeader: string | undefined): boolean {
@@ -193,7 +210,14 @@ export class WhatsAppWebhookService {
           isPlatformAdmin: isPlatformAdminEmail(user.email),
         };
 
-        await this.answerAndReply(identity, phoneE164, text);
+        // withTenantContext arranca sin rol (todavía no se sabía quién era) -
+        // se completa acá, porque las acciones del asistente usan los mismos
+        // servicios que la web y esos validan el rol desde el contexto (ej.
+        // CompaniesService.createCompany → assertCanManageAll).
+        const store = tenantContextStorage.getStore();
+        await (store
+          ? tenantContextStorage.run({ ...store, role: user.role }, () => this.answerAndReply(identity, phoneE164, text))
+          : this.answerAndReply(identity, phoneE164, text));
       },
       link.user_id,
       undefined,
@@ -210,20 +234,55 @@ export class WhatsAppWebhookService {
   private async answerAndReply(identity: AuthenticatedUser, phoneE164: string, text: string): Promise<void> {
     try {
       await this.subscriptionService.assertCanUseAssistant();
+      const access = await this.assistantAccessService.resolve(identity);
+      // Se contesta igual (no silencio): la persona vinculó su teléfono y
+      // tiene que saber por qué no le responde y quién lo puede prender.
+      if (!access.whatsappEnabled) {
+        await this.cloudApiClient.sendText(phoneE164, WHATSAPP_DISABLED_MESSAGE);
+        return;
+      }
       await this.assistantConversationService.assertNotRateLimited(identity);
 
       const { conversationId, history } = await this.assistantConversationService.getRecentHistory(identity);
-      await this.assistantConversationService.appendMessage(conversationId, 'USER', text);
+      const question = await this.assistantConversationService.appendMessage(conversationId, AssistantChannel.WHATSAPP, 'USER', text);
 
-      const intent = await this.assistantIntentRouterService.classify(text);
-      const { text: reply, toolNames } = await this.answer(identity, intent, history, text);
+      // "SÍ"/"NO" suelto con una acción esperando: lo resuelve el servidor,
+      // nunca el modelo (así no puede autoconfirmarse).
+      const short = await this.assistantActionsService.handleShortReply(identity, text);
+      if (short) {
+        await this.assistantConversationService.appendMessage(
+          conversationId,
+          AssistantChannel.WHATSAPP,
+          'ASSISTANT',
+          short.reply,
+          [{ tool: 'confirmar_accion', data: short.card }],
+          PersistedAssistantIntent.DATOS,
+        );
+        await this.cloudApiClient.sendText(phoneE164, short.reply);
+        return;
+      }
+
+      const { intent, topic } = await this.assistantIntentRouterService.classify(text);
+      const blocked = blockedTopicFor(access, { intent, topic });
+      if (blocked) {
+        await this.assistantConversationService.markBlocked(question.id, blocked);
+      }
+      const { text: reply, toolNames } = blocked
+        ? { text: blockedTopicReply(blocked), toolNames: [] }
+        : await this.answer(identity, access, intent, history, text, {
+            conversationId,
+            questionMessageId: question.id,
+            channel: AssistantChannel.WHATSAPP,
+          });
 
       await this.assistantConversationService.appendMessage(
         conversationId,
+        AssistantChannel.WHATSAPP,
         'ASSISTANT',
         reply,
         toolNames.length ? toolNames.map((tool) => ({ tool })) : undefined,
         intent === 'ayuda' ? PersistedAssistantIntent.AYUDA : PersistedAssistantIntent.DATOS,
+        blocked ?? undefined,
       );
       await this.cloudApiClient.sendText(phoneE164, reply);
     } catch (err) {
@@ -238,13 +297,15 @@ export class WhatsAppWebhookService {
 
   private async answer(
     identity: AuthenticatedUser,
+    access: AssistantAccess,
     intent: AssistantIntent,
     history: HistoryMessage[],
     text: string,
+    turn: ActionTurn,
   ): Promise<{ text: string; toolNames: string[] }> {
     if (intent === 'ayuda') {
       return { text: await this.assistantHelpService.answer(history, text), toolNames: [] };
     }
-    return this.assistantOrchestratorService.chat(identity, history, text);
+    return this.assistantOrchestratorService.chat(identity, access, history, text, turn);
   }
 }

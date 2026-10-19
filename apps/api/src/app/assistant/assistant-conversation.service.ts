@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AssistantIntent, getTenantDb, getTenantId } from '@plexo/database';
+import { AssistantChannel, AssistantIntent, getTenantDb, getTenantId } from '@plexo/database';
 import type { AuthenticatedUser } from '@plexo/types';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 
@@ -88,16 +88,28 @@ export class AssistantConversationService {
     }
   }
 
+  // `channel` obligatorio a propósito (no opcional al final): el Historial
+  // de Preferencias › Asistente filtra por canal, y un camino nuevo que se
+  // olvide de pasarlo dejaría filas sin canal sin que nadie lo note.
   appendMessage(
     conversationId: string,
+    channel: AssistantChannel,
     role: 'USER' | 'ASSISTANT',
     content: string,
     toolCalls?: unknown,
     intent?: AssistantIntent,
+    blockedTopic?: string,
   ) {
     return getTenantDb().assistantMessage.create({
-      data: { tenantId: getTenantId(), conversationId, role, content, toolCalls: toolCalls ?? undefined, intent },
+      data: { tenantId: getTenantId(), conversationId, channel, role, content, toolCalls: toolCalls ?? undefined, intent, blockedTopic },
     });
+  }
+
+  // La pregunta se guarda ANTES de clasificarla (si la IA falla, igual queda
+  // registrada) - por eso el bloqueo se marca después, sobre la fila ya
+  // creada. Sirve para el filtro "Bloqueadas" del Historial.
+  markBlocked(messageId: string, blockedTopic: string) {
+    return getTenantDb().assistantMessage.update({ where: { id: messageId }, data: { blockedTopic } });
   }
 
   async setFeedback(user: AuthenticatedUser, messageId: string, feedback: 'UP' | 'DOWN') {

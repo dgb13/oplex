@@ -1,29 +1,59 @@
 import { Module } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
+import { CalendarModule } from '@plexo/calendar';
+import { CompaniesModule } from '@plexo/companies';
 import { InventoryModule } from '@plexo/inventory';
+import { InvoicingModule } from '@plexo/invoicing';
+import { MercadoPagoModule } from '@plexo/mercadopago';
+import { PayablesModule } from '@plexo/payables';
 import { PosModule } from '@plexo/pos';
+import { PurchasesModule } from '@plexo/purchases';
+import { QuotesModule } from '@plexo/quotes';
+import { TenantSettingsModule } from '@plexo/tenant-settings';
 import { ReceivablesModule } from '@plexo/receivables';
 import { ReportsSalesModule } from '@plexo/reports-sales';
 import { SubscriptionModule } from '@plexo/subscriptions';
 import { AdminAssistantSettingsController } from './admin-assistant-settings.controller.js';
 import { AssistantController } from './assistant.controller.js';
+import { AssistantAccessService } from './assistant-access.service.js';
+import { AssistantActionsService } from './assistant-actions.service.js';
+import { AssistantConfigController } from './assistant-config.controller.js';
 import { ASSISTANT_ANTHROPIC_CLIENT } from './assistant-anthropic-client.token.js';
 import { AssistantConversationService } from './assistant-conversation.service.js';
 import { AssistantHelpService } from './assistant-help.service.js';
+import { AssistantHistoryController } from './assistant-history.controller.js';
+import { AssistantHistoryService } from './assistant-history.service.js';
 import { AssistantIntentRouterService } from './assistant-intent-router.service.js';
 import { AssistantOrchestratorService } from './assistant-orchestrator.service.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 
 @Module({
-  imports: [ReportsSalesModule, ReceivablesModule, PosModule, InventoryModule, SubscriptionModule],
-  controllers: [AssistantController, AdminAssistantSettingsController],
+  imports: [
+    ReportsSalesModule,
+    ReceivablesModule,
+    PosModule,
+    InventoryModule,
+    PayablesModule,
+    PurchasesModule,
+    SubscriptionModule,
+    CalendarModule,
+    CompaniesModule,
+    QuotesModule,
+    InvoicingModule,
+    MercadoPagoModule,
+    TenantSettingsModule,
+  ],
+  controllers: [AssistantController, AdminAssistantSettingsController, AssistantHistoryController, AssistantConfigController],
   providers: [
+    AssistantAccessService,
+    AssistantActionsService,
     AssistantSettingsService,
     AssistantConversationService,
     AssistantToolsService,
     AssistantIntentRouterService,
     AssistantHelpService,
+    AssistantHistoryService,
     AssistantOrchestratorService,
     {
       provide: ASSISTANT_ANTHROPIC_CLIENT,
@@ -42,7 +72,10 @@ import { AssistantToolsService } from './assistant-tools.service.js';
     AssistantConversationService,
     AssistantIntentRouterService,
     AssistantHelpService,
+    AssistantHistoryService,
     AssistantOrchestratorService,
+    AssistantAccessService,
+    AssistantActionsService,
   ],
 })
 export class AssistantModule {}

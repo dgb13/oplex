@@ -51,6 +51,7 @@ function makeEmailSender(): EmailSender {
   return {
     sendInvoiceEmail: jest.fn().mockResolvedValue(undefined),
     sendOverdueAlertEmail: jest.fn().mockResolvedValue(undefined),
+    sendPaymentLinkEmail: jest.fn().mockResolvedValue(undefined),
   };
 }
 
