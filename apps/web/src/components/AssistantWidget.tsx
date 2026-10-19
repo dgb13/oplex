@@ -13,6 +13,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import AssistantActionCard from './AssistantActionCard';
 import AssistantToolChart from './AssistantToolChart';
 
@@ -294,7 +295,7 @@ export default function AssistantWidget() {
               <div className="flex flex-col items-start gap-1">
                 {streamingText ? (
                   <div className={ASSISTANT_BUBBLE_CLASS}>
-                    <ReactMarkdown>{streamingText}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
                   </div>
                 ) : (
                   <div className="rounded-2xl rounded-bl-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm italic text-slate-500 dark:text-slate-400">
@@ -377,7 +378,7 @@ function MessageBubble({
   return (
     <div className="flex flex-col items-start gap-1">
       <div className={ASSISTANT_BUBBLE_CLASS}>
-        <ReactMarkdown>{message.text}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
       </div>
       {message.toolCalls && message.toolCalls.length > 0 && <AssistantToolChart toolCalls={message.toolCalls} />}
       {actionCards.map((card) => (

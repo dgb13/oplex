@@ -78,6 +78,9 @@ const MONEY = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximum
 const QTY = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 // Una cotización larga se arma mejor desde la web, donde se ve entera.
 const MAX_QUOTE_LINES = 20;
+// Para el link a Nueva factura precargada (misma variable que usan los mails
+// de invitación y el login con Google/Microsoft).
+const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:4200';
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -475,6 +478,8 @@ export class AssistantActionsService {
         return this.prepareQuoteEmail(input);
       case 'PAYMENT_LINK':
         return this.preparePaymentLink(input);
+      case 'INVOICE_PREPARE':
+        return this.prepareInvoice(input);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -492,6 +497,8 @@ export class AssistantActionsService {
         return this.executeQuoteEmail(action.payload as unknown as QuoteEmailPayload);
       case 'PAYMENT_LINK':
         return this.executePaymentLink(action.payload as unknown as PaymentLinkPayload);
+      case 'INVOICE_PREPARE':
+        return this.executeInvoicePrepare(action);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -649,27 +656,7 @@ export class AssistantActionsService {
 
   private async prepareQuote(input: unknown, access: AssistantAccess, turn: ActionTurn): Promise<Prepared> {
     const customer = await this.resolveCustomer(str(input, 'cliente'));
-    const rawLines = (input as { lineas?: unknown } | null)?.lineas;
-    if (!Array.isArray(rawLines) || rawLines.length === 0) {
-      throw new BadRequestException('Faltan los artículos y las cantidades.');
-    }
-    if (rawLines.length > MAX_QUOTE_LINES) {
-      throw new BadRequestException(`Son demasiados artículos para armarla por acá (más de ${MAX_QUOTE_LINES}): hacela desde la web.`);
-    }
-
-    const lines: QuotePayload['lines'] = [];
-    for (const raw of rawLines) {
-      const quantity = Number((raw as { cantidad?: unknown })?.cantidad);
-      const article = str(raw, 'articulo');
-      if (!article) {
-        throw new BadRequestException('Hay una línea sin artículo.');
-      }
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw new BadRequestException(`Falta la cantidad de "${article}".`);
-      }
-      const variant = await this.resolveVariant(article);
-      lines.push({ articleVariantId: variant.id, label: variant.label, quantity, unitPrice: variant.unitPrice });
-    }
+    const lines = await this.resolveLines(input);
     // Sin IVA a propósito: el IVA lo calcula QuoteService con la alícuota
     // vigente de cada artículo al crearla. Acá no se estima ni se inventa.
     const subtotal = round2(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0));
@@ -791,6 +778,66 @@ export class AssistantActionsService {
     };
   }
 
+  // ── Preparar factura ────────────────────────────────────────────────────
+
+  private async prepareInvoice(input: unknown): Promise<Prepared> {
+    const customer = await this.resolveCustomer(str(input, 'cliente'));
+    const lines = await this.resolveLines(input);
+    const subtotal = round2(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0));
+    const payload: InvoiceDraftPayload = {
+      customerId: customer.id,
+      customerName: customer.name,
+      lines,
+      notes: str(input, 'notas').slice(0, 1000) || null,
+    };
+    const detail = lines.map((l) => `${formatQty(l.quantity)} × ${l.label} (${formatMoney(l.unitPrice)})`).join(', ');
+    return {
+      payload: payload as unknown as Record<string, unknown>,
+      summary: `Factura para ${customer.name}: ${detail} · subtotal sin IVA ${formatMoney(subtotal)} · queda lista para revisar y emitir desde la web`,
+    };
+  }
+
+  /** No crea ningún comprobante: deja la acción hecha y devuelve el link a
+   * Nueva factura, que lee estos datos (getInvoiceDraft) y los precarga.
+   * Emitir - y con eso ARCA - lo hace siempre una persona desde la web. */
+  private async executeInvoicePrepare(action: AssistantAction): Promise<Executed> {
+    const payload = action.payload as unknown as InvoiceDraftPayload;
+    const url = `${FRONTEND_URL}/invoicing?asistente=${action.id}`;
+    return {
+      entityType: 'invoiceDraft',
+      entityId: action.id,
+      entityLabel: `Factura preparada para ${payload.customerName}`,
+      done: `quedó preparada la factura para ${payload.customerName}. Revisala y emitila desde acá: ${url}`,
+    };
+  }
+
+  /** Para Nueva factura: los datos de una factura que preparó el asistente.
+   * Sólo quien la pidió, o Dueño/Admin. */
+  async getInvoiceDraft(user: AuthenticatedUser, actionId: string): Promise<{
+    customerId: string;
+    customerName: string;
+    lines: Array<{ articleVariantId: string; quantity: number; unitPrice: number }>;
+    notes: string | null;
+  }> {
+    const action = await getTenantDb().assistantAction.findUnique({ where: { id: actionId } });
+    if (!action || action.kind !== 'INVOICE_PREPARE') {
+      throw new NotFoundException('No encontré esa factura preparada');
+    }
+    if (action.userId !== user.sub && user.role !== 'OWNER' && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Esa factura la preparó otra persona');
+    }
+    if (action.status !== AssistantActionStatus.DONE) {
+      throw new BadRequestException('Esa factura todavía no se confirmó');
+    }
+    const payload = action.payload as unknown as InvoiceDraftPayload;
+    return {
+      customerId: payload.customerId,
+      customerName: payload.customerName,
+      lines: payload.lines.map((l) => ({ articleVariantId: l.articleVariantId, quantity: l.quantity, unitPrice: l.unitPrice })),
+      notes: payload.notes,
+    };
+  }
+
   // ── Link de pago ────────────────────────────────────────────────────────
 
   private async preparePaymentLink(input: unknown): Promise<Prepared> {
@@ -874,6 +921,32 @@ export class AssistantActionsService {
   }
 
   // ── Búsquedas por nombre ────────────────────────────────────────────────
+
+  /** Las líneas que dictó la persona, ya resueltas a variantes con su
+   * precio de venta (cotización y factura). */
+  private async resolveLines(input: unknown): Promise<QuotePayload['lines']> {
+    const rawLines = (input as { lineas?: unknown } | null)?.lineas;
+    if (!Array.isArray(rawLines) || rawLines.length === 0) {
+      throw new BadRequestException('Faltan los artículos y las cantidades.');
+    }
+    if (rawLines.length > MAX_QUOTE_LINES) {
+      throw new BadRequestException(`Son demasiados artículos para armarlo por acá (más de ${MAX_QUOTE_LINES}): hacelo desde la web.`);
+    }
+    const lines: QuotePayload['lines'] = [];
+    for (const raw of rawLines) {
+      const quantity = Number((raw as { cantidad?: unknown })?.cantidad);
+      const article = str(raw, 'articulo');
+      if (!article) {
+        throw new BadRequestException('Hay una línea sin artículo.');
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new BadRequestException(`Falta la cantidad de "${article}".`);
+      }
+      const variant = await this.resolveVariant(article);
+      lines.push({ articleVariantId: variant.id, label: variant.label, quantity, unitPrice: variant.unitPrice });
+    }
+    return lines;
+  }
 
   /** Cliente activo por CUIT o por nombre. Más de una coincidencia =
    * repregunta con las opciones (nunca elige solo). */
@@ -1000,6 +1073,13 @@ interface QuotePayload {
   lines: Array<{ articleVariantId: string; label: string; quantity: number; unitPrice: number }>;
   notes: string | null;
   sendEmail: boolean;
+}
+
+interface InvoiceDraftPayload {
+  customerId: string;
+  customerName: string;
+  lines: Array<{ articleVariantId: string; label: string; quantity: number; unitPrice: number }>;
+  notes: string | null;
 }
 
 interface PaymentLinkPayload {

@@ -186,7 +186,16 @@ export const assistantActionsApi = {
   confirm: (id: string) => api.post<AssistantActionReply>(`/assistant/actions/${id}/confirm`).then((r) => r.data),
   cancel: (id: string) => api.post<AssistantActionReply>(`/assistant/actions/${id}/cancel`).then((r) => r.data),
   undo: (id: string) => api.post<AssistantActionCard>(`/assistant/actions/${id}/undo`).then((r) => r.data),
+  invoiceDraft: (id: string) => api.get<AssistantInvoiceDraft>(`/assistant/actions/${id}/invoice-draft`).then((r) => r.data),
 };
+
+// Lo que dejó preparado "Preparar factura" para precargar Nueva factura.
+export interface AssistantInvoiceDraft {
+  customerId: string;
+  customerName: string;
+  lines: Array<{ articleVariantId: string; quantity: number; unitPrice: number }>;
+  notes: string | null;
+}
 
 export const assistantConfigApi = {
   get: () => api.get<AssistantConfig>('/assistant/config').then((r) => r.data),

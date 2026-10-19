@@ -30,13 +30,23 @@ interface Props {
   // líneas ya cargadas, con precios finales (IVA incluido).
   initialLines?: SalesLine[];
   initialPricesIncludeTax?: boolean;
+  // Factura que dejó preparada el asistente (/invoicing?asistente=<id>).
+  initialCustomerId?: string;
+  initialNotes?: string;
   onCreated?: () => void;
 }
 
 const DOCUMENT_LETTERS = ['A', 'B', 'C', 'M'] as const;
 type Letter = (typeof DOCUMENT_LETTERS)[number];
 
-export default function NewInvoiceModal({ onClose, initialLines, initialPricesIncludeTax, onCreated }: Props) {
+export default function NewInvoiceModal({
+  onClose,
+  initialLines,
+  initialPricesIncludeTax,
+  initialCustomerId,
+  initialNotes,
+  onCreated,
+}: Props) {
   const perms = useCompanyPermissions();
   const queryClient = useQueryClient();
 
@@ -55,7 +65,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
 
   // Cliente vacío a propósito (ver CustomerPicker); sucursal y depósito sí
   // arrancan en el primero - suele haber uno solo de cada uno.
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState(initialCustomerId ?? '');
   const [branchId, setBranchId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [documentLetter, setDocumentLetter] = useState<Letter>('B');
@@ -65,7 +75,7 @@ export default function NewInvoiceModal({ onClose, initialLines, initialPricesIn
   const [lines, setLines] = useState<SalesLine[]>(initialLines ?? []);
   const [otherTaxLines, setOtherTaxLines] = useState<InvoiceTaxLineInput[]>([]);
   const [showOtherTaxes, setShowOtherTaxes] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialNotes ?? '');
   const [error, setError] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);

@@ -87,6 +87,7 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   crear_cotizacion: 'Armando la cotización…',
   enviar_cotizacion_por_correo: 'Preparando el envío…',
   mandar_link_de_pago: 'Buscando la factura…',
+  preparar_factura: 'Preparando la factura…',
 };
 
 // Nombre corto de cada herramienta para el detalle del Historial de
@@ -104,6 +105,7 @@ export const ASSISTANT_TOOL_TITLES: Record<string, string> = {
   crear_cotizacion: 'crear cotización',
   enviar_cotizacion_por_correo: 'enviar cotización por correo',
   mandar_link_de_pago: 'mandar link de pago',
+  preparar_factura: 'preparar factura',
 };
 
 export function labelForTool(toolName: string): string {

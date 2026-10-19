@@ -121,6 +121,13 @@ export class AssistantController {
     return this.assistantActionsService.undo(user, id);
   }
 
+  // Nueva factura (/invoicing?asistente=<id>) lee de acá lo que preparó el
+  // asistente. Emitir la factura sigue siendo el POST /sales de siempre.
+  @Get('actions/:id/invoice-draft')
+  getInvoiceDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.assistantActionsService.getInvoiceDraft(user, id);
+  }
+
   private async persistActionReply(user: AuthenticatedUser, result: ActionReply) {
     const conversation = await this.assistantConversationService.getOrCreateActive(user);
     const saved = await this.assistantConversationService.appendMessage(

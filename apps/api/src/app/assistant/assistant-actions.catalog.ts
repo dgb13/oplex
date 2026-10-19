@@ -10,18 +10,19 @@ import type { ConfigurableRole } from './assistant-topics.js';
  * la vista previa y ejecuta (AssistantActionsService). Ninguna herramienta
  * de acción crea nada por su cuenta.
  *
- * Sólo figuran las acciones ya implementadas - "preparar factura" se suma
- * acá cuando tenga su ejecutor, nunca antes (no se muestra en la pantalla
- * algo que no hace nada).
+ * Sólo figuran acciones con ejecutor: nunca se muestra en la pantalla algo
+ * que no hace nada.
  */
 export type AssistantActionLevel = 'OFF' | 'DRAFT' | 'DIRECT';
 
-export type AssistantActionId = 'recordatorio' | 'cliente' | 'cotizacion' | 'correo' | 'link';
+export type AssistantActionId = 'recordatorio' | 'cliente' | 'cotizacion' | 'correo' | 'link' | 'factura';
 
 // Mismo WRITE_ROLES que QuoteController (crear y enviar cotizaciones).
 const QUOTE_WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
 // Mismo WRITE_ROLES que MercadoPagoPaymentLinksController.
 const PAYMENT_LINK_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
+// Mismo @Roles que POST /sales (emitir una factura desde la web).
+const INVOICE_WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
 
 export interface AssistantActionDef {
   id: AssistantActionId;
@@ -178,6 +179,41 @@ export const ASSISTANT_ACTIONS: AssistantActionDef[] = [
       },
     },
   },
+  {
+    id: 'factura',
+    kind: 'INVOICE_PREPARE',
+    label: 'Preparar factura',
+    hint: 'La deja lista con cliente y artículos en Nueva factura, para revisar y emitir desde la web.',
+    allowedLevels: ['OFF', 'DRAFT'],
+    rule: 'Nunca se emite en ARCA desde el asistente: se emite desde la web.',
+    capableRoles: INVOICE_WRITE_ROLES,
+    moduleName: 'Facturación',
+    tool: {
+      name: 'preparar_factura',
+      description:
+        'Propone dejar preparada una factura para un cliente con artículos y cantidades. NO la emite (el asistente nunca emite en ARCA): al confirmar, devuelve un link a Nueva factura con todo cargado, para que la persona revise y la emita desde la web. Pasá el nombre del artículo sin la cantidad ni la unidad. Si el sistema devuelve varias opciones, preguntale cuál.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          cliente: { type: 'string', description: 'Nombre o CUIT del cliente.' },
+          lineas: {
+            type: 'array',
+            description: 'Artículos y cantidades.',
+            items: {
+              type: 'object',
+              properties: {
+                articulo: { type: 'string', description: 'Nombre o SKU del artículo.' },
+                cantidad: { type: 'number', description: 'Cantidad, mayor a cero.' },
+              },
+              required: ['articulo', 'cantidad'],
+            },
+          },
+          notas: { type: 'string', description: 'Observaciones para la factura, si las dijo.' },
+        },
+        required: ['cliente', 'lineas'],
+      },
+    },
+  },
 ];
 
 // Lo que se ve si la empresa nunca tocó la pantalla: todo apagado salvo el
@@ -189,6 +225,7 @@ export const DEFAULT_ACTION_LEVELS: Record<AssistantActionId, AssistantActionLev
   cotizacion: 'OFF',
   correo: 'OFF',
   link: 'OFF',
+  factura: 'OFF',
 };
 
 // Roles que pueden pedirla, del mockup aprobado (OWNER/ADMIN siempre).
@@ -198,6 +235,9 @@ export const DEFAULT_ACTION_ROLES: Record<AssistantActionId, ConfigurableRole[]>
   cotizacion: ['SALES'],
   correo: ['SALES'],
   link: ['SALES'],
+  // El mockup la daba a Contador/a, que en Oplex no emite facturas: queda
+  // sólo para Dueño/Admin hasta que la empresa la habilite para Ventas.
+  factura: [],
 };
 
 export function actionById(id: string): AssistantActionDef | undefined {

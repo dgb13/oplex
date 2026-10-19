@@ -711,4 +711,69 @@ describe('AssistantActionsService', () => {
       expect(invoicing.emailPaymentLink).not.toHaveBeenCalled();
     });
   });
+
+  describe('prepare invoice', () => {
+    const CUSTOMER = { id: 'cust-1', name: 'Kiosco Sol', email: null };
+    const VARIANT = { id: 'v-1', sku: 'GAL-01', color: null, size: null, unitPrice: '1500', article: { name: 'Galletitas' } };
+    const draftAction = (overrides: Record<string, unknown> = {}) =>
+      action({
+        id: 'act-inv',
+        kind: 'INVOICE_PREPARE',
+        status: 'DONE',
+        payload: {
+          customerId: 'cust-1',
+          customerName: 'Kiosco Sol',
+          lines: [{ articleVariantId: 'v-1', label: 'Galletitas (GAL-01)', quantity: 12, unitPrice: 1500 }],
+          notes: null,
+        },
+        ...overrides,
+      });
+
+    it('proposes it with the system prices and makes clear it is issued from the web', async () => {
+      const { service } = makeService();
+      const db = makeDb({
+        company: { findFirst: jest.fn(), findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.name?.equals ? [] : [CUSTOMER])) },
+        articleVariant: { findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.sku ? [] : [VARIANT])) },
+      });
+
+      await run(db, () =>
+        service.propose(makeUser({ role: 'OWNER' }), access({ factura: 'DRAFT' }, 'OWNER'), 'preparar_factura', { cliente: 'kiosco', lineas: [{ articulo: 'galletitas', cantidad: 12 }] }, TURN),
+      );
+
+      expect(db.assistantAction.create.mock.calls[0][0].data.summary).toBe(
+        'Factura para Kiosco Sol: 12 × Galletitas (GAL-01) (1.500,00) · subtotal sin IVA 18.000,00 · queda lista para revisar y emitir desde la web',
+      );
+    });
+
+    it('on "SÍ" only returns the link to Nueva factura - it never creates or issues an invoice', async () => {
+      // Ventas no la tiene de entrada (sólo Dueño/Admin): se prueba con un Dueño.
+      const { service } = makeService(access({ factura: 'DRAFT' }, 'OWNER'));
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(draftAction({ status: 'PENDING_CONFIRMATION' }));
+
+      const result = await run(db, () => service.confirm(makeUser({ role: 'OWNER' }), 'act-inv'));
+
+      expect(result.card.status).toBe('DONE');
+      expect(result.reply).toMatch(/\/invoicing\?asistente=act-inv/);
+      expect(db).not.toHaveProperty('invoice');
+    });
+
+    it('serves the draft to whoever asked for it (or Dueño/Admin) only once confirmed', async () => {
+      const { service } = makeService();
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(draftAction());
+
+      await expect(run(db, () => service.getInvoiceDraft(makeUser(), 'act-inv'))).resolves.toEqual({
+        customerId: 'cust-1',
+        customerName: 'Kiosco Sol',
+        lines: [{ articleVariantId: 'v-1', quantity: 12, unitPrice: 1500 }],
+        notes: null,
+      });
+      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'other', role: 'SALES' }), 'act-inv'))).rejects.toThrow(/otra persona/);
+      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'boss', role: 'ADMIN' }), 'act-inv'))).resolves.toBeTruthy();
+
+      db.assistantAction.findUnique.mockResolvedValue(draftAction({ status: 'PENDING_CONFIRMATION' }));
+      await expect(run(db, () => service.getInvoiceDraft(makeUser(), 'act-inv'))).rejects.toThrow(/todavía no se confirmó/);
+    });
+  });
 });
