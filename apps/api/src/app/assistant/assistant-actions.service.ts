@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, HttpException, Injectable, Log
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CalendarEventService } from '@plexo/calendar';
 import { CompaniesService, type CreateCompanyDto, type UpdateCompanyDto } from '@plexo/companies';
+import { QuoteService, type CreateQuoteDto } from '@plexo/quotes';
 import {
   AssistantActionStatus,
   getTenantDb,
@@ -69,6 +70,22 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const WEEKDAY_DATE = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+const MONEY = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const QTY = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+// Una cotización larga se arma mejor desde la web, donde se ve entera.
+const MAX_QUOTE_LINES = 20;
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function formatMoney(value: number): string {
+  return MONEY.format(value);
+}
+
+function formatQty(value: number): string {
+  return QTY.format(value);
+}
 
 function str(input: unknown, key: string): string {
   const value = (input as Record<string, unknown> | null | undefined)?.[key];
@@ -84,6 +101,14 @@ function formatCuit(digits: string): string {
 }
 
 function errorText(err: unknown): string {
+  // Errores de Prisma (P2002 = dato repetido, etc.): el texto crudo es
+  // ilegible para quien pidió la acción y no le dice qué hacer.
+  const prismaCode = err && typeof err === 'object' ? (err as { code?: unknown }).code : undefined;
+  if (typeof prismaCode === 'string' && /^P\d{4}$/.test(prismaCode)) {
+    return prismaCode === 'P2002'
+      ? 'ya hay otro registro con el mismo dato (por ejemplo, el mismo número de documento). Probá hacerlo desde la web'
+      : 'no se pudo guardar en la base. Probá hacerlo desde la web';
+  }
   if (err instanceof HttpException) {
     const response = err.getResponse();
     const message = typeof response === 'object' && response ? (response as { message?: unknown }).message : response;
@@ -128,6 +153,7 @@ export class AssistantActionsService {
     private readonly accessService: AssistantAccessService,
     private readonly calendarEventService: CalendarEventService,
     private readonly companiesService: CompaniesService,
+    private readonly quoteService: QuoteService,
   ) {}
 
   async propose(
@@ -150,7 +176,7 @@ export class AssistantActionsService {
 
     let prepared: Prepared;
     try {
-      prepared = await this.prepare(def, input, user);
+      prepared = await this.prepare(def, input, user, access, turn);
     } catch (err) {
       // Datos faltantes o ambiguos: el modelo se lo explica / repregunta.
       return { content: errorText(err), isError: true };
@@ -291,6 +317,16 @@ export class AssistantActionsService {
         // algún documento, ese documento no queda apuntando a la nada.
         await this.companiesService.updateCompany(action.entityId, { active: false } as UpdateCompanyDto);
         break;
+      case 'QUOTE_CREATE': {
+        // Se anula (no se borra: ya consumió un número de la serie). Si ya
+        // le llegó al cliente, no se puede deshacer desde acá.
+        const quote = await this.quoteService.get(action.entityId);
+        if (quote.sentAt) {
+          throw new BadRequestException('Esa cotización ya se le mandó al cliente: anulala desde Cotizaciones si hace falta.');
+        }
+        await this.quoteService.cancel(action.entityId);
+        break;
+      }
       default:
         throw new BadRequestException('Esta acción no se puede deshacer');
     }
@@ -371,8 +407,14 @@ export class AssistantActionsService {
     user: AuthenticatedUser,
   ): Promise<{ ok: boolean; message: string; action: AssistantAction }> {
     const db = getTenantDb();
+    // Punto de guardado: si la base rechaza algo a mitad de la ejecución (ej.
+    // un número de documento repetido), Postgres aborta la transacción
+    // entera y ya no se podría ni marcar la acción como FAILED. Volviendo al
+    // savepoint se descarta sólo lo que hizo la ejecución.
+    await db.$executeRaw`SAVEPOINT assistant_action`;
     try {
       const executed = await this.execute(action, user);
+      await db.$executeRaw`RELEASE SAVEPOINT assistant_action`;
       const done = await db.assistantAction.update({
         where: { id: action.id },
         data: {
@@ -385,6 +427,7 @@ export class AssistantActionsService {
       await this.recordActivity(user.sub, `${executed.entityType}.created`, executed.entityType, executed.entityId, `${executed.entityLabel} (por el Asistente)`);
       return { ok: true, message: executed.done, action: done };
     } catch (err) {
+      await db.$executeRaw`ROLLBACK TO SAVEPOINT assistant_action`;
       const message = errorText(err);
       this.logger.warn(`Acción ${def.id} (${action.id}) falló: ${message}`);
       const failed = await db.assistantAction.update({
@@ -395,12 +438,22 @@ export class AssistantActionsService {
     }
   }
 
-  private prepare(def: AssistantActionDef, input: unknown, user: AuthenticatedUser): Promise<Prepared> {
+  private prepare(
+    def: AssistantActionDef,
+    input: unknown,
+    user: AuthenticatedUser,
+    access: AssistantAccess,
+    turn: ActionTurn,
+  ): Promise<Prepared> {
     switch (def.kind) {
       case 'REMINDER_CREATE':
         return this.prepareReminder(input, user);
       case 'CUSTOMER_CREATE':
         return this.prepareCustomer(input);
+      case 'QUOTE_CREATE':
+        return this.prepareQuote(input, access, turn);
+      case 'QUOTE_EMAIL':
+        return this.prepareQuoteEmail(input);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -412,6 +465,10 @@ export class AssistantActionsService {
         return this.executeReminder(action.payload as unknown as ReminderPayload, user);
       case 'CUSTOMER_CREATE':
         return this.executeCustomer(action.payload as unknown as CustomerPayload);
+      case 'QUOTE_CREATE':
+        return this.executeQuote(action.payload as unknown as QuotePayload);
+      case 'QUOTE_EMAIL':
+        return this.executeQuoteEmail(action.payload as unknown as QuoteEmailPayload);
       default:
         throw new BadRequestException('Acción no disponible');
     }
@@ -565,6 +622,240 @@ export class AssistantActionsService {
     return { entityType: 'company', entityId: company.id, entityLabel: company.name, done: `quedó cargado el cliente "${company.name}"` };
   }
 
+  // ── Cotización ──────────────────────────────────────────────────────────
+
+  private async prepareQuote(input: unknown, access: AssistantAccess, turn: ActionTurn): Promise<Prepared> {
+    const customer = await this.resolveCustomer(str(input, 'cliente'));
+    const rawLines = (input as { lineas?: unknown } | null)?.lineas;
+    if (!Array.isArray(rawLines) || rawLines.length === 0) {
+      throw new BadRequestException('Faltan los artículos y las cantidades.');
+    }
+    if (rawLines.length > MAX_QUOTE_LINES) {
+      throw new BadRequestException(`Son demasiados artículos para armarla por acá (más de ${MAX_QUOTE_LINES}): hacela desde la web.`);
+    }
+
+    const lines: QuotePayload['lines'] = [];
+    for (const raw of rawLines) {
+      const quantity = Number((raw as { cantidad?: unknown })?.cantidad);
+      const article = str(raw, 'articulo');
+      if (!article) {
+        throw new BadRequestException('Hay una línea sin artículo.');
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new BadRequestException(`Falta la cantidad de "${article}".`);
+      }
+      const variant = await this.resolveVariant(article);
+      lines.push({ articleVariantId: variant.id, label: variant.label, quantity, unitPrice: variant.unitPrice });
+    }
+    // Sin IVA a propósito: el IVA lo calcula QuoteService con la alícuota
+    // vigente de cada artículo al crearla. Acá no se estima ni se inventa.
+    const subtotal = round2(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0));
+
+    const currency = await getTenantDb().currency.findFirst({ orderBy: [{ isBase: 'desc' }, { code: 'asc' }] });
+    if (!currency) {
+      throw new BadRequestException('La empresa no tiene ninguna moneda cargada.');
+    }
+    const max = access.limits.maxQuoteAmountWhatsapp;
+    if (turn.channel === 'WHATSAPP' && max !== null && subtotal > max) {
+      throw new BadRequestException(
+        `La cotización da ${currency.code} ${formatMoney(subtotal)} sin IVA y el tope por WhatsApp es ${currency.code} ${formatMoney(max)}: armala desde la web.`,
+      );
+    }
+
+    // "Y mandásela": sólo si además tiene habilitado enviar por correo y el
+    // cliente tiene email. Si no, se arma igual y se avisa por qué no sale.
+    let sendEmail = false;
+    let emailNote = '';
+    if ((input as { enviarPorCorreo?: unknown } | null)?.enviarPorCorreo === true) {
+      if (!access.allowedActions.has('correo')) {
+        emailNote = ' · no se manda por correo: esa acción no está habilitada para vos';
+      } else if (!customer.email) {
+        emailNote = ' · no se manda por correo: el cliente no tiene email cargado';
+      } else {
+        sendEmail = true;
+      }
+    }
+
+    const payload: QuotePayload = {
+      customerId: customer.id,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      currencyId: currency.id,
+      currencyCode: currency.code,
+      lines,
+      notes: str(input, 'notas').slice(0, 1000) || null,
+      sendEmail,
+    };
+    const detail = lines.map((l) => `${formatQty(l.quantity)} × ${l.label} (${currency.code} ${formatMoney(l.unitPrice)})`).join(', ');
+    return {
+      payload: payload as unknown as Record<string, unknown>,
+      summary:
+        `Cotización para ${customer.name}: ${detail} · subtotal sin IVA ${currency.code} ${formatMoney(subtotal)}` +
+        (sendEmail ? ` · y mandarla por correo a ${customer.email}` : '') +
+        emailNote,
+    };
+  }
+
+  private async executeQuote(payload: QuotePayload): Promise<Executed> {
+    const quote = await this.quoteService.create({
+      customerId: payload.customerId,
+      currencyId: payload.currencyId,
+      notes: payload.notes ?? undefined,
+      lines: payload.lines.map((l) => ({ articleVariantId: l.articleVariantId, quantity: l.quantity, unitPrice: l.unitPrice })),
+    } as CreateQuoteDto);
+    const created = `quedó la Cotización ${quote.number} para ${payload.customerName} por ${payload.currencyCode} ${formatMoney(Number(quote.total))} (IVA incluido)`;
+    if (!payload.sendEmail) {
+      return { entityType: 'quote', entityId: quote.id, entityLabel: quote.number, done: created };
+    }
+    // Si el correo falla, la cotización igual queda hecha: se avisa y se
+    // puede mandar desde la web, en vez de perder lo armado.
+    try {
+      await this.quoteService.sendEmail(quote.id);
+      return { entityType: 'quote', entityId: quote.id, entityLabel: quote.number, done: `${created} y se mandó a ${payload.customerEmail}` };
+    } catch (err) {
+      return {
+        entityType: 'quote',
+        entityId: quote.id,
+        entityLabel: quote.number,
+        done: `${created}, pero no se pudo mandar el correo (${errorText(err)}); mandala desde Cotizaciones`,
+      };
+    }
+  }
+
+  // ── Enviar cotización por correo ────────────────────────────────────────
+
+  private async prepareQuoteEmail(input: unknown): Promise<Prepared> {
+    const raw = str(input, 'numero');
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) {
+      throw new BadRequestException('Falta el número de la cotización.');
+    }
+    const padded = digits.slice(-6).padStart(6, '0');
+    const candidates = await getTenantDb().quote.findMany({
+      where: { OR: [{ number: { equals: raw, mode: 'insensitive' } }, { number: { endsWith: `-${padded}` } }] },
+      include: { customer: { select: { name: true, email: true } }, currency: { select: { code: true } } },
+      take: 6,
+    });
+    if (candidates.length === 0) {
+      throw new BadRequestException(`No encontré la cotización "${raw}".`);
+    }
+    if (candidates.length > 1) {
+      throw new BadRequestException(
+        `Hay más de una cotización con ese número: ${candidates.map((q) => `${q.number} (${q.customer.name})`).join(', ')}. ¿Cuál?`,
+      );
+    }
+    const quote = candidates[0];
+    if (quote.status === 'CANCELLED') {
+      throw new BadRequestException(`La cotización ${quote.number} está anulada.`);
+    }
+    if (!quote.customer.email) {
+      throw new BadRequestException(`${quote.customer.name} no tiene email cargado: cargalo en su ficha o mandala por WhatsApp desde la web.`);
+    }
+    const payload: QuoteEmailPayload = { quoteId: quote.id, number: quote.number, email: quote.customer.email };
+    return {
+      payload: payload as unknown as Record<string, unknown>,
+      summary: `Mandar la Cotización ${quote.number} (${quote.customer.name}, ${quote.currency.code} ${formatMoney(Number(quote.total))}) a ${quote.customer.email}`,
+    };
+  }
+
+  private async executeQuoteEmail(payload: QuoteEmailPayload): Promise<Executed> {
+    await this.quoteService.sendEmail(payload.quoteId);
+    return {
+      entityType: 'quote',
+      entityId: payload.quoteId,
+      entityLabel: `${payload.number} enviada por correo`,
+      done: `se mandó la Cotización ${payload.number} a ${payload.email}`,
+    };
+  }
+
+  // ── Búsquedas por nombre ────────────────────────────────────────────────
+
+  /** Cliente activo por CUIT o por nombre. Más de una coincidencia =
+   * repregunta con las opciones (nunca elige solo). */
+  private async resolveCustomer(raw: string): Promise<{ id: string; name: string; email: string | null }> {
+    if (!raw) {
+      throw new BadRequestException('Falta el cliente.');
+    }
+    const db = getTenantDb();
+    const digits = raw.replace(/\D/g, '');
+    const select = { id: true, name: true, email: true } as const;
+    const base = { active: true, roles: { some: { role: 'CUSTOMER' as const } } };
+    if (digits.length === 11) {
+      const byCuit = await db.company.findFirst({ where: { ...base, taxId: { in: [digits, formatCuit(digits)] } }, select });
+      if (byCuit) return byCuit;
+    }
+    const exact = await db.company.findMany({ where: { ...base, name: { equals: raw, mode: 'insensitive' } }, select, take: 2 });
+    if (exact.length === 1) return exact[0];
+    const matches = await db.company.findMany({
+      where: { ...base, name: { contains: raw, mode: 'insensitive' } },
+      select,
+      orderBy: { name: 'asc' },
+      take: 6,
+    });
+    if (matches.length === 0) {
+      throw new BadRequestException(`No encontré ningún cliente que coincida con "${raw}". ¿Está cargado como cliente?`);
+    }
+    if (matches.length > 1) {
+      throw new BadRequestException(`Hay varios clientes que coinciden con "${raw}": ${matches.map((m) => m.name).join(', ')}. ¿Cuál?`);
+    }
+    return matches[0];
+  }
+
+  /** Variante vendible (artículo activo, no insumo, con precio) por SKU o
+   * por nombre. Mismo criterio de no adivinar: varias opciones = repregunta. */
+  private async resolveVariant(raw: string): Promise<{ id: string; label: string; unitPrice: number }> {
+    const db = getTenantDb();
+    const select = {
+      id: true,
+      sku: true,
+      color: true,
+      size: true,
+      unitPrice: true,
+      article: { select: { name: true } },
+    } as const;
+    const sellable = { article: { active: true, isSupply: false } };
+    const bySku = await db.articleVariant.findMany({ where: { ...sellable, sku: { equals: raw, mode: 'insensitive' } }, select, take: 2 });
+    let found = bySku;
+    if (found.length !== 1) {
+      found = await db.articleVariant.findMany({
+        where: { ...sellable, article: { ...sellable.article, name: { contains: raw, mode: 'insensitive' } } },
+        select,
+        orderBy: [{ article: { name: 'asc' } }, { sku: 'asc' }],
+        take: 7,
+      });
+    }
+    if (found.length === 0) {
+      // Segundo intento: todas las palabras ("cemento portland" ↔ "Cemento
+      // Portland x 50 kg"), por si el nombre no está escrito igual.
+      const words = raw.split(/\s+/).filter((w) => w.length >= 3);
+      if (words.length > 1) {
+        found = await db.articleVariant.findMany({
+          where: {
+            ...sellable,
+            AND: words.map((w) => ({ article: { name: { contains: w, mode: 'insensitive' as const } } })),
+          },
+          select,
+          take: 7,
+        });
+      }
+    }
+    if (found.length === 0) {
+      throw new BadRequestException(`No encontré ningún artículo a la venta que coincida con "${raw}".`);
+    }
+    const label = (v: (typeof found)[number]) =>
+      [v.article.name, [v.color, v.size].filter(Boolean).join(' ')].filter(Boolean).join(' ') + ` (${v.sku})`;
+    if (found.length > 1) {
+      const options = found.slice(0, 6).map(label).join(', ');
+      throw new BadRequestException(`Hay varios artículos que coinciden con "${raw}": ${options}${found.length > 6 ? '…' : ''}. ¿Cuál?`);
+    }
+    const variant = found[0];
+    const unitPrice = Number(variant.unitPrice);
+    if (!(unitPrice > 0)) {
+      throw new BadRequestException(`${label(variant)} no tiene precio de venta cargado: hay que cargarlo en Inventario antes de cotizarlo.`);
+    }
+    return { id: variant.id, label: label(variant), unitPrice };
+  }
+
   // Mismo registro que deja ActivityLogInterceptor para lo que se hace por la
   // web, con "(por el Asistente)" en la etiqueta para distinguirlo. Nunca
   // frena la acción si falla.
@@ -593,4 +884,21 @@ interface CustomerPayload {
   phone: string | null;
   taxCondition: string | null;
   fiscalAddress: string | null;
+}
+
+interface QuotePayload {
+  customerId: string;
+  customerName: string;
+  customerEmail: string | null;
+  currencyId: string;
+  currencyCode: string;
+  lines: Array<{ articleVariantId: string; label: string; quantity: number; unitPrice: number }>;
+  notes: string | null;
+  sendEmail: boolean;
+}
+
+interface QuoteEmailPayload {
+  quoteId: string;
+  number: string;
+  email: string;
 }

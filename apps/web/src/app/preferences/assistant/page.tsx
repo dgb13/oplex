@@ -613,6 +613,7 @@ function ActionsTab() {
   const [saveError, setSaveError] = useState('');
   const [maxPerDay, setMaxPerDay] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<string | null>(null);
+  const [quoteMax, setQuoteMax] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (patch: UpdateAssistantConfig) => assistantConfigApi.update(patch),
@@ -620,6 +621,7 @@ function ActionsTab() {
       setSaveError('');
       setMaxPerDay(null);
       setExpiry(null);
+      setQuoteMax(null);
       queryClient.setQueryData(['assistant-config'], updated);
     },
     onError: () => setSaveError('No se pudo guardar el cambio. Probá de nuevo.'),
@@ -640,7 +642,18 @@ function ActionsTab() {
     mutation.mutate({ [field]: value });
   }
 
+  // Vacío = sin tope. Sólo se guarda si cambió y es un número válido.
+  function saveQuoteMax() {
+    if (quoteMax === null) return;
+    const trimmed = quoteMax.trim();
+    const value = trimmed === '' ? null : Number(trimmed.replace(/./g, '').replace(',', '.'));
+    if (value !== null && (!Number.isFinite(value) || value < 0)) return;
+    if (value === config?.limits.maxQuoteAmountWhatsapp) return;
+    mutation.mutate({ maxQuoteAmountWhatsapp: value });
+  }
+
   const reminder = config.actions.find((a) => a.id === 'recordatorio');
+  const hasQuotes = config.actions.some((a) => a.id === 'cotizacion');
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -726,6 +739,26 @@ function ActionsTab() {
         <Card>
           <CardContent className="flex flex-col gap-4">
             <h2 className="text-base font-semibold">Topes</h2>
+            {hasQuotes && (
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span>
+                  <span className="block font-medium">Cotización máxima por WhatsApp</span>
+                  <span className="block text-xs text-muted-foreground">Subtotal sin IVA. Más que eso, se arma desde la web. Vacío = sin tope.</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Sin tope"
+                    value={quoteMax ?? (config.limits.maxQuoteAmountWhatsapp?.toString() ?? '')}
+                    onChange={(e) => setQuoteMax(e.target.value)}
+                    onBlur={saveQuoteMax}
+                    className="w-28 rounded-lg border bg-background px-2.5 py-2 text-right tabular-nums"
+                  />
+                </span>
+              </label>
+            )}
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>
                 <span className="block font-medium">Acciones por día</span>

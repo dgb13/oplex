@@ -91,6 +91,15 @@ export interface ListHistoryParams {
   limit?: number;
 }
 
+/** Qué acciones hechas tienen cómo deshacerse: recordatorio y cliente
+ * siempre; una cotización sólo si no salió por correo (ver
+ * AssistantActionsService.undo, que igual lo vuelve a chequear). */
+function isUndoable(kind: string, payload: Prisma.JsonValue): boolean {
+  if (kind === 'REMINDER_CREATE' || kind === 'CUSTOMER_CREATE') return true;
+  if (kind === 'QUOTE_CREATE') return !(payload as { sendEmail?: boolean } | null)?.sendEmail;
+  return false;
+}
+
 /** Inicio del día de hoy en Argentina, expresado en UTC. */
 export function startOfArgentinaDay(now: Date): Date {
   const local = new Date(now.getTime() + ARGENTINA_OFFSET_MS);
@@ -243,8 +252,7 @@ export class AssistantHistoryService {
             status: a.status,
             summary: a.summary,
             errorMessage: a.errorMessage,
-            undoable:
-              a.status === AssistantActionStatus.DONE && !!a.entityId && (a.kind === 'REMINDER_CREATE' || a.kind === 'CUSTOMER_CREATE'),
+            undoable: a.status === AssistantActionStatus.DONE && !!a.entityId && isUndoable(a.kind, a.payload),
           };
         })(),
       };

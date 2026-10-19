@@ -84,6 +84,8 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   compras_resumen: 'Consultando compras…',
   crear_recordatorio: 'Preparando el recordatorio…',
   cargar_cliente: 'Preparando el alta del cliente…',
+  crear_cotizacion: 'Armando la cotización…',
+  enviar_cotizacion_por_correo: 'Preparando el envío…',
 };
 
 // Nombre corto de cada herramienta para el detalle del Historial de
@@ -98,6 +100,8 @@ export const ASSISTANT_TOOL_TITLES: Record<string, string> = {
   compras_resumen: 'compras y deuda con proveedores',
   crear_recordatorio: 'agendar recordatorio',
   cargar_cliente: 'cargar cliente',
+  crear_cotizacion: 'crear cotización',
+  enviar_cotizacion_por_correo: 'enviar cotización por correo',
 };
 
 export function labelForTool(toolName: string): string {

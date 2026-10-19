@@ -10,14 +10,16 @@ import type { ConfigurableRole } from './assistant-topics.js';
  * la vista previa y ejecuta (AssistantActionsService). Ninguna herramienta
  * de acción crea nada por su cuenta.
  *
- * Sólo figuran las acciones ya implementadas - las demás del mockup
- * (cotización, correo, link de pago, preparar factura) se suman acá cuando
- * tienen su ejecutor, nunca antes (no se muestra en la pantalla algo que no
- * hace nada).
+ * Sólo figuran las acciones ya implementadas - las demás del mockup (link
+ * de pago, preparar factura) se suman acá cuando tienen su ejecutor, nunca
+ * antes (no se muestra en la pantalla algo que no hace nada).
  */
 export type AssistantActionLevel = 'OFF' | 'DRAFT' | 'DIRECT';
 
-export type AssistantActionId = 'recordatorio' | 'cliente';
+export type AssistantActionId = 'recordatorio' | 'cliente' | 'cotizacion' | 'correo';
+
+// Mismo WRITE_ROLES que QuoteController (crear y enviar cotizaciones).
+const QUOTE_WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
 
 export interface AssistantActionDef {
   id: AssistantActionId;
@@ -88,6 +90,66 @@ export const ASSISTANT_ACTIONS: AssistantActionDef[] = [
       },
     },
   },
+  {
+    id: 'cotizacion',
+    kind: 'QUOTE_CREATE',
+    label: 'Crear cotización',
+    hint: 'Busca el cliente y los artículos, usa el precio de venta de cada uno y la deja numerada.',
+    // Sin Directa: una cotización queda numerada con la serie de quien la
+    // pide, mejor que alguien vea antes qué se va a armar.
+    allowedLevels: ['OFF', 'DRAFT'],
+    rule: null,
+    capableRoles: QUOTE_WRITE_ROLES,
+    moduleName: 'Cotizaciones',
+    tool: {
+      name: 'crear_cotizacion',
+      description:
+        'Propone armar una cotización para un cliente con artículos y cantidades. NO la crea: el sistema busca el cliente y los artículos, toma el precio de venta de cada uno y pide confirmación. Pasá el nombre del artículo como lo dijo la persona, sin la cantidad ni la unidad ("cemento", no "10 bolsas de cemento"). Si el sistema devuelve varias opciones, preguntale cuál. Sólo pedí enviarla por correo si la persona lo pidió.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          cliente: { type: 'string', description: 'Nombre o CUIT del cliente.' },
+          lineas: {
+            type: 'array',
+            description: 'Artículos y cantidades.',
+            items: {
+              type: 'object',
+              properties: {
+                articulo: { type: 'string', description: 'Nombre o SKU del artículo.' },
+                cantidad: { type: 'number', description: 'Cantidad, mayor a cero.' },
+              },
+              required: ['articulo', 'cantidad'],
+            },
+          },
+          enviarPorCorreo: { type: 'boolean', description: 'true si pidió que se la mande al cliente por correo.' },
+          notas: { type: 'string', description: 'Observaciones para la cotización, si las dijo.' },
+        },
+        required: ['cliente', 'lineas'],
+      },
+    },
+  },
+  {
+    id: 'correo',
+    kind: 'QUOTE_EMAIL',
+    label: 'Enviar una cotización por correo',
+    hint: 'Manda una cotización ya armada, con su PDF, al correo del cliente.',
+    allowedLevels: ['OFF', 'DRAFT'],
+    rule: 'Sale a un cliente: siempre pide “SÍ”.',
+    capableRoles: QUOTE_WRITE_ROLES,
+    moduleName: 'Cotizaciones',
+    tool: {
+      name: 'enviar_cotizacion_por_correo',
+      description:
+        'Propone mandar por correo al cliente una cotización que ya existe, por su número. NO la manda: el sistema pide confirmación. Sale al correo cargado en la ficha del cliente.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          numero: { type: 'string', description: 'Número de la cotización, ej. "MR-000045" o "45".' },
+        },
+        required: ['numero'],
+      },
+    },
+  },
 ];
 
 // Lo que se ve si la empresa nunca tocó la pantalla: todo apagado salvo el
@@ -96,12 +158,16 @@ export const ASSISTANT_ACTIONS: AssistantActionDef[] = [
 export const DEFAULT_ACTION_LEVELS: Record<AssistantActionId, AssistantActionLevel> = {
   recordatorio: 'DRAFT',
   cliente: 'OFF',
+  cotizacion: 'OFF',
+  correo: 'OFF',
 };
 
 // Roles que pueden pedirla, del mockup aprobado (OWNER/ADMIN siempre).
 export const DEFAULT_ACTION_ROLES: Record<AssistantActionId, ConfigurableRole[]> = {
   recordatorio: ['SALES', 'PURCHASES', 'INVENTORY', 'ACCOUNTANT', 'VIEWER'],
   cliente: ['SALES'],
+  cotizacion: ['SALES'],
+  correo: ['SALES'],
 };
 
 export function actionById(id: string): AssistantActionDef | undefined {

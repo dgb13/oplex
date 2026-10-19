@@ -6,6 +6,7 @@ import { InventoryModule } from '@plexo/inventory';
 import { PayablesModule } from '@plexo/payables';
 import { PosModule } from '@plexo/pos';
 import { PurchasesModule } from '@plexo/purchases';
+import { QuotesModule } from '@plexo/quotes';
 import { ReceivablesModule } from '@plexo/receivables';
 import { ReportsSalesModule } from '@plexo/reports-sales';
 import { SubscriptionModule } from '@plexo/subscriptions';
@@ -35,6 +36,7 @@ import { AssistantToolsService } from './assistant-tools.service.js';
     SubscriptionModule,
     CalendarModule,
     CompaniesModule,
+    QuotesModule,
   ],
   controllers: [AssistantController, AdminAssistantSettingsController, AssistantHistoryController, AssistantConfigController],
   providers: [

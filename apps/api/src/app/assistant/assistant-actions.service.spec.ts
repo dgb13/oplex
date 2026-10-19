@@ -8,12 +8,14 @@ jest.mock('@plexo/inventory', () => ({}));
 jest.mock('@plexo/payables', () => ({}));
 jest.mock('@plexo/purchases', () => ({}));
 jest.mock('@plexo/calendar', () => ({}));
+jest.mock('@plexo/quotes', () => ({}));
 jest.mock('@plexo/companies', () => ({
   COMPANY_ROLE_EDITORS: { CUSTOMER: ['OWNER', 'ADMIN', 'SALES'], SUPPLIER: [], BRANCH: [] },
 }));
 
 import type { CalendarEventService } from '@plexo/calendar';
 import type { CompaniesService } from '@plexo/companies';
+import type { QuoteService } from '@plexo/quotes';
 import {
   accessFromConfig,
   normalizeActionLevels,
@@ -73,7 +75,7 @@ function action(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeDb(overrides: Record<string, unknown> = {}) {
+function makeDb<T extends Record<string, unknown>>(overrides: T = {} as T) {
   return {
     assistantAction: {
       count: jest.fn().mockResolvedValue(0),
@@ -86,6 +88,7 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     user: { findMany: jest.fn().mockResolvedValue([]) },
     company: { findFirst: jest.fn().mockResolvedValue(null) },
     userActivityLog: { create: jest.fn().mockResolvedValue({}) },
+    $executeRaw: jest.fn().mockResolvedValue(0),
     ...overrides,
   };
 }
@@ -101,9 +104,15 @@ function makeService(resolvedAccess: AssistantAccess = access({ recordatorio: 'D
     updateCompany: jest.fn(),
     lookupAfip: jest.fn(),
   } as unknown as CompaniesService;
+  const quotes = {
+    create: jest.fn().mockResolvedValue({ id: 'quote-1', number: 'MR-000045', total: '155519.00' }),
+    sendEmail: jest.fn().mockResolvedValue({}),
+    get: jest.fn().mockResolvedValue({ sentAt: null }),
+    cancel: jest.fn(),
+  } as unknown as QuoteService;
   const accessService = { resolve: jest.fn().mockResolvedValue(resolvedAccess) } as unknown as AssistantAccessService;
-  const service = new AssistantActionsService({} as PrismaService, accessService, calendar, companies);
-  return { service, calendar, companies, accessService };
+  const service = new AssistantActionsService({} as PrismaService, accessService, calendar, companies, quotes);
+  return { service, calendar, companies, quotes, accessService };
 }
 
 describe('AssistantActionsService', () => {
@@ -317,7 +326,23 @@ describe('AssistantActionsService', () => {
       expect(result.card.status).toBe('FAILED');
       expect(result.reply).toMatch(/se cayó la base/);
       expect(db.userActivityLog.create).not.toHaveBeenCalled();
+      // Vuelve al punto de guardado antes de marcarla FAILED: si no, una
+      // transacción abortada por Postgres no deja escribir nada más.
+      expect(db.$executeRaw.mock.calls.map((c: [TemplateStringsArray]) => c[0].join(''))).toEqual([
+        'SAVEPOINT assistant_action',
+        'ROLLBACK TO SAVEPOINT assistant_action',
+      ]);
     });
+  });
+
+  it('explains a database rejection in plain words instead of the raw Prisma message', async () => {
+    const { service, calendar } = makeService();
+    (calendar.create as jest.Mock).mockRejectedValue(Object.assign(new Error('Invalid `prisma.calendarEvent.create()` invocation'), { code: 'P2002' }));
+
+    const result = await run(makeDb(), () => service.confirm(makeUser(), 'act-1'));
+
+    expect(result.reply).toMatch(/ya hay otro registro con el mismo dato/);
+    expect(result.reply).not.toMatch(/prisma/i);
   });
 
   describe('handleShortReply', () => {
@@ -368,6 +393,210 @@ describe('AssistantActionsService', () => {
       db.assistantAction.findUnique.mockResolvedValue(action({ status: 'DONE', entityId: 'ev-1' }));
 
       await expect(run(db, () => service.undo(makeUser({ sub: 'other', role: 'SALES' }), 'act-1'))).rejects.toThrow(/Sólo quien la pidió/);
+    });
+  });
+
+  describe('quotes', () => {
+    const CUSTOMER = { id: 'cust-1', name: 'Construcciones Delta', email: 'compras@delta.com' };
+    const CEMENT = { id: 'v-cem', sku: 'CEM-50', color: null, size: null, unitPrice: '12000', article: { name: 'Cemento x 50 kg' } };
+    const SHOVEL = { id: 'v-pala', sku: 'PAL-01', color: null, size: null, unitPrice: '9500', article: { name: 'Pala ancha' } };
+
+    function quoteDb(overrides: Record<string, unknown> = {}) {
+      const findVariants = jest.fn().mockImplementation(({ where }) => {
+        const sku = where.sku?.equals;
+        const name = where.article?.name?.contains;
+        if (sku) return Promise.resolve([]);
+        if (name === 'cemento') return Promise.resolve([CEMENT]);
+        if (name === 'pala') return Promise.resolve([SHOVEL]);
+        if (name === 'arena') return Promise.resolve([]);
+        return Promise.resolve([]);
+      });
+      return makeDb({
+        company: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockImplementation(({ where }) =>
+            Promise.resolve(where.name?.equals ? [] : [CUSTOMER]),
+          ),
+        },
+        articleVariant: { findMany: findVariants },
+        currency: { findFirst: jest.fn().mockResolvedValue({ id: 'ars', code: 'ARS' }) },
+        ...overrides,
+      });
+    }
+
+    const both = { cotizacion: 'DRAFT', correo: 'DRAFT' };
+
+    it('builds the proposal from the system: customer, article prices and a subtotal without VAT', async () => {
+      const { service, quotes } = makeService();
+      const db = quoteDb();
+
+      const outcome = await run(db, () =>
+        service.propose(
+          makeUser(),
+          access(both),
+          'crear_cotizacion',
+          { cliente: 'delta', lineas: [{ articulo: 'cemento', cantidad: 10 }, { articulo: 'pala', cantidad: 2 }], enviarPorCorreo: true },
+          TURN,
+        ),
+      );
+
+      const created = db.assistantAction.create.mock.calls[0][0].data;
+      expect(created.payload).toEqual(
+        expect.objectContaining({
+          customerId: 'cust-1',
+          currencyId: 'ars',
+          sendEmail: true,
+          lines: [
+            { articleVariantId: 'v-cem', label: 'Cemento x 50 kg (CEM-50)', quantity: 10, unitPrice: 12000 },
+            { articleVariantId: 'v-pala', label: 'Pala ancha (PAL-01)', quantity: 2, unitPrice: 9500 },
+          ],
+        }),
+      );
+      expect(created.summary).toContain('subtotal sin IVA ARS 139.000,00');
+      expect(created.summary).toContain('mandarla por correo a compras@delta.com');
+      expect(quotes.create).not.toHaveBeenCalled();
+      expect(outcome.isError).toBe(false);
+    });
+
+    it('does not plan to email it when sending quotes is not enabled for the person, and says why', async () => {
+      const { service } = makeService();
+      const db = quoteDb();
+
+      await run(db, () =>
+        service.propose(
+          makeUser(),
+          access({ cotizacion: 'DRAFT', correo: 'OFF' }),
+          'crear_cotizacion',
+          { cliente: 'delta', lineas: [{ articulo: 'cemento', cantidad: 1 }], enviarPorCorreo: true },
+          TURN,
+        ),
+      );
+
+      const created = db.assistantAction.create.mock.calls[0][0].data;
+      expect(created.payload.sendEmail).toBe(false);
+      expect(created.summary).toMatch(/no se manda por correo: esa acción no está habilitada/);
+    });
+
+    it('refuses over the WhatsApp cap, pointing to the web', async () => {
+      const { service } = makeService();
+      const capped = access(both);
+      capped.limits.maxQuoteAmountWhatsapp = 100000;
+
+      const outcome = await run(quoteDb(), () =>
+        service.propose(makeUser(), capped, 'crear_cotizacion', { cliente: 'delta', lineas: [{ articulo: 'cemento', cantidad: 10 }] }, TURN),
+      );
+
+      expect(outcome).toEqual(expect.objectContaining({ isError: true, content: expect.stringMatching(/tope por WhatsApp.*desde la web/) }));
+    });
+
+    it('asks which one when an article matches several, and refuses an article without a sale price', async () => {
+      const { service } = makeService();
+      const several = quoteDb({
+        articleVariant: {
+          findMany: jest.fn().mockImplementation(({ where }) =>
+            Promise.resolve(where.sku ? [] : [CEMENT, { ...CEMENT, id: 'v-cem25', sku: 'CEM-25', article: { name: 'Cemento x 25 kg' } }]),
+          ),
+        },
+      });
+      const ambiguous = await run(several, () =>
+        service.propose(makeUser(), access(both), 'crear_cotizacion', { cliente: 'delta', lineas: [{ articulo: 'cemento', cantidad: 1 }] }, TURN),
+      );
+      expect(ambiguous.content).toMatch(/Cemento x 50 kg \(CEM-50\), Cemento x 25 kg \(CEM-25\)/);
+
+      const noPrice = quoteDb({
+        articleVariant: { findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.sku ? [] : [{ ...CEMENT, unitPrice: '0' }])) },
+      });
+      const free = await run(noPrice, () =>
+        service.propose(makeUser(), access(both), 'crear_cotizacion', { cliente: 'delta', lineas: [{ articulo: 'cemento', cantidad: 1 }] }, TURN),
+      );
+      expect(free.content).toMatch(/no tiene precio de venta/);
+    });
+
+    it('on "SÍ" creates the quote with the proposed lines and emails it; the real total comes from the quote', async () => {
+      const { service, quotes } = makeService(access(both));
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(
+        action({
+          kind: 'QUOTE_CREATE',
+          payload: {
+            customerId: 'cust-1',
+            customerName: 'Construcciones Delta',
+            customerEmail: 'compras@delta.com',
+            currencyId: 'ars',
+            currencyCode: 'ARS',
+            lines: [{ articleVariantId: 'v-cem', label: 'Cemento', quantity: 10, unitPrice: 12000 }],
+            notes: null,
+            sendEmail: true,
+          },
+        }),
+      );
+
+      const result = await run(db, () => service.confirm(makeUser(), 'act-1'));
+
+      expect(quotes.create).toHaveBeenCalledWith({
+        customerId: 'cust-1',
+        currencyId: 'ars',
+        notes: undefined,
+        lines: [{ articleVariantId: 'v-cem', quantity: 10, unitPrice: 12000 }],
+      });
+      expect(quotes.sendEmail).toHaveBeenCalledWith('quote-1');
+      expect(result.reply).toMatch(/Cotización MR-000045.*ARS 155\.519,00.*se mandó a compras@delta\.com/);
+    });
+
+    it('keeps the quote done when the email fails, and says so', async () => {
+      const { service, quotes } = makeService(access(both));
+      (quotes.sendEmail as jest.Mock).mockRejectedValue(new Error('Resend caído'));
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(
+        action({
+          kind: 'QUOTE_CREATE',
+          payload: { customerId: 'c', customerName: 'Delta', customerEmail: 'x@y.com', currencyId: 'ars', currencyCode: 'ARS', lines: [], notes: null, sendEmail: true },
+        }),
+      );
+
+      const result = await run(db, () => service.confirm(makeUser(), 'act-1'));
+
+      expect(result.card.status).toBe('DONE');
+      expect(result.reply).toMatch(/no se pudo mandar el correo \(Resend caído\)/);
+    });
+
+    it('finds an existing quote by its short number to email it, asking when the number is ambiguous', async () => {
+      const { service } = makeService();
+      const one = makeDb({
+        quote: {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'q-45', number: 'MR-000045', status: 'DRAFT', total: '1000', customer: { name: 'Delta', email: 'compras@delta.com' }, currency: { code: 'ARS' } },
+          ]),
+        },
+      });
+      await run(one, () => service.propose(makeUser(), access(both), 'enviar_cotizacion_por_correo', { numero: '45' }, TURN));
+      expect(one.quote.findMany.mock.calls[0][0].where.OR).toContainEqual({ number: { endsWith: '-000045' } });
+      expect(one.assistantAction.create.mock.calls[0][0].data.summary).toBe(
+        'Mandar la Cotización MR-000045 (Delta, ARS 1.000,00) a compras@delta.com',
+      );
+
+      const two = makeDb({
+        quote: {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'a', number: 'MR-000045', status: 'DRAFT', total: '1', customer: { name: 'Delta', email: 'x' }, currency: { code: 'ARS' } },
+            { id: 'b', number: 'JP-000045', status: 'DRAFT', total: '1', customer: { name: 'Sol', email: 'y' }, currency: { code: 'ARS' } },
+          ]),
+        },
+      });
+      const outcome = await run(two, () => service.propose(makeUser(), access(both), 'enviar_cotizacion_por_correo', { numero: '45' }, TURN));
+      expect(outcome.content).toMatch(/MR-000045 \(Delta\), JP-000045 \(Sol\)/);
+    });
+
+    it('cancels an undone quote, but not one that already reached the customer', async () => {
+      const { service, quotes } = makeService();
+      const db = makeDb();
+      db.assistantAction.findUnique.mockResolvedValue(action({ kind: 'QUOTE_CREATE', status: 'DONE', entityType: 'quote', entityId: 'quote-1' }));
+
+      await run(db, () => service.undo(makeUser(), 'act-1'));
+      expect(quotes.cancel).toHaveBeenCalledWith('quote-1');
+
+      (quotes.get as jest.Mock).mockResolvedValue({ sentAt: new Date() });
+      await expect(run(db, () => service.undo(makeUser(), 'act-1'))).rejects.toThrow(/ya se le mandó al cliente/);
     });
   });
 });
