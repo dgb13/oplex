@@ -62,6 +62,21 @@ export interface MovementsPage {
   lastSyncAt: string | null;
 }
 
+export interface MovementsSummary {
+  currency: string;
+  gross: string;
+  fee: string;
+  net: string;
+  count: number;
+  feePercent: number | null;
+  byOrigin: { kind: 'CAJA' | 'DOCS' | 'FUERA'; gross: string }[];
+  pendingRelease: string;
+  upcomingReleases: { date: string; amount: string }[];
+  otherCurrencies: { currency: string; gross: string; count: number }[];
+  unassignedCount: number;
+  lastSyncAt: string | null;
+}
+
 export interface MovementsSyncResult {
   synced: number;
   lastSyncAt: string;
@@ -107,6 +122,8 @@ export const mercadoPagoApi = {
     api.get<PaymentIntent>(`/connectors/mercadopago/payment-links/${id}`).then((r) => r.data),
   listMovements: (query: MovementsQuery) =>
     api.get<MovementsPage>('/connectors/mercadopago/movements', { params: query }).then((r) => r.data),
+  getSummary: (range: { from: string; to: string }) =>
+    api.get<MovementsSummary>('/connectors/mercadopago/movements/summary', { params: range }).then((r) => r.data),
   syncMovements: () =>
     api.post<MovementsSyncResult>('/connectors/mercadopago/movements/sync').then((r) => r.data),
   exportMovements: async (query: MovementsQuery) => {

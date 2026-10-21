@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { getTenantDb, getTenantId, type Prisma } from '@plexo/database';
+import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
 import ExcelJS from 'exceljs';
 
 export type MovementOriginFilter = 'all' | 'caja' | 'docs' | 'outside' | 'unassigned';
@@ -46,10 +46,44 @@ export interface MovementsPage {
   lastSyncAt: string | null;
 }
 
+export interface SummaryQuery {
+  from?: string;
+  to?: string;
+}
+
+export interface MovementsSummary {
+  currency: string;
+  /** Cobrado en el período: bruto menos lo devuelto. */
+  gross: string;
+  fee: string;
+  net: string;
+  count: number;
+  /** Comisión sobre lo cobrado, en %. null si no se cobró nada. */
+  feePercent: number | null;
+  byOrigin: { kind: 'CAJA' | 'DOCS' | 'FUERA'; gross: string }[];
+  /** Plata cobrada que MP todavía no liberó (de cualquier fecha). */
+  pendingRelease: string;
+  upcomingReleases: { date: string; amount: string }[];
+  /** Cobros en otra moneda, que no entran en los totales en pesos. */
+  otherCurrencies: { currency: string; gross: string; count: number }[];
+  unassignedCount: number;
+  lastSyncAt: string | null;
+}
+
 const PAGE_SIZE = 50;
 const EXPORT_LIMIT = 10_000;
 // Rechazados y cancelados no son cobros: no se listan.
 const LISTED_STATUSES = ['approved', 'refunded', 'charged_back', 'in_mediation', 'pending', 'in_process', 'authorized'];
+// Lo que cuenta como cobrado en el Resumen: aprobado (o en reclamo, que
+// sigue cobrado hasta que se resuelva). Devueltos y contracargos no.
+const COLLECTED_STATUSES = ['approved', 'in_mediation'];
+const SUMMARY_CURRENCY = 'ARS';
+const UPCOMING_RELEASE_DAYS = 6;
+
+/** Fecha AAAA-MM-DD en Argentina. */
+function argentineDay(date: Date): string {
+  return new Date(date.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   credit_card: 'Crédito',
@@ -111,6 +145,97 @@ export class MercadoPagoMovementsService {
       total,
       page,
       pageSize: PAGE_SIZE,
+      unassignedCount,
+      lastSyncAt: settings?.mercadoPagoLastSyncAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * Resumen (etapa 3): totales del período sobre la copia local de los
+   * pagos. Devoluciones parciales: se restan de lo cobrado y del neto; la
+   * comisión queda como la informó MP (aproximación, son raras).
+   */
+  async summary(query: SummaryQuery): Promise<MovementsSummary> {
+    const db = getTenantDb();
+    const periodWhere = await this.where({ from: query.from, to: query.to });
+    const [inPeriod, pending, unassignedCount, settings] = await Promise.all([
+      db.mercadoPagoPayment.findMany({
+        where: { ...periodWhere, status: { in: COLLECTED_STATUSES } },
+        select: {
+          currency: true,
+          grossAmount: true,
+          feeAmount: true,
+          netAmount: true,
+          refundedAmount: true,
+          paymentIntentId: true,
+        },
+      }),
+      db.mercadoPagoPayment.findMany({
+        where: {
+          status: { in: COLLECTED_STATUSES },
+          currency: SUMMARY_CURRENCY,
+          moneyReleaseDate: { gt: new Date() },
+          NOT: { moneyReleaseStatus: 'released' },
+        },
+        select: { moneyReleaseDate: true, netAmount: true, grossAmount: true, refundedAmount: true },
+        orderBy: { moneyReleaseDate: 'asc' },
+      }),
+      this.unassignedCount(),
+      db.tenantSettings.findUnique({ where: { tenantId: getTenantId() }, select: { mercadoPagoLastSyncAt: true } }),
+    ]);
+
+    const pesos = inPeriod.filter((p) => p.currency === SUMMARY_CURRENCY);
+    const intentIds = pesos.map((p) => p.paymentIntentId).filter((id): id is string => !!id);
+    const intents = intentIds.length
+      ? await db.paymentIntent.findMany({ where: { id: { in: intentIds } }, select: { id: true, documentType: true } })
+      : [];
+    const kindByIntent = new Map(intents.map((i) => [i.id, i.documentType === 'POS_QR' ? 'CAJA' : 'DOCS'] as const));
+
+    let gross = new Prisma.Decimal(0);
+    let fee = new Prisma.Decimal(0);
+    let net = new Prisma.Decimal(0);
+    const byOrigin = { CAJA: new Prisma.Decimal(0), DOCS: new Prisma.Decimal(0), FUERA: new Prisma.Decimal(0) };
+    for (const p of pesos) {
+      const collected = p.grossAmount.minus(p.refundedAmount);
+      gross = gross.plus(collected);
+      fee = fee.plus(p.feeAmount);
+      net = net.plus((p.netAmount ?? p.grossAmount.minus(p.feeAmount)).minus(p.refundedAmount));
+      const kind = (p.paymentIntentId && kindByIntent.get(p.paymentIntentId)) || 'FUERA';
+      byOrigin[kind] = byOrigin[kind].plus(collected);
+    }
+
+    const others = new Map<string, { gross: Prisma.Decimal; count: number }>();
+    for (const p of inPeriod.filter((x) => x.currency !== SUMMARY_CURRENCY)) {
+      const entry = others.get(p.currency) ?? { gross: new Prisma.Decimal(0), count: 0 };
+      others.set(p.currency, { gross: entry.gross.plus(p.grossAmount.minus(p.refundedAmount)), count: entry.count + 1 });
+    }
+
+    let pendingRelease = new Prisma.Decimal(0);
+    const releaseByDay = new Map<string, Prisma.Decimal>();
+    for (const p of pending) {
+      const amount = (p.netAmount ?? p.grossAmount).minus(p.refundedAmount);
+      pendingRelease = pendingRelease.plus(amount);
+      const day = argentineDay(p.moneyReleaseDate as Date);
+      releaseByDay.set(day, (releaseByDay.get(day) ?? new Prisma.Decimal(0)).plus(amount));
+    }
+
+    return {
+      currency: SUMMARY_CURRENCY,
+      gross: gross.toFixed(2),
+      fee: fee.toFixed(2),
+      net: net.toFixed(2),
+      count: pesos.length,
+      feePercent: gross.gt(0) ? Number(fee.div(gross).times(100).toFixed(1)) : null,
+      byOrigin: (['CAJA', 'DOCS', 'FUERA'] as const).map((kind) => ({ kind, gross: byOrigin[kind].toFixed(2) })),
+      pendingRelease: pendingRelease.toFixed(2),
+      upcomingReleases: [...releaseByDay.entries()]
+        .slice(0, UPCOMING_RELEASE_DAYS)
+        .map(([date, amount]) => ({ date, amount: amount.toFixed(2) })),
+      otherCurrencies: [...others.entries()].map(([currency, o]) => ({
+        currency,
+        gross: o.gross.toFixed(2),
+        count: o.count,
+      })),
       unassignedCount,
       lastSyncAt: settings?.mercadoPagoLastSyncAt?.toISOString() ?? null,
     };

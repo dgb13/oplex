@@ -239,6 +239,12 @@ function PosSellScreen() {
         <p className="text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
           Esta caja no tiene un turno abierto.
         </p>
+        {searchParams.get('cobrosQr') === '1' && (
+          <p className="max-w-md text-center text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+            Para asignar un cobro con QR a una venta, abrí un turno en esta caja. Con el turno abierto, arriba aparece el
+            aviso de cobros con QR sin venta: tocá <b>Resolver</b>.
+          </p>
+        )}
         <button
           onClick={() => router.push('/pos')}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"

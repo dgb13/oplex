@@ -101,3 +101,62 @@ describe('MercadoPagoMovementsService.list', () => {
     expect(args.skip).toBe(50);
   });
 });
+
+describe('MercadoPagoMovementsService.summary', () => {
+  it('adds up the period in pesos by origin and groups what MP has not released yet by day', async () => {
+    const d = (n: number) => new Prisma.Decimal(n);
+    const db = {
+      mercadoPagoPayment: {
+        findMany: jest
+          .fn()
+          // Período
+          .mockResolvedValueOnce([
+            { currency: 'ARS', grossAmount: d(1000), feeAmount: d(60), netAmount: d(940), refundedAmount: d(0), paymentIntentId: 'i-qr' },
+            { currency: 'ARS', grossAmount: d(500), feeAmount: d(30), netAmount: d(470), refundedAmount: d(100), paymentIntentId: 'i-link' },
+            { currency: 'ARS', grossAmount: d(200), feeAmount: d(10), netAmount: d(190), refundedAmount: d(0), paymentIntentId: null },
+            { currency: 'USD', grossAmount: d(50), feeAmount: d(3), netAmount: d(47), refundedAmount: d(0), paymentIntentId: null },
+          ])
+          // Por liberarse
+          .mockResolvedValueOnce([
+            { moneyReleaseDate: new Date('2026-10-22T15:00:00Z'), netAmount: d(940), grossAmount: d(1000), refundedAmount: d(0) },
+            { moneyReleaseDate: new Date('2026-10-22T20:00:00Z'), netAmount: d(190), grossAmount: d(200), refundedAmount: d(0) },
+            // 01:00 UTC del 6/11 = 22:00 del 5/11 en Argentina
+            { moneyReleaseDate: new Date('2026-11-06T01:00:00Z'), netAmount: d(470), grossAmount: d(500), refundedAmount: d(100) },
+          ]),
+      },
+      paymentIntent: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'i-qr', documentType: 'POS_QR' },
+          { id: 'i-link', documentType: 'INVOICE' },
+        ]),
+        count: jest.fn().mockResolvedValue(2),
+      },
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoLastSyncAt: null }) },
+    };
+    const service = new MercadoPagoMovementsService();
+
+    const summary = await tenantContextStorage.run({ tenantId: 'tenant-1', tx: db as never }, () =>
+      service.summary({ from: '2026-10-01', to: '2026-10-31' }),
+    );
+
+    expect(summary).toMatchObject({
+      gross: '1600.00', // 1000 + (500 - 100) + 200
+      fee: '100.00',
+      net: '1500.00', // 940 + (470 - 100) + 190
+      count: 3,
+      feePercent: 6.3,
+      byOrigin: [
+        { kind: 'CAJA', gross: '1000.00' },
+        { kind: 'DOCS', gross: '400.00' },
+        { kind: 'FUERA', gross: '200.00' },
+      ],
+      pendingRelease: '1500.00',
+      upcomingReleases: [
+        { date: '2026-10-22', amount: '1130.00' },
+        { date: '2026-11-05', amount: '370.00' },
+      ],
+      otherCurrencies: [{ currency: 'USD', gross: '50.00', count: 1 }],
+      unassignedCount: 2,
+    });
+  });
+});

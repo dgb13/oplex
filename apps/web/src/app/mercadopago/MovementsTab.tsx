@@ -14,36 +14,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
-
-type Period = 'month' | 'prev' | 'last7' | 'last90';
-
-const PERIODS: { value: Period; label: string }[] = [
-  { value: 'month', label: 'Este mes' },
-  { value: 'prev', label: 'Mes anterior' },
-  { value: 'last7', label: 'Últimos 7 días' },
-  { value: 'last90', label: 'Últimos 90 días' },
-];
-
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function periodRange(period: Period): { from: string; to: string } {
-  const today = new Date();
-  switch (period) {
-    case 'month':
-      return { from: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), to: ymd(today) };
-    case 'prev':
-      return {
-        from: ymd(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
-        to: ymd(new Date(today.getFullYear(), today.getMonth(), 0)),
-      };
-    case 'last7':
-      return { from: ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6)), to: ymd(today) };
-    case 'last90':
-      return { from: ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 89)), to: ymd(today) };
-  }
-}
+import { PeriodSelect, periodRange, type Period } from './periods';
 
 const STATE_PILL: Record<OplexState, string> = {
   ASSIGNED: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
@@ -74,9 +45,17 @@ function releaseText(row: MovementRow): string {
  * con nuestros cobros. canAssign: Dueño/Admin pueden ir a asignar un cobro
  * con QR a una venta (el Contador sólo mira).
  */
-export default function MovementsTab({ canAssign, connected }: { canAssign: boolean; connected: boolean }) {
+export default function MovementsTab({
+  canAssign,
+  connected,
+  initialOrigin = 'all',
+}: {
+  canAssign: boolean;
+  connected: boolean;
+  initialOrigin?: MovementOriginFilter;
+}) {
   const queryClient = useQueryClient();
-  const [origin, setOrigin] = useState<MovementOriginFilter>('all');
+  const [origin, setOrigin] = useState<MovementOriginFilter>(initialOrigin);
   const [period, setPeriod] = useState<Period>('month');
   const [page, setPage] = useState(1);
   const [openRow, setOpenRow] = useState<string | null>(null);
@@ -149,23 +128,13 @@ export default function MovementsTab({ canAssign, connected }: { canAssign: bool
           </button>
         ))}
         <span className="flex-1" />
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          Período
-          <select
-            value={period}
-            onChange={(e) => {
-              setPeriod(e.target.value as Period);
-              setPage(1);
-            }}
-            className="h-9 rounded-lg border bg-card px-2.5 text-sm text-foreground"
-          >
-            {PERIODS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <PeriodSelect
+          value={period}
+          onChange={(p) => {
+            setPeriod(p);
+            setPage(1);
+          }}
+        />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

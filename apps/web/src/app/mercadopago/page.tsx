@@ -14,8 +14,10 @@ import { Suspense, useEffect, useState } from 'react';
 import ConfigurationSection from './ConfigurationSection';
 import ConnectPanel from './ConnectPanel';
 import MovementsTab from './MovementsTab';
+import SummaryTab from './SummaryTab';
+import type { MovementOriginFilter } from '@/lib/mercadopago';
 
-type Tab = 'movements' | 'config';
+type Tab = 'summary' | 'movements' | 'config';
 
 function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback: string): string {
   const message = err.response?.data?.message ?? fallback;
@@ -26,10 +28,11 @@ type OAuthResult = 'connected' | 'denied' | 'error';
 
 /**
  * Sección Mercado Pago (docs/planesdemodulos/plan-seccion-mercadopago.md):
- * reemplaza la tarjeta que vivía en Preferencias. Etapas 1-2: conexión,
- * Movimientos y Configuración; Resumen y Links de pago llegan en las
- * siguientes. Dueño/Admin ven todo; el Contador, sólo Movimientos. useSearchParams necesita el Suspense (mismo motivo que la
- * tarjeta vieja: si no, rompe el prerender de la ruta).
+ * reemplaza la tarjeta que vivía en Preferencias. Etapas 1-3: conexión,
+ * Resumen, Movimientos y Configuración; Links de pago llega en la etapa 4.
+ * Dueño/Admin ven todo; el Contador, Resumen y Movimientos.
+ * useSearchParams necesita el Suspense (mismo motivo que la tarjeta vieja:
+ * si no, rompe el prerender de la ruta).
  */
 export default function MercadoPagoPage() {
   return (
@@ -75,7 +78,9 @@ function MercadoPagoPageInner() {
     connectMutation.mutate();
   }
 
-  const [tab, setTab] = useState<Tab>('movements');
+  const [tab, setTab] = useState<Tab>('summary');
+  // "Ver y asignar" del Resumen abre Movimientos ya filtrado.
+  const [movementsOrigin, setMovementsOrigin] = useState<MovementOriginFilter>('all');
 
   const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
   const canRead = canManage || profile?.role === 'ACCOUNTANT';
@@ -108,12 +113,11 @@ function MercadoPagoPageInner() {
     );
   }
 
-  const tabs: { value: Tab; label: string }[] = canManage
-    ? [
-        { value: 'movements', label: 'Movimientos' },
-        { value: 'config', label: 'Configuración' },
-      ]
-    : [{ value: 'movements', label: 'Movimientos' }];
+  const tabs: { value: Tab; label: string }[] = [
+    { value: 'summary', label: 'Resumen' },
+    { value: 'movements', label: 'Movimientos' },
+    ...(canManage ? [{ value: 'config' as const, label: 'Configuración' }] : []),
+  ];
 
   return (
     <div className="flex max-w-6xl flex-col gap-6">
@@ -137,7 +141,10 @@ function MercadoPagoPageInner() {
                 type="button"
                 role="tab"
                 aria-selected={tab === t.value}
-                onClick={() => setTab(t.value)}
+                onClick={() => {
+                  setTab(t.value);
+                  setMovementsOrigin('all');
+                }}
                 className={`-mb-px h-11 border-b-2 px-4 text-sm transition ${
                   tab === t.value
                     ? 'border-primary font-semibold text-primary'
@@ -148,11 +155,23 @@ function MercadoPagoPageInner() {
               </button>
             ))}
           </div>
-          {tab === 'movements' || !canManage ? (
-            <MovementsTab canAssign={canManage} connected={status.status === 'CONNECTED'} />
-          ) : (
-            <ConfigurationSection status={status} />
+          {tab === 'summary' && (
+            <SummaryTab
+              onShowUnassigned={() => {
+                setMovementsOrigin('unassigned');
+                setTab('movements');
+              }}
+            />
           )}
+          {tab === 'movements' && (
+            <MovementsTab
+              key={movementsOrigin}
+              canAssign={canManage}
+              connected={status.status === 'CONNECTED'}
+              initialOrigin={movementsOrigin}
+            />
+          )}
+          {tab === 'config' && canManage && <ConfigurationSection status={status} />}
         </>
       ) : (
         <ConnectPanel

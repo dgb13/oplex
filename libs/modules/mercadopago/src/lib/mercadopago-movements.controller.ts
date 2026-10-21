@@ -2,7 +2,12 @@ import { Controller, Get, Post, Query, StreamableFile } from '@nestjs/common';
 import { Roles } from '@plexo/auth';
 import { LongRunningTransaction } from '@plexo/database';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto.js';
-import { MercadoPagoMovementsService, type MovementsPage, type MovementsQuery } from './mercadopago-movements.service.js';
+import {
+  MercadoPagoMovementsService,
+  type MovementsPage,
+  type MovementsQuery,
+  type MovementsSummary,
+} from './mercadopago-movements.service.js';
 import { MercadoPagoPaymentsSyncService, type MercadoPagoSyncResult } from './mercadopago-payments-sync.service.js';
 
 // Sección Mercado Pago: Dueño/Admin todo; el Contador ve Movimientos (y los
@@ -25,6 +30,12 @@ export class MercadoPagoMovementsController {
   @Get()
   list(@Query() dto: ListMovementsQueryDto): Promise<MovementsPage> {
     return this.movements.list(toQuery(dto));
+  }
+
+  @Roles(...READ_ROLES)
+  @Get('summary')
+  summary(@Query() dto: ListMovementsQueryDto): Promise<MovementsSummary> {
+    return this.movements.summary({ from: dto.from, to: dto.to });
   }
 
   // Pagina contra la API de MP dentro de la transacción del request (hasta
