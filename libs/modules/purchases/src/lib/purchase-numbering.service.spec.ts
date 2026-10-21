@@ -8,7 +8,7 @@ function runAsUser<T>(db: Record<string, unknown>, fn: () => T): T {
 describe('PurchaseNumberingService.nextNumber', () => {
   it('formats quoteRequest numbers as PREFIX-000NNN using the pre-increment value', async () => {
     const update = jest.fn().mockResolvedValue({ quoteRequestNextNumber: 8, quoteRequestPrefix: 'PED' });
-    const db = { user: { update } };
+    const db = { user: { update }, quoteRequest: { findFirst: jest.fn().mockResolvedValue(null) } };
     const service = new PurchaseNumberingService();
 
     const number = await runAsUser(db, () => service.nextNumber('quoteRequest'));
@@ -25,7 +25,7 @@ describe('PurchaseNumberingService.nextNumber', () => {
 
   it('formats purchaseOrder numbers with the purchaseOrder-specific prefix/counter', async () => {
     const update = jest.fn().mockResolvedValue({ purchaseOrderNextNumber: 2, purchaseOrderPrefix: 'OC' });
-    const db = { user: { update } };
+    const db = { user: { update }, purchaseOrder: { findFirst: jest.fn().mockResolvedValue(null) } };
     const service = new PurchaseNumberingService();
 
     const number = await runAsUser(db, () => service.nextNumber('purchaseOrder'));

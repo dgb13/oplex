@@ -8,7 +8,7 @@ function runAsUser<T>(db: Record<string, unknown>, fn: () => T): T {
 describe('ProductionNumberingService.nextNumber', () => {
   it('formats numbers as PREFIX-000NNN using the pre-increment value', async () => {
     const update = jest.fn().mockResolvedValue({ productionOrderNextNumber: 5, productionOrderPrefix: 'OP' });
-    const db = { user: { update } };
+    const db = { user: { update }, productionOrder: { findFirst: jest.fn().mockResolvedValue(null) } };
     const service = new ProductionNumberingService();
 
     const number = await runAsUser(db, () => service.nextNumber());

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { getTenantDb, getUserId, type PdfStyle } from '@plexo/database';
+import { effectiveNextDocumentNumber, getTenantDb, getUserId, type PdfStyle } from '@plexo/database';
 import type { UpdatePurchasePreferencesDto } from './dto/update-purchase-preferences.dto.js';
+import { purchaseDocumentNumbers } from './purchase-numbering.service.js';
 
 export interface PurchasePreferencesView {
   quoteRequestPrefix: string;
@@ -27,12 +28,12 @@ export class PurchasePreferencesService {
         purchaseDocumentPdfStyle: true,
       },
     });
-    return user;
+    return withEffectiveNextNumbers(user);
   }
 
   async updatePreferences(dto: UpdatePurchasePreferencesDto): Promise<PurchasePreferencesView> {
     const userId = requireUserId();
-    return getTenantDb().user.update({
+    const user = await getTenantDb().user.update({
       where: { id: userId },
       data: {
         quoteRequestPrefix: dto.quoteRequestPrefix,
@@ -47,7 +48,26 @@ export class PurchasePreferencesService {
         purchaseDocumentPdfStyle: true,
       },
     });
+    return withEffectiveNextNumbers(user);
   }
+}
+
+/** Shows the numbers the next documents will really get, not counter
+ * values another user with the same prefix already used. */
+async function withEffectiveNextNumbers(prefs: PurchasePreferencesView): Promise<PurchasePreferencesView> {
+  // Sequential, not Promise.all - these run on the request's tenant
+  // transaction client.
+  const quoteRequestNextNumber = await effectiveNextDocumentNumber(
+    prefs.quoteRequestPrefix,
+    prefs.quoteRequestNextNumber,
+    purchaseDocumentNumbers('quoteRequest'),
+  );
+  const purchaseOrderNextNumber = await effectiveNextDocumentNumber(
+    prefs.purchaseOrderPrefix,
+    prefs.purchaseOrderNextNumber,
+    purchaseDocumentNumbers('purchaseOrder'),
+  );
+  return { ...prefs, quoteRequestNextNumber, purchaseOrderNextNumber };
 }
 
 function requireUserId(): string {

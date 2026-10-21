@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { getTenantDb, getUserId, type PdfStyle } from '@plexo/database';
+import { effectiveNextDocumentNumber, getTenantDb, getUserId, type PdfStyle } from '@plexo/database';
 import type { UpdateQuotePreferencesDto } from './dto/update-quote-preferences.dto.js';
-import { formatQuoteNumber, highestQuoteNumber } from './quote-numbering.service.js';
+import { quoteNumbers } from './quote-numbering.service.js';
 
 export interface QuotePreferencesView {
   quotePrefix: string;
@@ -34,18 +34,11 @@ export class QuotePreferencesService {
   }
 }
 
-/** The number QuoteNumberingService will actually hand out next - the
- * stored counter, or past the highest quote already using this prefix
- * (another user's), so the "next number" preview doesn't promise a taken
- * one. Read-only: the counter itself only moves when a quote is created. */
+/** Shows the number the next quote will really get, not a counter value
+ * another user with the same prefix already used. */
 async function withEffectiveNextNumber(prefs: QuotePreferencesView): Promise<QuotePreferencesView> {
-  const taken = await getTenantDb().quote.findFirst({
-    where: { number: formatQuoteNumber(prefs.quotePrefix, prefs.quoteNextNumber) },
-    select: { id: true },
-  });
-  if (!taken) return prefs;
-  const highest = await highestQuoteNumber(prefs.quotePrefix);
-  return { ...prefs, quoteNextNumber: Math.max(prefs.quoteNextNumber, highest + 1) };
+  const quoteNextNumber = await effectiveNextDocumentNumber(prefs.quotePrefix, prefs.quoteNextNumber, quoteNumbers());
+  return { ...prefs, quoteNextNumber };
 }
 
 function requireUserId(): string {

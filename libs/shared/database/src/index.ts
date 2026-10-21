@@ -11,6 +11,7 @@ export * from './lib/notifications.js';
 export * from './lib/tax-definitions.js';
 export * from './lib/vat-cost.js';
 export * from './lib/financial-accounts.js';
+export * from './lib/document-numbering.js';
 
 // Prisma namespace as a real value (not type-only): Prisma.Decimal, Prisma.sql
 // etc. are legitimate runtime utilities business code needs. PrismaClient
