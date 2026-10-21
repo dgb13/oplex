@@ -7,7 +7,7 @@ import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import CashMovementModal from './CashMovementModal';
 import CheckoutModal from './CheckoutModal';
 import CloseSessionModal from './CloseSessionModal';
@@ -104,6 +104,14 @@ function PosSellScreen() {
     refetchInterval: 15000,
   });
   const unclaimed = unclaimedQuery.data ?? [];
+  // Desde Mercado Pago › Movimientos ("Asignar a venta") se llega con
+  // ?cobrosQr=1: se abre directo la lista de cobros sin venta, una vez.
+  const openedFromMovements = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('cobrosQr') !== '1' || openedFromMovements.current || unclaimed.length === 0) return;
+    openedFromMovements.current = true;
+    setUnclaimedView('browse');
+  }, [searchParams, unclaimed.length]);
 
   const register = (registersQuery.data ?? []).find((r) => r.id === registerId);
   const session = (openSessionsQuery.data ?? []).find((s) => s.registerId === registerId);
@@ -231,6 +239,12 @@ function PosSellScreen() {
         <p className="text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
           Esta caja no tiene un turno abierto.
         </p>
+        {searchParams.get('cobrosQr') === '1' && (
+          <p className="max-w-md text-center text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
+            Para asignar un cobro con QR a una venta, abrí un turno en esta caja. Con el turno abierto, arriba aparece el
+            aviso de cobros con QR sin venta: tocá <b>Resolver</b>.
+          </p>
+        )}
         <button
           onClick={() => router.push('/pos')}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 pos-dark:bg-indigo-500 pos-dark:hover:bg-indigo-400 pos-contrast:bg-amber-400 pos-contrast:text-black pos-contrast:hover:bg-amber-300 pos-emerald:bg-emerald-600 pos-emerald:hover:bg-emerald-500"

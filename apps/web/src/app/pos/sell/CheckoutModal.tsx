@@ -12,9 +12,11 @@ import {
   type CheckoutSaleInput,
   type QrCharge,
 } from '@/lib/pos';
+import { profileApi } from '@/lib/profile';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import PosSelect from '../PosSelect';
 import QrChargePanel from './QrChargePanel';
@@ -75,6 +77,8 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   const [qrStep, setQrStep] = useState(false);
   const [paidCharge, setPaidCharge] = useState<QrCharge | null>(null);
   const qrActive = registerQrQuery.data?.active ?? false;
+  const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
+  const canSetUpQr = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
 
   const selectedCustomer = (customersQuery.data ?? []).find((c) => c.id === customerId);
   const baseCurrency = (currenciesQuery.data ?? []).find((c) => c.isBase) ?? currenciesQuery.data?.[0];
@@ -549,6 +553,19 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-300 pos-contrast:bg-slate-900 pos-contrast:text-slate-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-600">
             Al confirmar se muestra un QR por el monto de Mercado Pago. La venta se cierra cuando Mercado Pago avise
             que el pago se acreditó.
+          </p>
+        )}
+
+        {registerQrQuery.isSuccess && !qrActive && mpRows.length > 0 && (
+          <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-300 pos-contrast:bg-slate-900 pos-contrast:text-slate-200 pos-emerald:bg-emerald-50 pos-emerald:text-slate-600">
+            Esta caja no cobra con QR: el pago con Mercado Pago se registra sin QR.{' '}
+            {canSetUpQr ? (
+              <Link href="/mercadopago" className="font-semibold underline">
+                Activar el QR en Mercado Pago
+              </Link>
+            ) : (
+              'Para cobrar con QR, pedile al dueño o a un administrador que lo active.'
+            )}
           </p>
         )}
 

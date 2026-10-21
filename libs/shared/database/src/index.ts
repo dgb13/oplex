@@ -113,5 +113,6 @@ export type {
   LegalRequest,
   DocumentComment,
   AssistantAction,
+  MercadoPagoPayment,
 } from './generated/client.js';
 export * from './generated/enums.js';

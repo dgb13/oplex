@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, Logger, Post, Query, Res } from '@nestjs/common';
 import { Public, Roles } from '@plexo/auth';
 import { ConnectorService } from '@plexo/connectors';
-import { getTenantId, getUserId, PrismaService, withTenantContext } from '@plexo/database';
+import { getTenantDb, getTenantId, getUserId, PrismaService, withTenantContext } from '@plexo/database';
 import type { FastifyReply } from 'fastify';
 import { MercadoPagoCallbackQueryDto } from './dto/mercadopago-callback-query.dto.js';
 import { generateCodeVerifier } from './pkce.js';
@@ -10,13 +10,11 @@ import { MercadoPagoStateService } from './mercadopago-state.service.js';
 
 const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:4200';
 
-// Where the callback lands the browser once it's done - no dedicated
-// Integraciones page exists yet (that's Fase 5), so this points at
-// Preferencias with a query flag a future page can read. Kept as one
-// named function so Fase 5 only has to change this, not hunt for every
-// redirect() call.
+// Where the callback lands the browser once it's done - the Mercado Pago
+// section (apps/web/src/app/mercadopago), which reads the query flag to
+// show the result once.
 function redirectTarget(status: 'connected' | 'error' | 'denied'): string {
-  return `${FRONTEND_URL}/preferences?connector=mercadopago&status=${status}`;
+  return `${FRONTEND_URL}/mercadopago?connector=mercadopago&status=${status}`;
 }
 
 /**
@@ -36,6 +34,12 @@ interface McpConnectorStatusResponse {
   status: 'DISCONNECTED' | 'PENDING' | 'CONNECTED' | 'EXPIRED' | 'REVOKED' | 'ERROR';
   nickname: string | null;
   connectedAt: Date | null;
+  /** Who in this tenant authorized the account - shown in the section's
+   * Configuración tab. */
+  connectedByName: string | null;
+  /** Mercado Pago › Configuración: si se pueden crear links de pago (el
+   * botón de Facturación lo usa para mostrarse o no). */
+  linksEnabled: boolean;
 }
 
 @Controller('connectors/mercadopago')
@@ -119,14 +123,27 @@ export class MercadoPagoController {
 
   @Get('status')
   async status(): Promise<McpConnectorStatusResponse> {
+    const settings = await getTenantDb().tenantSettings.findUnique({
+      where: { tenantId: getTenantId() },
+      select: { mercadoPagoLinksEnabled: true },
+    });
+    const linksEnabled = settings?.mercadoPagoLinksEnabled ?? true;
     const connector = await this.connectorService.getConnector('MERCADO_PAGO');
     if (!connector) {
-      return { status: 'DISCONNECTED', nickname: null, connectedAt: null };
+      return { status: 'DISCONNECTED', nickname: null, connectedAt: null, connectedByName: null, linksEnabled };
     }
+    const connectedBy = connector.connectedByUserId
+      ? await getTenantDb().user.findUnique({
+          where: { id: connector.connectedByUserId },
+          select: { name: true, email: true },
+        })
+      : null;
     return {
       status: connector.status,
       nickname: connector.externalNickname ?? null,
       connectedAt: connector.connectedAt ?? null,
+      connectedByName: connectedBy ? (connectedBy.name ?? connectedBy.email) : null,
+      linksEnabled,
     };
   }
 }

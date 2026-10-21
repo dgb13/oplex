@@ -10,7 +10,7 @@ Cuando el cliente te paga una factura, registrás el cobro y Oplex baja el saldo
 ## Antes de empezar
 
 - La factura tiene que tener saldo pendiente: el botón **Cobrar** sólo aparece en esas.
-- Para cobrar con Mercado Pago, la cuenta conectada en **Preferencias › Integraciones** con **Conectar Mercado Pago** (lo hace el Dueño o un Administrador).
+- Para cobrar con Mercado Pago, la cuenta conectada en la sección **Mercado Pago** del menú (lo hace el Dueño o un Administrador, ver [Mercado Pago](/documentacion/ventas/mercado-pago)).
 
 ## Registrar un cobro
 
@@ -48,5 +48,5 @@ Si abrís **Cobrar con Mercado Pago** de nuevo para la misma factura, Oplex te m
 | **El monto debe ser mayor a cero** | El monto está vacío o en cero. | Escribí el importe cobrado. |
 | **Completá número, banco, fecha de emisión y de vencimiento del cheque** | Faltan datos del cheque. | Completá los cuatro campos. |
 | **Receipt amount exceeds the invoice balance due** | El monto es mayor que el saldo de la factura. | Cobrá como máximo el saldo pendiente. |
-| **No se pudo generar el link de cobro con Mercado Pago** | Mercado Pago no respondió o la conexión venció. | Tocá **Reintentar**. Si sigue, revisá en Preferencias si Mercado Pago dice **Necesita reconexión** y tocá **Reconectar Mercado Pago**. |
-| No aparece **Cobrar con Mercado Pago**. | La cuenta no está conectada. | Pedile al Dueño o a un Administrador que la conecte en Preferencias. |
+| **No se pudo generar el link de cobro con Mercado Pago** | Mercado Pago no respondió o la conexión venció. | Tocá **Reintentar**. Si sigue, revisá en la sección **Mercado Pago** si dice **Necesita reconexión** y tocá **Reconectar Mercado Pago**. |
+| No aparece **Cobrar con Mercado Pago**. | La cuenta no está conectada. | El Dueño o un Administrador ve **Conectar Mercado Pago para mandar link**: tocándolo va a la sección para conectarla. Si no tenés ese rol, pediselo a uno de ellos. |

@@ -56,6 +56,7 @@ import { TreasuryModule } from './treasury/treasury.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WhatsAppModule } from './whatsapp/whatsapp.module.js';
 import { MercadoPagoWebhookModule } from './webhooks/mercadopago-webhook.module.js';
+import { MercadoPagoLinksModule } from './mercadopago-links/mercadopago-links.module.js';
 import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
 
 @Module({
@@ -105,6 +106,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     SubscriptionModule,
     MercadoPagoModule,
     MercadoPagoWebhookModule,
+    MercadoPagoLinksModule,
     AdminModule,
     SystemModule,
     UsersModule,

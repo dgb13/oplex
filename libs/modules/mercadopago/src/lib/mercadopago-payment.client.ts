@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import type { PaymentResponse } from 'mercadopago/dist/clients/payment/commonTypes.js';
+import type { PaymentSearch, PaymentSearchOptions } from 'mercadopago/dist/clients/payment/search/types.js';
 import { retryMercadoPagoCall } from './mercadopago-retry.util.js';
 
 /**
@@ -28,6 +29,15 @@ export class MercadoPagoPaymentClient {
     return retryMercadoPagoCall(() => {
       const payment = new Payment(new MercadoPagoConfig({ accessToken: tenantAccessToken }));
       return payment.get({ id: paymentId });
+    });
+  }
+
+  /** One page of GET /v1/payments/search as the tenant (sección Mercado
+   * Pago, MercadoPagoPaymentsSyncService) - same retry wrapper as getPayment. */
+  searchPayments(tenantAccessToken: string, options: PaymentSearchOptions): Promise<PaymentSearch> {
+    return retryMercadoPagoCall(() => {
+      const payment = new Payment(new MercadoPagoConfig({ accessToken: tenantAccessToken }));
+      return payment.search({ options });
     });
   }
 }

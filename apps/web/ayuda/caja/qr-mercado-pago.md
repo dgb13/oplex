@@ -9,14 +9,14 @@ Con el QR de Mercado Pago, el cliente paga desde la app de Mercado Pago escanean
 
 ## Antes de empezar
 
-- La cuenta de Mercado Pago conectada: tocá tu foto o iniciales arriba a la derecha, elegí **Preferencias** y, en **Integraciones**, tocá **Conectar Mercado Pago**. Te lleva a Mercado Pago para autorizar a Oplex y volvés sola. Tiene que decir **Conectado**.
+- La cuenta de Mercado Pago conectada: abrí **Mercado Pago** en el menú de la izquierda y tocá **Conectar Mercado Pago**. Te lleva a Mercado Pago para autorizar a Oplex y volvés sola. Tiene que decir **Conectado** (ver [Mercado Pago](/documentacion/ventas/mercado-pago)).
 - La caja creada (ver [Configurar las cajas](/documentacion/caja/configurar-cajas)).
 - El link de Google Maps (o las coordenadas) del local.
 
 ## Activar el QR de una caja
 
-1. **Abrí Cajas (POS).** Desde tu foto o iniciales arriba a la derecha.
-2. **Tocá Activar QR** en la fila de la caja. Se abre **Activar QR · Caja 1 - Mostrador** con la marca **Sin activar**.
+1. **Abrí Cajas (POS)** desde tu foto o iniciales arriba a la derecha, o la sección **Mercado Pago** del menú (**QR por caja**).
+2. **Tocá Activar QR** en la fila de la caja (en la sección Mercado Pago, **Crear QR**). Se abre **Activar QR · Caja 1 - Mostrador** con la marca **Sin activar**.
 3. **Revisá la dirección.** **Calle**, **Número**, **Provincia** y **Ciudad** (o **Barrio**, en Capital Federal) vienen con la dirección de la sucursal; corregila si no coincide. Mercado Pago muestra la sucursal con esta dirección en el mapa de su app.
 4. **Pegá la ubicación.** En **Ubicación en el mapa** pegá el link de Google Maps o las coordenadas. Si está bien, ves **Ubicación detectada:** con los números. Si no sabés cómo copiarla, abrí **¿Cómo copio la ubicación?**.
 5. **Tocá Activar QR.** La ventana pasa a **QR activo** y muestra el **QR fijo** de la caja.
@@ -50,7 +50,7 @@ Podés combinar medios: por ejemplo, una parte en efectivo y el resto con QR. Lo
 
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
-| **La cuenta de Mercado Pago de esta empresa no está conectada - conectala desde Preferencias** | Mercado Pago no está conectado o se desconectó. | Conectalo en **Preferencias › Integraciones**. Si dice **Necesita reconexión**, tocá **Reconectar Mercado Pago**. |
+| **La cuenta de Mercado Pago de esta empresa no está conectada - conectala desde la sección Mercado Pago** | Mercado Pago no está conectado o se desconectó. | Conectalo en la sección **Mercado Pago** del menú. Si dice **Necesita reconexión**, tocá **Reconectar Mercado Pago**. |
 | **Esas coordenadas quedan fuera de Argentina. Revisá que hayas copiado el lugar correcto.** | La ubicación pegada no es la del local. | Copiá de nuevo la ubicación desde Google Maps. |
 | **Ese link corto no trae las coordenadas. …** | Pegaste un link corto de Google Maps. | Copiá los números de las coordenadas como indica el mensaje. |
 | **Mercado Pago no aceptó los datos de la sucursal** / **Mercado Pago rechazó los datos: …** | La dirección no pasó la validación de Mercado Pago. | Revisá calle, número, ciudad y provincia. |

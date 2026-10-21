@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConnectorService } from '@plexo/connectors';
 import { getTenantDb, getTenantId, getUserId, type PaymentIntent, type Prisma } from '@plexo/database';
 import type { Items } from 'mercadopago/dist/clients/commonTypes.js';
@@ -7,6 +7,7 @@ import { MercadoPagoConfigService } from './mercadopago-config.service.js';
 import { MercadoPagoConnector } from './mercadopago.connector.js';
 import { buildPaymentLinkQrDataUri } from './mercadopago-qr.util.js';
 import { MercadoPagoPreferenceClient } from './mercadopago-preference.client.js';
+import { assertPaymentLinksEnabled } from './mercadopago-settings.service.js';
 
 export type PaymentLinkDocumentType = 'INVOICE' | 'QUOTE';
 
@@ -14,6 +15,26 @@ export interface CreatePaymentLinkInput {
   documentType: PaymentLinkDocumentType;
   documentId: string;
 }
+
+/** Una fila de Mercado Pago › Links de pago. */
+export interface PaymentLinkRow {
+  id: string;
+  documentType: PaymentLinkDocumentType;
+  documentId: string;
+  documentLabel: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  amount: string;
+  currency: string;
+  status: PaymentIntent['status'];
+  initPoint: string | null;
+  createdAt: Date;
+  paidAt: Date | null;
+  /** El documento todavía se puede cobrar (para "Generar uno nuevo"). */
+  payable: boolean;
+}
+
+const LINKS_LIST_LIMIT = 200;
 
 /** What the document lookup below needs, regardless of which table it
  * actually came from - keeps createPaymentLink's own body document-type
@@ -26,6 +47,8 @@ interface PayableDocument {
 
 @Injectable()
 export class MercadoPagoPaymentService {
+  private readonly logger = new Logger(MercadoPagoPaymentService.name);
+
   constructor(
     private readonly connectorService: ConnectorService,
     private readonly connector: MercadoPagoConnector,
@@ -42,6 +65,7 @@ export class MercadoPagoPaymentService {
    * network retries - see PaymentIntent's doc comment in schema.prisma).
    */
   async createPaymentLink(input: CreatePaymentLinkInput): Promise<PaymentIntent> {
+    await assertPaymentLinksEnabled();
     const document = await this.loadPayableDocument(input.documentType, input.documentId);
 
     const db = getTenantDb();
@@ -60,7 +84,7 @@ export class MercadoPagoPaymentService {
     const connectorRow = await this.connectorService.getConnector('MERCADO_PAGO');
     if (!connectorRow || connectorRow.status === 'DISCONNECTED' || connectorRow.status === 'PENDING') {
       throw new BadRequestException(
-        'Esta empresa todavía no vinculó una cuenta de Mercado Pago - conectala desde Preferencias antes de generar un link de cobro',
+        'Esta empresa todavía no vinculó una cuenta de Mercado Pago - conectala desde la sección Mercado Pago antes de generar un link de cobro',
       );
     }
     if (connectorRow.status !== 'CONNECTED') {
@@ -71,7 +95,7 @@ export class MercadoPagoPaymentService {
       // (see GestionTab.tsx), so this only ever surfaces for a direct API
       // call bypassing that gate.
       throw new BadRequestException(
-        'La conexión con Mercado Pago de esta empresa necesita reconectarse - hacelo desde Preferencias antes de generar un link de cobro',
+        'La conexión con Mercado Pago de esta empresa necesita reconectarse - hacelo desde la sección Mercado Pago antes de generar un link de cobro',
       );
     }
 
@@ -148,7 +172,99 @@ export class MercadoPagoPaymentService {
     if (intent.status !== 'PENDING') {
       throw new BadRequestException(`No se puede cancelar un link en estado ${intent.status}`);
     }
-    return getTenantDb().paymentIntent.update({ where: { id }, data: { status: 'CANCELLED' } });
+    const cancelled = await getTenantDb().paymentIntent.update({ where: { id }, data: { status: 'CANCELLED' } });
+    if (intent.externalId) {
+      await this.expireAtMercadoPago(intent.externalId);
+    }
+    return cancelled;
+  }
+
+  /**
+   * Además de cancelarlo en Oplex, vence la preferencia en Mercado Pago para
+   * que el link deje de aceptar pagos. Si MP no responde no se frena la
+   * cancelación: se avisa en el log (un pago que igual entrara llega por
+   * webhook a un link cancelado y no se registra solo; aparece en
+   * Movimientos).
+   */
+  private async expireAtMercadoPago(preferenceId: string): Promise<void> {
+    try {
+      const connectorRow = await this.connectorService.getConnector('MERCADO_PAGO');
+      if (!connectorRow || connectorRow.status !== 'CONNECTED') return;
+      const accessToken = await this.connector.getValidAccessToken(connectorRow.id);
+      await this.preferenceClient.expirePreference(accessToken, preferenceId);
+    } catch (err) {
+      this.logger.warn(`No se pudo vencer la preferencia ${preferenceId} en Mercado Pago: ${(err as Error).message}`);
+    }
+  }
+
+  /** Mercado Pago › Links de pago: los links de facturas y cotizaciones,
+   * los más nuevos primero. */
+  async listPaymentLinks(): Promise<PaymentLinkRow[]> {
+    const db = getTenantDb();
+    const intents = await db.paymentIntent.findMany({
+      where: { documentType: { in: ['INVOICE', 'QUOTE'] } },
+      orderBy: { createdAt: 'desc' },
+      take: LINKS_LIST_LIMIT,
+    });
+    const invoiceIds = intents.filter((i) => i.documentType === 'INVOICE').map((i) => i.documentId);
+    const quoteIds = intents.filter((i) => i.documentType === 'QUOTE').map((i) => i.documentId);
+    const [invoices, quotes] = await Promise.all([
+      invoiceIds.length
+        ? db.invoice.findMany({
+            where: { id: { in: invoiceIds } },
+            select: {
+              id: true,
+              documentLetter: true,
+              pointOfSale: true,
+              number: true,
+              status: true,
+              balanceDue: true,
+              customerName: true,
+              customer: { select: { email: true } },
+            },
+          })
+        : [],
+      quoteIds.length
+        ? db.quote.findMany({
+            where: { id: { in: quoteIds } },
+            select: { id: true, number: true, status: true, customer: { select: { name: true, email: true } } },
+          })
+        : [],
+    ]);
+    const invoiceById = new Map(invoices.map((i) => [i.id, i]));
+    const quoteById = new Map(quotes.map((q) => [q.id, q]));
+
+    return intents.map((intent) => {
+      const base = {
+        id: intent.id,
+        documentType: intent.documentType as PaymentLinkDocumentType,
+        documentId: intent.documentId,
+        amount: intent.amount.toFixed(2),
+        currency: intent.currency,
+        status: intent.status,
+        initPoint: intent.initPoint,
+        createdAt: intent.createdAt,
+        paidAt: intent.paidAt,
+      };
+      if (intent.documentType === 'INVOICE') {
+        const invoice = invoiceById.get(intent.documentId);
+        return {
+          ...base,
+          documentLabel: invoice ? `Factura ${invoice.documentLetter} ${invoice.pointOfSale}-${invoice.number}` : 'Factura',
+          customerName: invoice?.customerName ?? null,
+          customerEmail: invoice?.customer.email ?? null,
+          payable: !!invoice && invoice.status !== 'CANCELLED' && invoice.balanceDue.gt(0),
+        };
+      }
+      const quote = quoteById.get(intent.documentId);
+      return {
+        ...base,
+        documentLabel: quote ? `Cotización ${quote.number}` : 'Cotización',
+        customerName: quote?.customer.name ?? null,
+        customerEmail: quote?.customer.email ?? null,
+        payable: quote?.status === 'ACCEPTED',
+      };
+    });
   }
 
   /**

@@ -1,11 +1,11 @@
 ---
 title: Preferencias
-summary: Todo lo que se configura en Preferencias: documentos, emails a clientes, monedas, Mercado Pago, PDF de la factura, retenciones, remarca, reposición automática y el Asistente de IA.
+summary: Todo lo que se configura en Preferencias: documentos, emails a clientes, monedas, PDF de la factura, retenciones, remarca, reposición automática y el Asistente de IA.
 minutes: 7
 roles: Dueño, Administrador
 ---
 
-**Preferencias** reúne la configuración general de tu empresa en Oplex: cómo se ven tus documentos, desde qué dirección salen los emails a tus clientes, las monedas, la conexión con Mercado Pago y algunas reglas de inventario y compras. Lo que cambies acá vale para todo el equipo.
+**Preferencias** reúne la configuración general de tu empresa en Oplex: cómo se ven tus documentos, desde qué dirección salen los emails a tus clientes, las monedas y algunas reglas de inventario y compras. Lo que cambies acá vale para todo el equipo.
 
 Para abrirlo, tocá tu foto arriba a la derecha y elegí **Preferencias**. Sólo lo ven el **Dueño** y los **Administradores**.
 
@@ -55,14 +55,9 @@ Sirve si vendés o comprás en otra moneda además del peso.
 > [!IMPORTANTE]
 > No cambies la moneda base (**Marcar como base**) una vez que empezaste a facturar, salvo que tu contador te lo indique: cambia la moneda en la que se expresa todo.
 
-## Integraciones: Mercado Pago
+## Mercado Pago
 
-Conectá tu cuenta de Mercado Pago para cobrar facturas y cotizaciones, y para cobrar con QR en la Caja.
-
-1. Tocá **Conectar Mercado Pago**. Oplex te lleva a Mercado Pago para que autorices la conexión con tu cuenta.
-2. Al volver, la tarjeta muestra **Conectado** y el nombre de la cuenta.
-
-Si la tarjeta dice **Necesita reconexión**, tocá **Reconectar Mercado Pago**. Para cortar la conexión, **Desconectar** y **Confirmar**. Más detalle en [QR de Mercado Pago](/documentacion/caja/qr-mercado-pago).
+La conexión con Mercado Pago ahora tiene su propia sección en el menú. En Preferencias queda la tarjeta **Mercado Pago** con el botón **Ir a Mercado Pago**. Ver [Mercado Pago](/documentacion/ventas/mercado-pago).
 
 ## PDF de la Factura
 

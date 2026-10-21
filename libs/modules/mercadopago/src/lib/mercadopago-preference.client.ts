@@ -29,4 +29,18 @@ export class MercadoPagoPreferenceClient {
     const preference = new Preference(new MercadoPagoConfig({ accessToken: tenantAccessToken }));
     return preference.create({ body, requestOptions: { idempotencyKey } });
   }
+
+  /** Vence la preferencia ya (al cancelar un link en Oplex): marca
+   * `expires` con fecha de fin ahora, así el link deja de aceptar pagos.
+   * El tipo del SDK pide `items` (es el mismo que para crear), pero el PUT
+   * de MP actualiza sólo los campos que se mandan - A CONFIRMAR con una
+   * cuenta real (ver plan-seccion-mercadopago.md, etapa 4); quien llama lo
+   * hace a modo de mejor esfuerzo. */
+  expirePreference(tenantAccessToken: string, preferenceId: string): Promise<PreferenceResponse> {
+    const preference = new Preference(new MercadoPagoConfig({ accessToken: tenantAccessToken }));
+    return preference.update({
+      id: preferenceId,
+      updatePreferenceRequest: { expires: true, expiration_date_to: new Date().toISOString() } as PreferenceRequest,
+    });
+  }
 }

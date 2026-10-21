@@ -862,6 +862,18 @@ model TenantSettings {
   // todavía no; la primera operación de dinero lo hace y reclasifica el saldo.
   moneyAccountsSplitAt DateTime?
 
+  // Última sincronización de los pagos de Mercado Pago (MercadoPagoPayment):
+  // la próxima trae lo modificado desde acá (con un día de solapamiento).
+  // null = nunca, la primera trae los últimos 90 días.
+  mercadoPagoLastSyncAt DateTime?
+  // Sección Mercado Pago › Configuración (etapa 4). false = no se crean links
+  // de pago (botón de Facturación y acción del asistente).
+  mercadoPagoLinksEnabled       Boolean @default(true)
+  // Cuenta de dinero donde se registran los cobros por Mercado Pago (link y
+  // QR) cuando no se eligió otra. null = la cuenta de sistema "Mercado Pago"
+  // (getOrCreateSystemFinancialAccount), como antes.
+  mercadoPagoFinancialAccountId String?
+
   updatedAt DateTime @updatedAt
 
   @@map("tenant_settings")
@@ -4038,6 +4050,47 @@ model PaymentIntent {
   @@index([tenantId, documentType, documentId])
   @@index([externalPaymentId])
   @@map("payment_intents")
+}
+
+// Copia local de cada pago de la cuenta de Mercado Pago del tenant, traída de
+// GET /v1/payments/search (MercadoPagoPaymentsSyncService) - incluye lo
+// cobrado fuera de Oplex. Alimenta Movimientos, Resumen y el Excel de la
+// sección Mercado Pago sin pegarle a MP en cada pantalla. Ver
+// docs/planesdemodulos/plan-seccion-mercadopago.md.
+model MercadoPagoPayment {
+  id                 String    @id @default(uuid())
+  tenantId           String
+  mpPaymentId        String // id del pago en MP
+  status             String // approved, refunded, charged_back, rejected...
+  statusDetail       String?
+  dateCreated        DateTime
+  dateApproved       DateTime?
+  dateLastUpdated    DateTime?
+  paymentMethodId    String? // visa, account_money, debmaster...
+  paymentTypeId      String? // credit_card, debit_card, account_money...
+  installments       Int?
+  currency           String
+  grossAmount        Decimal   @db.Decimal(14, 2) // transaction_amount
+  // Lo que MP descontó (comisión, costo de cuotas, impuestos): bruto - neto.
+  feeAmount          Decimal   @db.Decimal(14, 2)
+  netAmount          Decimal?  @db.Decimal(14, 2) // transaction_details.net_received_amount
+  refundedAmount     Decimal   @default(0) @db.Decimal(14, 2)
+  moneyReleaseDate   DateTime?
+  moneyReleaseStatus String?
+  externalReference  String?
+  description        String?
+  payerEmail         String?
+  // Nuestro cobro (link o QR) que originó el pago - null = fuera de Oplex.
+  paymentIntentId    String?
+  raw                Json
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([tenantId, mpPaymentId])
+  @@index([tenantId, dateCreated])
+  @@index([tenantId, moneyReleaseDate])
+  @@index([tenantId, paymentIntentId])
+  @@map("mercadopago_payments")
 }
 
 // Global como Plan/SystemErrorLog - sin tenantId requerido ni RLS, a

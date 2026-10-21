@@ -8,9 +8,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { invoiceDisplayStatus, invoicingApi, type Invoice } from '@/lib/invoicing';
 import { mercadoPagoApi } from '@/lib/mercadopago';
+import { profileApi } from '@/lib/profile';
 import { getSocket } from '@/lib/socket';
 import { useDensity } from '@/providers/DensityProvider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import CreditNoteModal from './CreditNoteModal';
 import MercadoPagoPaymentModal from './MercadoPagoPaymentModal';
@@ -54,15 +56,22 @@ export default function GestionTab() {
     queryFn: invoicingApi.listInvoices,
   });
 
-  // Mismo query key que la card de Preferencias - React Query lo cachea
-  // una sola vez entre ambas pantallas, no duplica el pedido. Sólo importa
-  // si está CONNECTED: el botón de cobro no tiene sentido mostrarlo si la
-  // empresa nunca vinculó una cuenta.
+  // Mismo query key que la sección Mercado Pago - React Query lo cachea
+  // una sola vez entre ambas pantallas, no duplica el pedido. Conectado:
+  // botón de cobro. Sin conectar: Dueño/Admin ven un acceso para conectar
+  // (antes la opción simplemente no aparecía y no se sabía que existía);
+  // el resto de los roles no puede conectar, así que no ve nada.
   const { data: mercadoPagoStatus } = useQuery({
     queryKey: ['mercadopago-status'],
     queryFn: mercadoPagoApi.getStatus,
   });
-  const mercadoPagoConnected = mercadoPagoStatus?.status === 'CONNECTED';
+  // Conectado y con los links prendidos (Mercado Pago › Configuración).
+  const mercadoPagoConnected = mercadoPagoStatus?.status === 'CONNECTED' && mercadoPagoStatus.linksEnabled;
+  const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
+  const canConnectMercadoPago =
+    !!mercadoPagoStatus &&
+    mercadoPagoStatus.status !== 'CONNECTED' &&
+    (profile?.role === 'OWNER' || profile?.role === 'ADMIN');
 
   useEffect(() => {
     const socket = getSocket();
@@ -175,6 +184,14 @@ export default function GestionTab() {
                           >
                             Cobrar con Mercado Pago
                           </button>
+                        )}
+                        {canConnectMercadoPago && Number(inv.balanceDue) > 0 && inv.status !== 'CANCELLED' && (
+                          <Link
+                            href="/mercadopago"
+                            className="text-xs text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300"
+                          >
+                            Conectar Mercado Pago para mandar link
+                          </Link>
                         )}
                         {inv.afipCae && inv.status !== 'CANCELLED' && invoiceDisplayStatus(inv) !== 'CREDITED' && (
                           <button onClick={() => setCreditNoteFor(inv)} className="text-xs text-destructive hover:underline">

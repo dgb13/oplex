@@ -42,6 +42,8 @@ function withMoneyDefaults(db: Record<string, unknown>): Record<string, unknown>
       findUnique: jest.fn(({ where }: { where: { id: string } }) => Promise.resolve({ id: where.id, currencyId: null })),
     },
     invoice: { findUnique: jest.fn().mockResolvedValue({ customerId: 'customer-1', currencyId: 'ars', currency: { code: 'ARS' } }) },
+    // Mercado Pago › Configuración sin cuenta elegida.
+    tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoFinancialAccountId: null }) },
     ...db,
   };
 }
@@ -769,6 +771,30 @@ describe('SalesService.recordReceipt', () => {
     );
     expect(reportsFinancialService.recordFinancialTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ financialAccountId: 'fa-mp', amount: 300 }),
+    );
+  });
+
+  it('un cobro por Mercado Pago entra a la cuenta elegida en Mercado Pago › Configuración', async () => {
+    const receipt = makeReceipt({ method: 'MERCADOPAGO' });
+    const invoicingService = { recordReceipt: jest.fn().mockResolvedValue(receipt) } as unknown as InvoicingService;
+    const accountingService = makeReceiptAccountingService(jest.fn().mockResolvedValue({ id: 'entry-4', lines: [] }));
+    const service = new SalesService(
+      invoicingService,
+      {} as InventoryService,
+      accountingService,
+      makeReportsFinancialService(),
+      makeQuoteService(),
+      makeTenantSettingsService(),
+      makeCheckService(),
+    );
+
+    await runInTenant(
+      { tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoFinancialAccountId: 'fa-mp-norte' }) } },
+      () => service.recordReceipt({ invoiceId: 'invoice-1', amount: 300, method: 'MERCADOPAGO' }),
+    );
+
+    expect(accountingService.postReceiptJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ money: { financialAccountId: 'fa-mp-norte' } }),
     );
   });
 

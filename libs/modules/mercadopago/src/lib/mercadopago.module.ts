@@ -3,6 +3,11 @@ import { ConnectorRegistry, ConnectorsModule } from '@plexo/connectors';
 import { MercadoPagoConfigService } from './mercadopago-config.service.js';
 import { MercadoPagoConnector } from './mercadopago.connector.js';
 import { MercadoPagoController } from './mercadopago.controller.js';
+import { MercadoPagoMovementsController } from './mercadopago-movements.controller.js';
+import { MercadoPagoMovementsService } from './mercadopago-movements.service.js';
+import { MercadoPagoPaymentsSyncService } from './mercadopago-payments-sync.service.js';
+import { MercadoPagoSettingsController } from './mercadopago-settings.controller.js';
+import { MercadoPagoSettingsService } from './mercadopago-settings.service.js';
 import { MercadoPagoInStoreClient } from './mercadopago-instore.client.js';
 import { MercadoPagoOAuthClient } from './mercadopago-oauth.client.js';
 import { MercadoPagoPaymentClient } from './mercadopago-payment.client.js';
@@ -21,7 +26,12 @@ import { MercadoPagoStateService } from './mercadopago-state.service.js';
 // ConnectorsModule directly for what it needs to reconcile a payment.
 @Module({
   imports: [ConnectorsModule],
-  controllers: [MercadoPagoController, MercadoPagoPaymentLinksController],
+  controllers: [
+    MercadoPagoController,
+    MercadoPagoPaymentLinksController,
+    MercadoPagoMovementsController,
+    MercadoPagoSettingsController,
+  ],
   providers: [
     MercadoPagoConfigService,
     MercadoPagoOAuthClient,
@@ -32,6 +42,9 @@ import { MercadoPagoStateService } from './mercadopago-state.service.js';
     MercadoPagoPaymentService,
     MercadoPagoInStoreClient,
     MercadoPagoQrService,
+    MercadoPagoPaymentsSyncService,
+    MercadoPagoMovementsService,
+    MercadoPagoSettingsService,
   ],
   exports: [
     MercadoPagoConfigService,
@@ -39,6 +52,7 @@ import { MercadoPagoStateService } from './mercadopago-state.service.js';
     MercadoPagoPaymentClient,
     MercadoPagoPaymentService,
     MercadoPagoQrService,
+    MercadoPagoPaymentsSyncService,
   ],
 })
 export class MercadoPagoModule implements OnModuleInit {
