@@ -146,7 +146,17 @@ describe('OpsAlertsService.busyCheck', () => {
 
 describe('OpsAlertsService - envío', () => {
   const originalEnv = { ...process.env };
+  // runDailyCheck() uses the real clock while the fixtures are relative to
+  // NOW - pin the clock (only Date, timers stay real) or the result depends
+  // on the hour the suite runs.
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: NOW,
+      doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval'],
+    });
+  });
   afterEach(() => {
+    jest.useRealTimers();
     process.env = { ...originalEnv };
   });
 
