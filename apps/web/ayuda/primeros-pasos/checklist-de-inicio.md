@@ -40,6 +40,6 @@ Para que tu primera factura salga bien, seguí este orden:
 ## Opcional, según tu negocio
 
 - **Caja de mostrador:** creá tus cajas en **Cajas (POS)**. Ver [Configurar cajas](/documentacion/caja/configurar-cajas).
-- **Cobros con QR:** conectá Mercado Pago en **Preferencias**. Ver [QR de Mercado Pago](/documentacion/caja/qr-mercado-pago).
+- **Cobros con QR:** conectá Mercado Pago en la sección **Mercado Pago** del menú. Ver [QR de Mercado Pago](/documentacion/caja/qr-mercado-pago).
 - **Contador:** invitá a tu estudio contable. Ver [Contadores](/documentacion/equipo/contadores).
 - **Monedas:** si cotizás en dólares, cargá la moneda en **Preferencias › Monedas y Cotizaciones**. Ver [Preferencias](/documentacion/cuenta/preferencias).

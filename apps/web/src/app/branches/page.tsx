@@ -10,7 +10,7 @@ import { Suspense } from 'react';
  * Configuración). `?openBranch=1` abre el formulario de alta directo, sin
  * requerir el click en "+ Nueva sucursal" - lo usa OnboardingChecklist. */
 // useSearchParams necesita un Suspense arriba - sin él, next build falla
-// al prerenderizar /branches (mismo patrón que pos/sell y MercadoPagoCard).
+// al prerenderizar /branches (mismo patrón que pos/sell y la sección /mercadopago).
 export default function BranchesPage() {
   return (
     <Suspense fallback={null}>

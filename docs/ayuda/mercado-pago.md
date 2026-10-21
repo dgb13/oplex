@@ -1,6 +1,6 @@
 # Cómo cobro con Mercado Pago
 
-Primero conectás tu cuenta: **Preferencias → Integraciones → Conectar Mercado Pago** (solo Dueño/Administrador). Te lleva a Mercado Pago para autorizar a Oplex y volvés solo. Si la conexión vence o la desautorizás desde Mercado Pago, aparece **Reconectar**. Lo cobrado entra a tu propia cuenta de Mercado Pago, no a la de Oplex.
+Primero conectás tu cuenta: sección **Mercado Pago** del menú de la izquierda → **Conectar Mercado Pago** (solo Dueño/Administrador; mientras no está conectada, el menú muestra **Conectar** al lado). El QR de cada caja también se activa desde ahí (**QR por caja**). Te lleva a Mercado Pago para autorizar a Oplex y volvés solo. Si la conexión vence o la desautorizás desde Mercado Pago, aparece **Reconectar**. Lo cobrado entra a tu propia cuenta de Mercado Pago, no a la de Oplex.
 
 Con la cuenta conectada podés:
 

@@ -66,7 +66,7 @@ describe('MercadoPagoController.callback', () => {
 
     expect(connector.handleOAuthCallback).not.toHaveBeenCalled();
     expect(reply.redirect).toHaveBeenCalledWith(
-      expect.stringContaining('http://localhost:4200/preferences?connector=mercadopago&status=error'),
+      expect.stringContaining('http://localhost:4200/mercadopago?connector=mercadopago&status=error'),
       302,
     );
   });
@@ -131,7 +131,7 @@ describe('MercadoPagoController.status', () => {
 
     const result = await runAsUser(() => controller.status());
 
-    expect(result).toEqual({ status: 'DISCONNECTED', nickname: null, connectedAt: null });
+    expect(result).toEqual({ status: 'DISCONNECTED', nickname: null, connectedAt: null, connectedByName: null });
   });
 
   it('reports the stored status/nickname/connectedAt when a connector exists', async () => {
@@ -145,6 +145,27 @@ describe('MercadoPagoController.status', () => {
 
     const result = await runAsUser(() => controller.status());
 
-    expect(result).toEqual({ status: 'CONNECTED', nickname: 'MI NEGOCIO', connectedAt });
+    expect(result).toEqual({ status: 'CONNECTED', nickname: 'MI NEGOCIO', connectedAt, connectedByName: null });
+  });
+
+  it('names the user who connected the account', async () => {
+    const connectorService = makeConnectorServiceMock({
+      getConnector: jest.fn().mockResolvedValue({
+        status: 'CONNECTED',
+        externalNickname: 'MI NEGOCIO',
+        connectedAt: null,
+        connectedByUserId: 'user-9',
+      }),
+    });
+    const findUnique = jest.fn().mockResolvedValue({ name: null, email: 'laura@ejemplo.com' });
+    const controller = new MercadoPagoController(makeConnectorMock(), connectorService, makeStateService(), makePrisma());
+
+    const result = await tenantContextStorage.run(
+      { tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: { user: { findUnique } } as never },
+      () => controller.status(),
+    );
+
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: 'user-9' }, select: { name: true, email: true } });
+    expect(result.connectedByName).toBe('laura@ejemplo.com');
   });
 });

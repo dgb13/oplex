@@ -13,6 +13,7 @@ import ImpersonationBanner from './ImpersonationBanner';
 import MembershipSessionBanner from './MembershipSessionBanner';
 import TrialBanner from './TrialBanner';
 import { UserAvatar } from './UserAvatar';
+import { MERCADOPAGO_NEEDS_RECONNECT, mercadoPagoApi } from '@/lib/mercadopago';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -33,6 +34,7 @@ import {
   ShoppingBasket,
   ShoppingCart,
   Store,
+  Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -112,6 +114,10 @@ const NAV_ENTRIES: NavEntry[] = [
       { href: '/accounting/arca', label: 'Conexión con ARCA', roles: [] },
     ],
   },
+  // Sección propia (plan-seccion-mercadopago.md): conexión, QR por caja y
+  // configuración. Sólo Dueño/Admin por ahora; el Contador entra cuando
+  // existan Resumen y Movimientos (etapa 2).
+  { kind: 'link', href: '/mercadopago', label: 'Mercado Pago', icon: Wallet, roles: [] },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
   { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store, roles: ['SALES'] },
   { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase, roles: ['ACCOUNTANT'] },
@@ -242,6 +248,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return items.length > 0 ? [{ ...entry, items }] : [];
   });
 
+  // Etiqueta "Conectar"/"Reconectar" junto a Mercado Pago en el menú: es
+  // lo que hace encontrable la conexión (antes escondida en Preferencias).
+  // Mismo queryKey que la sección - react-query lo dedupe.
+  const canManageMercadoPago = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const { data: mercadoPagoStatus } = useQuery({
+    queryKey: ['mercadopago-status'],
+    queryFn: mercadoPagoApi.getStatus,
+    enabled: canManageMercadoPago,
+  });
+  const mercadoPagoBadge = !mercadoPagoStatus
+    ? null
+    : MERCADOPAGO_NEEDS_RECONNECT.includes(mercadoPagoStatus.status)
+      ? 'Reconectar'
+      : mercadoPagoStatus.status === 'CONNECTED'
+        ? null
+        : 'Conectar';
+
   useEffect(() => {
     if (profile?.mustChangePassword && pathname !== '/profile') {
       router.replace('/profile');
@@ -332,7 +355,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   <entry.icon className="h-4 w-4 shrink-0" />
-                  <span className={sidebarCollapsed ? 'md:hidden' : ''}>{entry.label}</span>
+                  <span className={`whitespace-nowrap ${sidebarCollapsed ? 'md:hidden' : ''}`}>{entry.label}</span>
+                  {entry.href === '/mercadopago' && mercadoPagoBadge && (
+                    <span
+                      className={`ml-auto whitespace-nowrap rounded-full bg-orange-700 px-1.5 py-0.5 text-[10px] font-bold text-white ${
+                        sidebarCollapsed ? 'md:hidden' : ''
+                      }`}
+                    >
+                      {mercadoPagoBadge}
+                    </span>
+                  )}
                 </Link>
               ) : (
                 <NavGroupSection

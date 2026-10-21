@@ -60,7 +60,7 @@ export class MercadoPagoPaymentService {
     const connectorRow = await this.connectorService.getConnector('MERCADO_PAGO');
     if (!connectorRow || connectorRow.status === 'DISCONNECTED' || connectorRow.status === 'PENDING') {
       throw new BadRequestException(
-        'Esta empresa todavía no vinculó una cuenta de Mercado Pago - conectala desde Preferencias antes de generar un link de cobro',
+        'Esta empresa todavía no vinculó una cuenta de Mercado Pago - conectala desde la sección Mercado Pago antes de generar un link de cobro',
       );
     }
     if (connectorRow.status !== 'CONNECTED') {
@@ -71,7 +71,7 @@ export class MercadoPagoPaymentService {
       // (see GestionTab.tsx), so this only ever surfaces for a direct API
       // call bypassing that gate.
       throw new BadRequestException(
-        'La conexión con Mercado Pago de esta empresa necesita reconectarse - hacelo desde Preferencias antes de generar un link de cobro',
+        'La conexión con Mercado Pago de esta empresa necesita reconectarse - hacelo desde la sección Mercado Pago antes de generar un link de cobro',
       );
     }
 

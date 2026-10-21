@@ -13,6 +13,6 @@ Todo lo de tu cuenta se abre desde tu foto, arriba a la derecha: tus datos perso
 2. **Vinculá tu WhatsApp.** En **Perfil › WhatsApp**: escribí tu número con +54 9, tocá **Generar código** y mandá el código por WhatsApp al número de Oplex. Así le preguntás al Asistente desde el celular.
 3. **Elegí y pagá tu plan.** En **Planes y facturación** ves los seis planes (de **Basic Gratis** a **Diamond**), el estado de tu suscripción y tus pagos. Para pagar: **Pagar Plan …**, elegí los meses, **Ver datos para transferir** y **Ya transferí, avisar**. Precios sin IVA; pagando el año tenés descuento.
 4. **Ojo con los estados.** **En prueba** (15 días), **Activo**, **Pago vencido** (10 días más de uso) y **Sólo lectura** (ves y exportás tus datos, pero no cargás nada nuevo hasta pagar o pasar a Basic Gratis).
-5. **Configurá la empresa.** En **Preferencias** (Dueño y Administrador): documentos, remitente de emails, monedas, Mercado Pago, PDF de la factura, retenciones, remarca y reposición automática.
+5. **Configurá la empresa.** En **Preferencias** (Dueño y Administrador): documentos, remitente de emails, monedas, PDF de la factura, retenciones, remarca y reposición automática.
 
 ![Ventana Contratar Plan con transferencia y la elección de meses](/ayuda/capturas/cuenta-contratar-plan.png)

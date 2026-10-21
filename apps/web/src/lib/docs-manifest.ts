@@ -67,6 +67,7 @@ export const DOCS_CHAPTERS: DocsChapter[] = [
       'letra-del-comprobante',
       'pdf-de-la-factura',
       'cobrar',
+      'mercado-pago',
       'nota-de-credito',
       'pendientes-de-entrega',
       'cuentas-a-cobrar',

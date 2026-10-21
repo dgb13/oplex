@@ -12,7 +12,11 @@ export interface MercadoPagoConnectorStatusResponse {
   status: MercadoPagoConnectorStatus;
   nickname: string | null;
   connectedAt: string | null;
+  connectedByName: string | null;
 }
+
+/** Estados en los que hay que volver a autorizar la cuenta. */
+export const MERCADOPAGO_NEEDS_RECONNECT: MercadoPagoConnectorStatus[] = ['EXPIRED', 'REVOKED', 'ERROR'];
 
 export type PaymentLinkDocumentType = 'INVOICE' | 'QUOTE';
 

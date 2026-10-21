@@ -513,7 +513,7 @@ export class MercadoPagoQrService {
     const row = await this.connectorService.getConnector('MERCADO_PAGO');
     if (!row || row.status !== 'CONNECTED' || !row.externalAccountId) {
       throw new BadRequestException(
-        'La cuenta de Mercado Pago de esta empresa no está conectada - conectala desde Preferencias',
+        'La cuenta de Mercado Pago de esta empresa no está conectada - conectala desde la sección Mercado Pago',
       );
     }
     const accessToken = await this.connector.getValidAccessToken(row.id);

@@ -27,7 +27,6 @@ import Link from 'next/link';
 import { useState } from 'react';
 import CurrencySettings from './CurrencySettings';
 import DocumentBrandingCard from './DocumentBrandingCard';
-import MercadoPagoCard from './MercadoPagoCard';
 
 function pillClass(active: boolean): string {
   return `rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -103,7 +102,7 @@ export default function PreferencesPage() {
           <DocumentBrandingCard settings={settings} />
           <EmailSettingsCard settings={settings} />
           <CurrencySettings />
-          <MercadoPagoCard />
+          <MercadoPagoAccessCard />
           <InvoicePdfCard />
           <WithholdingAgentCard settings={settings} />
           <InventoryPricingCard settings={settings} />
@@ -112,6 +111,26 @@ export default function PreferencesPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** Mercado Pago tiene su propia sección en el menú (antes la conexión vivía
+ * en esta página y costaba encontrarla) - acá queda sólo el acceso. */
+function MercadoPagoAccessCard() {
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="mb-1 text-sm font-medium text-muted-foreground">Mercado Pago</h2>
+          <p className="text-sm text-muted-foreground">
+            La conexión, el QR de cada caja y la configuración de Mercado Pago están ahora en su propia sección.
+          </p>
+        </div>
+        <Link href="/mercadopago" className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-muted">
+          Ir a Mercado Pago
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

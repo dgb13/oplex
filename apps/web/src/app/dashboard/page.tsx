@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import MercadoPagoConnectBanner from './MercadoPagoConnectBanner';
 import { useEffect, useState } from 'react';
 import OnboardingChecklist from './OnboardingChecklist';
 import {
@@ -276,6 +277,7 @@ export default function DashboardPage() {
       <h1 className="text-xl font-semibold">Tablero</h1>
 
       <OnboardingChecklist />
+      <MercadoPagoConnectBanner />
       <ProductionWidget />
 
       {error ? (
