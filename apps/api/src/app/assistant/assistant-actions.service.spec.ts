@@ -10,7 +10,7 @@ jest.mock('@plexo/purchases', () => ({}));
 jest.mock('@plexo/calendar', () => ({}));
 jest.mock('@plexo/quotes', () => ({}));
 jest.mock('@plexo/invoicing', () => ({}));
-jest.mock('@plexo/mercadopago', () => ({}));
+jest.mock('@plexo/mercadopago', () => ({ assertPaymentLinksEnabled: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@plexo/tenant-settings', () => ({ resolveEmailFrom: () => undefined }));
 jest.mock('@plexo/companies', () => ({
   COMPANY_ROLE_EDITORS: { CUSTOMER: ['OWNER', 'ADMIN', 'SALES'], SUPPLIER: [], BRANCH: [] },
@@ -94,6 +94,7 @@ function makeDb<T extends Record<string, unknown>>(overrides: T = {} as T) {
     user: { findMany: jest.fn().mockResolvedValue([]) },
     company: { findFirst: jest.fn().mockResolvedValue(null) },
     userActivityLog: { create: jest.fn().mockResolvedValue({}) },
+    tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) },
     $executeRaw: jest.fn().mockResolvedValue(0),
     ...overrides,
   };

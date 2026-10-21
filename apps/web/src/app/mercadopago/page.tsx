@@ -13,11 +13,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import ConfigurationSection from './ConfigurationSection';
 import ConnectPanel from './ConnectPanel';
+import LinksTab from './LinksTab';
 import MovementsTab from './MovementsTab';
 import SummaryTab from './SummaryTab';
 import type { MovementOriginFilter } from '@/lib/mercadopago';
 
-type Tab = 'summary' | 'movements' | 'config';
+type Tab = 'summary' | 'movements' | 'links' | 'config';
 
 function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback: string): string {
   const message = err.response?.data?.message ?? fallback;
@@ -28,9 +29,9 @@ type OAuthResult = 'connected' | 'denied' | 'error';
 
 /**
  * Sección Mercado Pago (docs/planesdemodulos/plan-seccion-mercadopago.md):
- * reemplaza la tarjeta que vivía en Preferencias. Etapas 1-3: conexión,
- * Resumen, Movimientos y Configuración; Links de pago llega en la etapa 4.
- * Dueño/Admin ven todo; el Contador, Resumen y Movimientos.
+ * reemplaza la tarjeta que vivía en Preferencias: conexión, Resumen,
+ * Movimientos, Links de pago y Configuración (etapas 1-4). Dueño/Admin ven
+ * todo; el Contador, Resumen y Movimientos.
  * useSearchParams necesita el Suspense (mismo motivo que la tarjeta vieja:
  * si no, rompe el prerender de la ruta).
  */
@@ -116,7 +117,12 @@ function MercadoPagoPageInner() {
   const tabs: { value: Tab; label: string }[] = [
     { value: 'summary', label: 'Resumen' },
     { value: 'movements', label: 'Movimientos' },
-    ...(canManage ? [{ value: 'config' as const, label: 'Configuración' }] : []),
+    ...(canManage
+      ? [
+          { value: 'links' as const, label: 'Links de pago' },
+          { value: 'config' as const, label: 'Configuración' },
+        ]
+      : []),
   ];
 
   return (
@@ -170,6 +176,9 @@ function MercadoPagoPageInner() {
               connected={status.status === 'CONNECTED'}
               initialOrigin={movementsOrigin}
             />
+          )}
+          {tab === 'links' && canManage && (
+            <LinksTab connected={status.status === 'CONNECTED'} linksEnabled={status.linksEnabled} />
           )}
           {tab === 'config' && canManage && <ConfigurationSection status={status} />}
         </>

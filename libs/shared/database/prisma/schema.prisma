@@ -866,6 +866,13 @@ model TenantSettings {
   // la próxima trae lo modificado desde acá (con un día de solapamiento).
   // null = nunca, la primera trae los últimos 90 días.
   mercadoPagoLastSyncAt DateTime?
+  // Sección Mercado Pago › Configuración (etapa 4). false = no se crean links
+  // de pago (botón de Facturación y acción del asistente).
+  mercadoPagoLinksEnabled       Boolean @default(true)
+  // Cuenta de dinero donde se registran los cobros por Mercado Pago (link y
+  // QR) cuando no se eligió otra. null = la cuenta de sistema "Mercado Pago"
+  // (getOrCreateSystemFinancialAccount), como antes.
+  mercadoPagoFinancialAccountId String?
 
   updatedAt DateTime @updatedAt
 

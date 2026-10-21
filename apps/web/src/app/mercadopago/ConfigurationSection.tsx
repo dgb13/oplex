@@ -3,6 +3,7 @@
 import RegisterQrModal from '@/app/settings/pos/RegisterQrModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { mercadoPagoApi, type MercadoPagoConnectorStatusResponse } from '@/lib/mercadopago';
 import { posApi, type CashRegister } from '@/lib/pos';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,15 +16,124 @@ function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback
   return Array.isArray(message) ? message.join(', ') : message;
 }
 
-/** Configuración de la sección (etapa 1): la cuenta conectada y el QR de
- * cada caja. Los interruptores de links de pago y la cuenta de dinero
- * llegan en la etapa 4. */
+/** Configuración de la sección: dónde se cobra con Mercado Pago, el QR de
+ * cada caja, en qué cuenta de dinero entra la plata y la cuenta conectada
+ * (etapas 1 y 4 de plan-seccion-mercadopago.md). */
 export default function ConfigurationSection({ status }: { status: MercadoPagoConnectorStatusResponse }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-4">
-      <RegistersQrCard canActivate={status.status === 'CONNECTED'} />
-      <ConnectedAccountCard status={status} />
+      <ChannelsCard />
+      <div className="flex flex-col gap-4">
+        <RegistersQrCard canActivate={status.status === 'CONNECTED'} />
+        <ReceiptAccountCard />
+        <ConnectedAccountCard status={status} />
+      </div>
     </div>
+  );
+}
+
+function useMercadoPagoSettings() {
+  const queryClient = useQueryClient();
+  const query = useQuery({ queryKey: ['mercadopago-settings'], queryFn: mercadoPagoApi.getSettings });
+  const [error, setError] = useState('');
+  const mutation = useMutation({
+    mutationFn: mercadoPagoApi.updateSettings,
+    onSuccess: (settings) => {
+      setError('');
+      queryClient.setQueryData(['mercadopago-settings'], settings);
+      // El estado lleva linksEnabled (botón de Facturación).
+      void queryClient.invalidateQueries({ queryKey: ['mercadopago-status'] });
+    },
+    onError: (err: AxiosError<{ message?: string | string[] }>) =>
+      setError(errorMessage(err, 'No se pudo guardar el cambio')),
+  });
+  return { settings: query.data, update: mutation.mutate, pending: mutation.isPending, error };
+}
+
+function ChannelsCard() {
+  const { settings, update, pending, error } = useMercadoPagoSettings();
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold">Dónde cobrás con Mercado Pago</h2>
+        <Channel
+          title="Links de pago en facturas y cotizaciones"
+          detail='Botón "Cobrar con Mercado Pago" en Facturación y links del asistente.'
+        >
+          {settings ? (
+            <ToggleSwitch
+              checked={settings.linksEnabled}
+              onChange={(checked) => !pending && update({ linksEnabled: checked })}
+              label={settings.linksEnabled ? 'Links de pago: prendidos' : 'Links de pago: apagados'}
+            />
+          ) : null}
+        </Channel>
+        <Channel title="QR en las cajas" detail="Se prende y apaga en cada caja, en QR por caja.">
+          <span className="text-xs text-muted-foreground">Por caja</span>
+        </Channel>
+        <Channel title="Asistente" detail="Puede mandar el link de pago de una factura por correo, si los links están prendidos.">
+          <Link href="/preferences/assistant" className="whitespace-nowrap text-sm text-primary hover:underline">
+            Configurar
+          </Link>
+        </Channel>
+        <Channel title="Tienda online" detail="El cobro con Mercado Pago en la tienda todavía no está disponible.">
+          <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            Próximamente
+          </span>
+        </Channel>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Channel({ title, detail, children }: { title: string; detail: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+      <div className="flex flex-col gap-0.5">
+        <b className="text-sm">{title}</b>
+        <span className="text-sm text-muted-foreground">{detail}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReceiptAccountCard() {
+  const { settings, update, pending, error } = useMercadoPagoSettings();
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold">Dónde se registra la plata en Oplex</h2>
+        {!settings ? (
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        ) : (
+          <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+            Cuenta de dinero para los cobros de Mercado Pago (links y QR)
+            <select
+              value={settings.financialAccountId}
+              disabled={pending}
+              onChange={(e) => update({ financialAccountId: e.target.value })}
+              className="h-10 rounded-lg border bg-card px-2.5 text-sm text-foreground"
+            >
+              {settings.financialAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <p className="text-sm text-muted-foreground">
+          Sólo cuentas de Mercado Pago en pesos. Para tener otra (por ejemplo, una por sucursal), creala en{' '}
+          <Link href="/reports" className="text-primary hover:underline">
+            Contabilidad › Reportes › Financiero
+          </Link>
+          .
+        </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </CardContent>
+    </Card>
   );
 }
 

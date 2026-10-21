@@ -1,6 +1,6 @@
 ---
 title: Mercado Pago
-summary: Conectá tu cuenta de Mercado Pago desde su sección del menú, mirá cada cobro con su comisión y cuándo se libera, activá el QR de cada caja y revisá o cortá la conexión.
+summary: Conectá tu cuenta de Mercado Pago desde su sección del menú, mirá cada cobro con su comisión y cuándo se libera, manejá los links de pago, activá el QR de cada caja y elegí dónde se registra la plata.
 minutes: 5
 roles: Dueño, Administrador (todo); Contador (Resumen y Movimientos)
 ---
@@ -58,6 +58,30 @@ Tocá un movimiento para ver el **N.º de operación** de Mercado Pago, quién p
 > [!IMPORTANTE]
 > **Sin asignar a una venta** es un cobro con QR que entró en Mercado Pago pero no quedó en ninguna venta. Tocá **Asignar a venta**: te lleva a la Caja con la lista de cobros sin venta (ver [Cobros QR sin venta](/documentacion/caja/cobros-qr-sin-venta)). La caja tiene que tener un turno abierto; si no lo tiene, abrilo y tocá **Resolver** en el aviso de arriba.
 
+## Links de pago
+
+La pestaña **Links de pago** lista los links que mandaste desde facturas, cotizaciones o el asistente, con el cliente, el monto, la fecha y el estado (**Esperando pago**, **Pagado**, **Cancelado** o **Con error**). Con un link que está **Esperando pago** podés:
+
+- **Copiar link**, para mandarlo vos por WhatsApp o donde quieras.
+- **Reenviar por correo**: le llega al cliente al correo que tiene cargado en Empresas. Si no tiene correo, el botón no se puede tocar.
+- **Cancelar** y después **Sí, cancelar**: el link deja de aceptar pagos.
+
+Si un link quedó **Cancelado** o **Con error** y la factura todavía tiene saldo (o la cotización sigue aceptada), aparece **Generar uno nuevo**.
+
+> [!NOTA]
+> Una cotización pagada con link no registra el cobro: cuando hagas la factura, registrá el cobro como siempre.
+
+## Configuración
+
+En **Dónde cobrás con Mercado Pago**:
+
+- **Links de pago en facturas y cotizaciones**: si lo apagás, no aparece **Cobrar con Mercado Pago** en Facturación y el asistente no manda links. Los links que ya mandaste siguen andando hasta que los canceles.
+- **QR en las cajas**: se prende en cada caja (ver abajo).
+- **Asistente**: con **Configurar** vas a sus permisos.
+- **Tienda online**: **Próximamente**.
+
+En **Dónde se registra la plata en Oplex** elegís la cuenta de dinero de Mercado Pago a la que entran los cobros por link y por QR. Si tenés una sola, ya está elegida. Para tener otra (por ejemplo, una por sucursal), creala en **Contabilidad › Reportes**, pestaña **Financiero** (ver [Cuentas de dinero](/documentacion/contabilidad/cuentas-de-dinero)).
+
 ## Activar el QR de una caja
 
 En la pestaña **Configuración**, en **QR por caja** ves cada caja con su estado:
@@ -80,5 +104,7 @@ En **Configuración › Cuenta conectada** ves la cuenta, quién la conectó y c
 | **No se pudo terminar la conexión** | Mercado Pago no confirmó la autorización. | Probá de nuevo y fijate de entrar con la cuenta del negocio. |
 | **No tenés permiso para ver esta sección.** | Tu rol no es Dueño, Administrador ni Contador. | Pedile a un Dueño o Administrador lo que necesites de Mercado Pago. |
 | **Crear QR** no se puede tocar. | La conexión venció. | Tocá **Reconectar Mercado Pago** arriba. |
+| **Los links de pago de Mercado Pago están apagados. Se prenden en Mercado Pago › Configuración.** | Se apagaron los links en Configuración. | Prendé **Links de pago en facturas y cotizaciones**. |
+| **… no tiene correo cargado. Cargalo en Empresas o copiá el link y mandalo vos.** | El cliente no tiene correo. | Cargalo en **Empresas** o usá **Copiar link**. |
 | No aparece un cobro que acabás de recibir. | Todavía no se actualizó la lista. | Tocá **Actualizar movimientos**. |
 | **Se trajeron … movimientos. Hay más: tocá "Actualizar movimientos" otra vez para seguir.** | Había muchos movimientos para traer de una vez. | Tocá **Actualizar movimientos** de nuevo hasta que diga **Movimientos al día**. |

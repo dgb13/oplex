@@ -37,6 +37,9 @@ interface McpConnectorStatusResponse {
   /** Who in this tenant authorized the account - shown in the section's
    * Configuración tab. */
   connectedByName: string | null;
+  /** Mercado Pago › Configuración: si se pueden crear links de pago (el
+   * botón de Facturación lo usa para mostrarse o no). */
+  linksEnabled: boolean;
 }
 
 @Controller('connectors/mercadopago')
@@ -120,9 +123,14 @@ export class MercadoPagoController {
 
   @Get('status')
   async status(): Promise<McpConnectorStatusResponse> {
+    const settings = await getTenantDb().tenantSettings.findUnique({
+      where: { tenantId: getTenantId() },
+      select: { mercadoPagoLinksEnabled: true },
+    });
+    const linksEnabled = settings?.mercadoPagoLinksEnabled ?? true;
     const connector = await this.connectorService.getConnector('MERCADO_PAGO');
     if (!connector) {
-      return { status: 'DISCONNECTED', nickname: null, connectedAt: null, connectedByName: null };
+      return { status: 'DISCONNECTED', nickname: null, connectedAt: null, connectedByName: null, linksEnabled };
     }
     const connectedBy = connector.connectedByUserId
       ? await getTenantDb().user.findUnique({
@@ -135,6 +143,7 @@ export class MercadoPagoController {
       nickname: connector.externalNickname ?? null,
       connectedAt: connector.connectedAt ?? null,
       connectedByName: connectedBy ? (connectedBy.name ?? connectedBy.email) : null,
+      linksEnabled,
     };
   }
 }

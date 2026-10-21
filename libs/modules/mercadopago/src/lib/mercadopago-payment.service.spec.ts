@@ -6,7 +6,9 @@ import type { MercadoPagoPreferenceClient } from './mercadopago-preference.clien
 import type { MercadoPagoConfigService } from './mercadopago-config.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: db as never }, fn);
+  // Mercado Pago › Configuración: sin fila de ajustes = links prendidos.
+  const tx = { tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) }, ...db };
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', tx: tx as never }, fn);
 }
 
 function makeConnectorService(overrides: Partial<jest.Mocked<ConnectorService>> = {}) {
@@ -308,6 +310,27 @@ describe('MercadoPagoPaymentService.cancelPaymentLink', () => {
     expect(db.paymentIntent.update).toHaveBeenCalledWith({ where: { id: 'intent-1' }, data: { status: 'CANCELLED' } });
   });
 
+  it('also expires the preference at Mercado Pago, without failing the cancel if MP does not answer', async () => {
+    const db = {
+      paymentIntent: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'intent-1', status: 'PENDING', externalId: 'preference-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'intent-1', status: 'CANCELLED' }),
+      },
+    };
+    const expirePreference = jest.fn().mockRejectedValue(new Error('timeout'));
+    const service = new MercadoPagoPaymentService(
+      makeConnectorService(),
+      makeConnector(),
+      makePreferenceClient({ expirePreference }),
+      makeConfig(),
+    );
+
+    const result = await runInTenant(db, () => service.cancelPaymentLink('intent-1'));
+
+    expect(expirePreference).toHaveBeenCalledWith('APP_USR-tenant-access-token', 'preference-1');
+    expect(result.status).toBe('CANCELLED');
+  });
+
   it('rejects cancelling an intent that is not PENDING', async () => {
     const db = { paymentIntent: { findUnique: jest.fn().mockResolvedValue({ id: 'intent-1', status: 'PAID' }) } };
     const service = new MercadoPagoPaymentService(makeConnectorService(), makeConnector(), makePreferenceClient(), makeConfig());
@@ -315,5 +338,86 @@ describe('MercadoPagoPaymentService.cancelPaymentLink', () => {
     await expect(runInTenant(db, () => service.cancelPaymentLink('intent-1'))).rejects.toThrow(
       'No se puede cancelar un link en estado PAID',
     );
+  });
+});
+
+describe('MercadoPagoPaymentService - links apagados y listado', () => {
+  it('refuses to create a link when Mercado Pago › Configuración turned them off', async () => {
+    const db = {
+      tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoLinksEnabled: false }) },
+      invoice: { findUnique: jest.fn() },
+    };
+    const service = new MercadoPagoPaymentService(makeConnectorService(), makeConnector(), makePreferenceClient(), makeConfig());
+
+    await expect(
+      runInTenant(db, () => service.createPaymentLink({ documentType: 'INVOICE', documentId: 'invoice-1' })),
+    ).rejects.toThrow('Los links de pago de Mercado Pago están apagados');
+    expect(db.invoice.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('lists invoice and quote links with their document, customer and whether they can still be paid', async () => {
+    const createdAt = new Date('2026-10-20T12:00:00Z');
+    const intent = (id: string, documentType: string, documentId: string, status = 'PENDING') => ({
+      id,
+      documentType,
+      documentId,
+      status,
+      amount: new Prisma.Decimal(54800),
+      currency: 'ARS',
+      initPoint: `https://mp/${id}`,
+      createdAt,
+      paidAt: null,
+    });
+    const db = {
+      paymentIntent: {
+        findMany: jest.fn().mockResolvedValue([
+          intent('l1', 'INVOICE', 'inv-1'),
+          intent('l2', 'QUOTE', 'q-1', 'CANCELLED'),
+          intent('l3', 'INVOICE', 'inv-2', 'PAID'),
+        ]),
+      },
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'inv-1',
+            documentLetter: 'B',
+            pointOfSale: '0002',
+            number: '00000233',
+            status: 'ISSUED',
+            balanceDue: new Prisma.Decimal(54800),
+            customerName: 'Ana Ruiz',
+            customer: { email: 'ana@ejemplo.com' },
+          },
+          {
+            id: 'inv-2',
+            documentLetter: 'B',
+            pointOfSale: '0002',
+            number: '00000231',
+            status: 'PAID',
+            balanceDue: new Prisma.Decimal(0),
+            customerName: 'Lucía Fernández',
+            customer: { email: null },
+          },
+        ]),
+      },
+      quote: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'q-1', number: 'PRE-000016', status: 'ACCEPTED', customer: { name: 'Delta SA', email: null } }]),
+      },
+    };
+    const service = new MercadoPagoPaymentService(makeConnectorService(), makeConnector(), makePreferenceClient(), makeConfig());
+
+    const rows = await runInTenant(db, () => service.listPaymentLinks());
+
+    expect(db.paymentIntent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { documentType: { in: ['INVOICE', 'QUOTE'] } } }),
+    );
+    expect(rows.map((r) => [r.documentLabel, r.customerName, r.customerEmail, r.status, r.payable])).toEqual([
+      ['Factura B 0002-00000233', 'Ana Ruiz', 'ana@ejemplo.com', 'PENDING', true],
+      ['Cotización PRE-000016', 'Delta SA', null, 'CANCELLED', true],
+      ['Factura B 0002-00000231', 'Lucía Fernández', null, 'PAID', false],
+    ]);
+    expect(rows[0].amount).toBe('54800.00');
   });
 });

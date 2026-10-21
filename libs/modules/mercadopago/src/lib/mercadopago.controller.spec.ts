@@ -41,7 +41,8 @@ function makeReply(): jest.Mocked<FastifyReply> {
 }
 
 function runAsUser<T>(fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: {} as never }, fn);
+  const tx = { tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) } };
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: tx as never }, fn);
 }
 
 describe('MercadoPagoController.authorize', () => {
@@ -131,7 +132,13 @@ describe('MercadoPagoController.status', () => {
 
     const result = await runAsUser(() => controller.status());
 
-    expect(result).toEqual({ status: 'DISCONNECTED', nickname: null, connectedAt: null, connectedByName: null });
+    expect(result).toEqual({
+      status: 'DISCONNECTED',
+      nickname: null,
+      connectedAt: null,
+      connectedByName: null,
+      linksEnabled: true,
+    });
   });
 
   it('reports the stored status/nickname/connectedAt when a connector exists', async () => {
@@ -145,7 +152,7 @@ describe('MercadoPagoController.status', () => {
 
     const result = await runAsUser(() => controller.status());
 
-    expect(result).toEqual({ status: 'CONNECTED', nickname: 'MI NEGOCIO', connectedAt, connectedByName: null });
+    expect(result).toEqual({ status: 'CONNECTED', nickname: 'MI NEGOCIO', connectedAt, connectedByName: null, linksEnabled: true });
   });
 
   it('names the user who connected the account', async () => {
@@ -161,11 +168,20 @@ describe('MercadoPagoController.status', () => {
     const controller = new MercadoPagoController(makeConnectorMock(), connectorService, makeStateService(), makePrisma());
 
     const result = await tenantContextStorage.run(
-      { tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: { user: { findUnique } } as never },
+      {
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        role: 'OWNER',
+        tx: {
+          user: { findUnique },
+          tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoLinksEnabled: false }) },
+        } as never,
+      },
       () => controller.status(),
     );
 
     expect(findUnique).toHaveBeenCalledWith({ where: { id: 'user-9' }, select: { name: true, email: true } });
     expect(result.connectedByName).toBe('laura@ejemplo.com');
+    expect(result.linksEnabled).toBe(false);
   });
 });

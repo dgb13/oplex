@@ -159,6 +159,11 @@ toca un cobro con QR sin conexión, el mensaje dice que le avise al dueño o adm
   cotizaciones hay que agregar el envío), cancelar, generar uno nuevo si venció.
 - Cancelar un link también lo invalida en Mercado Pago (hoy es sólo local). **A confirmar** qué
   permite la API de preferencias (vencerla o desactivarla).
+  *Hecho (2026-10-21)*: al cancelar se hace `PUT` de la preferencia con `expires: true` y fin = ahora,
+  a modo de mejor esfuerzo (si MP no responde, se cancela igual en Oplex). Sigue sin confirmar con una
+  cuenta real que el `PUT` sin `items` no los borre. Los links no vencen solos (no se les pone fecha),
+  así que no hay estado "Vencido" como en el mockup: "Generar uno nuevo" aparece en los cancelados o con
+  error. "Reenviar por correo" usa el mismo correo que la acción del asistente, también para cotizaciones.
 - Configuración (parte 2): interruptor de links de pago (`mercadoPagoLinksEnabled`, lo respetan
   el botón de Facturación y la acción del asistente), cuenta de dinero para los cobros
   (`mercadoPagoFinancialAccountId`, la usa `recordReceipt` cuando el método es MERCADOPAGO),

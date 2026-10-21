@@ -45,3 +45,24 @@ export async function getOrCreateSystemFinancialAccount(
     },
   });
 }
+
+/**
+ * Cuenta de dinero para un cobro por Mercado Pago (link o QR) sin cuenta
+ * elegida: la de Mercado Pago › Configuración (TenantSettings.
+ * mercadoPagoFinancialAccountId) si sigue existiendo; si no, la de sistema
+ * "Mercado Pago" de arriba, como siempre.
+ */
+export async function getMercadoPagoReceiptAccount(
+  db: Prisma.TransactionClient,
+  tenantId: string,
+): Promise<FinancialAccount> {
+  const settings = await db.tenantSettings.findUnique({
+    where: { tenantId },
+    select: { mercadoPagoFinancialAccountId: true },
+  });
+  if (settings?.mercadoPagoFinancialAccountId) {
+    const chosen = await db.financialAccount.findUnique({ where: { id: settings.mercadoPagoFinancialAccountId } });
+    if (chosen) return chosen;
+  }
+  return getOrCreateSystemFinancialAccount(db, tenantId, 'MERCADOPAGO');
+}

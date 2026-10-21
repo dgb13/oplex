@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CalendarEventService } from '@plexo/calendar';
 import { CompaniesService, type CreateCompanyDto, type UpdateCompanyDto } from '@plexo/companies';
 import { InvoicingService } from '@plexo/invoicing';
-import { MercadoPagoPaymentService } from '@plexo/mercadopago';
+import { assertPaymentLinksEnabled, MercadoPagoPaymentService } from '@plexo/mercadopago';
 import { QuoteService, type CreateQuoteDto } from '@plexo/quotes';
 import { resolveEmailFrom, TenantSettingsService } from '@plexo/tenant-settings';
 import {
@@ -841,6 +841,9 @@ export class AssistantActionsService {
   // ── Link de pago ────────────────────────────────────────────────────────
 
   private async preparePaymentLink(input: unknown): Promise<Prepared> {
+    // Si la empresa apagó los links (Mercado Pago › Configuración) se dice
+    // antes de proponer nada.
+    await assertPaymentLinksEnabled();
     const raw = str(input, 'factura');
     const customerText = str(input, 'cliente');
     const parsed = parseInvoiceReference(raw);

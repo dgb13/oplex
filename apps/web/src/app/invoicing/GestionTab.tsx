@@ -65,10 +65,13 @@ export default function GestionTab() {
     queryKey: ['mercadopago-status'],
     queryFn: mercadoPagoApi.getStatus,
   });
-  const mercadoPagoConnected = mercadoPagoStatus?.status === 'CONNECTED';
+  // Conectado y con los links prendidos (Mercado Pago › Configuración).
+  const mercadoPagoConnected = mercadoPagoStatus?.status === 'CONNECTED' && mercadoPagoStatus.linksEnabled;
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
   const canConnectMercadoPago =
-    !!mercadoPagoStatus && !mercadoPagoConnected && (profile?.role === 'OWNER' || profile?.role === 'ADMIN');
+    !!mercadoPagoStatus &&
+    mercadoPagoStatus.status !== 'CONNECTED' &&
+    (profile?.role === 'OWNER' || profile?.role === 'ADMIN');
 
   useEffect(() => {
     const socket = getSocket();

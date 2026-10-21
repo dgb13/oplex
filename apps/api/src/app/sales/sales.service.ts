@@ -1,6 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingService } from '@plexo/accounting';
-import { getOrCreateSystemFinancialAccount, getTenantDb, getTenantId, getUserId, notify, Prisma, userIdsWithRoles } from '@plexo/database';
+import {
+  getMercadoPagoReceiptAccount,
+  getOrCreateSystemFinancialAccount,
+  getTenantDb,
+  getTenantId,
+  getUserId,
+  notify,
+  Prisma,
+  userIdsWithRoles,
+} from '@plexo/database';
 import { getReservedQuantity, InventoryService } from '@plexo/inventory';
 import { InvoicingService, type CreateCreditNoteDto, type RecordReceiptDto } from '@plexo/invoicing';
 import { QuoteService } from '@plexo/quotes';
@@ -464,21 +473,18 @@ export class SalesService {
     // Antes de mover cualquier saldo (ver AccountingService.ensureMoneyAccounts).
     await this.accountingService.ensureMoneyAccounts();
 
-    // Dónde entró la plata: la cuenta elegida; si no se eligió ninguna,
-    // Mercado Pago para los cobros por Mercado Pago (QR/link) y "Cobranzas a
+    // Dónde entró la plata: la cuenta elegida; si no se eligió ninguna, la
+    // de Mercado Pago › Configuración para los cobros por Mercado Pago
+    // (QR/link; si no hay, la de sistema "Mercado Pago") y "Cobranzas a
     // depositar" para el resto (tarjeta, transferencia, Facturación sin
     // cuenta) - de ahí se pasa con una transferencia entre cuentas. Un
     // cheque de tercero no entra a ninguna cuenta hasta depositarlo.
     const financialAccountId = dto.check
       ? dto.financialAccountId
       : (dto.financialAccountId ??
-        (
-          await getOrCreateSystemFinancialAccount(
-            getTenantDb(),
-            getTenantId(),
-            dto.method === 'MERCADOPAGO' ? 'MERCADOPAGO' : 'PENDING_DEPOSIT',
-          )
-        ).id);
+        (dto.method === 'MERCADOPAGO'
+          ? (await getMercadoPagoReceiptAccount(getTenantDb(), getTenantId())).id
+          : (await getOrCreateSystemFinancialAccount(getTenantDb(), getTenantId(), 'PENDING_DEPOSIT')).id));
 
     const receipt = await this.invoicingService.recordReceipt({ ...dto, financialAccountId });
     await this.accountingService.postReceiptJournalEntry({

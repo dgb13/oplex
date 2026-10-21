@@ -13,6 +13,8 @@ export * from './lib/mercadopago-qr.service.js';
 export * from './lib/mercadopago-payments-sync.service.js';
 export * from './lib/mercadopago-movements.service.js';
 export * from './lib/mercadopago-movements.controller.js';
+export * from './lib/mercadopago-settings.service.js';
+export * from './lib/mercadopago-settings.controller.js';
 export * from './lib/mercadopago-instore.client.js';
 export * from './lib/mercadopago-retry.util.js';
 export * from './lib/mercadopago-webhook-signature.util.js';

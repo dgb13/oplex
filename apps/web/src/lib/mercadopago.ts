@@ -13,6 +13,30 @@ export interface MercadoPagoConnectorStatusResponse {
   nickname: string | null;
   connectedAt: string | null;
   connectedByName: string | null;
+  linksEnabled: boolean;
+}
+
+/** Una fila de Mercado Pago › Links de pago. */
+export interface PaymentLinkRow {
+  id: string;
+  documentType: PaymentLinkDocumentType;
+  documentId: string;
+  documentLabel: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  amount: string;
+  currency: string;
+  status: PaymentIntent['status'];
+  initPoint: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  payable: boolean;
+}
+
+export interface MercadoPagoSettings {
+  linksEnabled: boolean;
+  financialAccountId: string;
+  financialAccounts: { id: string; name: string }[];
 }
 
 /** Estados en los que hay que volver a autorizar la cuenta. */
@@ -131,6 +155,12 @@ export const mercadoPagoApi = {
     const res = await api.get('/connectors/mercadopago/movements/export', { params: filters, responseType: 'blob' });
     saveBlob(res.data, 'movimientos-mercado-pago.xlsx');
   },
+  listPaymentLinks: () => api.get<PaymentLinkRow[]>('/connectors/mercadopago/payment-links').then((r) => r.data),
+  emailPaymentLink: (id: string) =>
+    api.post<{ to: string }>(`/connectors/mercadopago/payment-links/${id}/email`).then((r) => r.data),
+  getSettings: () => api.get<MercadoPagoSettings>('/connectors/mercadopago/settings').then((r) => r.data),
+  updateSettings: (dto: { linksEnabled?: boolean; financialAccountId?: string }) =>
+    api.patch<MercadoPagoSettings>('/connectors/mercadopago/settings', dto).then((r) => r.data),
   cancelPaymentLink: (id: string) =>
     api.post<PaymentIntent>(`/connectors/mercadopago/payment-links/${id}/cancel`).then((r) => r.data),
 };
