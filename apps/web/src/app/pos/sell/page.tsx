@@ -7,7 +7,7 @@ import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import CashMovementModal from './CashMovementModal';
 import CheckoutModal from './CheckoutModal';
 import CloseSessionModal from './CloseSessionModal';
@@ -104,6 +104,14 @@ function PosSellScreen() {
     refetchInterval: 15000,
   });
   const unclaimed = unclaimedQuery.data ?? [];
+  // Desde Mercado Pago › Movimientos ("Asignar a venta") se llega con
+  // ?cobrosQr=1: se abre directo la lista de cobros sin venta, una vez.
+  const openedFromMovements = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('cobrosQr') !== '1' || openedFromMovements.current || unclaimed.length === 0) return;
+    openedFromMovements.current = true;
+    setUnclaimedView('browse');
+  }, [searchParams, unclaimed.length]);
 
   const register = (registersQuery.data ?? []).find((r) => r.id === registerId);
   const session = (openSessionsQuery.data ?? []).find((s) => s.registerId === registerId);

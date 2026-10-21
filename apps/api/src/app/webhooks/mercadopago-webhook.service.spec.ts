@@ -7,6 +7,7 @@ import type {
   MercadoPagoConnector,
   MercadoPagoPaymentClient,
   MercadoPagoQrService,
+  MercadoPagoPaymentsSyncService,
 } from '@plexo/mercadopago';
 import { INVOICE_PAID } from '../dashboard/events.js';
 import type { SalesService } from '../sales/sales.service.js';
@@ -79,6 +80,7 @@ interface Deps {
   salesService: jest.Mocked<SalesService>;
   eventEmitter: jest.Mocked<EventEmitter2>;
   qrService: jest.Mocked<MercadoPagoQrService>;
+  paymentsSync: jest.Mocked<MercadoPagoPaymentsSyncService>;
   tx: Record<string, unknown> & {
     paymentIntent: { findFirst: jest.Mock; update: jest.Mock };
     userActivityLog: { create: jest.Mock };
@@ -130,6 +132,10 @@ function makeDeps(overrides: {
     } as unknown as jest.Mocked<SalesService>,
     eventEmitter: { emit: jest.fn() } as unknown as jest.Mocked<EventEmitter2>,
     qrService: { syncFromWebhook: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<MercadoPagoQrService>,
+    paymentsSync: {
+      sync: jest.fn().mockResolvedValue(undefined),
+      syncOne: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<MercadoPagoPaymentsSyncService>,
   };
 }
 
@@ -143,6 +149,7 @@ function makeService(deps: Deps): MercadoPagoWebhookService {
     deps.salesService,
     deps.eventEmitter,
     deps.qrService,
+    deps.paymentsSync,
   );
 }
 

@@ -13,6 +13,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import ConfigurationSection from './ConfigurationSection';
 import ConnectPanel from './ConnectPanel';
+import MovementsTab from './MovementsTab';
+
+type Tab = 'movements' | 'config';
 
 function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback: string): string {
   const message = err.response?.data?.message ?? fallback;
@@ -23,9 +26,9 @@ type OAuthResult = 'connected' | 'denied' | 'error';
 
 /**
  * Sección Mercado Pago (docs/planesdemodulos/plan-seccion-mercadopago.md):
- * reemplaza la tarjeta que vivía en Preferencias. Etapa 1: conexión y
- * Configuración; Resumen, Movimientos y Links de pago llegan en las etapas
- * siguientes. useSearchParams necesita el Suspense (mismo motivo que la
+ * reemplaza la tarjeta que vivía en Preferencias. Etapas 1-2: conexión,
+ * Movimientos y Configuración; Resumen y Links de pago llegan en las
+ * siguientes. Dueño/Admin ven todo; el Contador, sólo Movimientos. useSearchParams necesita el Suspense (mismo motivo que la
  * tarjeta vieja: si no, rompe el prerender de la ruta).
  */
 export default function MercadoPagoPage() {
@@ -72,8 +75,11 @@ function MercadoPagoPageInner() {
     connectMutation.mutate();
   }
 
+  const [tab, setTab] = useState<Tab>('movements');
+
   const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
-  if (profile && !canManage) {
+  const canRead = canManage || profile?.role === 'ACCOUNTANT';
+  if (profile && !canRead) {
     return (
       <div className="flex flex-col gap-2">
         <h1 className="text-xl font-semibold">Mercado Pago</h1>
@@ -90,6 +96,25 @@ function MercadoPagoPageInner() {
 
   const linked = status.status === 'CONNECTED' || MERCADOPAGO_NEEDS_RECONNECT.includes(status.status);
 
+  // El Contador no conecta: si no hay cuenta, sólo se lo dice.
+  if (!canManage && !linked) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold">Mercado Pago</h1>
+        <p className="text-sm text-muted-foreground">
+          La empresa todavía no conectó una cuenta de Mercado Pago. La conecta el dueño o un administrador.
+        </p>
+      </div>
+    );
+  }
+
+  const tabs: { value: Tab; label: string }[] = canManage
+    ? [
+        { value: 'movements', label: 'Movimientos' },
+        { value: 'config', label: 'Configuración' },
+      ]
+    : [{ value: 'movements', label: 'Movimientos' }];
+
   return (
     <div className="flex max-w-6xl flex-col gap-6">
       {linked ? <Header status={status} /> : <h1 className="text-xl font-semibold">Mercado Pago</h1>}
@@ -102,10 +127,32 @@ function MercadoPagoPageInner() {
 
       {linked ? (
         <>
-          {status.status !== 'CONNECTED' && (
+          {status.status !== 'CONNECTED' && canManage && (
             <ReconnectBanner onReconnect={connect} pending={connectMutation.isPending} error={connectError} />
           )}
-          <ConfigurationSection status={status} />
+          <div role="tablist" aria-label="Secciones de Mercado Pago" className="flex flex-wrap gap-1 border-b">
+            {tabs.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.value}
+                onClick={() => setTab(t.value)}
+                className={`-mb-px h-11 border-b-2 px-4 text-sm transition ${
+                  tab === t.value
+                    ? 'border-primary font-semibold text-primary'
+                    : 'border-transparent font-medium text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {tab === 'movements' || !canManage ? (
+            <MovementsTab canAssign={canManage} connected={status.status === 'CONNECTED'} />
+          ) : (
+            <ConfigurationSection status={status} />
+          )}
         </>
       ) : (
         <ConnectPanel

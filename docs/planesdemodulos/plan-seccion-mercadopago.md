@@ -135,6 +135,10 @@ toca un cobro con QR sin conexión, el mensaje dice que le avise al dueño o adm
   de pago u orden (upsert de ese pago) y una vez por noche para todos los tenants conectados.
   **A confirmar con la cuenta real**: el tope de `offset` de la búsqueda y si los pagos de QR
   (API de Orders) traen `external_reference` = id del `PaymentIntent`, como lo mandamos.
+  *Hecho (2026-10-21)*: con la cuenta de prueba de la empresa demo, los pagos de QR sí traen el
+  `external_reference` y se cruzan. El tope de `offset` sigue sin confirmar: la sincronización corre
+  la ventana de fechas cada 1.000 resultados para no depender de él. La búsqueda no trae el nombre
+  de quien pagó, sólo el correo: `payerName` no se guarda.
 - Cruce con `PaymentIntent` por `external_reference` / `externalPaymentId` → origen (factura,
   cotización, caja) y estado "En Oplex": Asignado (link al documento o venta), Sin asignar
   (QR pagado sin venta), Devuelto, Fuera de Oplex.

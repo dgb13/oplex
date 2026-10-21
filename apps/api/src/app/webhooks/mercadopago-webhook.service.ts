@@ -16,6 +16,7 @@ import {
   MercadoPagoConfigService,
   MercadoPagoConnector,
   MercadoPagoPaymentClient,
+  MercadoPagoPaymentsSyncService,
   MercadoPagoQrService,
   verifyMercadoPagoWebhookSignature,
 } from '@plexo/mercadopago';
@@ -55,6 +56,7 @@ export class MercadoPagoWebhookService {
     private readonly salesService: SalesService,
     private readonly eventEmitter: EventEmitter2,
     private readonly qrService: MercadoPagoQrService,
+    private readonly paymentsSync: MercadoPagoPaymentsSyncService,
   ) {}
 
   /**
@@ -183,6 +185,7 @@ export class MercadoPagoWebhookService {
       if (result?.invoicePaidEvent) {
         this.eventEmitter.emit(INVOICE_PAID, result.invoicePaidEvent);
       }
+      await this.refreshPaymentsCopy(input.tenantIdParam, () => this.paymentsSync.syncOne(input.dataId as string));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await this.prisma.webhookEvent.update({ where: { id: webhookEvent.id }, data: { error: message } });
@@ -343,5 +346,24 @@ export class MercadoPagoWebhookService {
     }
     // syncFromWebhook le pregunta a MP el estado real dentro de la transacción.
     await withTenantContext(this.prisma, tenantId, () => this.qrService.syncFromWebhook(orderId), undefined, undefined, 30_000);
+    // El id de pago de la orden no es el de /v1/payments, así que se trae lo
+    // nuevo de la cuenta en vez de un solo pago.
+    await this.refreshPaymentsCopy(tenantId, () => this.paymentsSync.sync());
+  }
+
+  /**
+   * Copia local de los pagos para la sección Mercado Pago (Movimientos).
+   * Va en su propia transacción, DESPUÉS de conciliar, y nunca falla el
+   * webhook: si MP no responde, el botón "Actualizar movimientos" o el cron
+   * de la noche lo traen después. La conciliación es lo que no se puede
+   * perder; esto no.
+   */
+  private async refreshPaymentsCopy(tenantId: string, fn: () => Promise<unknown>): Promise<void> {
+    try {
+      await withTenantContext(this.prisma, tenantId, fn, undefined, undefined, 30_000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`No se pudo actualizar la copia de pagos de Mercado Pago (tenant ${tenantId}): ${message}`);
+    }
   }
 }

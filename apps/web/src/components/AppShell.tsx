@@ -114,10 +114,9 @@ const NAV_ENTRIES: NavEntry[] = [
       { href: '/accounting/arca', label: 'Conexión con ARCA', roles: [] },
     ],
   },
-  // Sección propia (plan-seccion-mercadopago.md): conexión, QR por caja y
-  // configuración. Sólo Dueño/Admin por ahora; el Contador entra cuando
-  // existan Resumen y Movimientos (etapa 2).
-  { kind: 'link', href: '/mercadopago', label: 'Mercado Pago', icon: Wallet, roles: [] },
+  // Sección propia (plan-seccion-mercadopago.md): conexión, movimientos y
+  // configuración. Dueño/Admin todo; el Contador ve los movimientos.
+  { kind: 'link', href: '/mercadopago', label: 'Mercado Pago', icon: Wallet, roles: ['ACCOUNTANT'] },
   { kind: 'link', href: '/companies', label: 'Empresas', icon: Building2 },
   { kind: 'link', href: '/branches', label: 'Sucursales', icon: Store, roles: ['SALES'] },
   { kind: 'link', href: '/accountants', label: 'Contadores', icon: Briefcase, roles: ['ACCOUNTANT'] },

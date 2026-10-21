@@ -16,6 +16,7 @@ import { BackupSchedulerService } from './backup-scheduler.service.js';
 import { ExchangeRateSchedulerService } from './exchange-rate-scheduler.service.js';
 import { InventoryReplenishmentController } from './inventory-replenishment.controller.js';
 import { InventoryReplenishmentSchedulerService } from './inventory-replenishment-scheduler.service.js';
+import { MercadoPagoPaymentsSchedulerService } from './mercadopago-payments-scheduler.service.js';
 import { MercadoPagoRefreshSchedulerService } from './mercadopago-refresh-scheduler.service.js';
 import { OpsAlertsService } from './ops-alerts.service.js';
 import { OpsModule } from '../ops/ops.module.js';
@@ -52,6 +53,7 @@ import { SubscriptionsSchedulerService } from './subscriptions-scheduler.service
     InventoryReplenishmentSchedulerService,
     ExchangeRateSchedulerService,
     MercadoPagoRefreshSchedulerService,
+    MercadoPagoPaymentsSchedulerService,
     PriceIndexSchedulerService,
     OpsAlertsService,
   ],
