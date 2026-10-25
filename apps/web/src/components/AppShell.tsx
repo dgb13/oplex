@@ -16,6 +16,7 @@ import { UserAvatar } from './UserAvatar';
 import { MERCADOPAGO_NEEDS_RECONNECT, mercadoPagoApi } from '@/lib/mercadopago';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
+import { supportApi } from '@/lib/support';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -584,6 +585,7 @@ function OnlineColleagues({ users }: { users: PresenceUser[] }) {
 
 function UserMenu() {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -591,6 +593,13 @@ function UserMenu() {
     queryKey: ['profile-me'],
     queryFn: profileApi.getMe,
   });
+  // Respuestas de Oplex sin leer en Ayuda y soporte (punto naranja).
+  const { data: supportUnread } = useQuery({
+    queryKey: ['support-unread'],
+    queryFn: supportApi.unread,
+    refetchInterval: 5 * 60_000,
+  });
+  const hasSupportReply = (supportUnread?.unread ?? 0) > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -628,9 +637,12 @@ function UserMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-transparent transition hover:ring-ring/50"
-        aria-label="Menú de usuario"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-transparent transition hover:ring-ring/50"
+        aria-label={hasSupportReply ? 'Menú de usuario (tenés una respuesta de soporte)' : 'Menú de usuario'}
       >
+        {hasSupportReply && (
+          <span className="absolute -right-0.5 -top-0.5 z-[1] h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-background" aria-hidden />
+        )}
         {profile ? (
           <UserAvatar avatarUrl={profile.avatarUrl} name={profile.name} email={profile.email} size={36} />
         ) : (
@@ -698,6 +710,17 @@ function UserMenu() {
           )}
 
           <div className="mt-1 border-t pt-1">
+            {/* ?from= le dice a Soporte desde qué pantalla viene la consulta. */}
+            <Link
+              href={`/support?from=${encodeURIComponent(pathname)}`}
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between px-4 py-2 text-sm hover:bg-muted"
+            >
+              Ayuda y soporte
+              {hasSupportReply && (
+                <span className="rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white">Respuesta nueva</span>
+              )}
+            </Link>
             <button onClick={handleLogout} className="block w-full px-4 py-2 text-left text-sm hover:bg-muted">
               Cerrar sesión
             </button>

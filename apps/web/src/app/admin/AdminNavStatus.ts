@@ -1,4 +1,4 @@
-import { adminBackupsApi, adminErrorsApi, adminSubscriptionsApi, adminSystemStatusApi } from '@/lib/admin';
+import { adminBackupsApi, adminErrorsApi, adminSubscriptionsApi, adminSupportApi, adminSystemStatusApi } from '@/lib/admin';
 import { useQuery } from '@tanstack/react-query';
 import { AR_TIME_ZONE, diskTone, type Tone } from './OpsUi';
 
@@ -50,7 +50,20 @@ export function useAdminNavStatus(): Partial<Record<string, NavChip>> {
     refetchInterval: 60_000,
   });
 
+  const support = useQuery({
+    queryKey: ['admin-support-counts'],
+    queryFn: adminSupportApi.counts,
+    refetchInterval: 60_000,
+  });
+
   const chips: Partial<Record<string, NavChip>> = {};
+
+  // Consultas sin leer en rojo; si no hay, las abiertas en amarillo.
+  if (support.data) {
+    const { open, unread } = support.data;
+    if (unread > 0) chips['/admin/support'] = { tone: 'bad', label: `${unread} sin leer` };
+    else if (open > 0) chips['/admin/support'] = { tone: 'warn', label: `${open} abiertas` };
+  }
 
   if (subscriptions.data) {
     const n = subscriptions.data.filter((row) => row.pendingPayment).length;

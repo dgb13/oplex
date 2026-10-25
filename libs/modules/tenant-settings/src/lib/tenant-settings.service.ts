@@ -404,6 +404,8 @@ export class TenantSettingsService {
       afipKeyEncrypted: this.encryption.encrypt(keyPem),
       afipCertExpiresAt: info.expiresAt,
       afipCertAlias: info.alias,
+      // Primera vez en producción (panel de Tenants del admin); no se pisa.
+      ...(info.env === 'PRODUCCION' && !existing?.afipProductionAt ? { afipProductionAt: new Date() } : {}),
       // Certificado nuevo: los tickets de WSAA y el último chequeo eran del anterior.
       afipWsaaTicketsEncrypted: null,
       afipLastCheckAt: null,

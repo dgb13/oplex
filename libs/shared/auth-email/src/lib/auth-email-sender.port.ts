@@ -47,6 +47,8 @@ export interface SendHtmlNoticePayload {
   text: string;
   /** A quién le llega si responden - por defecto soporte@oplex.com.ar. */
   replyTo?: string;
+  /** Archivos adjuntos (las capturas de una consulta de soporte). */
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
 /**
