@@ -54,6 +54,10 @@ async function bootstrap() {
   await app.register(fastifyStatic, {
     root: join(process.cwd(), 'uploads'),
     prefix: '/uploads/',
+    // Las capturas de soporte NO son públicas: se bajan con sesión por la
+    // API (ver support-files.ts). Excepción a la excepción de arriba.
+    // pathName ya llega decodificado y normalizado por @fastify/static.
+    allowedPath: (pathName) => !/^[\\/]*support([\\/]|$)/i.test(pathName),
   });
   // @fastify/cors defaults `methods` to 'GET,HEAD,POST' - narrower than every
   // other CORS middleware's default, and narrower than this API's actual

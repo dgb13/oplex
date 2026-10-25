@@ -13,6 +13,7 @@ import {
   Database,
   DollarSign,
   Landmark,
+  LifeBuoy,
   Menu,
   Repeat,
   ScanLine,
@@ -45,6 +46,10 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     ],
   },
   {
+    label: 'Atención',
+    entries: [{ href: '/admin/support', label: 'Soporte', icon: LifeBuoy }],
+  },
+  {
     label: 'Operación',
     entries: [
       { href: '/admin/activity', label: 'Actividad', icon: Activity },
@@ -73,9 +78,11 @@ const CHIP_CLASS = {
   bad: 'bg-red-900/50 text-red-300',
 } as const;
 
-// /admin es Tenants; el resto marca su sección también en sub-páginas.
+// /admin es Tenants (y su ficha, /admin/tenants/[id]); el resto marca su
+// sección también en sub-páginas.
 function isActive(pathname: string, href: string): boolean {
-  return href === '/admin' ? pathname === '/admin' : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === '/admin') return pathname === '/admin' || pathname.startsWith('/admin/tenants/');
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /**

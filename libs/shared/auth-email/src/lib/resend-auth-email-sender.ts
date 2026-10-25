@@ -50,6 +50,7 @@ export class ResendAuthEmailSender implements AuthEmailSender {
       subject: payload.subject,
       html: payload.html,
       text: payload.text,
+      attachments: payload.attachments,
     });
     if (error) {
       this.logger.error(`Failed to email "${payload.subject}" to ${payload.to}: ${error.message}`);

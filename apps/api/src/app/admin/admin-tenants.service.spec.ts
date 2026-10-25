@@ -56,62 +56,6 @@ describe('AdminTenantsService.createTenant', () => {
   });
 });
 
-describe('AdminTenantsService.listTenants', () => {
-  function makeListPrisma(tenantIds: string[]) {
-    const fakeTx = {
-      tenant: { findUniqueOrThrow: jest.fn() },
-      user: { count: jest.fn().mockResolvedValue(3) },
-      invoice: { count: jest.fn().mockResolvedValue(7) },
-      tenantSubscription: { findUnique: jest.fn().mockResolvedValue(null) },
-      $executeRaw: jest.fn().mockResolvedValue(undefined),
-    };
-    const prisma = {
-      $queryRaw: jest.fn().mockResolvedValue(tenantIds.map((id) => ({ id }))),
-      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(fakeTx)),
-    } as unknown as PrismaService;
-    return { prisma, fakeTx };
-  }
-
-  it('returns one summary per tenant with usage metrics', async () => {
-    const { prisma, fakeTx } = makeListPrisma(['tenant-1']);
-    fakeTx.tenant.findUniqueOrThrow.mockResolvedValue({
-      id: 'tenant-1',
-      name: 'Acme',
-      status: 'ACTIVE',
-      createdAt: new Date('2026-01-01'),
-    });
-    const service = new AdminTenantsService(prisma, makeAuthService(), makeTenantProvisioningService());
-
-    const result = await service.listTenants();
-
-    expect(result).toEqual([
-      {
-        id: 'tenant-1',
-        name: 'Acme',
-        status: 'ACTIVE',
-        createdAt: new Date('2026-01-01'),
-        activeUsers: 3,
-        invoicesThisMonth: 7,
-        planKey: null,
-        subscriptionStatus: null,
-      },
-    ]);
-  });
-
-  it('skips a tenant that fails to load instead of aborting the whole list', async () => {
-    const { prisma, fakeTx } = makeListPrisma(['tenant-1', 'tenant-2']);
-    fakeTx.tenant.findUniqueOrThrow
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({ id: 'tenant-2', name: 'Beta', status: 'ACTIVE', createdAt: new Date() });
-    const service = new AdminTenantsService(prisma, makeAuthService(), makeTenantProvisioningService());
-
-    const result = await service.listTenants();
-
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('tenant-2');
-  });
-});
-
 describe('AdminTenantsService.listTenantUsers', () => {
   it('returns the tenant users ordered by email, scoped to that tenant context', async () => {
     const { prisma, fakeTx } = makePrisma();

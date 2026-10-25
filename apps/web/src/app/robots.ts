@@ -28,6 +28,7 @@ const PRIVATE_SECTIONS = [
   '/settings',
   '/sla',
   '/suppliers',
+  '/support',
   '/taxes',
   '/treasury',
   '/uploads/',

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { getTenantDb, PrismaService, withTenantContext, type TenantStatus } from '@plexo/database';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -12,33 +12,11 @@ export interface CreatedTenant {
   tempPassword: string;
 }
 
-export interface TenantSummary {
-  id: string;
-  name: string;
-  status: TenantStatus;
-  createdAt: Date;
-  activeUsers: number;
-  invoicesThisMonth: number;
-  planKey: string | null;
-  subscriptionStatus: string | null;
-}
-
 export interface TenantUserSummary {
   id: string;
   email: string;
   name: string | null;
   role: string;
-}
-
-/** Rango del mes calendario actual en UTC - mismo criterio que
- * defaultDateRange() en reports-sales.service.ts, reescrito acá porque esa
- * función vive en una lib de reportes tenant-scoped y este uso es
- * cross-tenant (un solo "ahora" para el barrido completo, no por request). */
-function currentMonthRangeUtc(): { from: Date; to: Date } {
-  const now = new Date();
-  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  return { from, to };
 }
 
 /**
@@ -60,53 +38,13 @@ function currentMonthRangeUtc(): { from: Date; to: Date } {
  */
 @Injectable()
 export class AdminTenantsService {
-  private readonly logger = new Logger(AdminTenantsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly tenantProvisioningService: TenantProvisioningService,
   ) {}
 
-  /** Un withTenantContext por tenant (list_tenant_ids(), mismo recipe que
-   * ReceivablesSchedulerService/SubscriptionsSchedulerService) - un tenant
-   * con datos corruptos/una falla transitoria no debe tumbar el panel
-   * entero, sólo faltar en la lista con un log. */
-  async listTenants(): Promise<TenantSummary[]> {
-    const tenants = await this.prisma.$queryRaw<{ id: string }[]>`SELECT id FROM list_tenant_ids() AS id`;
-    const { from, to } = currentMonthRangeUtc();
-
-    const summaries: TenantSummary[] = [];
-    for (const { id: tenantId } of tenants) {
-      try {
-        const summary = await withTenantContext(this.prisma, tenantId, async () => {
-          const db = getTenantDb();
-          const [tenant, activeUsers, invoicesThisMonth, subscription] = await Promise.all([
-            db.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
-            db.user.count(),
-            db.invoice.count({ where: { issueDate: { gte: from, lt: to } } }),
-            db.tenantSubscription.findUnique({ where: { tenantId }, include: { plan: true } }),
-          ]);
-
-          return {
-            id: tenant.id,
-            name: tenant.name,
-            status: tenant.status,
-            createdAt: tenant.createdAt,
-            activeUsers,
-            invoicesThisMonth,
-            planKey: subscription?.plan.key ?? null,
-            subscriptionStatus: subscription?.status ?? null,
-          };
-        });
-        summaries.push(summary);
-      } catch (err) {
-        this.logger.error(`Failed to load tenant summary for ${tenantId}: ${(err as Error).message}`);
-      }
-    }
-
-    return summaries;
-  }
+  // La lista y la ficha de tenants viven en AdminTenantInsightsService.
 
   /** Para el selector de "a quién impersonar" en el frontend, cuando un
    * tenant tiene más de un usuario (ver la sección de impersonación del

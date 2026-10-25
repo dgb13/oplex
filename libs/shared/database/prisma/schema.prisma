@@ -806,6 +806,10 @@ model TenantSettings {
   afipLastCheckAt      DateTime?
   afipLastCheckOk      Boolean?
   afipLastCheckMessage String?
+  // Primera vez que se cargó un certificado de PRODUCCIÓN (panel de Tenants
+  // del admin). No se borra si después vuelve a homologación. Los tenants
+  // anteriores se completaron con la fecha de su primera factura con CAE.
+  afipProductionAt     DateTime?
 
   // Condición IVA propia del tenant (quien emite), no la del cliente -
   // determina qué letra de comprobante es fiscalmente válida (ver
@@ -4545,4 +4549,115 @@ model StorefrontOrderLine {
 
   @@index([tenantId, orderId])
   @@map("storefront_order_lines")
+}
+
+// Notas internas del operador de Oplex sobre un tenant (panel de Tenants).
+// Tabla de plataforma, sin RLS a propósito (como legal_requests): la
+// escribe y lee sólo el admin; ninguna pantalla de tenant la consulta.
+model PlatformTenantNote {
+  tenantId       String   @id
+  body           String
+  updatedByEmail String?
+  updatedAt      DateTime @updatedAt
+
+  @@map("platform_tenant_notes")
+}
+
+// Soporte: consultas de los usuarios a Oplex (errores, consultas,
+// sugerencias). Tablas de tenant con RLS - el admin las lee tenant por
+// tenant, mismo recipe que el panel de Tenants.
+enum SupportTicketType {
+  ERROR
+  QUESTION
+  SUGGESTION
+}
+
+enum SupportTicketStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_USER
+  RESOLVED
+}
+
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum SupportAuthorKind {
+  USER
+  ADMIN
+}
+
+model SupportTicket {
+  id       String @id @default(uuid())
+  tenantId String
+  // Número visible (#0142), único en toda la plataforma.
+  number   Int    @unique @default(autoincrement())
+  userId   String
+  // Copia de quién escribió: el aviso por correo y la bandeja del admin no
+  // dependen de que el usuario siga existiendo.
+  userEmail String
+  userName  String?
+  type      SupportTicketType
+  module    String
+  subject   String
+  status    SupportTicketStatus   @default(NEW)
+  priority  SupportTicketPriority @default(NORMAL)
+  // Página, navegador y pantalla que mandó el navegador, sólo si el
+  // usuario lo autorizó al crear la consulta.
+  context   Json?
+  unreadByAdmin Boolean   @default(true)
+  unreadByUser  Boolean   @default(false)
+  lastMessageAt DateTime  @default(now())
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  messages    SupportMessage[]
+  attachments SupportAttachment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId, lastMessageAt])
+  @@index([tenantId, status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id          String            @id @default(uuid())
+  tenantId    String
+  ticketId    String
+  ticket      SupportTicket     @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  authorKind  SupportAuthorKind
+  authorEmail String
+  body        String
+  // Nota interna del admin: nunca se le muestra ni se le manda al usuario.
+  internal    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+
+  attachments SupportAttachment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, ticketId, createdAt])
+  @@map("support_messages")
+}
+
+// Capturas y archivos de una consulta. Se guardan en uploads/support/, que
+// main.ts NO sirve públicamente: se bajan con sesión por la API.
+model SupportAttachment {
+  id         String         @id @default(uuid())
+  tenantId   String
+  ticketId   String
+  ticket     SupportTicket  @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  messageId  String
+  message    SupportMessage @relation(fields: [tenantId, messageId], references: [tenantId, id], onDelete: Cascade)
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime       @default(now())
+
+  @@index([tenantId, ticketId])
+  @@map("support_attachments")
 }

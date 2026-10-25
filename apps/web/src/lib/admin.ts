@@ -2,15 +2,75 @@ import { api } from '@/lib/api';
 
 export type TenantStatus = 'ACTIVE' | 'SUSPENDED';
 
+export type TenantHealth = 'ok' | 'warn' | 'bad';
+
 export interface TenantSummary {
   id: string;
   name: string;
+  taxId: string | null;
   status: TenantStatus;
   createdAt: string;
   activeUsers: number;
   invoicesThisMonth: number;
   planKey: string | null;
+  planName: string | null;
+  planPriceMonthly: number | null;
   subscriptionStatus: string | null;
+  trialEndsAt: string | null;
+  articles: number;
+  customers: number;
+  suppliers: number;
+  quotes: number;
+  /** null = sin certificado cargado. */
+  arcaEnv: 'PRODUCCION' | 'HOMOLOGACION' | null;
+  arcaProductionAt: string | null;
+  firstCaeInvoiceAt: string | null;
+  whatsappLinks: number;
+  mercadoPagoConnectedAt: string | null;
+  storefrontPublished: boolean;
+  lastActivityAt: string | null;
+  openTickets: number;
+  health: TenantHealth;
+  healthReasons: string[];
+}
+
+export interface TenantDetail extends TenantSummary {
+  milestones: Array<{ key: string; label: string; at: string | null; detail: string | null }>;
+  users: Array<{
+    id: string;
+    email: string;
+    name: string | null;
+    role: string;
+    createdAt: string;
+    lastLoginAt: string | null;
+    whatsappPhone: string | null;
+    whatsappVerifiedAt: string | null;
+  }>;
+  arca: {
+    env: 'PRODUCCION' | 'HOMOLOGACION' | null;
+    certExpiresAt: string | null;
+    lastCheckAt: string | null;
+    lastCheckOk: boolean | null;
+    lastCheckMessage: string | null;
+    productionAt: string | null;
+  };
+  mercadoPago: {
+    status: string | null;
+    nickname: string | null;
+    connectedAt: string | null;
+    lastErrorMessage: string | null;
+    paymentsLast30Days: number;
+  };
+  storefront: { subdomain: string | null; published: boolean; template: string | null; ordersTotal: number };
+  email: { mode: string; customDomain: string | null; domainStatus: string | null };
+  usage: {
+    invoicesTotal: number;
+    assistantMessagesLast30Days: number;
+    aiEventsLast30Days: number;
+    errorsLast30Days: number;
+    resolvedTickets: number;
+  };
+  note: { body: string; updatedByEmail: string | null; updatedAt: string } | null;
 }
 
 export interface TenantUserSummary {
@@ -27,6 +87,8 @@ export interface ImpersonateResult {
 
 export const adminTenantsApi = {
   list: () => api.get<TenantSummary[]>('/admin/tenants').then((r) => r.data),
+  detail: (tenantId: string) => api.get<TenantDetail>(`/admin/tenants/${tenantId}/detail`).then((r) => r.data),
+  saveNote: (tenantId: string, body: string) => api.put(`/admin/tenants/${tenantId}/note`, { body }).then((r) => r.data),
   listUsers: (tenantId: string) =>
     api.get<TenantUserSummary[]>(`/admin/tenants/${tenantId}/users`).then((r) => r.data),
   updateStatus: (tenantId: string, status: TenantStatus) =>
@@ -631,4 +693,70 @@ export const adminOplexBankApi = {
   get: () => api.get<OplexBankDetailsInput>('/admin/subscriptions/oplex-bank').then((r) => r.data),
   update: (dto: OplexBankDetailsInput) =>
     api.patch<OplexBankDetailsInput>('/admin/subscriptions/oplex-bank', dto).then((r) => r.data),
+};
+
+// Soporte (bandeja del backoffice). Ver lib/support.ts para el lado del usuario.
+export type SupportTicketType = 'ERROR' | 'QUESTION' | 'SUGGESTION';
+export type SupportTicketStatus = 'NEW' | 'IN_PROGRESS' | 'WAITING_USER' | 'RESOLVED';
+export type SupportTicketPriority = 'LOW' | 'NORMAL' | 'HIGH';
+
+export interface AdminSupportTicketRow {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  number: number;
+  userEmail: string;
+  userName: string | null;
+  type: SupportTicketType;
+  module: string;
+  subject: string;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  unreadByAdmin: boolean;
+  lastMessageAt: string;
+  createdAt: string;
+}
+
+export interface SupportAttachmentInfo {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface AdminSupportTicketDetail extends AdminSupportTicketRow {
+  userId: string;
+  userRole: string | null;
+  userExists: boolean;
+  tenantTaxId: string | null;
+  context: Record<string, string> | null;
+  resolvedAt: string | null;
+  messages: Array<{
+    id: string;
+    authorKind: 'USER' | 'ADMIN';
+    authorEmail: string;
+    body: string;
+    internal: boolean;
+    createdAt: string;
+    attachments: SupportAttachmentInfo[];
+  }>;
+}
+
+export const adminSupportApi = {
+  list: () => api.get<AdminSupportTicketRow[]>('/admin/support/tickets').then((r) => r.data),
+  counts: () => api.get<{ open: number; unread: number }>('/admin/support/counts').then((r) => r.data),
+  get: (tenantId: string, id: string) =>
+    api.get<AdminSupportTicketDetail>(`/admin/support/tickets/${tenantId}/${id}`).then((r) => r.data),
+  update: (tenantId: string, id: string, dto: { status?: SupportTicketStatus; priority?: SupportTicketPriority }) =>
+    api.patch(`/admin/support/tickets/${tenantId}/${id}`, dto).then((r) => r.data),
+  reply: (tenantId: string, id: string, body: string, internal: boolean, files: File[]) => {
+    const form = new FormData();
+    form.append('body', body);
+    form.append('internal', String(internal));
+    files.forEach((f) => form.append('files', f));
+    return api.post(`/admin/support/tickets/${tenantId}/${id}/messages`, form).then((r) => r.data);
+  },
+  /** Los adjuntos piden sesión: se bajan como blob y se abren con un object URL. */
+  attachmentBlob: (tenantId: string, id: string) =>
+    api.get<Blob>(`/admin/support/attachments/${tenantId}/${id}`, { responseType: 'blob' }).then((r) => r.data),
 };

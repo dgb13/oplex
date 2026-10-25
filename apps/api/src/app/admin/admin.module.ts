@@ -13,6 +13,7 @@ import { AdminMercadoPagoController } from './admin-mercadopago.controller.js';
 import { AdminMercadoPagoService } from './admin-mercadopago.service.js';
 import { AdminSystemStatusController } from './admin-system-status.controller.js';
 import { AdminSystemStatusService } from './admin-system-status.service.js';
+import { AdminTenantInsightsService } from './admin-tenant-insights.service.js';
 import { AdminTenantsController } from './admin-tenants.controller.js';
 import { AdminTenantsService } from './admin-tenants.service.js';
 
@@ -31,6 +32,6 @@ import { AdminSubscriptionsService } from './admin-subscriptions.service.js';
     AdminArcaConstanciaLinkController,
     AdminSubscriptionsController,
   ],
-  providers: [AdminAiStatusService, AdminTenantsService, AdminAuditService, AdminMercadoPagoService, AdminSystemStatusService, AdminSubscriptionsService],
+  providers: [AdminAiStatusService, AdminTenantsService, AdminTenantInsightsService, AdminAuditService, AdminMercadoPagoService, AdminSystemStatusService, AdminSubscriptionsService],
 })
 export class AdminModule {}

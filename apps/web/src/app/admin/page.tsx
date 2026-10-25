@@ -1,244 +1,290 @@
 'use client';
 
-import { adminErrorsApi, adminTenantsApi, type TenantStatus, type TenantSummary } from '@/lib/admin';
-import { startImpersonation } from '@/lib/impersonation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AxiosError } from 'axios';
+import { adminTenantsApi, type TenantSummary } from '@/lib/admin';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import AdminSelect from './AdminSelect';
+import { useMemo, useState } from 'react';
+import {
+  daysSince,
+  formatAgo,
+  HealthBadge,
+  IntegrationIcons,
+  IntegrationLegend,
+  PlanPill,
+  trialDaysLeft,
+} from './TenantUi';
 
-// Same extraction as CompanyFormModal/LoginPage - without this, a failed
-// suspend/reactivate/impersonate silently reset the row back to its normal
-// buttons with zero indication anything went wrong.
-function extractErrorMessage(err: unknown, fallback: string): string {
-  const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
-  if (!message) return fallback;
-  return Array.isArray(message) ? message.join(', ') : message;
+type FilterKey = 'all' | 'trial' | 'noarca' | 'inactive' | 'pastdue' | 'tickets';
+
+const FILTERS: Array<{ key: FilterKey; label: string; match: (t: TenantSummary) => boolean }> = [
+  { key: 'all', label: 'Todos', match: () => true },
+  {
+    key: 'trial',
+    label: 'Prueba por vencer',
+    match: (t) => {
+      const left = trialDaysLeft(t);
+      return left !== null && left <= 5;
+    },
+  },
+  { key: 'noarca', label: 'Sin ARCA en producción', match: (t) => t.arcaEnv !== 'PRODUCCION' },
+  { key: 'inactive', label: 'Inactivos +7 días', match: (t) => (daysSince(t.lastActivityAt) ?? Infinity) >= 7 },
+  { key: 'pastdue', label: 'Pago vencido', match: (t) => t.subscriptionStatus === 'PAST_DUE' || t.subscriptionStatus === 'EXPIRED' },
+  { key: 'tickets', label: 'Con consultas abiertas', match: (t) => t.openTickets > 0 },
+];
+
+const isPaying = (t: TenantSummary) => t.subscriptionStatus === 'ACTIVE' && (t.planPriceMonthly ?? 0) > 0;
+
+// Embudo de activación: hasta dónde llegó cada tenant (boceto aprobado).
+const FUNNEL: Array<{ label: string; match: (t: TenantSummary) => boolean }> = [
+  { label: 'Se registraron', match: () => true },
+  { label: 'Cargaron artículos', match: (t) => t.articles > 0 },
+  { label: 'Hicieron una cotización', match: (t) => t.quotes > 0 },
+  { label: 'ARCA en producción', match: (t) => t.arcaEnv === 'PRODUCCION' },
+  { label: 'Emitieron una factura', match: (t) => t.firstCaeInvoiceAt !== null },
+  { label: 'Pagan un plan', match: isPaying },
+];
+
+const nf = new Intl.NumberFormat('es-AR');
+const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+function csvCell(value: unknown): string {
+  const s = value === null || value === undefined ? '' : String(value);
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-const STATUS_LABELS: Record<TenantStatus, string> = { ACTIVE: 'Activo', SUSPENDED: 'Suspendido' };
-const STATUS_COLORS: Record<TenantStatus, string> = {
-  ACTIVE: 'bg-green-900/50 text-green-300',
-  SUSPENDED: 'bg-red-900/50 text-red-300',
-};
+// CSV con ";" (lo que abre bien Excel en castellano) y BOM para los acentos.
+function downloadCsv(rows: TenantSummary[]) {
+  const header = [
+    'Tenant', 'CUIT', 'Plan', 'Suscripción', 'Alta', 'ARCA', 'ARCA producción desde', 'WhatsApp', 'Mercado Pago',
+    'Tienda', 'Artículos', 'Clientes', 'Proveedores', 'Cotizaciones', 'Facturas del mes', 'Usuarios',
+    'Última actividad', 'Consultas abiertas', 'Salud', 'Motivo',
+  ];
+  const lines = rows.map((t) =>
+    [
+      t.name, t.taxId, t.planName ?? t.planKey, t.subscriptionStatus, t.createdAt.slice(0, 10),
+      t.arcaEnv ?? 'Sin certificado', t.arcaProductionAt?.slice(0, 10), t.whatsappLinks,
+      t.mercadoPagoConnectedAt ? 'Sí' : 'No', t.storefrontPublished ? 'Publicada' : 'No', t.articles, t.customers,
+      t.suppliers, t.quotes, t.invoicesThisMonth, t.activeUsers, t.lastActivityAt?.slice(0, 10), t.openTickets,
+      t.health, t.healthReasons.join(' · '),
+    ]
+      .map(csvCell)
+      .join(';'),
+  );
+  const blob = new Blob(['﻿' + [header.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tenants-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function AdminTenantsPage() {
-  const { data: tenants, isLoading } = useQuery({ queryKey: ['admin-tenants'], queryFn: adminTenantsApi.list });
-  const { data: recentErrors } = useQuery({
-    queryKey: ['admin-errors-recent'],
-    queryFn: () => adminErrorsApi.list({ limit: 200 }),
-  });
+  const router = useRouter();
+  const { data: tenants, isLoading, isError } = useQuery({ queryKey: ['admin-tenants'], queryFn: adminTenantsApi.list });
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [query, setQuery] = useState('');
 
-  const errorsLast24h =
-    recentErrors?.filter((e) => Date.now() - new Date(e.createdAt).getTime() < 24 * 60 * 60 * 1000).length ?? 0;
+  const all = useMemo(
+    () => [...(tenants ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [tenants],
+  );
+  const shown = useMemo(() => {
+    const match = (FILTERS.find((f) => f.key === filter) ?? FILTERS[0]).match;
+    const q = query.trim().toLowerCase();
+    return all.filter((t) => match(t) && (!q || `${t.name} ${t.taxId ?? ''}`.toLowerCase().includes(q)));
+  }, [all, filter, query]);
+
+  const now = new Date();
+  const thisMonth = all.filter((t) => {
+    const d = new Date(t.createdAt);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+  const trialSoon = all.filter(FILTERS[1].match);
+  const paying = all.filter(isPaying);
+  const arcaProd = all.filter((t) => t.arcaEnv === 'PRODUCCION').length;
+  const mp = all.filter((t) => t.mercadoPagoConnectedAt).length;
+  const wa = all.filter((t) => t.whatsappLinks > 0).length;
+  const inactive = all.filter(FILTERS[3].match).length;
+  const pct = (n: number) => (all.length ? Math.round((n / all.length) * 100) : 0);
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-white">Tenants</h1>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Tenants totales" value={tenants ? String(tenants.length) : '—'} />
-        <StatCard
-          label="Suspendidos"
-          value={tenants ? String(tenants.filter((t) => t.status === 'SUSPENDED').length) : '—'}
-          alert={!!tenants?.some((t) => t.status === 'SUSPENDED')}
-        />
-        <StatCard label="Errores 5xx (24hs)" value={String(errorsLast24h)} alert={errorsLast24h > 0} />
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-white">Tenants</h1>
+        <button
+          type="button"
+          onClick={() => downloadCsv(shown)}
+          disabled={!shown.length}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 disabled:opacity-50"
+        >
+          Exportar a Excel
+        </button>
       </div>
 
-      {tenants && tenants.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="mb-4 text-sm font-medium text-slate-400">Facturas emitidas este mes, por tenant</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={tenants}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} width={40} allowDecimals={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b' }}
-                labelStyle={{ color: '#94a3b8' }}
-              />
-              <Bar dataKey="invoicesThisMonth" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+        <Kpi label="Tenants" value={all.length} hint={`+${thisMonth} este mes`} />
+        <Kpi
+          label="Prueba vence ≤ 5 días"
+          value={trialSoon.length}
+          hint={trialSoon.map((t) => t.name).join(', ') || 'ninguno'}
+          warn={trialSoon.length > 0}
+        />
+        <Kpi
+          label="Pagan plan"
+          value={paying.length}
+          hint={`${money.format(paying.reduce((s, t) => s + (t.planPriceMonthly ?? 0), 0))} / mes`}
+        />
+        <Kpi label="ARCA en producción" value={arcaProd} hint={`${pct(arcaProd)} % del total`} />
+        <Kpi label="Mercado Pago conectado" value={mp} hint={`WhatsApp: ${wa}`} />
+        <Kpi label="Inactivos +7 días" value={inactive} hint="posible abandono" warn={inactive > 0} />
+      </div>
+
+      {all.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-medium text-slate-400">Embudo de activación: hasta dónde llegó cada tenant</h2>
+            <span className="text-xs text-slate-500">sobre {all.length} registrados</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {FUNNEL.map((step) => {
+              const n = all.filter(step.match).length;
+              return (
+                <div
+                  key={step.label}
+                  className="grid grid-cols-[110px_minmax(0,1fr)_64px] items-center gap-2.5 text-[12.5px] sm:grid-cols-[180px_minmax(0,1fr)_72px]"
+                >
+                  <span className="text-slate-300">{step.label}</span>
+                  <div className="h-4 overflow-hidden rounded bg-slate-800">
+                    <span className="block h-full rounded bg-indigo-500" style={{ width: `${pct(n)}%` }} />
+                  </div>
+                  <span className="text-right font-mono text-xs tabular-nums text-slate-400">
+                    {n} · {pct(n)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900">
+      <section className="rounded-xl border border-slate-800 bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-3.5">
+          <div className="flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                  filter === f.key
+                    ? 'border-indigo-500 bg-indigo-500/15 text-white'
+                    : 'border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <input
+            id="tenant-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar nombre o CUIT"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 sm:w-56"
+          />
+        </div>
+
         {isLoading ? (
           <p className="p-6 text-sm text-slate-500">Cargando tenants...</p>
-        ) : !tenants || tenants.length === 0 ? (
-          <p className="p-6 text-sm text-slate-500">Sin tenants todavía.</p>
+        ) : isError ? (
+          <p className="p-6 text-sm text-red-400">No se pudo cargar la lista de tenants.</p>
+        ) : shown.length === 0 ? (
+          <p className="p-6 text-sm text-slate-500">
+            {all.length === 0 ? 'Sin tenants todavía.' : 'Ningún tenant cumple este filtro.'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
-                  <th className="p-3">Tenant</th>
-                  <th className="p-3">Estado</th>
-                  <th className="p-3">Plan</th>
-                  <th className="p-3">Suscripción</th>
-                  <th className="p-3 text-right">Usuarios</th>
-                  <th className="p-3 text-right">Facturas/mes</th>
-                  <th className="p-3">Creado</th>
-                  <th className="p-3">Acciones</th>
+                <tr className="border-b border-slate-800 text-left text-[11.5px] text-slate-500">
+                  <th className="p-2.5 font-medium">Tenant</th>
+                  <th className="p-2.5 font-medium">Plan</th>
+                  <th className="p-2.5 font-medium">Integraciones</th>
+                  <th className="p-2.5 text-right font-medium">Artículos</th>
+                  <th className="p-2.5 text-right font-medium">Clientes</th>
+                  <th className="p-2.5 text-right font-medium">Proveed.</th>
+                  <th className="p-2.5 text-right font-medium">Fact./mes</th>
+                  <th className="p-2.5 text-right font-medium">Usuarios</th>
+                  <th className="p-2.5 font-medium">Última actividad</th>
+                  <th className="p-2.5 font-medium">Salud</th>
                 </tr>
               </thead>
               <tbody>
-                {tenants.map((tenant) => (
-                  <TenantRow key={tenant.id} tenant={tenant} />
-                ))}
+                {shown.map((t) => {
+                  const idle = daysSince(t.lastActivityAt);
+                  return (
+                    <tr
+                      key={t.id}
+                      onClick={() => router.push(`/admin/tenants/${t.id}`)}
+                      onKeyDown={(e) => e.key === 'Enter' && router.push(`/admin/tenants/${t.id}`)}
+                      tabIndex={0}
+                      className="cursor-pointer border-b border-slate-800/50 outline-none hover:bg-slate-800/30 focus-visible:bg-slate-800/40"
+                    >
+                      <td className="p-2.5">
+                        <span className="flex flex-wrap items-center gap-1.5 font-semibold text-white">
+                          {t.name}
+                          {t.status === 'SUSPENDED' && (
+                            <span className="rounded bg-red-900/50 px-1.5 text-[11px] font-medium text-red-300">Suspendido</span>
+                          )}
+                          {t.openTickets > 0 && (
+                            <span className="rounded bg-red-900/50 px-1.5 text-[11px] font-medium text-red-300">
+                              {t.openTickets} consulta{t.openTickets > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-500">{t.taxId ?? 'sin CUIT'}</span>
+                      </td>
+                      <td className="p-2.5">
+                        <PlanPill tenant={t} />
+                      </td>
+                      <td className="p-2.5">
+                        <IntegrationIcons tenant={t} />
+                      </td>
+                      <td className="p-2.5 text-right font-mono tabular-nums">{nf.format(t.articles)}</td>
+                      <td className="p-2.5 text-right font-mono tabular-nums">{nf.format(t.customers)}</td>
+                      <td className="p-2.5 text-right font-mono tabular-nums">{nf.format(t.suppliers)}</td>
+                      <td className="p-2.5 text-right font-mono tabular-nums">{nf.format(t.invoicesThisMonth)}</td>
+                      <td className="p-2.5 text-right font-mono tabular-nums">{t.activeUsers}</td>
+                      <td className={`whitespace-nowrap p-2.5 ${idle !== null && idle < 7 ? 'text-slate-400' : 'text-amber-300'}`}>
+                        {formatAgo(t.lastActivityAt)}
+                      </td>
+                      <td className="p-2.5">
+                        <HealthBadge tenant={t} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </div>
+        <div className="p-3.5">
+          <IntegrationLegend />
+        </div>
+      </section>
     </div>
   );
 }
 
-function StatCard({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
+function Kpi({ label, value, hint, warn }: { label: string; value: number; hint: string; warn?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${alert ? 'border-red-900 bg-red-950/40' : 'border-slate-800 bg-slate-900'}`}>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${alert ? 'text-red-300' : 'text-white'}`}>{value}</p>
+    <div className={`min-w-0 rounded-xl border p-3 ${warn ? 'border-amber-900 bg-amber-950/30' : 'border-slate-800 bg-slate-900'}`}>
+      <p className="text-[11.5px] text-slate-400">{label}</p>
+      <p className={`mt-0.5 text-2xl font-bold tabular-nums ${warn ? 'text-amber-300' : 'text-white'}`}>{value}</p>
+      <p className="truncate text-[11px] text-slate-500" title={hint}>
+        {hint}
+      </p>
     </div>
-  );
-}
-
-function TenantRow({ tenant }: { tenant: TenantSummary }) {
-  const queryClient = useQueryClient();
-  const router = useRouter();
-  const [confirmingStatus, setConfirmingStatus] = useState(false);
-  const [impersonating, setImpersonating] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-
-  const { data: users, isLoading: usersLoading } = useQuery({
-    queryKey: ['admin-tenant-users', tenant.id],
-    queryFn: () => adminTenantsApi.listUsers(tenant.id),
-    enabled: impersonating,
-  });
-
-  const statusMutation = useMutation({
-    mutationFn: (status: TenantStatus) => adminTenantsApi.updateStatus(tenant.id, status),
-    onSuccess: () => {
-      setConfirmingStatus(false);
-      void queryClient.invalidateQueries({ queryKey: ['admin-tenants'] });
-    },
-  });
-
-  const impersonateMutation = useMutation({
-    mutationFn: (userId: string) => adminTenantsApi.impersonate(tenant.id, userId),
-    onSuccess: (result) => startImpersonation(queryClient, router, tenant.id, result.accessToken, result.expiresAt),
-  });
-
-  const nextStatus: TenantStatus = tenant.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-
-  return (
-    <tr className="border-b border-slate-800/50 hover:bg-slate-800/30">
-      <td className="p-3 font-medium text-slate-200">{tenant.name}</td>
-      <td className="p-3">
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[tenant.status]}`}>
-          {STATUS_LABELS[tenant.status]}
-        </span>
-      </td>
-      <td className="p-3 text-slate-300">{tenant.planKey ?? '—'}</td>
-      <td className="p-3 text-slate-400">{tenant.subscriptionStatus ?? '—'}</td>
-      <td className="p-3 text-right text-slate-300">{tenant.activeUsers}</td>
-      <td className="p-3 text-right text-slate-300">{tenant.invoicesThisMonth}</td>
-      <td className="p-3 text-slate-500">{new Date(tenant.createdAt).toLocaleDateString('es-AR')}</td>
-      <td className="p-3">
-        {confirmingStatus ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-amber-400">
-              {nextStatus === 'SUSPENDED'
-                ? '¿Confirmás suspender este tenant? No van a poder loguearse.'
-                : '¿Confirmás reactivar este tenant?'}
-            </span>
-            <button
-              type="button"
-              onClick={() => statusMutation.mutate(nextStatus)}
-              disabled={statusMutation.isPending}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
-            >
-              {statusMutation.isPending ? 'Aplicando...' : 'Confirmar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingStatus(false)}
-              className="rounded-lg px-3 py-1.5 text-xs text-slate-400 transition hover:text-slate-200"
-            >
-              Volver
-            </button>
-            {statusMutation.isError && (
-              <span className="text-xs text-red-400">
-                {extractErrorMessage(statusMutation.error, 'No se pudo aplicar el cambio')}
-              </span>
-            )}
-          </div>
-        ) : impersonating ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {usersLoading ? (
-              <span className="text-xs text-slate-500">Cargando usuarios...</span>
-            ) : (
-              <AdminSelect
-                className="min-w-56"
-                buttonClassName="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
-                value={selectedUserId}
-                onChange={setSelectedUserId}
-                placeholder="Elegí un usuario"
-                options={(users ?? []).map((u) => ({ value: u.id, label: `${u.email} (${u.role})` }))}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => selectedUserId && impersonateMutation.mutate(selectedUserId)}
-              disabled={!selectedUserId || impersonateMutation.isPending}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
-            >
-              {impersonateMutation.isPending ? 'Ingresando...' : 'Confirmar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setImpersonating(false);
-                setSelectedUserId('');
-              }}
-              className="rounded-lg px-3 py-1.5 text-xs text-slate-400 transition hover:text-slate-200"
-            >
-              Volver
-            </button>
-            {impersonateMutation.isError && (
-              <span className="text-xs text-red-400">
-                {extractErrorMessage(impersonateMutation.error, 'No se pudo impersonar a este usuario')}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmingStatus(true)}
-              className={`rounded-lg border px-3 py-1.5 text-xs transition ${
-                tenant.status === 'ACTIVE'
-                  ? 'border-red-800 text-red-400 hover:bg-red-950'
-                  : 'border-green-800 text-green-400 hover:bg-green-950'
-              }`}
-            >
-              {tenant.status === 'ACTIVE' ? 'Suspender' : 'Activar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setImpersonating(true)}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800"
-            >
-              Impersonar
-            </button>
-          </div>
-        )}
-      </td>
-    </tr>
   );
 }
