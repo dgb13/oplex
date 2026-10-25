@@ -13,7 +13,13 @@ export function generateStaticParams(): Params[] {
 export async function generateMetadata({ params }: { params: Promise<Params> }) {
   const { chapter, article } = await params;
   const doc = getDocsArticle(chapter, article);
-  return doc ? { title: `${doc.title} · Manual de Oplex`, description: doc.summary } : { title: 'Manual de Oplex' };
+  return doc
+    ? {
+        title: `${doc.title} · Manual de Oplex`,
+        description: doc.summary,
+        alternates: { canonical: `/documentacion/${chapter}/${article}` },
+      }
+    : { title: 'Manual de Oplex' };
 }
 
 export default async function DocsArticlePage({ params }: { params: Promise<Params> }) {

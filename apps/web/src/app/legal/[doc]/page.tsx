@@ -25,7 +25,10 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ doc: string }> }) {
   const { doc } = await params;
   const meta = LEGAL_DOCS.find((d) => d.slug === doc);
-  return { title: meta ? `${meta.title} · Oplex` : 'Oplex' };
+  return {
+    title: meta ? `${meta.title} · Oplex` : 'Oplex',
+    alternates: { canonical: `/legal/${doc}` },
+  };
 }
 
 export default async function LegalPage({ params }: { params: Promise<{ doc: string }> }) {
