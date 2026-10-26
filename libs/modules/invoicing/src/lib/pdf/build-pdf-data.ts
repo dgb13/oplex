@@ -19,6 +19,8 @@ type Decimalish = { toNumber(): number };
  * netAmount es el neto con la bonificación de la línea pero ANTES del
  * descuento general; lineTotal ya tiene el descuento general y el IVA. */
 export interface PdfSourceLine {
+  /** Detalle libre de la línea (InvoiceLine.description); las NC no lo tienen. */
+  description?: string | null;
   quantity: Decimalish;
   unitPrice: Decimalish;
   discountType: string;
@@ -101,7 +103,7 @@ const OTHER_TAX_LABEL: Record<string, string> = {
   OTHER: 'Otros tributos',
 };
 
-const UNIT_LABELS: Record<string, string> = { UNIT: 'u.', KG: 'kg', LTR: 'l', MM: 'mm', M2: 'm²' };
+const UNIT_LABELS: Record<string, string> = { UNIT: 'u.', KG: 'kg', LTR: 'l', MM: 'mm', M2: 'm²', HOUR: 'h', DAY: 'día' };
 
 /** RG 5003/2021 (Ley 27.618): factura A de un RI a un monotributista. */
 export const MONOTRIBUTO_CREDIT_LEGEND =
@@ -175,6 +177,7 @@ function buildAmounts(doc: PdfSourceDocument, otherTaxes: InvoicePdfOtherTax[], 
     const variantLabel = buildVariantLabel(line.articleVariant);
     const pdfLine: InvoicePdfLine = {
       description: variantLabel ? `${line.articleVariant.article.name} · ${variantLabel}` : line.articleVariant.article.name,
+      note: line.description?.trim() || null,
       sku: line.articleVariant.sku,
       quantity: line.quantity.toNumber().toLocaleString('es-AR', { maximumFractionDigits: 3 }),
       unit: UNIT_LABELS[line.articleVariant.article.unitOfMeasure ?? 'UNIT'] ?? 'u.',

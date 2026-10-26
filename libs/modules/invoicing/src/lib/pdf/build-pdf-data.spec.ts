@@ -70,6 +70,25 @@ describe('buildInvoicePdfData', () => {
     expect(data.totalInWords).toBe('pesos ciento veintiuno con 00/100');
   });
 
+  it('shows the line detail and the hour unit for labor billed by the hour', async () => {
+    const labor = makeLine({
+      description: ' Cambio de embrague ',
+      quantity: new Prisma.Decimal(2.5),
+      articleVariant: {
+        sku: 'MO-HORA',
+        color: null,
+        size: null,
+        brand: null,
+        attributes: null,
+        article: { name: 'Mano de obra', unitOfMeasure: 'HOUR' },
+      },
+    });
+    const data = await buildInvoicePdfData(makeDoc({ lines: [labor, makeLine()] }), TENANT, null);
+
+    expect(data.lines[0]).toMatchObject({ description: 'Mano de obra', note: 'Cambio de embrague', quantity: '2,5', unit: 'h' });
+    expect(data.lines[1].note).toBeNull();
+  });
+
   it('splits EXENTO/NO_GRAVADO lines out of the taxed bucket entirely', async () => {
     const doc = makeDoc({
       lines: [

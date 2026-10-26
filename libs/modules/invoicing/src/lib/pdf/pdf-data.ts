@@ -49,6 +49,8 @@ export interface InvoicePdfCustomer {
 
 export interface InvoicePdfLine {
   description: string;
+  /** Detalle libre de la línea ("Cambio de embrague"), debajo del nombre. */
+  note: string | null;
   sku: string;
   quantity: string;
   unit: string;

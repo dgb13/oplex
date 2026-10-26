@@ -166,6 +166,9 @@ export default function InvoiceDetailPanel({ invoice, onClose }: Props) {
                               <span className="text-slate-500"> · {buildVariantLabel(line.articleVariant)}</span>
                             )}
                           </p>
+                          {line.description && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400">{line.description}</p>
+                          )}
                           <p className="font-mono text-[10px] text-slate-500">
                             {line.articleVariant.sku}
                           </p>

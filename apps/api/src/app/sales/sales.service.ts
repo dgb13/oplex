@@ -614,6 +614,7 @@ export class SalesService {
         articleVariantId: line.articleVariantId,
         quantity: line.quantity.toNumber(),
         unitPrice: line.unitPrice.mul(factor).toNumber(),
+        ...(line.notes?.trim() ? { description: line.notes.trim() } : {}),
         ...(line.discountPercent && line.discountPercent.gt(0)
           ? { discountType: 'PERCENTAGE' as const, discountValue: line.discountPercent.toNumber() }
           : {}),

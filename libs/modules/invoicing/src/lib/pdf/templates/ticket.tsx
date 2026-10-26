@@ -18,7 +18,10 @@ function ticketHeight(data: InvoicePdfData): number {
   const issuerRows = 6 + (data.emitter.tradeName ? 1 : 0) + rowsFor(data.emitter.address);
   const customerRows = 2 + (data.associatedDocument ? 2 : 0) + (data.servicePeriod ? 2 : 0);
   // Una línea larga ocupa dos renglones de descripción.
-  const lineRows = data.lines.reduce((sum, line) => sum + rowsFor(line.description) + 1.3, 0);
+  const lineRows = data.lines.reduce(
+    (sum, line) => sum + rowsFor(line.description) + (line.note ? rowsFor(line.note) : 0) + 1.3,
+    0,
+  );
   const totalsRows = data.totalRows.length + 2 + (data.transparency ? 4 : 0) + data.legends.length * 5;
   const footerRows = 3 + rowsFor(contactLine(data.emitter)) + rowsFor(data.notes);
   // Logo y nombre ~50pt, letra ~30pt, QR ~95pt, separadores (8) ~90pt, márgenes 24pt.
@@ -97,6 +100,7 @@ export function TicketTemplate({ data }: { data: InvoicePdfData }) {
         {data.lines.map((line, i) => (
           <View key={i} style={{ marginBottom: 2 }} wrap={false}>
             <Text>{line.description}</Text>
+            {line.note ? <Text>{line.note}</Text> : null}
             <View style={s.row}>
               <Text>
                 {`${line.quantity} x ${line.unitPrice}`}

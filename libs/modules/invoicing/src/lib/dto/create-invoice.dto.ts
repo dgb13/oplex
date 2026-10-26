@@ -23,6 +23,13 @@ export class CreateInvoiceLineDto {
   @IsUUID()
   articleVariantId!: string;
 
+  // Detalle libre de la línea ("Cambio de embrague"). Sale en el PDF, no va
+  // a ARCA.
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
   @IsNumber()
   @IsPositive()
   quantity!: number;

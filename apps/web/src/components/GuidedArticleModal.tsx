@@ -15,6 +15,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 type Kind = 'insumo' | 'producto' | 'servicio';
 type How = 'pack' | 'unit' | 'bar' | 'sheet' | 'kilo';
 type PackUnit = 'kg' | 'g' | 'L' | 'ml';
+type ServiceUnit = 'UNIT' | 'HOUR' | 'DAY';
+
+// Cómo se cobra un servicio: por trabajo (unidad), por hora (mano de obra de
+// un taller) o por día (alquileres). Es la unidad de medida del artículo.
+const SERVICE_UNITS: { value: ServiceUnit; label: string; priceLabel: string }[] = [
+  { value: 'UNIT', label: 'Por trabajo', priceLabel: 'Precio' },
+  { value: 'HOUR', label: 'Por hora', priceLabel: 'Precio por hora' },
+  { value: 'DAY', label: 'Por día', priceLabel: 'Precio por día' },
+];
 
 const KINDS: { id: Kind; title: string; hint: string }[] = [
   { id: 'insumo', title: 'Un insumo', hint: 'Lo uso para fabricar. No lo vendo.' },
@@ -57,6 +66,7 @@ interface Draft {
   packName: string;
   packQty: string;
   packUnit: PackUnit;
+  serviceUnit: ServiceUnit;
   barLength: string;
   sheetWidth: string;
   sheetLength: string;
@@ -79,6 +89,7 @@ function freshDraft(kind: Kind | '', how: How | '', name = ''): Draft {
     packName: 'bolsa',
     packQty: '',
     packUnit: 'kg',
+    serviceUnit: 'UNIT',
     barLength: '6000',
     sheetWidth: '1220',
     sheetLength: '2440',
@@ -328,7 +339,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
       if (!p.articleId) {
         const article = await inventoryApi.createArticle({
           name: d.name.trim(),
-          unitOfMeasure: d.how === 'kilo' ? 'KG' : 'UNIT',
+          unitOfMeasure: d.kind === 'servicio' ? d.serviceUnit : d.how === 'kilo' ? 'KG' : 'UNIT',
           categoryId: d.categoryId || undefined,
           isService,
           isPublished: d.catalog,
@@ -477,7 +488,7 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
       price: d.price,
       taxDefinitionId,
       sku: d.name.trim() ? code : '',
-      unitOfMeasure: d.how === 'kilo' ? 'KG' : 'UNIT',
+      unitOfMeasure: d.kind === 'servicio' ? d.serviceUnit : d.how === 'kilo' ? 'KG' : 'UNIT',
       warehouseId,
       // Las barras no tienen stock inicial en el formulario completo.
       stock: d.how === 'bar' ? '' : toStock(d.have),
@@ -754,9 +765,25 @@ export default function GuidedArticleModal({ onClose, onSaved, initialName = '',
                   </>
                 )}
 
+                {draft.kind === 'servicio' && (
+                  <Field label="Se cobra">
+                    <Select
+                      value={draft.serviceUnit}
+                      onChange={(v) => set('serviceUnit', v as ServiceUnit)}
+                      options={SERVICE_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                    />
+                  </Field>
+                )}
+
                 {(draft.kind === 'producto' || draft.kind === 'servicio') && (
                   <Field
-                    label={draft.kind === 'servicio' ? 'Precio' : draft.how === 'kilo' ? 'Precio por kilo' : 'Precio de venta'}
+                    label={
+                      draft.kind === 'servicio'
+                        ? (SERVICE_UNITS.find((u) => u.value === draft.serviceUnit)?.priceLabel ?? 'Precio')
+                        : draft.how === 'kilo'
+                          ? 'Precio por kilo'
+                          : 'Precio de venta'
+                    }
                     error={errors.includes('el precio de venta')}
                   >
                     <NumberInput value={draft.price} onChange={(v) => set('price', v)} prefix="$" />

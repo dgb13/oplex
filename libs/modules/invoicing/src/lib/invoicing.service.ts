@@ -123,6 +123,7 @@ export type InvoiceWithCurrencyAndLines = Invoice & { currency: Currency; lines:
 
 interface LineCalculation {
   articleVariantId: string;
+  description: string | null;
   quantity: Prisma.Decimal;
   unitPrice: Prisma.Decimal;
   discountType: DiscountType;
@@ -586,6 +587,7 @@ export class InvoicingService {
       subtotal = subtotal.add(netAmount);
       lineCalculations.push({
         articleVariantId: variant.id,
+        description: line.description?.trim() || null,
         quantity,
         unitPrice,
         discountType,
@@ -629,6 +631,7 @@ export class InvoicingService {
 
       lineInputs.push({
         articleVariantId: calc.articleVariantId,
+        description: calc.description,
         quantity: calc.quantity,
         unitPrice: calc.unitPrice,
         discountType: calc.discountType,

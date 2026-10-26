@@ -1100,7 +1100,7 @@ describe('SalesService.createInvoiceFromQuote', () => {
     expect(createInvoiceArgs.lines).toEqual([{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 100 }]);
   });
 
-  it('keeps each line discount and tax, and the quote notes, so the invoice matches what was approved', async () => {
+  it('keeps each line discount, tax and notes, and the quote notes, so the invoice matches what was approved', async () => {
     const quote = makeQuote({
       currencyId: 'ars',
       currency: { id: 'ars', code: 'ARS', isBase: true },
@@ -1113,6 +1113,7 @@ describe('SalesService.createInvoiceFromQuote', () => {
           discountPercent: new Prisma.Decimal(10),
           taxKind: 'GRAVADO',
           taxRate: new Prisma.Decimal(10.5),
+          notes: ' Cambio de embrague ',
         },
         {
           articleVariantId: 'variant-2',
@@ -1141,6 +1142,7 @@ describe('SalesService.createInvoiceFromQuote', () => {
         articleVariantId: 'variant-1',
         quantity: 1,
         unitPrice: 100,
+        description: 'Cambio de embrague',
         discountType: 'PERCENTAGE',
         discountValue: 10,
         taxKind: 'GRAVADO',

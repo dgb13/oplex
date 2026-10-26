@@ -102,8 +102,15 @@ export function stockUnitLabel(article: Article): string {
       return article.baseUnit ?? '';
     default:
       // Discreto vendido por kilo (p. ej. un producto fabricado "se vende
-      // por kilo" en Recetas) - se cuenta en kg, no en unidades.
-      return article.unitOfMeasure === 'KG' ? 'kg' : 'un.';
+      // por kilo" en Recetas) - se cuenta en kg, no en unidades. Un servicio
+      // por hora o por día, en esa unidad.
+      return article.unitOfMeasure === 'KG'
+        ? 'kg'
+        : article.unitOfMeasure === 'HOUR'
+          ? 'h'
+          : article.unitOfMeasure === 'DAY'
+            ? 'día'
+            : 'un.';
   }
 }
 
@@ -341,6 +348,9 @@ export const UNIT_OF_MEASURE_OPTIONS = [
   { value: 'LTR', label: 'Litro' },
   { value: 'MM', label: 'Milímetro' },
   { value: 'M2', label: 'Metro cuadrado' },
+  // Servicios que se cobran por tiempo (mano de obra, alquileres).
+  { value: 'HOUR', label: 'Hora' },
+  { value: 'DAY', label: 'Día' },
 ] as const;
 
 export const MOVEMENT_TYPES = [

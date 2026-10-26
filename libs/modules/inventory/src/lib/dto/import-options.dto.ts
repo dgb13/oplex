@@ -30,10 +30,10 @@ export class ImportOptionsDto {
   @IsObject()
   taxValues?: Record<string, string>;
 
-  // Valor de unidad del archivo -> UNIT/KG/LTR/MM/M2.
+  // Valor de unidad del archivo -> UNIT/KG/LTR/MM/M2/HOUR/DAY.
   @IsOptional()
   @IsObject()
-  unitValues?: Record<string, 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2'>;
+  unitValues?: Record<string, 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2' | 'HOUR' | 'DAY'>;
 
   // Unidad de las columnas de largo y ancho del archivo.
   @IsOptional()

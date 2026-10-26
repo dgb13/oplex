@@ -152,6 +152,7 @@ export function TradicionalTemplate({ data, size }: { data: InvoicePdfData; size
               </View>
               <View style={[s.td, s.vline, s.cDesc]}>
                 <Text>{line.description}</Text>
+                {line.note ? <Text style={s.sku}>{line.note}</Text> : null}
                 <Text style={s.sku}>
                   Cód. {line.sku}
                   {line.discount ? ` — bonif. ${line.discount}` : ''}

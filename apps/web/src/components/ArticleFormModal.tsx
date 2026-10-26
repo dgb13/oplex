@@ -341,7 +341,11 @@ export default function ArticleFormModal({ onClose, onSaved, initial = {} }: Pro
           ? null
           : unitOfMeasure === 'KG'
             ? 'kg'
-            : 'un.';
+            : unitOfMeasure === 'HOUR'
+              ? 'h'
+              : unitOfMeasure === 'DAY'
+                ? 'día'
+                : 'un.';
   const realCost =
     costPerStockUnit !== undefined ? realUnitCost(costPerStockUnit, costIncludesVat, vatRate, taxCondition) : null;
   const suggestedPrice =

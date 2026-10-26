@@ -59,6 +59,7 @@ const SHEETS = sheetsBySize(StyleSheet.create({
   cVat: { width: 36, textAlign: 'right' },
   cAmount: { width: 72, textAlign: 'right' },
   sku: { fontFamily: FONTS.mono, fontSize: 6.8, color: MUTED, marginTop: 1 },
+  note: { fontSize: 7.5, color: MUTED, marginTop: 1.5 },
   bold: { fontWeight: 600 },
   foot: { flexDirection: 'row', gap: 18, marginTop: 12 },
   totals: { width: 210, backgroundColor: SOFT, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 11 },
@@ -171,6 +172,7 @@ export function ModernoTemplate({ data, size }: { data: InvoicePdfData; size: In
               <View style={s.cDesc}>
                 <Text style={s.bold}>{line.description}</Text>
                 <Text style={s.sku}>{line.sku}</Text>
+                {line.note ? <Text style={s.note}>{line.note}</Text> : null}
               </View>
               <Text style={s.cQty}>{`${line.quantity} ${line.unit}`}</Text>
               <Text style={s.cPrice}>{line.unitPrice}</Text>

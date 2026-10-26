@@ -146,6 +146,7 @@ export function NaturalTemplate({ data, size }: { data: InvoicePdfData; size: In
               )}
               <View style={{ flex: 1 }}>
                 <Text style={s.itemName}>{line.description}</Text>
+                {line.note ? <Text style={s.itemSub}>{line.note}</Text> : null}
                 <Text style={s.itemSub}>
                   {line.sku}
                   {line.discount ? <Text style={{ color: '#3f7d3a', fontWeight: 700 }}>{` · ${line.discount} de descuento`}</Text> : null}
