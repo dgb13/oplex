@@ -18,7 +18,7 @@ Desde **Nueva factura** emitís una factura electrónica que ARCA autoriza en el
 1. **Abrí la pantalla.** Andá a **Ventas › Facturación**, pestaña **Gestión**, y tocá **+ Nueva factura**.
 2. **Mirá el estado de ARCA.** Arriba, al lado del título, ves **ARCA conectado** con la fecha de vencimiento del certificado ①. Si dice **ARCA sin conectar**, no vas a poder emitir: seguí el aviso **Ir a Conexión con ARCA →**.
 3. **Elegí el cliente.** Escribí en **Buscá el cliente por nombre o CUIT** y elegilo ②. Abajo aparece una tarjeta con su CUIT y su condición frente al IVA. Si no está, tocá **+ Nuevo cliente**.
-4. **Agregá los artículos.** En **Agregar artículo: buscá por nombre o SKU (o escaneá el código)** escribí y tocá `Enter` ③. Debajo de cada artículo ves cuánto hay en stock; si no alcanza, dice **no alcanza para esta cantidad**.
+4. **Agregá los artículos.** En **Agregar artículo: buscá por nombre o SKU (o escaneá el código)** escribí y tocá `Enter` ③. Debajo de cada artículo ves cuánto hay en stock; si no alcanza, dice **no alcanza para esta cantidad**. Con el lápiz (**Agregar detalle**) de cada línea escribís un detalle que sale en el PDF debajo del artículo, por ejemplo *cambio de pastillas delanteras*.
 5. **Revisá cantidades, precios e IVA.** Corregí cantidad o precio en la línea. Con **Precios con IVA incluido** indicás si los precios que escribiste ya traen el IVA.
 6. **Sumá percepciones, si corresponde.** Tocá **+ Agregar percepciones / otros tributos** y cargá tipo, concepto, base imponible, alícuota y monto (por ejemplo una **Percepción IIBB (provincial)**).
 7. **Escribí observaciones, si querés.** El campo **Observaciones** sale impreso en el PDF: número de orden de compra del cliente, remito, aclaraciones. Hasta 500 caracteres.

@@ -33,6 +33,9 @@ El **Dueño** y los **Administradores** ven siempre todo. Para el resto, esta es
 | Empresas | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Documentación | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Caja | ✓ | — | — | — | — |
+| Fichas ² | ✓ | — | — | — | ✓ |
+| Órdenes de trabajo ² | ✓ | ✓ | — | ✓ | ✓ |
+| Órdenes de trabajo › Margen por trabajo ² | — | — | — | ✓ | — |
 | Ventas › Facturación | ✓ | — | — | ✓ | ✓ |
 | Ventas › Cotizaciones | ✓ | — | — | — | ✓ |
 | Ventas › Pendientes de entrega | ✓ | — | ✓ | — | — |
@@ -50,12 +53,14 @@ El **Dueño** y los **Administradores** ven siempre todo. Para el resto, esta es
 
 ¹ Sólo si tu plan incluye ese módulo.
 
+² Sólo si el módulo está prendido en **Rubro y módulos**. Ventas carga horas en una orden pero no ve importes ni márgenes; Compras y el Contador suman a la orden las compras hechas para ese trabajo. Ver [Costo y margen de cada trabajo](/documentacion/rubros/costo-y-margen).
+
 **Sólo Dueño y Administrador** ven:
 
 - **Ventas › Tienda online**.
 - **Contabilidad › Conexión con ARCA**.
 - **Contabilidad › Contabilidad**, **Contabilidad › Impuestos** y **Contabilidad › Reportes**. Estas tres también las ve un contador externo vinculado (ver más abajo).
-- En el menú de usuario (tu foto, arriba a la derecha): **Equipo**, **Cajas (POS)** y **Preferencias**.
+- En el menú de usuario (tu foto, arriba a la derecha): **Equipo**, **Cajas (POS)**, **Rubro y módulos** y **Preferencias**.
 
 Todos ven en el menú de usuario **Perfil** y **Planes y facturación**. Pero sólo el Dueño y los Administradores pueden pagar, cambiar de plan o pedir la baja.
 

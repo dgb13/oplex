@@ -158,7 +158,7 @@ export default function FichaPage() {
             disabled={updateMutation.isPending}
             onClick={() => updateMutation.mutate({ active: !asset.active })}
           >
-            {asset.active ? `Dar de baja este ${asset.typeName.toLowerCase()}` : 'Volver a activar'}
+            {asset.active ? 'Dar de baja esta ficha' : 'Volver a activar'}
           </Button>
         </div>
       )}

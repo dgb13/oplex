@@ -89,7 +89,7 @@ export default function WorkOrderCostsPanel({ orderId, role }: { orderId: string
 
   return (
     <section className="rounded-xl border bg-card p-5">
-      <h2 className="text-base font-semibold">{seeMoney ? 'Costo y margen' : 'Horas trabajadas'}</h2>
+      <h2 className="text-base font-semibold">{seeMoney ? 'Costo y margen' : role === 'PURCHASES' ? 'Horas y compras' : 'Horas trabajadas'}</h2>
 
       {seeMoney && !costs.hidden && (
         <>
@@ -207,7 +207,8 @@ export default function WorkOrderCostsPanel({ orderId, role }: { orderId: string
         </form>
       )}
 
-      {seeMoney && !costs.hidden && (
+      {/* Compras ve las compras que vincula, sin ingreso ni margen. */}
+      {(seeMoney ? !costs.hidden : role === 'PURCHASES') && (
         <>
           <h3 className="mt-5 text-sm font-semibold">Compras para este trabajo</h3>
           <p className="text-xs text-muted-foreground">El repuesto o la tornería que compraste especialmente para esta orden.</p>

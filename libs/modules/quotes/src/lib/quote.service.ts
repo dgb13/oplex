@@ -107,10 +107,10 @@ export class QuoteService {
     const tenantId = getTenantId();
     const existing = await db.quote.findUnique({ where: { id } });
     if (!existing) {
-      throw new NotFoundException('Quote not found');
+      throw new NotFoundException('Cotización no encontrada');
     }
     if (existing.status !== 'DRAFT') {
-      throw new BadRequestException('Only a DRAFT quote can be edited');
+      throw new BadRequestException('Sólo se puede editar una cotización en borrador');
     }
 
     await this.validateReferences(dto, existing.customerId);
@@ -256,7 +256,7 @@ export class QuoteService {
   async cancel(id: string): Promise<QuoteDetail> {
     const existing = await this.findOrThrow(id);
     if (existing.status === 'CANCELLED') {
-      throw new BadRequestException('This quote is already cancelled');
+      throw new BadRequestException('Esta cotización ya está cancelada');
     }
     return getTenantDb().quote.update({ where: { id }, data: { status: 'CANCELLED' }, include: DETAIL_INCLUDE });
   }
@@ -276,7 +276,7 @@ export class QuoteService {
   private async resolveDecision(id: string, status: 'ACCEPTED' | 'REJECTED'): Promise<QuoteDetail> {
     const existing = await this.findOrThrow(id);
     if (existing.status !== 'SENT') {
-      throw new BadRequestException('Only a SENT quote can be accepted or rejected');
+      throw new BadRequestException('Sólo se puede aceptar o rechazar una cotización enviada');
     }
     return getTenantDb().quote.update({ where: { id }, data: { status }, include: DETAIL_INCLUDE });
   }
@@ -287,7 +287,7 @@ export class QuoteService {
   async sendEmail(id: string): Promise<QuoteDetail> {
     const quote = await this.findOrThrow(id);
     if (!quote.customer.email) {
-      throw new BadRequestException('This customer has no email on file');
+      throw new BadRequestException('El cliente no tiene email cargado');
     }
     const { buffer, filename } = await this.generatePdf(id);
     await this.emailSender.sendQuoteEmail({
@@ -359,7 +359,7 @@ export class QuoteService {
   private async findOrThrow(id: string): Promise<QuoteDetail> {
     const quote = await getTenantDb().quote.findUnique({ where: { id }, include: DETAIL_INCLUDE });
     if (!quote) {
-      throw new NotFoundException('Quote not found');
+      throw new NotFoundException('Cotización no encontrada');
     }
     return quote;
   }
@@ -400,20 +400,20 @@ export class QuoteService {
         include: { roles: true },
       });
       if (!customer) {
-        throw new NotFoundException('Customer not found');
+        throw new NotFoundException('Cliente no encontrado');
       }
       if (!customer.active) {
-        throw new BadRequestException('This customer is inactive');
+        throw new BadRequestException('Este cliente está inactivo');
       }
       if (!customer.roles.some((r) => r.role === 'CUSTOMER')) {
-        throw new BadRequestException('This company is not flagged as a customer');
+        throw new BadRequestException('Esta empresa no está marcada como cliente');
       }
     }
 
     if (dto.currencyId) {
       const currency = await db.currency.findUnique({ where: { id: dto.currencyId } });
       if (!currency) {
-        throw new NotFoundException('Currency not found');
+        throw new NotFoundException('Moneda no encontrada');
       }
     }
 

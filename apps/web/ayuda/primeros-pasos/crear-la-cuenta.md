@@ -20,7 +20,8 @@ Crear la cuenta te lleva un par de minutos. Arrancás con **15 días de prueba g
 4. **Aceptá los documentos legales.** Tildá la casilla *Acepto los Términos y Condiciones, la Política de Privacidad y el Acuerdo de Tratamiento de Datos*. Cada nombre es un link para leerlos.
 5. **Tocá Crear cuenta.** Aparece el aviso *Cuenta creada. Te mandamos un código para verificar tu email.*
 6. **Verificá tu email.** En la pantalla **Verificá tu email** escribí el código de 6 dígitos que te llegó y tocá **Verificar**. Si no te llegó, revisá el correo no deseado o tocá **Reenviar código** (se habilita después de unos segundos).
-7. **Listo.** Entrás directo al **Tablero** de tu empresa.
+7. **Elegí tu rubro.** En **¿A qué se dedica tu negocio?** buscá el tuyo (taller, kiosco, veterinaria…) y tocá **Continuar**: Oplex te deja prendido lo que usa tu rubro. Ver [Tu rubro y los módulos](/documentacion/rubros/rubro-y-modulos).
+8. **Listo.** Entrás al **Tablero** de tu empresa.
 
 ![Pantalla de registro con los campos completos](/ayuda/capturas/primeros-pasos-registro.jpg)
 
@@ -35,6 +36,7 @@ En vez de elegir una contraseña podés usar tu cuenta de Google o de Microsoft:
 2. Elegí tu cuenta y aceptá los permisos que te pide Google o Microsoft.
 3. En **Ya casi terminamos**, escribí el **Nombre de la empresa** y tocá **Crear cuenta**.
 4. Antes de empezar, Oplex te muestra el **Contrato de uso de Oplex**. Leelo y tocá **Aceptar y continuar**.
+5. Elegí tu rubro en **¿A qué se dedica tu negocio?**, igual que en el paso 7 de arriba.
 
 > [!NOTA]
 > Si un botón aparece apagado y al pasar el mouse dice *Próximamente*, ese ingreso todavía no está habilitado. Usá otro o registrate con email y contraseña.

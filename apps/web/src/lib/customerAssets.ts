@@ -105,3 +105,9 @@ export function assetSummary(type: CustomerAssetType | undefined, asset: Custome
     .slice(0, max)
     .join(' · ');
 }
+
+/** "Patente" -> "patente", "N° de serie / IMEI" -> "n° de serie / IMEI":
+ * para usar un nombre de campo dentro de una frase sin romper las siglas. */
+export function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}

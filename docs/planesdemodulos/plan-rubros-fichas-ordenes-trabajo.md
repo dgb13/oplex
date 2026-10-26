@@ -327,6 +327,25 @@ por el drift viejo).
   pantalla 3).
 - El catálogo inicial ya traía fichas y estados de todos los rubros (migración de la etapa 1).
 
+**2026-10-26: etapa 7 hecha** (manual y prueba de punta a punta).
+
+- Manual: capítulo nuevo `apps/web/ayuda/rubros/` (8 · Rubros, fichas y órdenes de trabajo, 6 artículos
+  y 3 capturas `rubros-*.jpg` con datos inventados); actualizados crear la cuenta, recorrido, checklist
+  (6 tareas), roles, artículos (Se cobra por hora/día), factura y cotizaciones (detalle por línea). PDF
+  regenerado. Los capítulos 8 a 12 pasaron a 9 a 13.
+- Prueba: taller completo (alta → rubro → artículos → ficha → OT → presupuesto → horas y compra → aviso
+  → márgenes; la factura frena por falta de ARCA con mensaje claro), kiosco (no ve fichas ni órdenes; la
+  API responde 403 "módulo apagado") y service de celulares (Equipos, Órdenes de servicio, IMEI).
+- Arreglos que salieron de la prueba:
+  - Textos de taller fijos para todos: buscador de órdenes decía "patente" y la columna "Vehículo /
+    equipo"; ejemplo "Service de 10.000 km" en la orden nueva.
+  - Género: "+ Nuevo mascota", "+ Nueva pedido", "Dar de baja este bicicleta", "ya está listo" →
+    frases con verbo ("+ Cargar …") que sirven para cualquier ficha o documento.
+  - Contador y Compras no tenían Órdenes de trabajo en el menú (pero podían ver márgenes / sumar
+    compras); y al sumar una compra la API le devolvía a Compras el ingreso y el margen. Ahora Compras
+    ve sólo horas y compras (`forRole` + test).
+  - Porcentaje de margen por fila con punto decimal; mensajes en inglés de cotizaciones.
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no

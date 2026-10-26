@@ -143,7 +143,7 @@ export default function MarginReportPage() {
                   <td className="p-3 text-right">{r.laborHours.toLocaleString('es-AR')}</td>
                   <td className={`p-3 text-right font-semibold ${r.margin !== null && r.margin < 0 ? 'text-destructive' : ''}`}>
                     {r.margin !== null ? formatMoney(r.margin) : '—'}
-                    {r.marginPercent !== null ? <span className="ml-1 text-xs font-normal text-muted-foreground">{r.marginPercent}%</span> : null}
+                    {r.marginPercent !== null ? <span className="ml-1 text-xs font-normal text-muted-foreground">{r.marginPercent.toLocaleString('es-AR')}%</span> : null}
                   </td>
                 </tr>
               ))

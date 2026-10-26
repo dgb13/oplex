@@ -5,12 +5,14 @@ minutes: 5
 roles: Dueño, Administrador
 ---
 
-Cuando entrás por primera vez, el Tablero te muestra la tarjeta **Primeros pasos en OPLEX** con cuatro tareas. Cada una se tilda sola cuando la completás. Además, en este artículo te dejamos el orden completo que recomendamos para arrancar sin trabas.
+Cuando entrás por primera vez, el Tablero te muestra la tarjeta **Primeros pasos en OPLEX** con seis tareas. Cada una se tilda sola cuando la completás. Además, en este artículo te dejamos el orden completo que recomendamos para arrancar sin trabas.
 
-## Las cuatro tareas de la tarjeta
+## Las seis tareas de la tarjeta
 
 | Tarea | Qué hacer | Dónde |
 |---|---|---|
+| **Cargá tu condición frente al IVA** | Decí si sos Monotributo, Responsable Inscripto o Exento: define si facturás A, B o C | **Contabilidad › Conexión con ARCA** |
+| **Conectá tu certificado de ARCA** | Subí el certificado para poder emitir facturas con CAE | **Contabilidad › Conexión con ARCA** |
 | **Agregá tu primera sucursal** | Cargá tu local, por ejemplo "Casa Central", con su punto de venta de ARCA | **Sucursales** |
 | **Cargá tu primer artículo** | Cargá un artículo o importá tu lista entera | **Inventario** |
 | **Emití tu primera factura** | Hacé una factura a un cliente | **Ventas › Facturación** |
@@ -19,7 +21,7 @@ Cuando entrás por primera vez, el Tablero te muestra la tarjeta **Primeros paso
 Debajo de cada tarea pendiente está el link **Comenzar →**, que te lleva directo a la pantalla. Las tareas hechas aparecen tachadas.
 
 > [!NOTA]
-> Cuando completás las cuatro, la tarjeta desaparece sola. Si preferís sacarla antes, tocá la **✕** de arriba a la derecha. Se oculta sólo en esa computadora o navegador.
+> Cuando completás las seis, la tarjeta desaparece sola. Si preferís sacarla antes, tocá la **✕** de arriba a la derecha. Se oculta sólo en esa computadora o navegador.
 
 ## El orden recomendado
 

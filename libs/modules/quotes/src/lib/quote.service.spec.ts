@@ -192,7 +192,7 @@ describe('QuoteService status transitions', () => {
     const service = makeService();
 
     await expect(runAsUser(db, () => service.accept('quote-1'))).rejects.toThrow(
-      'Only a SENT quote can be accepted or rejected',
+      'Sólo se puede aceptar o rechazar una cotización enviada',
     );
   });
 
@@ -216,7 +216,7 @@ describe('QuoteService status transitions', () => {
     const service = makeService();
 
     await expect(runAsUser(db, () => service.cancel('quote-1'))).rejects.toThrow(
-      'This quote is already cancelled',
+      'Esta cotización ya está cancelada',
     );
   });
 });
