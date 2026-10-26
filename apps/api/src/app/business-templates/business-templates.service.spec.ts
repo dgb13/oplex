@@ -1,5 +1,5 @@
 import type { PrismaService } from '@plexo/database';
-import { BusinessTemplatesService, slugifyTemplateName } from './business-templates.service.js';
+import { BusinessTemplatesService, cleanAssetType, cleanWorkOrder, slugifyTemplateName } from './business-templates.service.js';
 
 const CURRENT = {
   id: 'tpl-1',
@@ -80,5 +80,46 @@ describe('slugifyTemplateName', () => {
   it('builds the same keys as the initial migration', () => {
     expect(slugifyTemplateName('Taller mecánico')).toBe('taller-mecanico');
     expect(slugifyTemplateName('Hotel, hostel y cabañas')).toBe('hotel-hostel-y-cabanas');
+  });
+});
+
+describe('cleanAssetType / cleanWorkOrder (editor de /admin/rubros)', () => {
+  it('keeps existing field keys, builds keys for new ones and needs exactly one main field', () => {
+    const type = cleanAssetType({
+      name: ' Vehículo ',
+      fields: [
+        { key: 'patente', label: 'Patente', type: 'TEXT', isIdentifier: true },
+        { key: '', label: 'Tipo de caja', type: 'SELECT', options: ['Manual', 'Automática'] },
+      ],
+    });
+    expect(type.name).toBe('Vehículo');
+    expect(type.fields.map((f) => f.key)).toEqual(['patente', 'tipoDeCaja']);
+    expect(type.fields[0]).toMatchObject({ isIdentifier: true, required: true });
+    expect(() =>
+      cleanAssetType({ name: 'X', fields: [{ label: 'A', type: 'TEXT' }, { label: 'B', type: 'TEXT' }] }),
+    ).toThrow('exactamente un dato principal');
+  });
+
+  it('needs a status that closes the order, not as the first one', () => {
+    expect(() => cleanWorkOrder({ docName: 'Orden', statuses: [{ name: 'A' }, { name: 'B' }] })).toThrow('cierre la orden');
+    expect(() => cleanWorkOrder({ docName: 'Orden', statuses: [{ name: 'A', final: true }, { name: 'B' }] })).toThrow('primer estado');
+  });
+});
+
+describe('repetidos en el editor de /admin/rubros', () => {
+  it('rejects two fields or two statuses with the same name', () => {
+    expect(() =>
+      cleanAssetType({
+        name: 'Vehículo',
+        fields: [
+          { label: 'Patente', type: 'TEXT', isIdentifier: true },
+          { label: 'Color', type: 'TEXT' },
+          { label: 'color', type: 'TEXT' },
+        ],
+      }),
+    ).toThrow('dos campos');
+    expect(() =>
+      cleanWorkOrder({ docName: 'Orden', statuses: [{ name: 'Recibido' }, { name: 'recibido' }, { name: 'Entregado', final: true }] }),
+    ).toThrow('dos estados');
   });
 });

@@ -5,6 +5,7 @@ import {
   BUSINESS_FAMILIES,
   BUSINESS_MODULES,
   type BusinessTemplate,
+  type BusinessTemplateConfig,
   type BusinessTemplateInput,
   type BusinessTemplateRequest,
 } from '@/lib/businessModules';
@@ -13,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useMemo, useState } from 'react';
 import AdminSelect from '../AdminSelect';
+import TemplateStructureEditor from './TemplateStructureEditor';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
@@ -43,6 +45,8 @@ interface FormState {
   categories: string;
   defaultWarranty: string;
   notice: string;
+  assetType: BusinessTemplateConfig['assetType'] | null;
+  workOrder: BusinessTemplateConfig['workOrder'] | null;
 }
 
 function toForm(t: BusinessTemplate | null): FormState {
@@ -55,6 +59,8 @@ function toForm(t: BusinessTemplate | null): FormState {
     categories: (t?.config.suggestedCategories ?? []).join(', '),
     defaultWarranty: t?.config.defaultWarranty ?? '',
     notice: t?.config.notice ?? '',
+    assetType: t?.config.assetType ?? null,
+    workOrder: t?.config.workOrder ?? null,
   };
 }
 
@@ -72,6 +78,16 @@ function toInput(form: FormState): BusinessTemplateInput {
         .filter(Boolean),
       ...(form.defaultWarranty.trim() ? { defaultWarranty: form.defaultWarranty.trim() } : {}),
       ...(form.notice.trim() ? { notice: form.notice.trim() } : {}),
+      assetType: form.assetType
+        ? {
+            ...form.assetType,
+            fields: form.assetType.fields.map((f) => ({
+              ...f,
+              ...(f.type === 'SELECT' ? { options: (f.options ?? []).map((o) => o.trim()).filter(Boolean) } : { options: undefined }),
+            })),
+          }
+        : null,
+      workOrder: form.workOrder,
     },
   };
 }
@@ -423,25 +439,12 @@ export default function AdminRubrosPage() {
                   </div>
                 </div>
 
-                {selected && (selected.config.assetType || selected.config.workOrder) && (
-                  <div className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
-                    {selected.config.assetType && (
-                      <p>
-                        <span className="font-semibold text-slate-300">Ficha:</span> {selected.config.assetType.name} (
-                        {selected.config.assetType.fields.map((f) => f.label).join(', ')})
-                      </p>
-                    )}
-                    {selected.config.workOrder && (
-                      <p className="mt-1">
-                        <span className="font-semibold text-slate-300">{selected.config.workOrder.docName}:</span>{' '}
-                        {selected.config.workOrder.statuses.map((s) => s.name).join(' → ')}
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs text-slate-500">
-                      Se usan cuando salgan Fichas y Órdenes de trabajo; su edición llega con esos módulos.
-                    </p>
-                  </div>
-                )}
+                <TemplateStructureEditor
+                  assetType={form.assetType ?? null}
+                  workOrder={form.workOrder ?? null}
+                  onAssetType={(assetType) => setForm((f) => ({ ...f, assetType }))}
+                  onWorkOrder={(workOrder) => setForm((f) => ({ ...f, workOrder }))}
+                />
 
                 {error && <p className="text-sm text-red-400">{error}</p>}
                 {message && (

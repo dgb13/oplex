@@ -8,12 +8,13 @@ import {
   BusinessTemplatesController,
 } from './business-templates.controller.js';
 import { BusinessTemplatesService } from './business-templates.service.js';
+import { TemplateUpdatesService } from './template-updates.service.js';
 
 /** Rubros: catálogo en /admin/rubros + rubro y módulos de cada negocio.
  * Plan: docs/planesdemodulos/plan-rubros-fichas-ordenes-trabajo.md. */
 @Module({
   imports: [CustomerAssetsModule, WorkOrdersModule],
   controllers: [BusinessTemplatesController, BusinessProfileController, AdminBusinessTemplatesController],
-  providers: [BusinessTemplatesService, BusinessProfileService],
+  providers: [BusinessTemplatesService, BusinessProfileService, TemplateUpdatesService],
 })
 export class BusinessTemplatesModule {}

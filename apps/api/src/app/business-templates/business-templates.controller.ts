@@ -3,12 +3,14 @@ import { CurrentUser, PlatformAdminGuard, Roles } from '@plexo/auth';
 import type { AuthenticatedUser } from '@plexo/types';
 import { BusinessProfileService } from './business-profile.service.js';
 import { BusinessTemplatesService } from './business-templates.service.js';
+import { TemplateUpdatesService } from './template-updates.service.js';
 import {
   ChooseBusinessTemplateDto,
   CreateBusinessTemplateDto,
   CreateBusinessTemplateRequestDto,
   UpdateBusinessTemplateDto,
   UpdateBusinessTemplateRequestDto,
+  ApplyTemplateUpdatesDto,
   UpdateEnabledModulesDto,
 } from './dto/business-template.dto.js';
 
@@ -39,7 +41,30 @@ export class BusinessTemplatesController {
 /** Rubro y módulos del propio negocio. */
 @Controller('business-profile')
 export class BusinessProfileController {
-  constructor(private readonly profile: BusinessProfileService) {}
+  constructor(
+    private readonly profile: BusinessProfileService,
+    private readonly updates: TemplateUpdatesService,
+  ) {}
+
+  /** "Hay novedades para tu rubro": lo nuevo de la plantilla que el negocio
+   * todavía no tiene (null si no hay). */
+  @Roles(...WRITE_ROLES)
+  @Get('updates')
+  pendingUpdates() {
+    return this.updates.pending();
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post('updates/apply')
+  applyUpdates(@Body() dto: ApplyTemplateUpdatesDto) {
+    return this.updates.apply(dto.ids);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post('updates/dismiss')
+  dismissUpdates() {
+    return this.updates.dismiss();
+  }
 
   @Get()
   get() {
