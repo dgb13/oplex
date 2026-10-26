@@ -28,7 +28,7 @@ export const BUSINESS_MODULES: BusinessModuleDef[] = [
   { key: 'tienda', label: 'Tienda online', description: 'Tu catálogo publicado en la web.', status: 'available', plan: 'storefront', legacy: true },
   { key: 'produccion', label: 'Producción y recetas', description: 'Recetas, órdenes de producción y consumos.', status: 'available', plan: 'production', legacy: true },
   { key: 'fichas', label: 'Fichas del cliente', description: 'Vehículos, equipos, mascotas… con su historial.', status: 'available' },
-  { key: 'ordenes-trabajo', label: 'Órdenes de trabajo', description: 'Trabajos con estados, responsable y aviso al cliente.', status: 'upcoming' },
+  { key: 'ordenes-trabajo', label: 'Órdenes de trabajo', description: 'Trabajos con estados, responsable y aviso al cliente.', status: 'available' },
   { key: 'costo-trabajo', label: 'Costo por trabajo', description: 'Repuestos, terceros y horas de cada trabajo, y su margen.', status: 'upcoming' },
   { key: 'vencimientos', label: 'Lotes y vencimientos', description: 'Control de fechas de vencimiento.', status: 'later' },
   { key: 'venta-peso', label: 'Venta por peso', description: 'Precio por kilo y etiquetas de balanza.', status: 'later' },

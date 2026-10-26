@@ -1,6 +1,7 @@
 import { tenantContextStorage } from '@plexo/database';
 import { LEGACY_MODULE_KEYS } from './business-modules.js';
 import type { CustomerAssetsService } from '../customer-assets/customer-assets.service.js';
+import type { WorkOrdersService } from '../work-orders/work-orders.service.js';
 import { BusinessProfileService } from './business-profile.service.js';
 import type { BusinessTemplatesService, BusinessTemplateView } from './business-templates.service.js';
 
@@ -38,6 +39,10 @@ function makeAssets() {
   return { ensureTypeFromTemplate: jest.fn().mockResolvedValue(undefined) } as unknown as CustomerAssetsService;
 }
 
+function makeWorkOrders() {
+  return { ensureFromTemplate: jest.fn().mockResolvedValue(undefined) } as unknown as WorkOrdersService;
+}
+
 function makeDb(settings: Record<string, unknown> | null, categories: { name: string }[] = []) {
   return {
     tenantSettings: {
@@ -54,7 +59,7 @@ function makeDb(settings: Record<string, unknown> | null, categories: { name: st
 describe('BusinessProfileService.choose', () => {
   it('a new signup gets only the modules of its rubro, the suggested categories and the default warranty', async () => {
     const db = makeDb({ businessTemplatePending: true, modulesConfigured: false, enabledModules: [], quoteDefaultWarranty: null });
-    const service = new BusinessProfileService(makeTemplates(), makeAssets());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets(), makeWorkOrders());
 
     const result = await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -79,7 +84,7 @@ describe('BusinessProfileService.choose', () => {
   it('creates the rubro ficha (Vehículo) when the business uses Fichas', async () => {
     const db = makeDb({ businessTemplatePending: true, modulesConfigured: false, enabledModules: [] });
     const assets = makeAssets();
-    const service = new BusinessProfileService(makeTemplates(), assets);
+    const service = new BusinessProfileService(makeTemplates(), assets, makeWorkOrders());
 
     await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -88,7 +93,7 @@ describe('BusinessProfileService.choose', () => {
 
   it('an existing business keeps every module it sees today: the rubro only adds', async () => {
     const db = makeDb({ businessTemplatePending: false, modulesConfigured: false, enabledModules: [] });
-    const service = new BusinessProfileService(makeTemplates(), makeAssets());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets(), makeWorkOrders());
 
     await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -102,7 +107,7 @@ describe('BusinessProfileService.choose', () => {
       { businessTemplatePending: false, modulesConfigured: true, enabledModules: ['caja'], quoteDefaultWarranty: 'Mi garantía' },
       [{ name: 'repuestos' }],
     );
-    const service = new BusinessProfileService(makeTemplates(), makeAssets());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets(), makeWorkOrders());
 
     const result = await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -113,21 +118,21 @@ describe('BusinessProfileService.choose', () => {
   });
 
   it('rejects a rubro that does not exist or was deactivated', async () => {
-    const service = new BusinessProfileService(makeTemplates(null), makeAssets());
+    const service = new BusinessProfileService(makeTemplates(null), makeAssets(), makeWorkOrders());
     await expect(runInTenant(makeDb(null), () => service.choose('no-existe'))).rejects.toThrow('Ese rubro no existe');
   });
 });
 
 describe('BusinessProfileService.updateModules', () => {
   it('toggles the modules that exist today (Fichas included) and keeps the upcoming ones the rubro brought', async () => {
-    const db = makeDb({ modulesConfigured: true, enabledModules: ['caja', 'presupuestos', 'ordenes-trabajo'] });
-    const service = new BusinessProfileService(makeTemplates(), makeAssets());
+    const db = makeDb({ modulesConfigured: true, enabledModules: ['caja', 'presupuestos', 'costo-trabajo'] });
+    const service = new BusinessProfileService(makeTemplates(), makeAssets(), makeWorkOrders());
 
     await runInTenant(db, () => service.updateModules(['agenda', 'fichas']));
 
     expect(db.tenantSettings.upsert.mock.calls[0][0].update).toEqual({
       modulesConfigured: true,
-      enabledModules: ['agenda', 'fichas', 'ordenes-trabajo'],
+      enabledModules: ['agenda', 'fichas', 'costo-trabajo'],
     });
   });
 });

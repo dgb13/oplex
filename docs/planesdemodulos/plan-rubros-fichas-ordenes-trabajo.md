@@ -281,6 +281,23 @@ por el drift viejo).
   con datos no cambia de tipo.
 - Se aprovechó para corregir el selector de clientes, que rotulaba "CUIT" a un DNI.
 
+**2026-10-26: etapa 4 hecha** (Órdenes de trabajo).
+
+- Migración `20261104000000_work_orders` (`work_order_statuses`, `work_orders`,
+  `work_order_status_changes`, con RLS) + en `tenant_settings`: nombre del documento y numeración
+  (una sola serie por negocio, OT-000001, con `takeDocumentNumber`).
+- API `apps/api/src/app/work-orders/`. Estados copiados del rubro al elegirlo; quien lo eligió
+  antes los recibe al entrar; sin rubro, unos genéricos. Un estado usado se desactiva, no se borra.
+- Al ingresar se guardan los datos numéricos de la ficha (los km) en la ficha y copiados en la orden.
+- Presupuesto: se arma con Cotizaciones (QuoteFormModal con cliente y notas de la orden) y se ve con
+  su panel. La factura se toma sola de la cotización (`Invoice.quoteId`): no hay que vincularla.
+- WhatsApp: link `wa.me` con el mensaje armado (no la API de Meta). Turno: evento de la Agenda
+  con `linkType = 'work-order'` (los avisos y la Agenda llevan a la orden).
+- **Cambio respecto del plan**: el comprobante de ingreso es una página imprimible
+  (`/comprobante-ingreso/[id]`, "Imprimir / guardar PDF") en vez de un PDF del API: el API no
+  declara la librería de PDF y sumarla toca cómo se arma el deploy.
+- Historial de la ficha con las órdenes del vehículo (año y km de cada visita).
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no

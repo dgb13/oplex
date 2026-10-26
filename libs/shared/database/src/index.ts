@@ -117,5 +117,7 @@ export type {
   BusinessTemplate,
   CustomerAssetType,
   CustomerAsset,
+  WorkOrder,
+  WorkOrderStatus,
 } from './generated/client.js';
 export * from './generated/enums.js';

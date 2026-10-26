@@ -19,6 +19,7 @@ import { subscriptionsApi } from '@/lib/subscriptions';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
 import { BUSINESS_TEMPLATE_ICONS } from '@/lib/businessTemplateIcons';
 import { customerAssetsApi } from '@/lib/customerAssets';
+import { workOrdersApi } from '@/lib/workOrders';
 import { supportApi } from '@/lib/support';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -40,6 +41,7 @@ import {
   ShoppingCart,
   Store,
   Wallet,
+  Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -86,6 +88,8 @@ const NAV_ENTRIES: NavEntry[] = [
   // Fichas del cliente: el nombre y el ícono salen del rubro ("Vehículos" con
   // un auto en un taller) - ver fichasEntry más abajo.
   { kind: 'link', href: '/fichas', label: 'Fichas', icon: ClipboardList, roles: ['SALES', 'VIEWER'], businessModule: 'fichas' },
+  // Órdenes de trabajo: el nombre sale del rubro ("Órdenes de servicio"...).
+  { kind: 'link', href: '/ordenes-trabajo', label: 'Órdenes de trabajo', icon: Wrench, roles: ['SALES', 'VIEWER'], businessModule: 'ordenes-trabajo' },
   {
     kind: 'group',
     label: 'Ventas',
@@ -262,11 +266,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     enabled: Boolean(businessProfile) && isModuleEnabled(businessProfile, 'fichas'),
   });
   const fichasLabel = assetTypes?.length === 1 ? assetTypes[0].pluralName : 'Fichas';
+  const { data: workOrderConfig } = useQuery({
+    queryKey: ['work-order-config'],
+    queryFn: workOrdersApi.config,
+    enabled: Boolean(businessProfile) && isModuleEnabled(businessProfile, 'ordenes-trabajo'),
+  });
   const fichasIcon = BUSINESS_TEMPLATE_ICONS[businessProfile?.template?.iconKey ?? ''] ?? ClipboardList;
   const navEntries = planEntries.flatMap((entry): NavEntry[] => {
     if (entry.kind === 'link') {
       if (!canSee(entry, profile?.role, grants) || !moduleOn(entry.businessModule)) return [];
-      return [entry.href === '/fichas' ? { ...entry, label: fichasLabel, icon: fichasIcon } : entry];
+      if (entry.href === '/fichas') return [{ ...entry, label: fichasLabel, icon: fichasIcon }];
+      if (entry.href === '/ordenes-trabajo' && workOrderConfig) return [{ ...entry, label: workOrderConfig.pluralName }];
+      return [entry];
     }
     if (!moduleOn(entry.businessModule)) return [];
     const items = entry.items.filter((item) => canSee(item, profile?.role, grants) && moduleOn(item.businessModule));

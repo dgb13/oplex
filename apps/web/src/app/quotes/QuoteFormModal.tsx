@@ -21,6 +21,11 @@ import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 interface Props {
   quote?: QuoteDetail;
   onClose: () => void;
+  // Cotización armada desde una orden de trabajo: cliente y notas (el
+  // vehículo) ya cargados, y la orden se entera de cuál se creó.
+  initialCustomerId?: string;
+  initialNotes?: string;
+  onSaved?: (quote: QuoteDetail) => void;
 }
 
 const VALIDITY_PRESETS = [7, 15, 30] as const;
@@ -34,7 +39,7 @@ function datePlusDays(days: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export default function QuoteFormModal({ quote, onClose }: Props) {
+export default function QuoteFormModal({ quote, onClose, initialCustomerId, initialNotes, onSaved }: Props) {
   const perms = useCompanyPermissions();
   const queryClient = useQueryClient();
   const isEdit = Boolean(quote);
@@ -52,12 +57,12 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
 
   // Cliente vacío en una cotización nueva - se elige a propósito, nunca "el
   // primero de la lista" (ver CustomerPicker).
-  const [customerId, setCustomerId] = useState(quote?.customer.id ?? '');
+  const [customerId, setCustomerId] = useState(quote?.customer.id ?? initialCustomerId ?? '');
   const [currencyId, setCurrencyId] = useState(quote?.currency.id ?? '');
   const [validUntil, setValidUntil] = useState(
     quote ? (quote.validUntil?.slice(0, 10) ?? '') : datePlusDays(DEFAULT_VALIDITY_DAYS),
   );
-  const [notes, setNotes] = useState(quote?.notes ?? '');
+  const [notes, setNotes] = useState(quote?.notes ?? initialNotes ?? '');
   const [pricesIncludeTax, setPricesIncludeTax] = useState(false);
   const [lines, setLines] = useState<SalesLine[]>(
     () =>
@@ -144,9 +149,10 @@ export default function QuoteFormModal({ quote, onClose }: Props) {
       };
       return quote ? quotesApi.update(quote.id, dto) : quotesApi.create(dto);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['quotes'] });
       void queryClient.invalidateQueries({ queryKey: ['quote-preferences'] });
+      onSaved?.(saved);
       onClose();
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {

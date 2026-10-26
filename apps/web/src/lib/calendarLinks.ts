@@ -10,6 +10,9 @@ export function resolveCalendarLink(link: { module: string; id: string }): strin
   switch (link.module) {
     case 'production-order':
       return `/production/orders/${link.id}`;
+    // Turno de una orden de trabajo (etapa 4 del plan de rubros).
+    case 'work-order':
+      return `/ordenes-trabajo/${link.id}`;
     case 'invoice':
       return '/invoicing';
     case 'purchase-invoice':

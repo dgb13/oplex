@@ -2,6 +2,7 @@
 
 import BusinessTemplatePicker from '@/components/business/BusinessTemplatePicker';
 import AssetTypeEditor from '@/components/customer-assets/AssetTypeEditor';
+import WorkOrderStatusEditor from '@/components/work-orders/WorkOrderStatusEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { Button } from '@/components/ui/button';
 import {
@@ -215,6 +216,8 @@ export default function ModulesPage() {
 
       {/* Campos de la ficha (Vehículo, Equipo...) - sólo con Fichas prendido. */}
       {business && isModuleEnabled(business, 'fichas') && <AssetTypeEditor />}
+      {/* Estados de las órdenes de trabajo - sólo con el módulo prendido. */}
+      {business && isModuleEnabled(business, 'ordenes-trabajo') && <WorkOrderStatusEditor />}
 
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-base font-semibold">Próximamente</h2>

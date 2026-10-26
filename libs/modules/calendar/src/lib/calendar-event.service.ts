@@ -31,6 +31,9 @@ function taskLink(event: CalendarEvent): string {
   if (event.linkType === 'production-order' && event.linkId) {
     return `/production/orders/${event.linkId}`;
   }
+  if (event.linkType === 'work-order' && event.linkId) {
+    return `/ordenes-trabajo/${event.linkId}`;
+  }
   return '/agenda';
 }
 
