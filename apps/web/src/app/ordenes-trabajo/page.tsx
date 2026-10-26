@@ -1,7 +1,7 @@
 'use client';
 
 import NewWorkOrderModal from '@/components/work-orders/NewWorkOrderModal';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
 import { profileApi } from '@/lib/profile';
@@ -48,6 +48,11 @@ export default function WorkOrdersPage() {
   const counts = new Map<string, number>();
   for (const o of openQuery.data ?? []) counts.set(o.status.id, (counts.get(o.status.id) ?? 0) + 1);
   const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
+  // Reporte de márgenes: con "Costo por trabajo" y para quien ve importes.
+  const showMargins =
+    Boolean(business) &&
+    isModuleEnabled(business, 'costo-trabajo') &&
+    (profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'ACCOUNTANT');
   // Hoy en hora local, "2026-10-28" (en-CA da ese formato).
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -73,7 +78,14 @@ export default function WorkOrdersPage() {
           <h1 className="text-xl font-semibold">{config?.pluralName ?? 'Órdenes de trabajo'}</h1>
           <p className="text-sm text-muted-foreground">Cada trabajo, de que entra hasta que se entrega.</p>
         </div>
-        {canWrite && config && <Button onClick={() => setCreating(true)}>+ Nueva {config.docName.toLowerCase()}</Button>}
+        <div className="flex flex-wrap gap-2">
+          {showMargins && (
+            <Link href="/ordenes-trabajo/margenes" className={buttonVariants({ variant: 'outline' })}>
+              Margen por trabajo
+            </Link>
+          )}
+          {canWrite && config && <Button onClick={() => setCreating(true)}>+ Nueva {config.docName.toLowerCase()}</Button>}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

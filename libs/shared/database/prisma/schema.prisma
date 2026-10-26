@@ -3722,6 +3722,10 @@ model PurchaseInvoice {
   createdByUserId       String
   createdBy             User                  @relation(fields: [createdByUserId], references: [id])
   createdAt             DateTime              @default(now())
+  // Compra hecha para un trabajo puntual (el repuesto o la tornería de ese
+  // auto): entra en el costo de la orden (etapa 5 del plan de rubros).
+  workOrderId           String?
+  workOrder             WorkOrder?            @relation(fields: [workOrderId], references: [id])
 
   taxLines     PurchaseInvoiceTaxLine[]
   receiptLinks PurchaseInvoiceReceipt[]
@@ -3732,6 +3736,7 @@ model PurchaseInvoice {
   @@unique([tenantId, id])
   @@index([tenantId, supplierId])
   @@index([tenantId, purchaseOrderId])
+  @@index([workOrderId])
   @@map("purchase_invoices")
 }
 
@@ -4855,7 +4860,9 @@ model WorkOrder {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  statusChanges WorkOrderStatusChange[]
+  statusChanges    WorkOrderStatusChange[]
+  labor            WorkOrderLabor[]
+  purchaseInvoices PurchaseInvoice[]
 
   @@unique([tenantId, number])
   @@unique([tenantId, id])
@@ -4878,4 +4885,24 @@ model WorkOrderStatusChange {
 
   @@index([tenantId, workOrderId, createdAt])
   @@map("work_order_status_changes")
+}
+
+// Horas trabajadas en una orden (etapa 5): quién, cuántas y, si se carga,
+// cuánto cuesta la hora - entra en el costo del trabajo. workerName es texto
+// porque el mecánico no siempre es usuario del sistema; userId si lo es.
+model WorkOrderLabor {
+  id          String    @id @default(uuid())
+  tenantId    String
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [tenantId, workOrderId], references: [tenantId, id], onDelete: Cascade)
+  workerName  String
+  userId      String?
+  hours       Decimal   @db.Decimal(8, 2)
+  costPerHour Decimal?  @db.Decimal(14, 2)
+  note        String?
+  workedAt    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, workOrderId])
+  @@map("work_order_labor")
 }

@@ -103,3 +103,62 @@ export function formatDate(iso: string | null): string {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+
+/** Costo y margen de una orden (módulo "costo-trabajo"). Para el rol Ventas
+ * el API manda sólo las horas (hidden = true, sin importes). */
+export interface WorkOrderCosts {
+  income: { amount: number; source: 'invoice' | 'quote' } | null;
+  parts: { amount: number; source: 'invoice' | 'estimate'; missingCost: number } | null;
+  purchases: { id: string; supplier: string; number: string; date: string; amount: number }[];
+  purchasesTotal: number;
+  labor: { id: string; workerName: string; hours: number; costPerHour: number | null; note: string | null; workedAt: string }[];
+  laborHours: number;
+  laborCost: number;
+  laborWithoutCost: number;
+  totalCost: number;
+  margin: number | null;
+  marginPercent: number | null;
+  hidden?: boolean;
+}
+
+export interface PurchaseOption {
+  id: string;
+  supplier: string;
+  number: string;
+  date: string;
+  amount: number;
+  workOrderId: string | null;
+  notes: string | null;
+}
+
+export interface MarginRow {
+  id: string;
+  number: string;
+  createdAt: string;
+  customer: string;
+  asset: string | null;
+  status: string;
+  closed: boolean;
+  income: number | null;
+  incomeSource: 'invoice' | 'quote' | null;
+  totalCost: number;
+  laborHours: number;
+  margin: number | null;
+  marginPercent: number | null;
+}
+
+export const workOrderCostsApi = {
+  get: (id: string) => api.get<WorkOrderCosts>(`/work-orders/${id}/costs`).then((r) => r.data),
+  addLabor: (id: string, input: { workerName: string; userId?: string; hours: number; costPerHour?: number; note?: string }) =>
+    api.post<WorkOrderCosts>(`/work-orders/${id}/labor`, input).then((r) => r.data),
+  deleteLabor: (id: string, laborId: string) => api.delete<WorkOrderCosts>(`/work-orders/${id}/labor/${laborId}`).then((r) => r.data),
+  rates: () => api.get<Record<string, number>>('/work-orders/labor/rates').then((r) => r.data),
+  searchPurchases: (q?: string) =>
+    api.get<PurchaseOption[]>('/work-orders/purchases/search', { params: q ? { q } : {} }).then((r) => r.data),
+  linkPurchase: (id: string, purchaseInvoiceId: string, link: boolean) =>
+    api.post<WorkOrderCosts>(`/work-orders/${id}/purchases`, { purchaseInvoiceId, link }).then((r) => r.data),
+  marginReport: (from?: string, to?: string) =>
+    api
+      .get<MarginRow[]>('/work-orders/margins/report', { params: { ...(from ? { from } : {}), ...(to ? { to } : {}) } })
+      .then((r) => r.data),
+};

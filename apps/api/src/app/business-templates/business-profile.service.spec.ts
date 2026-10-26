@@ -125,14 +125,14 @@ describe('BusinessProfileService.choose', () => {
 
 describe('BusinessProfileService.updateModules', () => {
   it('toggles the modules that exist today (Fichas included) and keeps the upcoming ones the rubro brought', async () => {
-    const db = makeDb({ modulesConfigured: true, enabledModules: ['caja', 'presupuestos', 'costo-trabajo'] });
+    const db = makeDb({ modulesConfigured: true, enabledModules: ['caja', 'presupuestos', 'vencimientos'] });
     const service = new BusinessProfileService(makeTemplates(), makeAssets(), makeWorkOrders());
 
     await runInTenant(db, () => service.updateModules(['agenda', 'fichas']));
 
     expect(db.tenantSettings.upsert.mock.calls[0][0].update).toEqual({
       modulesConfigured: true,
-      enabledModules: ['agenda', 'fichas', 'costo-trabajo'],
+      enabledModules: ['agenda', 'fichas', 'vencimientos'],
     });
   });
 });
