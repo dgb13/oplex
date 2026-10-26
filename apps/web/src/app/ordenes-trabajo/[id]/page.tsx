@@ -5,6 +5,8 @@ import QuoteFormModal from '@/app/quotes/QuoteFormModal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
+import WorkOrderCostsPanel from '@/components/work-orders/WorkOrderCostsPanel';
+import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
 import { calendarApi } from '@/lib/calendar';
 import { customerAssetsApi, formatAssetValue } from '@/lib/customerAssets';
 import { profileApi } from '@/lib/profile';
@@ -31,6 +33,8 @@ export default function WorkOrderPage() {
   const queryClient = useQueryClient();
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
   const orderQuery = useQuery({ queryKey: ['work-order', id], queryFn: () => workOrdersApi.get(id) });
+  const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
+  const costsOn = Boolean(business) && isModuleEnabled(business, 'costo-trabajo');
   const configQuery = useQuery({ queryKey: ['work-order-config'], queryFn: workOrdersApi.config });
   const assigneesQuery = useQuery({ queryKey: ['work-order-assignees'], queryFn: workOrdersApi.assignees });
   const order = orderQuery.data;
@@ -340,6 +344,9 @@ export default function WorkOrderPage() {
           </p>
         ) : null}
       </section>
+
+      {/* Costo y margen (módulo "Costo por trabajo"). */}
+      {costsOn && <WorkOrderCostsPanel orderId={order.id} role={profile?.role} />}
 
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-base font-semibold">Historial</h2>

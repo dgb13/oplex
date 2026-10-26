@@ -298,6 +298,21 @@ por el drift viejo).
   declara la librería de PDF y sumarla toca cómo se arma el deploy.
 - Historial de la ficha con las órdenes del vehículo (año y km de cada visita).
 
+**2026-10-26: etapa 5 hecha** (Costo por trabajo).
+
+- Migración `20261105000000_work_order_costs`: `work_order_labor` (quién, horas, costo por hora
+  opcional, nota; `workerName` texto porque el mecánico no siempre es usuario) y
+  `purchase_invoices.workOrderId`.
+- `WorkOrderCostsService` no guarda nada calculado: ingreso = `Invoice.subtotal` (neto) o, sin
+  factura, el neto de la cotización; repuestos = `StockMovement.unitCost` de las salidas de la
+  factura (menos devoluciones) o, sin factura, estimado con el costo promedio actual del stock;
+  compras vinculadas (neto); horas × costo por hora. Avisa lo que cuenta como $0 (sin costo).
+- Permisos: importes y margen sólo Dueño/Admin/Contador; Ventas (el mecánico) carga y ve horas
+  sin importes; vincular compras: Dueño/Admin/Compras/Contador.
+- Web: panel "Costo y margen" en la orden (horas, "+ Sumar una compra") y reporte
+  `/ordenes-trabajo/margenes` con filtro de fechas.
+- Una compra se vincula desde la orden (buscador), no desde la carga de facturas de compra.
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no

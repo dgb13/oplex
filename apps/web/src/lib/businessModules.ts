@@ -29,7 +29,7 @@ export const BUSINESS_MODULES: BusinessModuleDef[] = [
   { key: 'produccion', label: 'Producción y recetas', description: 'Recetas, órdenes de producción y consumos.', status: 'available', plan: 'production', legacy: true },
   { key: 'fichas', label: 'Fichas del cliente', description: 'Vehículos, equipos, mascotas… con su historial.', status: 'available' },
   { key: 'ordenes-trabajo', label: 'Órdenes de trabajo', description: 'Trabajos con estados, responsable y aviso al cliente.', status: 'available' },
-  { key: 'costo-trabajo', label: 'Costo por trabajo', description: 'Repuestos, terceros y horas de cada trabajo, y su margen.', status: 'upcoming' },
+  { key: 'costo-trabajo', label: 'Costo por trabajo', description: 'Repuestos, terceros y horas de cada trabajo, y su margen.', status: 'available' },
   { key: 'vencimientos', label: 'Lotes y vencimientos', description: 'Control de fechas de vencimiento.', status: 'later' },
   { key: 'venta-peso', label: 'Venta por peso', description: 'Precio por kilo y etiquetas de balanza.', status: 'later' },
   { key: 'abonos', label: 'Abonos y cuotas', description: 'Cobros mensuales recurrentes.', status: 'later' },
