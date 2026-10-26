@@ -25,7 +25,7 @@ export const BUSINESS_MODULES = [
   { key: 'tienda', status: 'available', legacy: true },
   { key: 'produccion', status: 'available', legacy: true },
   { key: 'fichas', status: 'available', legacy: false },
-  { key: 'ordenes-trabajo', status: 'upcoming' },
+  { key: 'ordenes-trabajo', status: 'available', legacy: false },
   { key: 'costo-trabajo', status: 'upcoming' },
   { key: 'vencimientos', status: 'later' },
   { key: 'venta-peso', status: 'later' },

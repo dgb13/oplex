@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { getTenantDb, getTenantId } from '@plexo/database';
 import { AVAILABLE_MODULE_KEYS, BUSINESS_MODULE_KEYS, LEGACY_MODULE_KEYS } from './business-modules.js';
 import { CustomerAssetsService, type TemplateAssetType } from '../customer-assets/customer-assets.service.js';
+import { WorkOrdersService, type TemplateWorkOrder } from '../work-orders/work-orders.service.js';
 import { BusinessTemplatesService, type BusinessTemplateView } from './business-templates.service.js';
 
 export interface BusinessProfileView {
@@ -36,6 +37,7 @@ export class BusinessProfileService {
   constructor(
     private readonly templates: BusinessTemplatesService,
     private readonly assets: CustomerAssetsService,
+    private readonly workOrders: WorkOrdersService,
   ) {}
 
   async getProfile(): Promise<BusinessProfileView> {
@@ -112,6 +114,9 @@ export class BusinessProfileService {
     // Ficha del rubro (Vehículo en un taller): se crea si el negocio usa Fichas.
     const assetType = template.config.assetType as TemplateAssetType | undefined;
     if (assetType && enabledModules.includes('fichas')) await this.assets.ensureTypeFromTemplate(assetType);
+    // Estados y nombre de las órdenes del rubro, si el negocio las usa.
+    const workOrder = template.config.workOrder as TemplateWorkOrder | undefined;
+    if (workOrder && enabledModules.includes('ordenes-trabajo')) await this.workOrders.ensureFromTemplate(workOrder);
 
     return { ...(await this.getProfile()), createdCategories };
   }

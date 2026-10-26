@@ -4,6 +4,7 @@ import CompanyDetailModal from '@/components/CompanyDetailModal';
 import CompanyFormModal from '@/components/CompanyFormModal';
 import AssetFormModal from '@/components/customer-assets/AssetFormModal';
 import CustomerPicker from '@/components/sales/CustomerPicker';
+import AssetWorkOrderHistory from '@/components/work-orders/AssetWorkOrderHistory';
 import { Button } from '@/components/ui/button';
 import { businessProfileApi } from '@/lib/businessModules';
 import { BusinessTemplateIcon } from '@/lib/businessTemplateIcons';
@@ -17,8 +18,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 
-/** Ficha de un vehículo / equipo / mascota (maqueta aprobada, pantalla 4).
- * El historial de trabajos llega con Órdenes de trabajo (etapa 4). */
+/** Ficha de un vehículo / equipo / mascota (maqueta aprobada, pantalla 4),
+ * con su historial de órdenes de trabajo. */
 export default function FichaPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -147,13 +148,7 @@ export default function FichaPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <section className="rounded-xl border bg-card p-5">
-        <h2 className="text-base font-semibold">Historial</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Las órdenes de trabajo de este {asset.typeName.toLowerCase()} van a aparecer acá cuando salga el módulo de
-          Órdenes de trabajo.
-        </p>
-      </section>
+      <AssetWorkOrderHistory assetId={asset.id} customerId={asset.company.id} type={type} />
 
       {canWrite && (
         <div>

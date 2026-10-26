@@ -896,6 +896,12 @@ model TenantSettings {
   // existieran los rubros. Apagar un módulo lo saca del menú, no borra datos.
   modulesConfigured       Boolean  @default(false)
   enabledModules          String[] @default([])
+  // Órdenes de trabajo (etapa 4): cómo se llaman en este negocio ("Orden de
+  // trabajo", "Orden de servicio", "Pedido" - sale de la plantilla del
+  // rubro) y su numeración, una sola serie por negocio (OT-000001).
+  workOrderDocName        String?
+  workOrderPrefix         String   @default("OT")
+  workOrderNextNumber     Int      @default(1)
 
   updatedAt DateTime @updatedAt
 
@@ -1286,6 +1292,7 @@ model Company {
   mercadoPagoStore     MercadoPagoStore?
   // Fichas del cliente (vehículos, equipos, mascotas...) - ver CustomerAsset.
   customerAssets       CustomerAsset[]
+  workOrders           WorkOrder[]
 
   @@index([tenantId])
   @@map("companies")
@@ -4788,8 +4795,87 @@ model CustomerAsset {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
+  workOrders WorkOrder[]
+
   @@unique([tenantId, id])
   @@index([tenantId, identifierKey])
   @@index([tenantId, companyId])
   @@map("customer_assets")
+}
+
+// Órdenes de trabajo (etapa 4 del plan de rubros). Estados por negocio,
+// copiados de la plantilla del rubro (BusinessTemplate.config.workOrder) y
+// editables. Un estado usado no se borra: se desactiva.
+model WorkOrderStatus {
+  id               String   @id @default(uuid())
+  tenantId         String
+  name             String
+  sortOrder        Int
+  // Cierra la orden (Entregado, Retirado...): deja de figurar como abierta.
+  isFinal          Boolean  @default(false)
+  // Muestra "Avisar por WhatsApp" (Listo para retirar).
+  notifiesCustomer Boolean  @default(false)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workOrders WorkOrder[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("work_order_statuses")
+}
+
+// Un trabajo para un cliente, opcionalmente sobre una de sus fichas
+// (vehículo, equipo...). quoteId / invoiceId apuntan a la cotización y la
+// factura del trabajo; van sin FK a propósito para no tocar esos modelos
+// (WorkOrdersService los valida al vincular).
+model WorkOrder {
+  id              String          @id @default(uuid())
+  tenantId        String
+  number          String
+  customerId      String
+  customer        Company         @relation(fields: [customerId], references: [id])
+  assetId         String?
+  asset           CustomerAsset?  @relation(fields: [tenantId, assetId], references: [tenantId, id])
+  statusId        String
+  status          WorkOrderStatus @relation(fields: [tenantId, statusId], references: [tenantId, id])
+  // Qué pidió el cliente ("Service 10.000 km + ruido al frenar").
+  description     String
+  // Cómo vino: rayones, objetos en el auto, accesorios entregados.
+  intakeNotes     String?
+  // Copia de los datos de la ficha al ingresar (los km de ese día).
+  assetSnapshot   Json?
+  assignedUserId  String?
+  promisedAt      DateTime?
+  quoteId         String?
+  invoiceId       String?
+  closedAt        DateTime?
+  createdByUserId String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  statusChanges WorkOrderStatusChange[]
+
+  @@unique([tenantId, number])
+  @@unique([tenantId, id])
+  @@index([tenantId, statusId])
+  @@index([tenantId, assetId])
+  @@index([tenantId, customerId])
+  @@map("work_orders")
+}
+
+// Historial de estados de una orden (quién la pasó, cuándo).
+model WorkOrderStatusChange {
+  id           String    @id @default(uuid())
+  tenantId     String
+  workOrderId  String
+  workOrder    WorkOrder @relation(fields: [tenantId, workOrderId], references: [tenantId, id], onDelete: Cascade)
+  fromStatusId String?
+  toStatusId   String
+  userId       String?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, workOrderId, createdAt])
+  @@map("work_order_status_changes")
 }

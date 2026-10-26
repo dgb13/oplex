@@ -37,6 +37,9 @@ export interface CreateCalendarEventInput {
   endsAt?: string;
   allDay?: boolean;
   kind?: CalendarEventKind;
+  // Documento al que pertenece (ej. 'work-order' + id: turno de una orden).
+  linkType?: string;
+  linkId?: string;
 }
 
 export interface GetCalendarEntriesParams {
