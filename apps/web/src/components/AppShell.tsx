@@ -89,7 +89,7 @@ const NAV_ENTRIES: NavEntry[] = [
   // un auto en un taller) - ver fichasEntry más abajo.
   { kind: 'link', href: '/fichas', label: 'Fichas', icon: ClipboardList, roles: ['SALES', 'VIEWER'], businessModule: 'fichas' },
   // Órdenes de trabajo: el nombre sale del rubro ("Órdenes de servicio"...).
-  { kind: 'link', href: '/ordenes-trabajo', label: 'Órdenes de trabajo', icon: Wrench, roles: ['SALES', 'VIEWER'], businessModule: 'ordenes-trabajo' },
+  { kind: 'link', href: '/ordenes-trabajo', label: 'Órdenes de trabajo', icon: Wrench, roles: ['SALES', 'PURCHASES', 'ACCOUNTANT', 'VIEWER'], businessModule: 'ordenes-trabajo' },
   {
     kind: 'group',
     label: 'Ventas',

@@ -103,7 +103,7 @@ export default function IntakeReceiptPage() {
         </section>
 
         <p className="mt-6 text-xs text-slate-600">
-          El cliente deja el {order.asset?.typeName.toLowerCase() ?? 'trabajo'} para el trabajo indicado. Cualquier trabajo adicional se
+          El cliente deja lo detallado arriba para el trabajo indicado. Cualquier trabajo adicional se
           presupuesta y se hace sólo con su aprobación.
         </p>
 

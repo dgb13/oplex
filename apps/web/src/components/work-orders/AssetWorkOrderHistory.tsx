@@ -41,7 +41,7 @@ export default function AssetWorkOrderHistory({
         <h2 className="text-base font-semibold">Historial</h2>
         {enabled && canWrite && configQuery.data && (
           <button type="button" onClick={() => setCreating(true)} className="text-sm font-medium text-indigo-600 hover:underline">
-            + Nueva {configQuery.data.docName.toLowerCase()}
+            + Cargar {configQuery.data.docName.toLowerCase()}
           </button>
         )}
       </div>

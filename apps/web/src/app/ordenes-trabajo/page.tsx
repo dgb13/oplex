@@ -4,6 +4,7 @@ import NewWorkOrderModal from '@/components/work-orders/NewWorkOrderModal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
+import { customerAssetsApi, lowerFirst } from '@/lib/customerAssets';
 import { profileApi } from '@/lib/profile';
 import { formatDate, formatDay, statusTone, workOrdersApi } from '@/lib/workOrders';
 import { useQuery } from '@tanstack/react-query';
@@ -14,13 +15,25 @@ import { useEffect, useState } from 'react';
 type Scope = 'open' | 'closed' | 'all';
 
 /** Órdenes de trabajo: las abiertas por estado, búsqueda por número,
- * patente, cliente o trabajo. */
+ * dato principal de la ficha (patente, IMEI...), cliente o trabajo. */
 export default function WorkOrdersPage() {
   const router = useRouter();
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
   const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
   const enabled = business ? isModuleEnabled(business, 'ordenes-trabajo') : undefined;
   const configQuery = useQuery({ queryKey: ['work-order-config'], queryFn: workOrdersApi.config, enabled: enabled === true });
+  // La columna y el buscador hablan del dato de la ficha del rubro ("Patente"
+  // en un taller, "IMEI" en un service de celulares); sin Fichas no se muestran.
+  const fichasOn = business ? isModuleEnabled(business, 'fichas') : false;
+  const typesQuery = useQuery({
+    queryKey: ['customer-asset-types'],
+    queryFn: customerAssetsApi.listTypes,
+    enabled: enabled === true && fichasOn,
+  });
+  const assetTypes = typesQuery.data ?? [];
+  const singleType = assetTypes.length === 1 ? assetTypes[0] : undefined;
+  const showAsset = fichasOn && assetTypes.length > 0;
+  const identifierLabel = singleType?.fields.find((f) => f.isIdentifier)?.label ?? 'ficha';
   const [scope, setScope] = useState<Scope>('open');
   const [statusId, setStatusId] = useState('');
   const [query, setQuery] = useState('');
@@ -84,7 +97,7 @@ export default function WorkOrdersPage() {
               Margen por trabajo
             </Link>
           )}
-          {canWrite && config && <Button onClick={() => setCreating(true)}>+ Nueva {config.docName.toLowerCase()}</Button>}
+          {canWrite && config && <Button onClick={() => setCreating(true)}>+ Cargar {config.docName.toLowerCase()}</Button>}
         </div>
       </div>
 
@@ -131,7 +144,7 @@ export default function WorkOrdersPage() {
           id="wo-q"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscá por número, patente, cliente o trabajo"
+          placeholder={`Buscá por número, ${showAsset ? `${lowerFirst(identifierLabel)}, ` : ''}cliente o trabajo`}
           className="h-10"
         />
       </div>
@@ -143,7 +156,7 @@ export default function WorkOrdersPage() {
               <th className="p-3">Número</th>
               <th className="p-3">Ingresó</th>
               <th className="p-3">Cliente</th>
-              <th className="p-3">{config ? 'Vehículo / equipo' : ''}</th>
+              {showAsset && <th className="p-3">{singleType?.name ?? 'Ficha'}</th>}
               <th className="p-3">Trabajo</th>
               <th className="p-3">Estado</th>
               <th className="p-3">Prometido</th>
@@ -152,13 +165,13 @@ export default function WorkOrdersPage() {
           <tbody>
             {ordersQuery.isLoading ? (
               <tr>
-                <td colSpan={7} className="p-4 text-muted-foreground">
+                <td colSpan={showAsset ? 7 : 6} className="p-4 text-muted-foreground">
                   Cargando…
                 </td>
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-4 text-muted-foreground">
+                <td colSpan={showAsset ? 7 : 6} className="p-4 text-muted-foreground">
                   {search ? 'No hay resultados para esa búsqueda.' : 'No hay órdenes acá.'}
                 </td>
               </tr>
@@ -174,7 +187,7 @@ export default function WorkOrdersPage() {
                     </td>
                     <td className="p-3 text-muted-foreground">{formatDate(o.createdAt)}</td>
                     <td className="p-3">{o.customer.name}</td>
-                    <td className="p-3 font-mono">{o.asset?.identifier ?? '—'}</td>
+                    {showAsset && <td className="p-3 font-mono">{o.asset?.identifier ?? '—'}</td>}
                     <td className="max-w-[260px] truncate p-3 text-muted-foreground" title={o.description}>
                       {o.description}
                     </td>

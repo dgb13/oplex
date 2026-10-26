@@ -75,8 +75,9 @@ export class WorkOrderCostsController {
     return this.costs.searchPurchases(q);
   }
 
-  /** Ventas (ej. el mecánico) ve sólo las horas: sin importes ni margen. */
-  @Roles(...VIEW_ROLES, 'SALES')
+  /** Ventas (ej. el mecánico) ve sólo las horas, y Compras además las compras
+   * de la orden: sin ingreso ni margen. */
+  @Roles(...VIEW_ROLES, 'SALES', 'PURCHASES')
   @Get(':id/costs')
   async get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return forRole(await this.costs.costs(id), user);
@@ -100,17 +101,20 @@ export class WorkOrderCostsController {
 
   @Roles(...PURCHASE_ROLES)
   @Post(':id/purchases')
-  linkPurchase(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LinkPurchaseDto) {
-    return this.costs.linkPurchase(id, dto.purchaseInvoiceId, dto.link);
+  async linkPurchase(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LinkPurchaseDto, @CurrentUser() user: AuthenticatedUser) {
+    return forRole(await this.costs.linkPurchase(id, dto.purchaseInvoiceId, dto.link), user);
   }
 }
 
 type Costs = Awaited<ReturnType<WorkOrderCostsService['costs']>>;
 
-/** Dueño, admin y contador ven todo; el resto, sólo las horas. */
-function forRole(costs: Costs, user: AuthenticatedUser) {
+/** Dueño, admin y contador ven todo; Compras, las horas y las compras que
+ * vincula (las facturas de compra ya las ve); el resto, sólo las horas. */
+export function forRole(costs: Costs, user: Pick<AuthenticatedUser, 'role'>) {
   if ((VIEW_ROLES as readonly string[]).includes(user.role)) return costs;
-  return { ...withoutMoney(costs), labor: costs.labor.map((l) => ({ ...l, costPerHour: null })) };
+  const limited = { ...withoutMoney(costs), labor: costs.labor.map((l) => ({ ...l, costPerHour: null })) };
+  if (user.role === 'PURCHASES') return { ...limited, purchases: costs.purchases, purchasesTotal: costs.purchasesTotal };
+  return limited;
 }
 
 function withoutMoney(costs: Costs) {

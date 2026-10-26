@@ -16,7 +16,7 @@ Una cotización (presupuesto) es lo que le mandás al cliente antes de venderle.
 
 1. **Abrí Cotizaciones.** Andá a **Ventas › Cotizaciones** y tocá **Nueva cotización**.
 2. **Elegí el cliente.** Escribí en **Buscá el cliente por nombre o CUIT** y elegilo. Si no existe, tocá **+ Nuevo cliente**.
-3. **Agregá los artículos.** En **Agregar artículo: buscá por nombre o SKU (o escaneá el código)** escribí y tocá `Enter`. Tip: escribí `3*taladro` para agregar 3 de una vez.
+3. **Agregá los artículos.** En **Agregar artículo: buscá por nombre o SKU (o escaneá el código)** escribí y tocá `Enter`. Tip: escribí `3*taladro` para agregar 3 de una vez. Con el lápiz (**Agregar detalle**) de cada línea escribís un detalle que sale en el PDF; al convertir la cotización en factura, el detalle pasa a la factura.
 4. **Ajustá cada línea.** Cambiá cantidad y precio si hace falta. En **Bonif. %** poné el descuento de esa línea. Con el botón **Agregar detalle** de la línea podés sumar un texto que sale en el PDF (**Detalle de la línea (aparece en el PDF)**).
 5. **Elegí si los precios llevan IVA.** El interruptor **Precios con IVA incluido** indica cómo escribiste los precios. Si sos Monotributo, ves **Sin IVA (Factura C): el precio es el final**.
 6. **Completá el costado.** **Moneda** (por ejemplo ARS $ o USD), **Válida hasta** (botones de **7 días**, **15 días**, **30 días** o **Sin vencimiento**) y **Dirigida a** (un contacto del cliente).

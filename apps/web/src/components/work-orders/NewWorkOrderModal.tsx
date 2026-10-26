@@ -102,7 +102,7 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <form onSubmit={submit} className="flex max-h-[90vh] w-full max-w-xl flex-col gap-4 overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Nueva {docName.toLowerCase()}</h2>
+          <h2 className="text-lg font-semibold">Cargar {docName.toLowerCase()}</h2>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="text-muted-foreground hover:text-foreground">
             ✕
           </button>
@@ -142,7 +142,7 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
               }}
               disabled={Boolean(defaultAssetId)}
               options={[
-                { value: '', label: assets.length === 0 ? `Sin ${assetLabel.toLowerCase()} cargado` : 'Sin elegir' },
+                { value: '', label: assets.length === 0 ? `Todavía no tiene ${(types.length === 1 ? types[0].pluralName : 'fichas').toLowerCase()}` : 'Sin elegir' },
                 ...assets.map((a) => ({
                   value: a.id,
                   label: [a.identifier, assetSummary(types.find((t) => t.id === a.typeId), a, 2)].filter(Boolean).join(' · '),
@@ -183,7 +183,7 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            placeholder="Ej.: Service de 10.000 km + ruido al frenar"
+            placeholder="Ej.: lo que pidió el cliente y lo que hay que revisar"
           />
         </div>
         <div className="flex flex-col gap-1">

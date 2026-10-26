@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
 import { BusinessTemplateIcon } from '@/lib/businessTemplateIcons';
-import { assetSummary, customerAssetsApi } from '@/lib/customerAssets';
+import { assetSummary, customerAssetsApi, lowerFirst } from '@/lib/customerAssets';
 import { profileApi } from '@/lib/profile';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -73,7 +73,7 @@ export default function FichasPage() {
             </p>
           </div>
         </div>
-        {canWrite && type && <Button onClick={() => setCreating(true)}>+ Nuevo {type.name.toLowerCase()}</Button>}
+        {canWrite && type && <Button onClick={() => setCreating(true)}>+ Cargar {type.name.toLowerCase()}</Button>}
       </div>
 
       {types.length > 1 && (
@@ -115,7 +115,7 @@ export default function FichasPage() {
               id="fichas-q"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Buscá por ${identifierLabel.toLowerCase()} o por cliente`}
+              placeholder={`Buscá por ${lowerFirst(identifierLabel)} o por cliente`}
               className="h-10"
             />
           </div>
@@ -140,7 +140,7 @@ export default function FichasPage() {
                 ) : assets.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="p-4 text-muted-foreground">
-                      {search ? 'No hay resultados para esa búsqueda.' : `Todavía no cargaste ningún ${type?.name.toLowerCase() ?? 'registro'}.`}
+                      {search ? 'No hay resultados para esa búsqueda.' : `Todavía no cargaste ${type?.pluralName.toLowerCase() ?? 'fichas'}.`}
                     </td>
                   </tr>
                 ) : (

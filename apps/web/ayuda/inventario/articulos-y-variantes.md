@@ -20,7 +20,7 @@ Cuando un mismo producto viene en varias versiones (los guantes de trabajo en ta
 Ejemplo: el nivel de aluminio 60 cm, que viene en una sola versión.
 
 1. **Andá a Inventario y tocá + Nuevo artículo.** Se abre la ventana **Nuevo artículo**.
-2. **En ¿Qué es?, elegí Un producto que vendo.** Las otras opciones son **Un insumo** (lo usás para fabricar y no lo vendés, ver más abajo) y **Un servicio** (no lleva stock, por ejemplo el servicio de afilado).
+2. **En ¿Qué es?, elegí Un producto que vendo.** Las otras opciones son **Un insumo** (lo usás para fabricar y no lo vendés, ver más abajo) y **Un servicio** (no lleva stock, por ejemplo el servicio de afilado). En un servicio, **Se cobra** te deja elegir **Por trabajo**, **Por hora** o **Por día**: con **Por hora** cargás el **Precio por hora** y en la factura o la cotización ponés la cantidad de horas (por ejemplo 2,5).
 3. **En ¿Cómo lo vendés?, elegí Por unidad.** **Por kilo** es para lo que se pesa al vender. **En talles o colores** es para un artículo con variantes (ver más abajo). Esta respuesta define cómo se cuenta el stock y no se puede cambiar después.
 4. **Completá Los datos.** Escribí el **Nombre**, el **Precio de venta**, el **Costo** y cuántas unidades tenés hoy en **¿Cuántas unidades tenés?**. Al lado del costo elegí si lo escribiste **sin IVA** o **con IVA**.
 5. **Mirá el resumen verde.** Te muestra cómo va a quedar el stock (y el costo, en insumos) antes de guardar.

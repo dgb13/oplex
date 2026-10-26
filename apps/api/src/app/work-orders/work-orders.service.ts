@@ -393,7 +393,7 @@ export class WorkOrdersService {
     const from = settings?.tradeName || tenant?.name || '';
     const what = order.asset ? `tu ${order.asset.type.name.toLowerCase()} ${order.asset.identifier}` : `tu trabajo (${order.number})`;
     const message = order.status.notifiesCustomer
-      ? `Hola ${order.customer.name}, ${what} ya está listo para retirar.${from ? ` — ${from}` : ''}`
+      ? `Hola ${order.customer.name}, ${what} ya se puede retirar.${from ? ` — ${from}` : ''}`
       : `Hola ${order.customer.name}, te escribimos por ${what}: está en "${order.status.name}".${from ? ` — ${from}` : ''}`;
     return { url: `https://wa.me/${digits}?text=${encodeURIComponent(message)}`, message };
   }

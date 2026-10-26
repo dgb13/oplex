@@ -39,7 +39,7 @@ export default function CustomerAssetsSection({ companyId, readOnly }: { company
         )}
       </div>
       {assets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Sin {title.toLowerCase()} cargados.</p>
+        <p className="text-sm text-muted-foreground">Todavía no tiene {title.toLowerCase()}.</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {assets.map((a) => (

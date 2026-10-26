@@ -11,13 +11,14 @@ La pantalla de Oplex siempre tiene la misma forma: el menú a la izquierda, una 
 
 ## ① El menú de la izquierda
 
-Ahí están todos los módulos. Cada persona ve sólo los que su rol le permite (ver [Roles y permisos](/documentacion/introduccion/roles-y-permisos)). En orden:
+Ahí están todos los módulos. Cada persona ve sólo los que su rol le permite (ver [Roles y permisos](/documentacion/introduccion/roles-y-permisos)), y sólo los módulos prendidos en **Rubro y módulos**. En orden:
 
 - **Tablero**: lo importante del día (ver más abajo).
 - **Resumen**: un desglose por categoría de cómo le está yendo a tu negocio.
 - **Agenda**: lo que vence, se cobra o se paga, en un calendario. Ver [Agenda](/documentacion/equipo/agenda).
 - **Inventario**: artículos, stock y depósitos.
 - **Caja**: el punto de venta del mostrador.
+- **Fichas** y **Órdenes de trabajo**: si tu rubro las usa. El nombre sale de tu rubro, por ejemplo **Vehículos** en un taller. Ver [Rubros, fichas y órdenes de trabajo](/documentacion/rubros).
 - **Ventas**: Facturación, Cotizaciones, Pendientes de entrega, Cuentas a Cobrar, Clientes, Tienda online y Pedidos de la tienda.
 - **Compras**: Compras, Cuentas a Pagar y Proveedores.
 - **Producción**: aparece sólo si tu plan la incluye.
@@ -51,6 +52,7 @@ Al tocar tu foto ves tu nombre y email, y estas opciones:
 - **Planes y facturación**: tu plan de Oplex y los pagos. Ver [Planes y facturación](/documentacion/cuenta/planes-y-facturacion).
 - **Equipo**: sumar y administrar usuarios (Dueño y Administrador).
 - **Cajas (POS)**: las cajas del punto de venta (Dueño y Administrador). Ver [Configurar cajas](/documentacion/caja/configurar-cajas).
+- **Rubro y módulos**: tu rubro y qué módulos aparecen en el menú (Dueño y Administrador). Ver [Tu rubro y los módulos](/documentacion/rubros/rubro-y-modulos).
 - **Preferencias**: logo, PDF, emails, monedas y más (Dueño y Administrador). Ver [Preferencias](/documentacion/cuenta/preferencias).
 - **Vista cómoda o compacta**: el ícono de rayitas cambia el espacio entre filas de las tablas. La compacta muestra más filas por pantalla.
 - **Cerrar sesión**.
@@ -60,6 +62,7 @@ Al tocar tu foto ves tu nombre y email, y estas opciones:
 Es la primera pantalla al entrar. Muestra:
 
 - **Primeros pasos en OPLEX**: la lista de inicio, mientras no la completes o la cierres. Ver [Checklist de inicio](/documentacion/primeros-pasos/checklist-de-inicio).
+- **Hay novedades para tu rubro**, cuando Oplex mejora la plantilla de tu rubro. Ver [Novedades para tu rubro](/documentacion/rubros/novedades-del-rubro).
 - Los indicadores del día: **Facturado hoy**, **Cobrado hoy**, **Ticket promedio**, **Facturas pendientes**, **Stock total** y **Alertas de stock**.
 - **Ventas últimos 7 días**, **Alertas de stock**, **Stock por depósito** y **Últimas facturas**.
 - Si tu plan incluye Producción, una tarjeta con el estado de las órdenes.
