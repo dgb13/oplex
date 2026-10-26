@@ -88,6 +88,12 @@ describe('buildQuotePdfData', () => {
     expect(data.totals).toMatchObject({ netTaxed: null, vatByRate: [], vatContained: '89,25', total: '739,25' });
   });
 
+  it('rotula el documento del cliente como DNI o CUIT según la cantidad de dígitos', () => {
+    const withDni = buildQuotePdfData(makeQuote({ customer: { name: 'Juan', taxId: '25123456', fiscalAddress: null } }), RI, noImages);
+    expect(withDni.customer.taxIdLabel).toBe('DNI');
+    expect(buildQuotePdfData(makeQuote(), RI, noImages).customer.taxIdLabel).toBe('CUIT');
+  });
+
   it('para un monotributista no hay IVA ni alícuotas en cero', () => {
     const quote = makeQuote({
       lines: [

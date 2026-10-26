@@ -117,7 +117,7 @@ export function ModernoTemplate({ data }: { data: QuotePdfData }) {
           <View style={[s.box, { flex: 1.3 }]}>
             <Text style={[s.boxTitle, { color: brand }]}>Cliente</Text>
             <Text style={[s.bold, { fontSize: 10 }]}>{customer.name}</Text>
-            <Kv k="CUIT" v={customerTaxLine(data) || null} />
+            <Kv k={data.customer.taxIdLabel} v={customerTaxLine(data) || null} />
             <Kv k="Domicilio" v={customer.address} />
             <Kv k="Contacto" v={joinDefined([customer.contactName, customer.contactEmail ?? customer.email, customer.contactPhone ?? customer.phone]) || null} />
           </View>

@@ -116,6 +116,7 @@ export class OAuthService {
       // signup público (ver SignupService).
       autoVerifyEmail: true,
       planKey: SIGNUP_DEFAULT_PLAN_KEY,
+      askBusinessTemplate: true,
     });
 
     await this.linkOAuthAccount(tenantId, userId, profile);

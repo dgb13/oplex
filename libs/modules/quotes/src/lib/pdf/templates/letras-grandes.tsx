@@ -56,7 +56,7 @@ export function LetrasGrandesTemplate({ data }: { data: QuotePdfData }) {
             </Text>
             {customer.taxId ? (
               <Text>
-                <Text style={s.lab}>CUIT: </Text>
+                <Text style={s.lab}>{customer.taxIdLabel}: </Text>
                 {customer.taxId}
               </Text>
             ) : null}

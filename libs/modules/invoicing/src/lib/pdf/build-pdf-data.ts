@@ -1,6 +1,6 @@
 import type { DocumentLetter, InvoiceConcept, Tenant, TenantSettings } from '@plexo/database';
 import { buildVariantLabel } from '@plexo/types';
-import { CBTE_TIPO, resolveCondicionIvaReceptor } from '../afip-wsfe-client.js';
+import { CBTE_TIPO, classifyTaxId, resolveCondicionIvaReceptor } from '../afip-wsfe-client.js';
 import { amountInWords } from './amount-in-words.js';
 import { buildAfipQrDataUri } from './qr.util.js';
 import type {
@@ -325,9 +325,11 @@ export async function buildInvoicePdfData(
     },
     customer: {
       name: doc.customerName,
-      docLabel: doc.customerTaxId ? 'CUIT' : null,
+      docLabel: doc.customerTaxId ? (classifyTaxId(doc.customerTaxId) === 'DNI' ? 'DNI' : 'CUIT') : null,
       docNumber: doc.customerTaxId,
-      taxConditionLabel: doc.customerTaxCondition?.trim() || (doc.customerTaxId ? 'Sin informar' : 'Consumidor Final'),
+      taxConditionLabel:
+        doc.customerTaxCondition?.trim() ||
+        (doc.customerTaxId && classifyTaxId(doc.customerTaxId) !== 'DNI' ? 'Sin informar' : 'Consumidor Final'),
       address: doc.customerFiscalAddress?.trim() || null,
     },
 

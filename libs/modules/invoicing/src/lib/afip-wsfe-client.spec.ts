@@ -1,6 +1,6 @@
 import { Prisma } from '@plexo/database';
 import forge from 'node-forge';
-import { AfipWsfeClient, resolveCondicionIvaReceptor } from './afip-wsfe-client.js';
+import { AfipWsfeClient, resolveCondicionIvaReceptor, resolveDocTipoNro } from './afip-wsfe-client.js';
 import type { ElectronicInvoiceRequest } from './electronic-invoicing.port.js';
 
 function escapeXml(xml: string): string {
@@ -303,6 +303,14 @@ describe('AfipWsfeClient.requestCae', () => {
       const wsfeBody = fetchMock.mock.calls[1][1].body as string;
       expect(wsfeBody).toContain(`<ar:CondicionIVAReceptorId>${expected}</ar:CondicionIVAReceptorId>`);
     }
+  });
+
+  it('sends a DNI as DocTipo 96 and as Consumidor Final, and rejects a number that is neither', () => {
+    expect(resolveDocTipoNro('25.123.456')).toEqual({ docTipo: 96, docNro: '25123456' });
+    expect(resolveDocTipoNro('20-11111111-2')).toEqual({ docTipo: 80, docNro: '20111111112' });
+    expect(resolveDocTipoNro(null)).toEqual({ docTipo: 99, docNro: '0' });
+    expect(resolveCondicionIvaReceptor('25123456', null)).toBe(5);
+    expect(() => resolveDocTipoNro('12345')).toThrow(/ni un DNI/);
   });
 
   it('refuses to guess the receptor condition for a CUIT customer without one', () => {

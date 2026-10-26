@@ -258,9 +258,10 @@ export class PurchaseOrderService {
    * `https://wa.me/{phone}?text=...`. There's no delivery receipt for this:
    * "sent" means the user confirmed they went through with it (see
    * markSentWhatsapp), not a verified read/delivery status. */
-  async buildWhatsappLink(id: string, phone: string): Promise<{ url: string }> {
+  // phone viene de ?phone= y puede faltar: sin número es un 400, no un 500.
+  async buildWhatsappLink(id: string, phone: string | undefined): Promise<{ url: string }> {
     const purchaseOrder = await this.findOrThrow(id);
-    const digitsOnly = phone.replace(/[^0-9]/g, '');
+    const digitsOnly = (phone ?? '').replace(/[^0-9]/g, '');
     if (!digitsOnly) {
       throw new BadRequestException('Invalid WhatsApp number');
     }

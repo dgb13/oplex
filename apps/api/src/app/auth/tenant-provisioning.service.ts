@@ -15,6 +15,9 @@ export interface ProvisionTenantInput {
   // backoffice, o un login OAuth donde el proveedor ya probó el email).
   autoVerifyEmail: boolean;
   planKey: string;
+  // true para las altas públicas (email y OAuth): la web le pide elegir el
+  // rubro antes de entrar. El backoffice no lo marca (lo carga el operador).
+  askBusinessTemplate?: boolean;
 }
 
 export interface ProvisionedTenant {
@@ -83,6 +86,9 @@ export class TenantProvisioningService {
         },
       });
       userId = user.id;
+      if (input.askBusinessTemplate) {
+        await db.tenantSettings.create({ data: { tenantId: input.tenantId, businessTemplatePending: true } });
+      }
       // Corre DENTRO de este callback a propósito: acá getTenantId() ya
       // resuelve al tenant recién creado (contexto anidado) - mismo
       // comentario que ya tenía AdminTenantsService.createTenant().

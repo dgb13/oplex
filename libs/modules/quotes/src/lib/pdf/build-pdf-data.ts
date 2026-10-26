@@ -101,6 +101,13 @@ const TAX_CONDITION_LABELS: Record<TenantTaxConditionValue, string> = {
   EXENTO: 'IVA Exento',
 };
 
+/** Un particular (cliente típico de un taller) carga su DNI en el mismo
+ * campo que el CUIT: 7 u 8 dígitos es DNI. */
+export function taxIdLabel(taxId: string | null): string {
+  const digits = (taxId ?? '').replace(/\D/g, '');
+  return digits.length === 7 || digits.length === 8 ? 'DNI' : 'CUIT';
+}
+
 /** Misma regla que la letra de la factura (ver suggestDocumentLetter en la
  * web): A sólo con cliente RI con CUIT; ante la duda, B. */
 export function resolveVatMode(
@@ -218,6 +225,7 @@ export function buildQuotePdfData(
     customer: {
       name: quote.customer.name,
       taxId: quote.customer.taxId,
+      taxIdLabel: taxIdLabel(quote.customer.taxId),
       taxCondition: quote.customer.taxCondition ?? null,
       address: quote.customer.fiscalAddress,
       email: quote.customer.email ?? null,

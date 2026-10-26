@@ -57,11 +57,17 @@ export function buildVariantLabel(variant: {
   attributes: Record<string, string> | null;
 }): string | null {
   if (variant.attributes && Object.keys(variant.attributes).length > 0) {
-    return Object.keys(variant.attributes)
+    const values = Object.keys(variant.attributes)
       .sort()
       .map((key) => variant.attributes?.[key])
-      .filter(Boolean)
-      .join(' / ');
+      .filter((value): value is string => Boolean(value));
+    // La marca va adelante aunque haya atributos: si no, dos marcas del mismo
+    // repuesto (mismo código original, mismo vehículo) se ven iguales.
+    const brand = variant.brand?.trim();
+    if (brand && !values.some((value) => value.toLowerCase() === brand.toLowerCase())) {
+      values.unshift(brand);
+    }
+    return values.join(' / ');
   }
   return [variant.color, variant.size, variant.brand].filter(Boolean).join(' / ') || null;
 }

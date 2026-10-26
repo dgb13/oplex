@@ -96,6 +96,9 @@ describe('buildInvoicePdfData', () => {
 
     const consumidorFinal = await buildInvoicePdfData(makeDoc({ customerTaxId: null, customerTaxCondition: null }), TENANT, null);
     expect(consumidorFinal.customer).toMatchObject({ docLabel: null, docNumber: null, taxConditionLabel: 'Consumidor Final' });
+
+    const withDni = await buildInvoicePdfData(makeDoc({ customerTaxId: '25123456', customerTaxCondition: null }), TENANT, null);
+    expect(withDni.customer).toMatchObject({ docLabel: 'DNI', docNumber: '25123456', taxConditionLabel: 'Consumidor Final' });
   });
 
   it('Factura C no discrimina IVA: sin Neto Gravado ni filas de IVA', async () => {

@@ -4,6 +4,7 @@ import { companiesApi } from '@/lib/companies';
 import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi } from '@/lib/invoicing';
 import { profileApi } from '@/lib/profile';
+import { tenantSettingsApi } from '@/lib/tenantSettings';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -50,10 +51,24 @@ export default function OnboardingChecklist() {
     enabled: !dismissed,
   });
 
-  const dataLoaded = Boolean(companies && articles && invoices && profile);
+  // Sin condición frente al IVA no sale el PDF de una cotización, y sin
+  // certificado ARCA no se puede facturar: van primero porque frenan todo.
+  const { data: settings } = useQuery({
+    queryKey: ['tenant-settings'],
+    queryFn: tenantSettingsApi.get,
+    enabled: !dismissed,
+  });
+
+  const dataLoaded = Boolean(companies && articles && invoices && profile && settings);
   const steps: Step[] =
-    companies && articles && invoices && profile
+    companies && articles && invoices && profile && settings
       ? [
+          {
+            label: 'Cargá tu condición frente al IVA',
+            done: Boolean(settings.ownTaxCondition),
+            href: '/accounting/arca',
+          },
+          { label: 'Conectá tu certificado de ARCA', done: settings.afipConfigured, href: '/accounting/arca' },
           {
             label: 'Agregá tu primera sucursal',
             done: companies.some((c) => c.roles.some((r) => r.role === 'BRANCH')),
@@ -96,7 +111,7 @@ export default function OnboardingChecklist() {
           ✕
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {steps.map((step) => (
           <div
             key={step.label}

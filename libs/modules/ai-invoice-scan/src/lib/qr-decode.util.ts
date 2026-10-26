@@ -68,8 +68,8 @@ function buildMonIdToCurrencyCode(): Map<string, string> {
 const MON_ID_TO_CURRENCY_CODE = buildMonIdToCurrencyCode();
 
 /** Inverso simplificado de resolveDocTipoNro (@plexo/invoicing) - ese sólo
- * necesita ARMAR docTipo 80 (CUIT) ó 99 (Consumidor Final) para nuestras
- * propias facturas. Acá, leyendo el QR de un TERCERO, docTipo 99 sigue
+ * necesita ARMAR docTipo 80 (CUIT), 96 (DNI) ó 99 (Consumidor Final) para
+ * nuestras propias facturas. Acá, leyendo el QR de un TERCERO, docTipo 99 sigue
  * significando "sin tax id real", cualquier otro valor (80=CUIT, 96=DNI,
  * etc.) simplemente devuelve el número tal cual - no hace falta distinguir
  * el tipo de documento para este flujo (sólo nos importa si hay o no un
