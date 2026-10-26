@@ -1,6 +1,7 @@
 'use client';
 
 import BusinessTemplatePicker from '@/components/business/BusinessTemplatePicker';
+import TemplateUpdatesBanner from '@/components/business/TemplateUpdatesBanner';
 import AssetTypeEditor from '@/components/customer-assets/AssetTypeEditor';
 import WorkOrderStatusEditor from '@/components/work-orders/WorkOrderStatusEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
@@ -130,6 +131,9 @@ export default function ModulesPage() {
         </Button>
         {template?.notice && <p className="w-full rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{template.notice}</p>}
       </section>
+
+      {/* Lo nuevo que Oplex sumó a la plantilla del rubro (etapa 6). */}
+      {template && <TemplateUpdatesBanner />}
 
       {notice && (
         <p role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300">

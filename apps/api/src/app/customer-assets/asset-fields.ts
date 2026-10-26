@@ -56,7 +56,7 @@ export function pluralize(name: string): string {
   return `${name}es`;
 }
 
-function slugKey(label: string): string {
+export function slugKey(label: string): string {
   const base = label
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

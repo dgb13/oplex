@@ -888,6 +888,9 @@ model TenantSettings {
   // todavía no eligió.
   businessTemplateKey     String?
   businessTemplateVersion Int?
+  // "Ahora no" en las novedades del rubro: esa versión no se vuelve a
+  // ofrecer (sí una posterior).
+  dismissedTemplateVersion Int?
   // true sólo para altas nuevas: la web le pide elegir el rubro antes de
   // entrar. Los negocios previos quedan en false (tarjeta opcional).
   businessTemplatePending Boolean  @default(false)

@@ -12,6 +12,24 @@ const DISMISSED_KEY = 'oplex-business-template-card-dismissed';
 /** Para los negocios que ya existían antes de los rubros: invitación
  * opcional a elegir el suyo. No se les cambia nada solo (decisión del
  * usuario, plan-rubros-fichas-ordenes-trabajo.md). */
+function UpdatesNotice() {
+  const { data: updates } = useQuery({ queryKey: ['business-template-updates'], queryFn: businessProfileApi.pendingUpdates });
+  if (!updates) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950/30">
+      <div className="min-w-0 flex-[1_1_260px]">
+        <p className="text-sm font-semibold">Hay novedades para tu rubro</p>
+        <p className="text-sm text-muted-foreground">
+          {updates.items.length} mejora(s) en la plantilla de &quot;{updates.templateName}&quot;. Vos elegís cuáles sumar.
+        </p>
+      </div>
+      <Link href="/settings/modules" className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+        Ver novedades
+      </Link>
+    </div>
+  );
+}
+
 export default function BusinessTemplateCard() {
   const [dismissed, setDismissed] = useState(true);
   useEffect(() => {
@@ -26,7 +44,10 @@ export default function BusinessTemplateCard() {
   const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
   const canChoose = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
 
-  if (dismissed || !canChoose || !business || business.template || business.pending) return null;
+  if (!canChoose || !business || business.pending) return null;
+  // Negocio con rubro: aviso si Oplex publicó novedades para su plantilla.
+  if (business.template) return <UpdatesNotice />;
+  if (dismissed) return null;
 
   function dismiss() {
     try {

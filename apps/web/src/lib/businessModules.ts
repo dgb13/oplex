@@ -64,13 +64,42 @@ export function isModuleEnabled(profile: BusinessProfile | undefined, key: strin
   return profile.enabledModules.includes(key);
 }
 
+export interface TemplateAssetField {
+  key: string;
+  label: string;
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN';
+  required?: boolean;
+  isIdentifier?: boolean;
+  options?: string[];
+}
+
+export interface TemplateStatus {
+  name: string;
+  final?: boolean;
+  notifiesCustomer?: boolean;
+}
+
 export interface BusinessTemplateConfig {
   modules: string[];
   suggestedCategories: string[];
   defaultWarranty?: string;
   notice?: string;
-  assetType?: { name: string; notice?: string; fields: { key: string; label: string; isIdentifier?: boolean }[] };
-  workOrder?: { docName: string; statuses: { name: string }[] };
+  assetType?: { name: string; notice?: string; fields: TemplateAssetField[] };
+  workOrder?: { docName: string; statuses: TemplateStatus[] };
+}
+
+/** "Hay novedades para tu rubro": lo nuevo de la plantilla (etapa 6). */
+export type TemplateUpdateItem =
+  | { id: string; kind: 'module'; key: string }
+  | { id: string; kind: 'category'; name: string }
+  | { id: string; kind: 'assetField'; typeName: string; field: TemplateAssetField }
+  | { id: string; kind: 'status'; name: string; after: string | null; final: boolean; notifiesCustomer: boolean };
+
+export interface TemplateUpdates {
+  templateName: string;
+  fromVersion: number;
+  toVersion: number;
+  items: TemplateUpdateItem[];
 }
 
 export interface BusinessTemplate {
@@ -123,6 +152,10 @@ export const businessProfileApi = {
     api.patch<BusinessProfile>('/business-profile/modules', { enabledModules }).then((r) => r.data),
   listTemplates: () => api.get<BusinessTemplate[]>('/business-templates').then((r) => r.data),
   requestTemplate: (text: string) => api.post('/business-templates/requests', { text }).then((r) => r.data),
+  pendingUpdates: () => api.get<TemplateUpdates | null>('/business-profile/updates').then((r) => r.data || null),
+  applyUpdates: (ids: string[]) =>
+    api.post<{ applied: number }>('/business-profile/updates/apply', { ids }).then((r) => r.data),
+  dismissUpdates: () => api.post('/business-profile/updates/dismiss').then((r) => r.data),
 };
 
 export interface BusinessTemplateInput {
@@ -130,7 +163,15 @@ export interface BusinessTemplateInput {
   family: string;
   iconKey: string;
   isActive?: boolean;
-  config: { modules: string[]; suggestedCategories: string[]; defaultWarranty?: string; notice?: string };
+  config: {
+    modules: string[];
+    suggestedCategories: string[];
+    defaultWarranty?: string;
+    notice?: string;
+    // undefined = sin cambios; null = el rubro deja de traer ficha / órdenes.
+    assetType?: BusinessTemplateConfig['assetType'] | null;
+    workOrder?: BusinessTemplateConfig['workOrder'] | null;
+  };
 }
 
 export const adminBusinessTemplatesApi = {

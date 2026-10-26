@@ -1,21 +1,26 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, Prisma, PrismaService, withTenantContext, type BusinessTemplate } from '@plexo/database';
+import { slugKey } from '../customer-assets/asset-fields.js';
+import type { TemplateAssetType } from '../customer-assets/customer-assets.service.js';
+import type { TemplateWorkOrder } from '../work-orders/work-orders.service.js';
 import { BUSINESS_FAMILIES } from './business-modules.js';
 import type {
   BusinessTemplateConfigDto,
+  TemplateAssetTypeDto,
+  TemplateWorkOrderDto,
   CreateBusinessTemplateDto,
   UpdateBusinessTemplateDto,
 } from './dto/business-template.dto.js';
 
-/** Config guardada en BusinessTemplate.config. assetType y workOrder se
- * cargan en la migración inicial y se editarán en las etapas 3 y 4. */
+/** Config guardada en BusinessTemplate.config: módulos, sugerencias y, si el
+ * rubro los usa, la ficha (assetType) y los estados de las órdenes. */
 export interface BusinessTemplateConfig {
   modules: string[];
   suggestedCategories: string[];
   defaultWarranty?: string;
   notice?: string;
-  assetType?: unknown;
-  workOrder?: unknown;
+  assetType?: TemplateAssetType;
+  workOrder?: TemplateWorkOrder;
 }
 
 export interface BusinessTemplateView {
@@ -72,7 +77,58 @@ function cleanConfig(dto: BusinessTemplateConfigDto): BusinessTemplateConfig {
     suggestedCategories: [...new Set(categories)],
     ...(dto.defaultWarranty?.trim() ? { defaultWarranty: dto.defaultWarranty.trim() } : {}),
     ...(dto.notice?.trim() ? { notice: dto.notice.trim() } : {}),
+    ...(dto.assetType ? { assetType: cleanAssetType(dto.assetType) } : {}),
+    ...(dto.workOrder ? { workOrder: cleanWorkOrder(dto.workOrder) } : {}),
   };
+}
+
+/** Ficha del rubro: las claves existentes se conservan (los negocios las
+ * usan para recibir novedades); las nuevas salen del nombre. */
+export function cleanAssetType(dto: TemplateAssetTypeDto): TemplateAssetType {
+  const used = new Set<string>();
+  const fields = dto.fields.map((f) => {
+    const label = f.label.trim();
+    if (!label) throw new BadRequestException('Todos los campos de la ficha necesitan un nombre');
+    let key = f.key?.trim() && !used.has(f.key.trim()) ? f.key.trim() : '';
+    if (!key) {
+      const base = slugKey(label);
+      key = base;
+      for (let n = 2; used.has(key); n++) key = `${base}${n}`;
+    }
+    used.add(key);
+    const options = f.type === 'SELECT' ? [...new Set((f.options ?? []).map((o) => o.trim()).filter(Boolean))] : undefined;
+    if (f.type === 'SELECT' && (!options || options.length === 0)) {
+      throw new BadRequestException(`El campo "${label}" es una lista: cargá al menos una opción`);
+    }
+    return {
+      key,
+      label,
+      type: f.type,
+      ...(f.required || f.isIdentifier ? { required: true } : {}),
+      ...(f.isIdentifier ? { isIdentifier: true } : {}),
+      ...(options ? { options } : {}),
+    };
+  });
+  if (fields.filter((f) => f.isIdentifier).length !== 1) {
+    throw new BadRequestException('La ficha tiene que tener exactamente un dato principal (el que se usa para buscar)');
+  }
+  const labels = fields.map((f) => f.label.toLowerCase());
+  const repeatedField = labels.find((l, i) => labels.indexOf(l) !== i);
+  if (repeatedField) throw new BadRequestException(`La ficha tiene dos campos "${repeatedField}"`);
+  return { name: dto.name.trim(), ...(dto.notice?.trim() ? { notice: dto.notice.trim() } : {}), fields };
+}
+
+export function cleanWorkOrder(dto: TemplateWorkOrderDto): TemplateWorkOrder {
+  const statuses = dto.statuses
+    .map((s) => ({ name: s.name.trim(), ...(s.final ? { final: true } : {}), ...(s.notifiesCustomer ? { notifiesCustomer: true } : {}) }))
+    .filter((s) => s.name);
+  if (statuses.length < 2) throw new BadRequestException('Las órdenes necesitan al menos dos estados');
+  const names = statuses.map((s) => s.name.toLowerCase());
+  const repeatedStatus = names.find((n, i) => names.indexOf(n) !== i);
+  if (repeatedStatus) throw new BadRequestException(`Hay dos estados "${repeatedStatus}"`);
+  if (!statuses.some((s) => s.final)) throw new BadRequestException('Marcá al menos un estado que cierre la orden');
+  if (statuses[0].final) throw new BadRequestException('El primer estado no puede cerrar la orden');
+  return { docName: dto.docName.trim(), statuses };
 }
 
 /**
@@ -139,11 +195,12 @@ export class BusinessTemplatesService {
     if (!current) throw new NotFoundException('Rubro no encontrado');
 
     const currentConfig = readConfig(current);
-    // assetType/workOrder (y cualquier otra clave) se conservan: el editor de
-    // esta etapa sólo manda módulos, categorías, garantía y aviso.
+    // Ficha y estados: si no vienen se conservan; null los quita.
     const kept: BusinessTemplateConfig = { ...currentConfig };
     delete kept.defaultWarranty;
     delete kept.notice;
+    if (dto.config?.assetType === null) delete kept.assetType;
+    if (dto.config?.workOrder === null) delete kept.workOrder;
     const nextConfig = dto.config ? { ...kept, ...cleanConfig(dto.config) } : currentConfig;
     // Postgres (JSONB) devuelve las claves en otro orden: se comparan
     // ordenadas para no publicar una versión "nueva" idéntica.

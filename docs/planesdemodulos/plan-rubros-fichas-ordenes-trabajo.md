@@ -313,6 +313,20 @@ por el drift viejo).
   `/ordenes-trabajo/margenes` con filtro de fechas.
 - Una compra se vincula desde la orden (buscador), no desde la carga de facturas de compra.
 
+**2026-10-26: etapa 6 hecha** (Novedades de plantilla).
+
+- Migración `20261106000000_template_updates`: `tenant_settings.dismissedTemplateVersion`.
+- `/admin/rubros` edita también la ficha (campos, dato principal, listas) y los estados de las
+  órdenes de cada rubro. Las claves de los campos existentes se conservan; se rechazan fichas sin
+  dato principal, campos o estados repetidos y órdenes sin estado que cierre.
+- `TemplateUpdatesService`: compara la versión aplicada por el negocio con la vigente y ofrece SÓLO
+  lo nuevo que el negocio todavía no tiene (módulos, categorías, campos de la ficha, estados en su
+  lugar). Aplicar sólo agrega; lo que la plantilla sacó no se le quita a nadie. "Ahora no" no
+  vuelve a ofrecer esa versión. Si no hay nada para ofrecer, el negocio queda al día sin cambios.
+- Web: aviso en el Tablero ("Hay novedades para tu rubro") y casillas en Rubro y módulos (maqueta,
+  pantalla 3).
+- El catálogo inicial ya traía fichas y estados de todos los rubros (migración de la etapa 1).
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no
