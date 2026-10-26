@@ -135,6 +135,7 @@ export function LetrasGrandesTemplate({ data, size }: { data: InvoicePdfData; si
             <View key={i} style={s.item} wrap={false}>
               <View style={{ flex: 1 }}>
                 <Text style={s.itemName}>{line.description}</Text>
+                {line.note ? <Text style={s.itemDetail}>{line.note}</Text> : null}
                 <Text style={s.itemDetail}>
                   {`${line.quantity} ${line.unit} × $ ${line.unitPrice}`}
                   {line.discount ? ` · descuento ${line.discount}` : ''}

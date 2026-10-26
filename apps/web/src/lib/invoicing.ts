@@ -20,6 +20,8 @@ export interface ExchangeRateHistoryEntry {
 export interface InvoiceLine {
   id: string;
   articleVariantId: string;
+  // Detalle libre de la línea (sale en el PDF).
+  description: string | null;
   quantity: string;
   unitPrice: string;
   discountType: 'PERCENTAGE' | 'AMOUNT';
@@ -99,6 +101,8 @@ export interface InvoiceDetail extends Invoice {
 export interface CreateSaleLineInput {
   articleVariantId: string;
   quantity: number;
+  // Detalle libre ("Cambio de embrague"): sale en el PDF, no va a ARCA.
+  description?: string;
   discountType?: 'PERCENTAGE' | 'AMOUNT';
   discountValue?: number;
   // Anula precio/alícuota de catálogo para esta línea - ver

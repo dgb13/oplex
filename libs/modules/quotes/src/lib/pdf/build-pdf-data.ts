@@ -93,7 +93,7 @@ const dayOnlyFormatter = new Intl.DateTimeFormat('es-AR', {
   timeZone: 'UTC',
 });
 
-const UNIT_LABELS: Record<string, string> = { UNIT: 'u.', KG: 'kg', LTR: 'l', MM: 'mm', M2: 'm²' };
+const UNIT_LABELS: Record<string, string> = { UNIT: 'u.', KG: 'kg', LTR: 'l', MM: 'mm', M2: 'm²', HOUR: 'h', DAY: 'día' };
 
 const TAX_CONDITION_LABELS: Record<TenantTaxConditionValue, string> = {
   RESPONSABLE_INSCRIPTO: 'IVA Responsable Inscripto',

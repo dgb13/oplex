@@ -98,7 +98,7 @@ export function parseYesNo(raw: string): boolean | null {
   return null;
 }
 
-export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2';
+export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2' | 'HOUR' | 'DAY';
 
 const UNIT_ALIASES: Record<string, UnitValue> = {
   '': 'UNIT', un: 'UNIT', u: 'UNIT', uni: 'UNIT', unid: 'UNIT', unidad: 'UNIT', unidades: 'UNIT', unit: 'UNIT', 'c u': 'UNIT', cu: 'UNIT', pza: 'UNIT', pieza: 'UNIT', ud: 'UNIT',
@@ -106,6 +106,8 @@ const UNIT_ALIASES: Record<string, UnitValue> = {
   l: 'LTR', lt: 'LTR', lts: 'LTR', ltr: 'LTR', litro: 'LTR', litros: 'LTR',
   mm: 'MM', milimetro: 'MM', milimetros: 'MM',
   m2: 'M2', mt2: 'M2', 'metro cuadrado': 'M2', 'metros cuadrados': 'M2',
+  h: 'HOUR', hs: 'HOUR', hr: 'HOUR', hrs: 'HOUR', hora: 'HOUR', horas: 'HOUR',
+  dia: 'DAY', dias: 'DAY', d: 'DAY', jornada: 'DAY', jornadas: 'DAY',
 };
 
 /** Unidad de Oplex para un valor del archivo, o null si no se reconoce. */

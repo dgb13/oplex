@@ -155,6 +155,7 @@ export default function NewInvoiceModal({
         lines: lines.map((l) => ({
           articleVariantId: l.articleVariantId,
           quantity: l.quantity,
+          description: l.notes?.trim() || undefined,
           unitPrice: l.unitPrice,
           taxKind: l.taxKind,
           taxRate: l.taxRate,
@@ -280,6 +281,7 @@ export default function NewInvoiceModal({
                 currencyCode={selectedCurrency?.code}
                 addInputRef={addArticleRef}
                 withoutVat={withoutVat}
+                allowNotes
               />
 
               {showOtherTaxes || otherTaxLines.length > 0 ? (

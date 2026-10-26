@@ -55,7 +55,15 @@ const PHOTO_PARALLEL = 5;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 /** Elección del usuario para un valor de IVA: el artículo queda sin alícuota. */
 export const NO_TAX = '__none__';
-const UNIT_LABELS: Record<UnitValue, string> = { UNIT: 'Unidad', KG: 'Kilogramo', LTR: 'Litro', MM: 'Milímetro', M2: 'Metro cuadrado' };
+const UNIT_LABELS: Record<UnitValue, string> = {
+  UNIT: 'Unidad',
+  KG: 'Kilogramo',
+  LTR: 'Litro',
+  MM: 'Milímetro',
+  M2: 'Metro cuadrado',
+  HOUR: 'Hora',
+  DAY: 'Día',
+};
 
 export type ImportAnalysis = FileAnalysis<ImportField>;
 
@@ -721,7 +729,7 @@ const EXPORT_COLUMNS = [
   { header: 'Insumo', key: 'supply', width: 10 },
 ];
 
-const UNIT_EXPORT: Record<string, string> = { UNIT: 'UN', KG: 'KG', LTR: 'LT', MM: 'MM', M2: 'M2' };
+const UNIT_EXPORT: Record<string, string> = { UNIT: 'UN', KG: 'KG', LTR: 'LT', MM: 'MM', M2: 'M2', HOUR: 'HS', DAY: 'DIA' };
 
 /** Fila de encabezados según los campos de artículos. */
 export function detectHeaderRow(grid: Cell[][]): number {

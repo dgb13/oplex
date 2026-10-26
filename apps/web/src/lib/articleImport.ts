@@ -22,7 +22,7 @@ export type ImportField =
   | 'sheetLength'
   | 'supply';
 export type ImportFieldOrSkip = ImportField | 'skip';
-export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2';
+export type UnitValue = 'UNIT' | 'KG' | 'LTR' | 'MM' | 'M2' | 'HOUR' | 'DAY';
 export type LengthUnit = 'm' | 'cm' | 'mm';
 
 export const IMPORT_FIELD_OPTIONS: { value: ImportFieldOrSkip; label: string }[] = [
@@ -53,6 +53,8 @@ export const UNIT_OPTIONS: { value: UnitValue; label: string }[] = [
   { value: 'LTR', label: 'Litro' },
   { value: 'MM', label: 'Milímetro' },
   { value: 'M2', label: 'Metro cuadrado' },
+  { value: 'HOUR', label: 'Hora' },
+  { value: 'DAY', label: 'Día' },
 ];
 
 export interface ImportColumn {

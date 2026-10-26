@@ -248,6 +248,21 @@ por el drift viejo).
   categorías y garantía aplicados; apagar Caja la saca del menú; negocio previo que elige rubro
   conserva todo; /admin edita, versiona y conserva ficha y estados; pedidos de rubros nuevos.
 
+**2026-10-26: etapa 2 hecha** (sobre main, después del merge 8bfc6dd).
+
+- Migración `20261102000000_hour_unit_line_description`: `UnitOfMeasure` + `HOUR`/`DAY`,
+  `InvoiceLine.description`.
+- Unidad: selector de artículos (Hora, Día), importación (h, hs, horas, día, jornada) y
+  exportación (HS, DIA), etiquetas "h"/"día" en PDF y stock. Alta guiada: un servicio pregunta
+  "Se cobra: por trabajo / por hora / por día" y el precio pasa a "Precio por hora".
+- Descripción por línea: Nueva factura habilita el "detalle" de cada línea (mismo botón que
+  Cotizaciones); cotización → factura copia las notas de cada línea; sale debajo del artículo en
+  los 5 estilos + ticket y en el detalle de la factura. No va a ARCA.
+- Las unidades sugeridas por rubro siguen sin usarse (no hacen falta: el alta guiada ya pregunta).
+- Ojo en local: después de una migración que cambia un enum, levantar el API con
+  `--skip-nx-cache` (el cliente generado de Prisma no entra en el hash de Nx y el bundle queda
+  con el enum viejo). En el deploy no pasa porque compila de cero.
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no

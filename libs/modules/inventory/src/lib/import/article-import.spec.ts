@@ -71,6 +71,9 @@ describe('guessTax / guessUnit', () => {
     expect(guessUnit('Kgs')).toBe('KG');
     expect(guessUnit('LT')).toBe('LTR');
     expect(guessUnit('')).toBe('UNIT');
+    expect(guessUnit('Hs.')).toBe('HOUR');
+    expect(guessUnit('Horas')).toBe('HOUR');
+    expect(guessUnit('Día')).toBe('DAY');
     expect(guessUnit('ROLLO')).toBeNull();
   });
 });

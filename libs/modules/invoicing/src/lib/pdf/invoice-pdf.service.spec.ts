@@ -49,7 +49,9 @@ async function makeData(overrides: Partial<InvoicePdfData> = {}): Promise<Invoic
     isBaseCurrency: true,
     vatMode: 'DISCRIMINATED',
     lines: [
-      { description: 'Agua mineral 500ml', sku: 'AGUA-500', quantity: '10', unit: 'u.', unitPrice: '100,00', discount: '5%', vatLabel: '21%', lineTotal: '950,00', image: null },
+      { description: 'Agua mineral 500ml', note: null, sku: 'AGUA-500', quantity: '10', unit: 'u.', unitPrice: '100,00', discount: '5%', vatLabel: '21%', lineTotal: '950,00', image: null },
+      // Línea con detalle libre y en horas (mano de obra de un taller).
+      { description: 'Mano de obra', note: 'Cambio de embrague y regulación', sku: 'MO-HORA', quantity: '2,5', unit: 'h', unitPrice: '25.000,00', discount: null, vatLabel: '21%', lineTotal: '62.500,00', image: null },
     ],
     hasLineDiscounts: true,
     totalRows: [

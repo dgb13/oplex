@@ -48,6 +48,10 @@ enum UnitOfMeasure {
   MM
   M2
   UNIT
+  // Servicios que se cobran por tiempo: mano de obra por hora, alquiler por
+  // día (plan-rubros-fichas-ordenes-trabajo.md, etapa 2).
+  HOUR
+  DAY
 }
 
 // Ver docs/planesdemodulos/OPLEX-Produccion-Plan-Tecnico-14-9.md, Fase 4.1 - discriminador
@@ -2384,6 +2388,10 @@ model InvoiceLine {
   invoice          Invoice        @relation(fields: [tenantId, invoiceId], references: [tenantId, id])
   articleVariantId String
   articleVariant   ArticleVariant @relation(fields: [articleVariantId], references: [id])
+  // Detalle libre de esta línea ("Cambio de embrague", "Service 10.000 km"),
+  // además del nombre del artículo. Sale en el PDF; NO va a ARCA (WSFE no
+  // recibe líneas). Viene de las notas de la línea al facturar una cotización.
+  description      String?
   quantity         Decimal        @db.Decimal(14, 3)
   // Already converted to the invoice's currency (articleVariant.unitPrice
   // in USD x Invoice.exchangeRate), before any discount.

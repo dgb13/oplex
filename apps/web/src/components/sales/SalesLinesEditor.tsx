@@ -97,8 +97,8 @@ export default function SalesLinesEditor({
   pricesIncludeTax: boolean;
   onPricesIncludeTaxChange: (value: boolean) => void;
   currencyCode?: string;
-  // Botón de "detalle" por línea (texto libre que sale en el PDF) - sólo
-  // Cotizaciones lo guarda hoy.
+  // Botón de "detalle" por línea (texto libre que sale en el PDF) -
+  // Cotizaciones y Nueva factura (InvoiceLine.description).
   allowNotes?: boolean;
   // Columna de bonificación % por línea - sólo Cotizaciones la guarda hoy.
   allowDiscount?: boolean;

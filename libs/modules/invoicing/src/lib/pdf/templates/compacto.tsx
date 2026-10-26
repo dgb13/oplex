@@ -140,7 +140,10 @@ export function CompactoTemplate({ data, size }: { data: InvoicePdfData; size: I
           {data.lines.map((line, i) => (
             <View key={i} style={[s.tr, i % 2 === 1 ? { backgroundColor: '#f6f6f8' } : {}]} wrap={false}>
               <Text style={[s.cCode, s.mono]}>{line.sku}</Text>
-              <Text style={s.cDesc}>{line.description}</Text>
+              <Text style={s.cDesc}>
+                {line.description}
+                {line.note ? <Text style={{ color: MUTED }}> ({line.note})</Text> : null}
+              </Text>
               <Text style={s.cQty}>{line.quantity}</Text>
               <Text style={s.cUnit}>{line.unit}</Text>
               <Text style={s.cPrice}>{line.unitPrice}</Text>
