@@ -46,6 +46,8 @@ export interface QuotePdfEmitter {
 export interface QuotePdfCustomer {
   name: string;
   taxId: string | null;
+  /** "CUIT" o "DNI" según la cantidad de dígitos de taxId. */
+  taxIdLabel: string;
   taxCondition: string | null;
   address: string | null;
   email: string | null;

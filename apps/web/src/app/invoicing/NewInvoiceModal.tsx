@@ -17,7 +17,9 @@ import { companiesApi } from '@/lib/companies';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi, type InvoiceTaxLineInput, type StockShortage } from '@/lib/invoicing';
+import { receivablesApi } from '@/lib/receivables';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { formatMoney } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
@@ -120,6 +122,20 @@ export default function NewInvoiceModal({
   // Factura C (emisor Monotributo/Exento): sin IVA, igual que el backend.
   const withoutVat = documentLetter === 'C';
   const totals = computeSalesTotals(lines, pricesIncludeTax, validOtherTaxLines, withoutVat);
+
+  // Límite de crédito del cliente: sólo avisa, no frena la venta (decisión
+  // del usuario). Los saldos están en moneda base, así que sólo se compara
+  // con una factura en moneda base. Sin permiso para ver saldos no se avisa.
+  const balancesQuery = useQuery({
+    queryKey: ['receivables-balances'],
+    queryFn: receivablesApi.listCustomerBalances,
+    retry: false,
+  });
+  const customerBalance = balancesQuery.data?.find((b) => b.customerId === customerId);
+  const creditLimit = Number(customerBalance?.creditLimit ?? 0);
+  const outstanding = Number(customerBalance?.outstanding ?? 0);
+  const exceedsCreditLimit =
+    Boolean(selectedCurrency?.isBase) && creditLimit > 0 && outstanding + totals.total > creditLimit;
 
   const mutation = useMutation({
     mutationFn: (allowPendingDelivery: boolean) =>
@@ -363,6 +379,13 @@ export default function NewInvoiceModal({
                     Contabilidad → Conexión con ARCA → Datos de la empresa
                   </Link>
                   : sin ella no se puede saber si corresponde Factura A, B o C.
+                </p>
+              )}
+              {exceedsCreditLimit && (
+                <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Con esta factura, {selectedCustomer?.name ?? 'el cliente'} queda debiendo{' '}
+                  {formatMoney(outstanding + totals.total)} y su límite de crédito es {formatMoney(creditLimit)}. Podés
+                  emitirla igual; el límite se cambia en la ficha del cliente.
                 </p>
               )}
               {error && <p className="text-sm text-destructive">{error}</p>}

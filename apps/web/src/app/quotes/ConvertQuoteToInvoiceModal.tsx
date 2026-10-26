@@ -8,7 +8,9 @@ import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter
 import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi, type StockShortage } from '@/lib/invoicing';
 import { quotesApi, type QuoteDetail } from '@/lib/quotes';
+import { receivablesApi } from '@/lib/receivables';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { formatMoney } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
@@ -50,6 +52,18 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   const warehousesQuery = useQuery({ queryKey: ['inventory-warehouses'], queryFn: inventoryApi.listWarehouses });
   const branches = branchesQuery.data ?? [];
   const warehouses = warehousesQuery.data ?? [];
+
+  // Límite de crédito: sólo avisa (igual que Nueva factura). Los saldos están
+  // en pesos, así que sólo se compara una cotización en ARS.
+  const balancesQuery = useQuery({
+    queryKey: ['receivables-balances'],
+    queryFn: receivablesApi.listCustomerBalances,
+    retry: false,
+  });
+  const customerBalance = balancesQuery.data?.find((b) => b.customerId === quote.customer.id);
+  const creditLimit = Number(customerBalance?.creditLimit ?? 0);
+  const owedAfter = Number(customerBalance?.outstanding ?? 0) + Number(quote.total);
+  const exceedsCreditLimit = quote.currency.code === 'ARS' && creditLimit > 0 && owedAfter > creditLimit;
 
   if (!branchId && branches[0]) setBranchId(branches[0].id);
   if (!warehouseId && warehouses[0]) setWarehouseId(warehouses[0].id);
@@ -136,6 +150,12 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
             </p>
           </div>
 
+          {exceedsCreditLimit && (
+            <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              Con esta factura, {quote.customer.name} queda debiendo {formatMoney(owedAfter)} y su límite de crédito es{' '}
+              {formatMoney(creditLimit)}. Podés facturar igual; el límite se cambia en la ficha del cliente.
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="mt-2 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={onClose}>

@@ -65,6 +65,7 @@ describe('SignupService.signup', () => {
         ownerEmail: 'nueva@demo.com',
         autoVerifyEmail: false,
         mustChangePassword: false,
+        askBusinessTemplate: true,
       }),
     );
     expect(fakeTx.emailVerificationCode.upsert).toHaveBeenCalled();

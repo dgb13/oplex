@@ -107,7 +107,7 @@ export function TradicionalTemplate({ data }: { data: QuotePdfData }) {
         <View style={s.addr}>
           <View style={{ flex: 1 }}>
             <Labeled label="Señores" value={customer.name} />
-            <Labeled label="CUIT" value={customerTaxLine(data) || null} />
+            <Labeled label={data.customer.taxIdLabel} value={customerTaxLine(data) || null} />
             <Labeled label="Domicilio" value={customer.address} />
           </View>
           <View style={{ flex: 1 }}>

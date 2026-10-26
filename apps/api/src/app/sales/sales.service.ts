@@ -602,13 +602,25 @@ export class SalesService {
       exchangeRate: factor.toNumber(),
       globalDiscountPercent: dto.globalDiscountPercent,
       dueDate: dto.dueDate,
-      notes: dto.notes,
+      // Las notas de la cotización (ej. vehículo/patente en un taller) pasan
+      // a la factura salvo que el modal mande otras.
+      notes: dto.notes ?? quote.notes ?? undefined,
       pricesIncludeTax: dto.pricesIncludeTax,
       allowPendingDelivery: dto.allowPendingDelivery,
+      // La factura tiene que salir igual a lo que el cliente aprobó: la
+      // bonificación y el IVA resueltos en cada línea de la cotización se
+      // copian tal cual (antes se perdían y la factura salía más cara).
       lines: quote.lines.map((line) => ({
         articleVariantId: line.articleVariantId,
         quantity: line.quantity.toNumber(),
         unitPrice: line.unitPrice.mul(factor).toNumber(),
+        ...(line.discountPercent && line.discountPercent.gt(0)
+          ? { discountType: 'PERCENTAGE' as const, discountValue: line.discountPercent.toNumber() }
+          : {}),
+        ...(line.taxKind ? { taxKind: line.taxKind } : {}),
+        ...(line.taxRate != null && (line.taxKind ?? 'GRAVADO') === 'GRAVADO'
+          ? { taxRate: line.taxRate.toNumber() }
+          : {}),
       })),
     });
 

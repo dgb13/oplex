@@ -50,7 +50,10 @@ export function suggestDocumentLetter(
   }
 
   // ownTaxCondition === 'RESPONSABLE_INSCRIPTO'
-  if (!customerTaxId) {
+  // Un DNI (7 u 8 dígitos) en el campo del CUIT es un particular: Consumidor
+  // Final, igual que sin documento.
+  const taxIdDigits = (customerTaxId ?? '').replace(/\D/g, '');
+  if (!customerTaxId || taxIdDigits.length === 7 || taxIdDigits.length === 8) {
     return {
       letter: 'B',
       locked: true,

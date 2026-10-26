@@ -42,6 +42,7 @@ import { BankReconciliationModule } from './bank-reconciliation/bank-reconciliat
 import { CollaborationModule } from './collaboration/collaboration.module.js';
 import { LegalModule } from './legal/legal.module.js';
 import { SupportModule } from './support/support.module.js';
+import { BusinessTemplatesModule } from './business-templates/business-templates.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module.js';
 import { InventoryCartCheckoutModule } from './inventory-cart-checkout/inventory-cart-checkout.module.js';
@@ -84,6 +85,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     CollaborationModule,
     LegalModule,
     SupportModule,
+    BusinessTemplatesModule,
     CalendarModule,
     AgendaModule,
     SchedulerModule,

@@ -16,6 +16,7 @@ import { UserAvatar } from './UserAvatar';
 import { MERCADOPAGO_NEEDS_RECONNECT, mercadoPagoApi } from '@/lib/mercadopago';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
+import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
 import { supportApi } from '@/lib/support';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -53,6 +54,9 @@ interface NavLink {
   // de Contabilidad/Impuestos/Reportes, que vienen en el token.
   roles?: string[];
   module?: string[];
+  // Módulo del rubro (lib/businessModules.ts): si el negocio lo apagó en
+  // Rubro y módulos (/settings/modules), el item no se muestra. Sin esto = siempre.
+  businessModule?: string;
 }
 
 interface NavLeaf extends NavLink {
@@ -65,6 +69,7 @@ interface NavGroup {
   label: string;
   icon: LucideIcon;
   items: NavLink[];
+  businessModule?: string;
 }
 
 type NavEntry = NavLeaf | NavGroup;
@@ -72,21 +77,21 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/dashboard', label: 'Tablero', icon: LayoutDashboard },
   { kind: 'link', href: '/resumen', label: 'Resumen', icon: BarChart3 },
-  { kind: 'link', href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { kind: 'link', href: '/agenda', label: 'Agenda', icon: CalendarDays, businessModule: 'agenda' },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
-  { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket, roles: ['SALES'] },
+  { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket, roles: ['SALES'], businessModule: 'caja' },
   {
     kind: 'group',
     label: 'Ventas',
     icon: ShoppingCart,
     items: [
       { href: '/invoicing', label: 'Facturación', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
-      { href: '/quotes', label: 'Cotizaciones', roles: ['SALES', 'VIEWER'] },
+      { href: '/quotes', label: 'Cotizaciones', roles: ['SALES', 'VIEWER'], businessModule: 'presupuestos' },
       { href: '/sales/pending-deliveries', label: 'Pendientes de entrega', roles: ['SALES', 'INVENTORY'] },
-      { href: '/receivables', label: 'Cuentas a Cobrar', roles: ['SALES', 'ACCOUNTANT'] },
+      { href: '/receivables', label: 'Cuentas a Cobrar', roles: ['SALES', 'ACCOUNTANT'], businessModule: 'cuentas-corrientes' },
       { href: '/clients', label: 'Clientes', roles: ['SALES', 'ACCOUNTANT', 'VIEWER'] },
-      { href: '/storefront', label: 'Tienda online', roles: [] },
-      { href: '/storefront/orders', label: 'Pedidos de la tienda', roles: ['SALES'] },
+      { href: '/storefront', label: 'Tienda online', roles: [], businessModule: 'tienda' },
+      { href: '/storefront/orders', label: 'Pedidos de la tienda', roles: ['SALES'], businessModule: 'tienda' },
     ],
   },
   {
@@ -149,6 +154,7 @@ const PRODUCTION_NAV_GROUP: NavGroup = {
   kind: 'group',
   label: 'Producción',
   icon: Factory,
+  businessModule: 'produccion',
   items: [
     { href: '/production', label: 'Tablero', roles: ['INVENTORY', 'VIEWER'] },
     { href: '/production/bom', label: 'Recetas', roles: ['INVENTORY', 'VIEWER'] },
@@ -219,6 +225,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     queryKey: ['subscription-me'],
     queryFn: subscriptionsApi.getCurrent,
   });
+  // Rubro y módulos del negocio. Mientras carga se ve todo (isModuleEnabled
+  // con undefined) - lo mismo que ve un negocio previo a los rubros.
+  const { data: businessProfile } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
   const comprasIndex = NAV_ENTRIES.findIndex((e) => e.kind === 'group' && e.label === 'Compras');
   const withProduction = subscription?.plan.productionModuleEnabled
     ? [
@@ -240,11 +249,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setGrants(tokenClaims()?.moduleAccess ?? []);
   }, []);
+  const moduleOn = (key: string | undefined) => !key || isModuleEnabled(businessProfile, key);
   const navEntries = planEntries.flatMap((entry): NavEntry[] => {
     if (entry.kind === 'link') {
-      return canSee(entry, profile?.role, grants) ? [entry] : [];
+      return canSee(entry, profile?.role, grants) && moduleOn(entry.businessModule) ? [entry] : [];
     }
-    const items = entry.items.filter((item) => canSee(item, profile?.role, grants));
+    if (!moduleOn(entry.businessModule)) return [];
+    const items = entry.items.filter((item) => canSee(item, profile?.role, grants) && moduleOn(item.businessModule));
     return items.length > 0 ? [{ ...entry, items }] : [];
   });
 
@@ -270,6 +281,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       router.replace('/profile');
     }
   }, [profile, pathname, router]);
+
+  // Alta nueva que todavía no eligió rubro: primero eso (sólo quien puede
+  // elegirlo; un invitado entra normal).
+  const canChooseBusiness = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  useEffect(() => {
+    if (businessProfile?.pending && canChooseBusiness && !profile?.mustChangePassword) {
+      router.replace('/bienvenida');
+    }
+  }, [businessProfile?.pending, canChooseBusiness, profile?.mustChangePassword, router]);
 
   useEffect(() => {
     if (!localStorage.getItem('token')) {
@@ -693,6 +713,18 @@ function UserMenu() {
               className="block px-4 py-2 text-sm hover:bg-muted"
             >
               Cajas (POS)
+            </Link>
+          )}
+
+          {/* Rubro y módulos: configuración de todo el negocio, mismos roles
+           * que PATCH /business-profile/modules. */}
+          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+            <Link
+              href="/settings/modules"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm hover:bg-muted"
+            >
+              Rubro y módulos
             </Link>
           )}
 

@@ -878,6 +878,21 @@ model TenantSettings {
   // (getOrCreateSystemFinancialAccount), como antes.
   mercadoPagoFinancialAccountId String?
 
+  // Rubro del negocio (BusinessTemplate.key) y versión de la plantilla que
+  // se le aplicó - la versión sirve para avisarle "hay novedades" cuando
+  // Oplex publica una nueva. null = negocio previo a los rubros o que
+  // todavía no eligió.
+  businessTemplateKey     String?
+  businessTemplateVersion Int?
+  // true sólo para altas nuevas: la web le pide elegir el rubro antes de
+  // entrar. Los negocios previos quedan en false (tarjeta opcional).
+  businessTemplatePending Boolean  @default(false)
+  // Módulos que el negocio usa (claves de business-modules.ts). Sólo cuenta
+  // con modulesConfigured = true; en false se ve todo, como antes de que
+  // existieran los rubros. Apagar un módulo lo saca del menú, no borra datos.
+  modulesConfigured       Boolean  @default(false)
+  enabledModules          String[] @default([])
+
   updatedAt DateTime @updatedAt
 
   @@map("tenant_settings")
@@ -4660,4 +4675,60 @@ model SupportAttachment {
 
   @@index([tenantId, ticketId])
   @@map("support_attachments")
+}
+
+// Catálogo de rubros (taller mecánico, kiosco, farmacia…): plantillas que
+// Oplex administra desde /admin/rubros. Tabla de plataforma, sin RLS (como
+// plans). Un negocio que elige un rubro recibe una COPIA de su config (ver
+// BusinessProfileService.choose): cambiar la plantilla después no le pisa
+// nada. Plan: docs/planesdemodulos/plan-rubros-fichas-ordenes-trabajo.md.
+model BusinessTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  family    String
+  // Nombre de un ícono de lucide-react (ver apps/web/src/lib/businessTemplateIcons.tsx).
+  iconKey   String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  // Config vigente ({ modules, suggestedCategories, defaultWarranty, notice })
+  // y su versión. Cada cambio de config publica una versión nueva y guarda
+  // la anterior en BusinessTemplateVersion.
+  config    Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions BusinessTemplateVersion[]
+
+  @@index([isActive, family, sortOrder])
+  @@map("business_templates")
+}
+
+model BusinessTemplateVersion {
+  id          String           @id @default(uuid())
+  templateId  String
+  template    BusinessTemplate @relation(fields: [templateId], references: [id])
+  version     Int
+  config      Json
+  publishedBy String?
+  publishedAt DateTime         @default(now())
+
+  @@unique([templateId, version])
+  @@map("business_template_versions")
+}
+
+// "No encuentro mi rubro → pedir que lo agreguen", desde el alta o desde
+// Configuración → Módulos. Tabla de plataforma (la lee la bandeja de
+// /admin/rubros); tenantId es sólo informativo, sin RLS.
+model BusinessTemplateRequest {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  text      String
+  // NEW / DONE / DISCARDED
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@map("business_template_requests")
 }

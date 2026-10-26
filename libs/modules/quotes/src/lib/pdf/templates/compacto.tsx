@@ -100,7 +100,7 @@ export function CompactoTemplate({ data }: { data: QuotePdfData }) {
               <Text style={s.kvKey}>Cliente</Text>
               <Text style={[s.kvValue, { fontWeight: 700 }]}>{customer.name}</Text>
             </View>
-            <Kv k="CUIT" v={customerTaxLine(data) || null} />
+            <Kv k={data.customer.taxIdLabel} v={customerTaxLine(data) || null} />
             <Kv k="Domicilio" v={customer.address} />
             <Kv k="Contacto" v={joinDefined([customer.contactName, customer.contactEmail ?? customer.email]) || null} />
           </View>

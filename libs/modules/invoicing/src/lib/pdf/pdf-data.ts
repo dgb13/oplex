@@ -40,7 +40,7 @@ export interface InvoicePdfEmitter {
 
 export interface InvoicePdfCustomer {
   name: string;
-  /** "CUIT", o null para Consumidor Final sin documento. */
+  /** "CUIT" o "DNI", o null para Consumidor Final sin documento. */
   docLabel: string | null;
   docNumber: string | null;
   taxConditionLabel: string;

@@ -114,5 +114,6 @@ export type {
   DocumentComment,
   AssistantAction,
   MercadoPagoPayment,
+  BusinessTemplate,
 } from './generated/client.js';
 export * from './generated/enums.js';

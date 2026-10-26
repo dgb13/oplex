@@ -86,7 +86,22 @@ export function resolveDocTipoNro(customerTaxId: string | null): { docTipo: numb
     return { docTipo: 99, docNro: '0' }; // Consumidor Final
   }
   const digits = customerTaxId.replace(/\D/g, '');
-  return { docTipo: 80, docNro: digits }; // CUIT
+  const kind = classifyTaxId(customerTaxId);
+  if (kind === 'CUIT') return { docTipo: 80, docNro: digits };
+  if (kind === 'DNI') return { docTipo: 96, docNro: digits };
+  throw new Error(
+    `El documento "${customerTaxId}" del cliente no es un CUIT (11 dígitos) ni un DNI (7 u 8 dígitos). Corregilo en su ficha.`,
+  );
+}
+
+/** Company.taxId es un único campo de texto: un particular (cliente típico
+ * de un taller o un kiosco) carga su DNI ahí. Se distingue por la cantidad
+ * de dígitos, que es lo único que diferencia uno del otro. */
+export function classifyTaxId(taxId: string | null | undefined): 'CUIT' | 'DNI' | null {
+  const digits = (taxId ?? '').replace(/\D/g, '');
+  if (digits.length === 11) return 'CUIT';
+  if (digits.length === 7 || digits.length === 8) return 'DNI';
+  return null;
 }
 
 /** CondicionIVAReceptorId (RG 5616, obligatorio en FECAESolicitar) - ids
@@ -94,6 +109,8 @@ export function resolveDocTipoNro(customerTaxId: string | null): { docTipo: numb
  * (consultado el 2026-09-26): 1 RI, 4 Exento, 5 Consumidor Final,
  * 6 Monotributo, 7 No Categorizado, 13 Monotributista Social,
  * 15 IVA No Alcanzado. Sin CUIT = Consumidor Final (igual que DocTipo 99).
+ * Con DNI también: quien tiene una condición frente al IVA tiene CUIT, así
+ * que un DNI sólo puede ser Consumidor Final.
  * Con CUIT y sin condición conocida no se adivina: asumir mal informa un
  * dato fiscal equivocado, así que se pide cargarla. Exportado para tests. */
 export function resolveCondicionIvaReceptor(
@@ -102,6 +119,7 @@ export function resolveCondicionIvaReceptor(
   customerName?: string,
 ): number {
   if (!customerTaxId) return 5;
+  if (classifyTaxId(customerTaxId) === 'DNI') return 5;
   const c = (customerTaxCondition ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

@@ -19,6 +19,7 @@ import {
   ScanLine,
   Server,
   Settings,
+  Store,
   TrendingUp,
   UserCheck,
   X,
@@ -41,6 +42,7 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
     entries: [
       { href: '/admin', label: 'Tenants', icon: Building2 },
       { href: '/admin/plans', label: 'Planes', icon: CreditCard },
+      { href: '/admin/rubros', label: 'Rubros', icon: Store },
       { href: '/admin/subscriptions', label: 'Suscripciones', icon: Repeat },
       { href: '/admin/visits', label: 'Visitas', icon: ChartLine },
     ],

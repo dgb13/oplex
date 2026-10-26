@@ -56,6 +56,7 @@ export class SignupService {
       mustChangePassword: false,
       autoVerifyEmail: false,
       planKey: SIGNUP_DEFAULT_PLAN_KEY,
+      askBusinessTemplate: true,
     });
 
     // Prueba de que aceptó el contrato al crear la cuenta (quién, cuándo,

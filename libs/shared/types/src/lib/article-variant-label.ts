@@ -19,11 +19,17 @@ export function buildVariantLabel(variant: {
 }): string | null {
   const attributes = variant.attributes as Record<string, string> | null | undefined;
   if (attributes && typeof attributes === 'object' && Object.keys(attributes).length > 0) {
-    return Object.keys(attributes)
+    const values = Object.keys(attributes)
       .sort()
       .map((key) => attributes[key])
-      .filter(Boolean)
-      .join(' / ');
+      .filter(Boolean);
+    // La marca va adelante aunque haya atributos: si no, dos marcas del mismo
+    // repuesto (mismo código original, mismo vehículo) se ven iguales.
+    const brand = variant.brand?.trim();
+    if (brand && !values.some((value) => value.toLowerCase() === brand.toLowerCase())) {
+      values.unshift(brand);
+    }
+    return values.join(' / ');
   }
   return [variant.color, variant.size, variant.brand].filter(Boolean).join(' / ') || null;
 }

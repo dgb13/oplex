@@ -39,6 +39,14 @@ describe('suggestDocumentLetter', () => {
     });
   });
 
+  it('forces Factura B for a customer identified only by DNI', () => {
+    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '25.123.456', null)).toEqual({
+      letter: 'B',
+      locked: true,
+      reason: expect.stringContaining('Consumidor Final'),
+    });
+  });
+
   it('forces Factura B when the customer is Monotributo or Exento', () => {
     expect(
       suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'Monotributo (Categoría B)').letter,

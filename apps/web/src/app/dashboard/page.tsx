@@ -30,6 +30,8 @@ import {
 import Link from 'next/link';
 import MercadoPagoConnectBanner from './MercadoPagoConnectBanner';
 import { useEffect, useState } from 'react';
+import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
+import BusinessTemplateCard from './BusinessTemplateCard';
 import OnboardingChecklist from './OnboardingChecklist';
 import {
   Area,
@@ -120,10 +122,12 @@ function CardMenu({ href, label }: { href: string; label: string }) {
  * production/page.tsx (['production-orders']) - React Query dedupea
  * ambos fetches, así que este widget no agrega ningún pedido nuevo al
  * navegar entre Tablero y Producción. No renderiza nada para un tenant en
- * un plan sin el módulo (BASIC). */
+ * un plan sin el módulo (BASIC) ni si el negocio lo apagó en Rubro y módulos. */
 function ProductionWidget() {
   const { data: subscription } = useQuery({ queryKey: ['subscription-me'], queryFn: subscriptionsApi.getCurrent });
-  const enabled = subscription?.plan.productionModuleEnabled ?? false;
+  const { data: businessProfile } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
+  const enabled =
+    (subscription?.plan.productionModuleEnabled ?? false) && isModuleEnabled(businessProfile, 'produccion');
   const ordersQuery = useQuery({ queryKey: ['production-orders'], queryFn: productionApi.listOrders, enabled });
 
   if (!enabled) {
@@ -276,6 +280,7 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Tablero</h1>
 
+      <BusinessTemplateCard />
       <OnboardingChecklist />
       <MercadoPagoConnectBanner />
       <ProductionWidget />

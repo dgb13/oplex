@@ -1100,6 +1100,56 @@ describe('SalesService.createInvoiceFromQuote', () => {
     expect(createInvoiceArgs.lines).toEqual([{ articleVariantId: 'variant-1', quantity: 2, unitPrice: 100 }]);
   });
 
+  it('keeps each line discount and tax, and the quote notes, so the invoice matches what was approved', async () => {
+    const quote = makeQuote({
+      currencyId: 'ars',
+      currency: { id: 'ars', code: 'ARS', isBase: true },
+      notes: 'Vehículo: patente AA000ZZ',
+      lines: [
+        {
+          articleVariantId: 'variant-1',
+          quantity: new Prisma.Decimal(1),
+          unitPrice: new Prisma.Decimal(100),
+          discountPercent: new Prisma.Decimal(10),
+          taxKind: 'GRAVADO',
+          taxRate: new Prisma.Decimal(10.5),
+        },
+        {
+          articleVariantId: 'variant-2',
+          quantity: new Prisma.Decimal(2),
+          unitPrice: new Prisma.Decimal(50),
+          discountPercent: new Prisma.Decimal(0),
+          taxKind: 'EXENTO',
+          taxRate: new Prisma.Decimal(0),
+        },
+      ],
+    });
+    const { service, invoicingService } = makeServices(quote);
+    const db = {
+      ...makeBranchDb(),
+      invoice: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
+      currency: { findFirst: jest.fn().mockResolvedValue({ id: 'ars', code: 'ARS', isBase: true }) },
+      exchangeRateHistory: { findFirst: jest.fn() },
+    };
+
+    await runInTenant(db, () => service.createInvoiceFromQuote('quote-1', convertDto));
+
+    const createInvoiceArgs = (invoicingService.createInvoice as jest.Mock).mock.calls[0][0];
+    expect(createInvoiceArgs.notes).toBe('Vehículo: patente AA000ZZ');
+    expect(createInvoiceArgs.lines).toEqual([
+      {
+        articleVariantId: 'variant-1',
+        quantity: 1,
+        unitPrice: 100,
+        discountType: 'PERCENTAGE',
+        discountValue: 10,
+        taxKind: 'GRAVADO',
+        taxRate: 10.5,
+      },
+      { articleVariantId: 'variant-2', quantity: 2, unitPrice: 50, taxKind: 'EXENTO' },
+    ]);
+  });
+
   it('rejects when the quote currency has no exchange rate loaded yet', async () => {
     const quote = makeQuote();
     const { service } = makeServices(quote);
