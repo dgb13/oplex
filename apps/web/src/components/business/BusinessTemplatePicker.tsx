@@ -197,7 +197,9 @@ export default function BusinessTemplatePicker({
               {availableModules.map((m) => (
                 <li key={m} className="flex items-center gap-2 text-sm">
                   <Check className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-                  {BUSINESS_MODULE_LABELS[m] ?? m}
+                  {m === 'fichas' && selected.config.assetType
+                    ? `Fichas de ${selected.config.assetType.name.toLowerCase()}`
+                    : (BUSINESS_MODULE_LABELS[m] ?? m)}
                 </li>
               ))}
             </ul>

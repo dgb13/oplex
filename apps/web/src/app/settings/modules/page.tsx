@@ -1,6 +1,7 @@
 'use client';
 
 import BusinessTemplatePicker from '@/components/business/BusinessTemplatePicker';
+import AssetTypeEditor from '@/components/customer-assets/AssetTypeEditor';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { Button } from '@/components/ui/button';
 import {
@@ -211,6 +212,9 @@ export default function ModulesPage() {
           })}
         </div>
       </section>
+
+      {/* Campos de la ficha (Vehículo, Equipo...) - sólo con Fichas prendido. */}
+      {business && isModuleEnabled(business, 'fichas') && <AssetTypeEditor />}
 
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-base font-semibold">Próximamente</h2>

@@ -3,8 +3,10 @@
  * BusinessTemplate en el schema y el plan
  * docs/planesdemodulos/plan-rubros-fichas-ordenes-trabajo.md).
  *
- * - available: existe hoy; apagarlo lo saca del menú (no corta el API ni
- *   borra datos).
+ * - available: existe hoy; apagarlo lo saca del menú (no borra datos).
+ *   legacy: los que ya existían antes de los rubros - un negocio previo sin
+ *   configurar los ve prendidos. Los módulos nuevos (Fichas...) sólo se ven
+ *   si el negocio los prende o los trae su rubro.
  * - upcoming: está en el plan (etapas 3 a 5); un rubro lo puede traer
  *   prendido y queda guardado para cuando salga, pero todavía no se toca.
  * - later: "Más adelante", fuera de este plan.
@@ -16,13 +18,13 @@
  * Espejo de apps/web/src/lib/businessModules.ts - mismas claves.
  */
 export const BUSINESS_MODULES = [
-  { key: 'caja', status: 'available' },
-  { key: 'presupuestos', status: 'available' },
-  { key: 'cuentas-corrientes', status: 'available' },
-  { key: 'agenda', status: 'available' },
-  { key: 'tienda', status: 'available' },
-  { key: 'produccion', status: 'available' },
-  { key: 'fichas', status: 'upcoming' },
+  { key: 'caja', status: 'available', legacy: true },
+  { key: 'presupuestos', status: 'available', legacy: true },
+  { key: 'cuentas-corrientes', status: 'available', legacy: true },
+  { key: 'agenda', status: 'available', legacy: true },
+  { key: 'tienda', status: 'available', legacy: true },
+  { key: 'produccion', status: 'available', legacy: true },
+  { key: 'fichas', status: 'available', legacy: false },
   { key: 'ordenes-trabajo', status: 'upcoming' },
   { key: 'costo-trabajo', status: 'upcoming' },
   { key: 'vencimientos', status: 'later' },
@@ -35,10 +37,25 @@ export type BusinessModuleKey = (typeof BUSINESS_MODULES)[number]['key'];
 
 export const BUSINESS_MODULE_KEYS: readonly string[] = BUSINESS_MODULES.map((m) => m.key);
 
-/** Los que hoy se pueden prender/apagar desde Configuración → Módulos. */
+/** Los que hoy se pueden prender/apagar desde Rubro y módulos. */
 export const AVAILABLE_MODULE_KEYS: readonly string[] = BUSINESS_MODULES.filter((m) => m.status === 'available').map(
   (m) => m.key,
 );
+
+/** Lo que ve prendido un negocio previo a los rubros (modulesConfigured =
+ * false): los módulos que ya existían, no los nuevos. */
+export const LEGACY_MODULE_KEYS: readonly string[] = BUSINESS_MODULES.filter((m) => 'legacy' in m && m.legacy).map(
+  (m) => m.key,
+);
+
+/** ¿El negocio usa este módulo? Misma regla que isModuleEnabled en la web. */
+export function isBusinessModuleEnabled(
+  settings: { modulesConfigured: boolean; enabledModules: string[] } | null | undefined,
+  key: string,
+): boolean {
+  if (!settings?.modulesConfigured) return LEGACY_MODULE_KEYS.includes(key);
+  return settings.enabledModules.includes(key);
+}
 
 /** Familias del catálogo, en el orden en que se muestran. */
 export const BUSINESS_FAMILIES = [

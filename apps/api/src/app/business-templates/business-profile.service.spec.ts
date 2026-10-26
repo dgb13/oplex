@@ -1,5 +1,6 @@
 import { tenantContextStorage } from '@plexo/database';
-import { AVAILABLE_MODULE_KEYS } from './business-modules.js';
+import { LEGACY_MODULE_KEYS } from './business-modules.js';
+import type { CustomerAssetsService } from '../customer-assets/customer-assets.service.js';
 import { BusinessProfileService } from './business-profile.service.js';
 import type { BusinessTemplatesService, BusinessTemplateView } from './business-templates.service.js';
 
@@ -20,6 +21,7 @@ const TALLER: BusinessTemplateView = {
     modules: ['presupuestos', 'ordenes-trabajo', 'fichas', 'caja'],
     suggestedCategories: ['Repuestos', 'Mano de obra'],
     defaultWarranty: '3 meses o 5.000 km en mano de obra',
+    assetType: { name: 'Vehículo', fields: [{ key: 'patente', label: 'Patente', type: 'TEXT', isIdentifier: true }] },
   },
   updatedAt: new Date(),
 };
@@ -30,6 +32,10 @@ function makeTemplates(template: BusinessTemplateView | null = TALLER) {
     findByKey: jest.fn().mockResolvedValue(template),
     createRequest: jest.fn().mockResolvedValue({}),
   } as unknown as BusinessTemplatesService;
+}
+
+function makeAssets() {
+  return { ensureTypeFromTemplate: jest.fn().mockResolvedValue(undefined) } as unknown as CustomerAssetsService;
 }
 
 function makeDb(settings: Record<string, unknown> | null, categories: { name: string }[] = []) {
@@ -48,7 +54,7 @@ function makeDb(settings: Record<string, unknown> | null, categories: { name: st
 describe('BusinessProfileService.choose', () => {
   it('a new signup gets only the modules of its rubro, the suggested categories and the default warranty', async () => {
     const db = makeDb({ businessTemplatePending: true, modulesConfigured: false, enabledModules: [], quoteDefaultWarranty: null });
-    const service = new BusinessProfileService(makeTemplates());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets());
 
     const result = await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -70,14 +76,24 @@ describe('BusinessProfileService.choose', () => {
     expect(result.createdCategories).toEqual(['Repuestos', 'Mano de obra']);
   });
 
+  it('creates the rubro ficha (Vehículo) when the business uses Fichas', async () => {
+    const db = makeDb({ businessTemplatePending: true, modulesConfigured: false, enabledModules: [] });
+    const assets = makeAssets();
+    const service = new BusinessProfileService(makeTemplates(), assets);
+
+    await runInTenant(db, () => service.choose('taller-mecanico'));
+
+    expect(assets.ensureTypeFromTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Vehículo' }));
+  });
+
   it('an existing business keeps every module it sees today: the rubro only adds', async () => {
     const db = makeDb({ businessTemplatePending: false, modulesConfigured: false, enabledModules: [] });
-    const service = new BusinessProfileService(makeTemplates());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets());
 
     await runInTenant(db, () => service.choose('taller-mecanico'));
 
     const enabled: string[] = db.tenantSettings.upsert.mock.calls[0][0].update.enabledModules;
-    for (const key of AVAILABLE_MODULE_KEYS) expect(enabled).toContain(key);
+    for (const key of LEGACY_MODULE_KEYS) expect(enabled).toContain(key);
     expect(enabled).toEqual(expect.arrayContaining(['ordenes-trabajo', 'fichas']));
   });
 
@@ -86,7 +102,7 @@ describe('BusinessProfileService.choose', () => {
       { businessTemplatePending: false, modulesConfigured: true, enabledModules: ['caja'], quoteDefaultWarranty: 'Mi garantía' },
       [{ name: 'repuestos' }],
     );
-    const service = new BusinessProfileService(makeTemplates());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets());
 
     const result = await runInTenant(db, () => service.choose('taller-mecanico'));
 
@@ -97,21 +113,21 @@ describe('BusinessProfileService.choose', () => {
   });
 
   it('rejects a rubro that does not exist or was deactivated', async () => {
-    const service = new BusinessProfileService(makeTemplates(null));
+    const service = new BusinessProfileService(makeTemplates(null), makeAssets());
     await expect(runInTenant(makeDb(null), () => service.choose('no-existe'))).rejects.toThrow('Ese rubro no existe');
   });
 });
 
 describe('BusinessProfileService.updateModules', () => {
-  it('only toggles modules that exist today and keeps the upcoming ones the rubro brought', async () => {
+  it('toggles the modules that exist today (Fichas included) and keeps the upcoming ones the rubro brought', async () => {
     const db = makeDb({ modulesConfigured: true, enabledModules: ['caja', 'presupuestos', 'ordenes-trabajo'] });
-    const service = new BusinessProfileService(makeTemplates());
+    const service = new BusinessProfileService(makeTemplates(), makeAssets());
 
     await runInTenant(db, () => service.updateModules(['agenda', 'fichas']));
 
     expect(db.tenantSettings.upsert.mock.calls[0][0].update).toEqual({
       modulesConfigured: true,
-      enabledModules: ['agenda', 'ordenes-trabajo'],
+      enabledModules: ['agenda', 'fichas', 'ordenes-trabajo'],
     });
   });
 });
