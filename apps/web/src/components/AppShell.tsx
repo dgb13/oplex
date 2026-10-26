@@ -17,6 +17,8 @@ import { MERCADOPAGO_NEEDS_RECONNECT, mercadoPagoApi } from '@/lib/mercadopago';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
+import { BUSINESS_TEMPLATE_ICONS } from '@/lib/businessTemplateIcons';
+import { customerAssetsApi } from '@/lib/customerAssets';
 import { supportApi } from '@/lib/support';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +30,7 @@ import {
   Calculator,
   CalendarDays,
   ChevronDown,
+  ClipboardList,
   Factory,
   LayoutDashboard,
   PanelLeft,
@@ -80,6 +83,9 @@ const NAV_ENTRIES: NavEntry[] = [
   { kind: 'link', href: '/agenda', label: 'Agenda', icon: CalendarDays, businessModule: 'agenda' },
   { kind: 'link', href: '/inventory', label: 'Inventario', icon: Package },
   { kind: 'link', href: '/pos', label: 'Caja', icon: ShoppingBasket, roles: ['SALES'], businessModule: 'caja' },
+  // Fichas del cliente: el nombre y el ícono salen del rubro ("Vehículos" con
+  // un auto en un taller) - ver fichasEntry más abajo.
+  { kind: 'link', href: '/fichas', label: 'Fichas', icon: ClipboardList, roles: ['SALES', 'VIEWER'], businessModule: 'fichas' },
   {
     kind: 'group',
     label: 'Ventas',
@@ -250,9 +256,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setGrants(tokenClaims()?.moduleAccess ?? []);
   }, []);
   const moduleOn = (key: string | undefined) => !key || isModuleEnabled(businessProfile, key);
+  const { data: assetTypes } = useQuery({
+    queryKey: ['customer-asset-types'],
+    queryFn: customerAssetsApi.listTypes,
+    enabled: Boolean(businessProfile) && isModuleEnabled(businessProfile, 'fichas'),
+  });
+  const fichasLabel = assetTypes?.length === 1 ? assetTypes[0].pluralName : 'Fichas';
+  const fichasIcon = BUSINESS_TEMPLATE_ICONS[businessProfile?.template?.iconKey ?? ''] ?? ClipboardList;
   const navEntries = planEntries.flatMap((entry): NavEntry[] => {
     if (entry.kind === 'link') {
-      return canSee(entry, profile?.role, grants) && moduleOn(entry.businessModule) ? [entry] : [];
+      if (!canSee(entry, profile?.role, grants) || !moduleOn(entry.businessModule)) return [];
+      return [entry.href === '/fichas' ? { ...entry, label: fichasLabel, icon: fichasIcon } : entry];
     }
     if (!moduleOn(entry.businessModule)) return [];
     const items = entry.items.filter((item) => canSee(item, profile?.role, grants) && moduleOn(item.businessModule));

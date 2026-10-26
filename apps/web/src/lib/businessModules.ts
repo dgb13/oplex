@@ -15,16 +15,19 @@ export interface BusinessModuleDef {
   status: BusinessModuleStatus;
   /** Requiere un plan que lo incluya (ver Plan.productionModuleEnabled / storefrontEnabled). */
   plan?: 'production' | 'storefront';
+  /** Ya existía antes de los rubros: un negocio previo sin configurar lo ve
+   * prendido. Los nuevos (Fichas...) sólo si el negocio los prende. */
+  legacy?: boolean;
 }
 
 export const BUSINESS_MODULES: BusinessModuleDef[] = [
-  { key: 'caja', label: 'Caja y mostrador', description: 'Ventas rápidas, turnos de caja y cobro con QR.', status: 'available' },
-  { key: 'presupuestos', label: 'Cotizaciones', description: 'Presupuestos con PDF y envío por WhatsApp o email.', status: 'available' },
-  { key: 'cuentas-corrientes', label: 'Cuentas a cobrar', description: 'Saldos de clientes, vencimientos y cobranzas.', status: 'available' },
-  { key: 'agenda', label: 'Agenda y turnos', description: 'Calendario del equipo, turnos y tareas.', status: 'available' },
-  { key: 'tienda', label: 'Tienda online', description: 'Tu catálogo publicado en la web.', status: 'available', plan: 'storefront' },
-  { key: 'produccion', label: 'Producción y recetas', description: 'Recetas, órdenes de producción y consumos.', status: 'available', plan: 'production' },
-  { key: 'fichas', label: 'Fichas del cliente', description: 'Vehículos, equipos, mascotas… con su historial.', status: 'upcoming' },
+  { key: 'caja', label: 'Caja y mostrador', description: 'Ventas rápidas, turnos de caja y cobro con QR.', status: 'available', legacy: true },
+  { key: 'presupuestos', label: 'Cotizaciones', description: 'Presupuestos con PDF y envío por WhatsApp o email.', status: 'available', legacy: true },
+  { key: 'cuentas-corrientes', label: 'Cuentas a cobrar', description: 'Saldos de clientes, vencimientos y cobranzas.', status: 'available', legacy: true },
+  { key: 'agenda', label: 'Agenda y turnos', description: 'Calendario del equipo, turnos y tareas.', status: 'available', legacy: true },
+  { key: 'tienda', label: 'Tienda online', description: 'Tu catálogo publicado en la web.', status: 'available', plan: 'storefront', legacy: true },
+  { key: 'produccion', label: 'Producción y recetas', description: 'Recetas, órdenes de producción y consumos.', status: 'available', plan: 'production', legacy: true },
+  { key: 'fichas', label: 'Fichas del cliente', description: 'Vehículos, equipos, mascotas… con su historial.', status: 'available' },
   { key: 'ordenes-trabajo', label: 'Órdenes de trabajo', description: 'Trabajos con estados, responsable y aviso al cliente.', status: 'upcoming' },
   { key: 'costo-trabajo', label: 'Costo por trabajo', description: 'Repuestos, terceros y horas de cada trabajo, y su margen.', status: 'upcoming' },
   { key: 'vencimientos', label: 'Lotes y vencimientos', description: 'Control de fechas de vencimiento.', status: 'later' },
@@ -54,9 +57,10 @@ export interface BusinessProfile {
 }
 
 /** ¿Se ve este módulo? Un negocio sin configurar (los previos a los rubros)
- * ve todo, como antes. */
+ * ve los módulos que ya existían, como antes; los nuevos no. Mientras carga
+ * el perfil, igual. Misma regla que isBusinessModuleEnabled en el API. */
 export function isModuleEnabled(profile: BusinessProfile | undefined, key: string): boolean {
-  if (!profile || !profile.modulesConfigured) return true;
+  if (!profile || !profile.modulesConfigured) return Boolean(BUSINESS_MODULES.find((m) => m.key === key)?.legacy);
   return profile.enabledModules.includes(key);
 }
 

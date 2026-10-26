@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import { ROLE_LABELS } from './CompanyFormModal';
+import CustomerAssetsSection from './customer-assets/CustomerAssetsSection';
 import PersonAvatarModal from './PersonAvatarModal';
 import { useCompanyPermissions } from './useCompanyPermissions';
 
@@ -316,6 +317,9 @@ export default function CompanyDetailModal({ company, onClose, onEdit, readOnly 
             {!readOnly && <NewPersonForm companyId={company.id} />}
           </>
         )}
+
+        {/* Vehículos / equipos / mascotas del cliente (módulo Fichas). */}
+        {currentRoles.includes('CUSTOMER') && <CustomerAssetsSection companyId={company.id} readOnly={readOnly} />}
 
         {company.roles.some((r) => r.role === 'SUPPLIER') && (
           <div className={canHaveContacts ? 'mt-6 border-t pt-4' : ''}>

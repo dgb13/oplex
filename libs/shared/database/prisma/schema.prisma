@@ -1284,6 +1284,8 @@ model Company {
   // Sucursal dada de alta en Mercado Pago para cobrar con QR - ver model
   // MercadoPagoStore. A lo sumo una por sucursal.
   mercadoPagoStore     MercadoPagoStore?
+  // Fichas del cliente (vehículos, equipos, mascotas...) - ver CustomerAsset.
+  customerAssets       CustomerAsset[]
 
   @@index([tenantId])
   @@map("companies")
@@ -4739,4 +4741,55 @@ model BusinessTemplateRequest {
 
   @@index([status, createdAt])
   @@map("business_template_requests")
+}
+
+// Fichas del cliente (etapa 3 del plan de rubros): el tipo de "bien" sobre
+// el que trabaja el negocio - Vehículo en un taller, Equipo en un service,
+// Mascota en una veterinaria. Se copia de la plantilla del rubro
+// (BusinessTemplate.config.assetType) y el negocio lo edita a gusto.
+// fields: [{ key, label, type: TEXT|NUMBER|DATE|SELECT|BOOLEAN, required?,
+// isIdentifier?, options?, hidden? }] - exactamente uno isIdentifier (la
+// patente, el n° de serie): es por lo que se busca. Un campo con datos no se
+// borra, se oculta (hidden).
+model CustomerAssetType {
+  id         String   @id @default(uuid())
+  tenantId   String
+  name       String
+  pluralName String
+  fields     Json
+  notice     String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  assets CustomerAsset[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("customer_asset_types")
+}
+
+// Un vehículo / equipo / mascota de un cliente. companyId es el dueño
+// ACTUAL: un auto vendido se pasa a otro cliente y su historial va con él.
+// identifier es el valor del campo isIdentifier tal cual se cargó;
+// identifierKey, el mismo normalizado (mayúsculas, sin espacios ni guiones)
+// para buscar y avisar repetidos - se avisa, no se bloquea.
+model CustomerAsset {
+  id            String            @id @default(uuid())
+  tenantId      String
+  typeId        String
+  type          CustomerAssetType @relation(fields: [tenantId, typeId], references: [tenantId, id])
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id])
+  identifier    String
+  identifierKey String
+  values        Json
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([tenantId, id])
+  @@index([tenantId, identifierKey])
+  @@index([tenantId, companyId])
+  @@map("customer_assets")
 }

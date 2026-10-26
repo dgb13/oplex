@@ -10,6 +10,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
  * los formularios viejos preseleccionaban el primer cliente de la lista y
  * era muy fácil cotizarle/facturarle al que no era sin darse cuenta.
  */
+/** Un particular carga su DNI (7 u 8 dígitos) en el mismo campo que el CUIT. */
+function taxIdLabel(taxId: string): string {
+  const digits = taxId.replace(/D/g, '');
+  return digits.length === 7 || digits.length === 8 ? 'DNI' : 'CUIT';
+}
+
 export default function CustomerPicker({
   customers,
   value,
@@ -67,7 +73,7 @@ export default function CustomerPicker({
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{selected.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {selected.taxId ? `CUIT ${selected.taxId}` : 'Sin CUIT cargado'}
+            {selected.taxId ? `${taxIdLabel(selected.taxId)} ${selected.taxId}` : 'Sin CUIT ni DNI cargado'}
             {' · '}
             {selected.taxCondition ?? 'Condición IVA sin cargar'}
             {selected.email ? ` · ${selected.email}` : ''}

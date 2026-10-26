@@ -115,5 +115,7 @@ export type {
   AssistantAction,
   MercadoPagoPayment,
   BusinessTemplate,
+  CustomerAssetType,
+  CustomerAsset,
 } from './generated/client.js';
 export * from './generated/enums.js';

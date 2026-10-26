@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { getTenantDb, getTenantId } from '@plexo/database';
-import { AVAILABLE_MODULE_KEYS, BUSINESS_MODULE_KEYS } from './business-modules.js';
+import { AVAILABLE_MODULE_KEYS, BUSINESS_MODULE_KEYS, LEGACY_MODULE_KEYS } from './business-modules.js';
+import { CustomerAssetsService, type TemplateAssetType } from '../customer-assets/customer-assets.service.js';
 import { BusinessTemplatesService, type BusinessTemplateView } from './business-templates.service.js';
 
 export interface BusinessProfileView {
@@ -32,7 +33,10 @@ export interface ChooseResult extends BusinessProfileView {
  */
 @Injectable()
 export class BusinessProfileService {
-  constructor(private readonly templates: BusinessTemplatesService) {}
+  constructor(
+    private readonly templates: BusinessTemplatesService,
+    private readonly assets: CustomerAssetsService,
+  ) {}
 
   async getProfile(): Promise<BusinessProfileView> {
     const settings = await getTenantDb().tenantSettings.findUnique({ where: { tenantId: getTenantId() } });
@@ -71,7 +75,7 @@ export class BusinessProfileService {
       ? settings.enabledModules
       : settings?.businessTemplatePending
         ? []
-        : [...AVAILABLE_MODULE_KEYS];
+        : [...LEGACY_MODULE_KEYS];
     const enabledModules = unique([...base, ...template.config.modules]).filter((k) => BUSINESS_MODULE_KEYS.includes(k));
 
     const warranty = template.config.defaultWarranty;
@@ -105,6 +109,10 @@ export class BusinessProfileService {
       await db.category.createMany({ data: createdCategories.map((name) => ({ tenantId, name })) });
     }
 
+    // Ficha del rubro (Vehículo en un taller): se crea si el negocio usa Fichas.
+    const assetType = template.config.assetType as TemplateAssetType | undefined;
+    if (assetType && enabledModules.includes('fichas')) await this.assets.ensureTypeFromTemplate(assetType);
+
     return { ...(await this.getProfile()), createdCategories };
   }
 
@@ -126,7 +134,7 @@ export class BusinessProfileService {
     const tenantId = getTenantId();
     const db = getTenantDb();
     const settings = await db.tenantSettings.findUnique({ where: { tenantId } });
-    const current = settings?.modulesConfigured ? settings.enabledModules : [...AVAILABLE_MODULE_KEYS];
+    const current = settings?.modulesConfigured ? settings.enabledModules : [...LEGACY_MODULE_KEYS];
     const enabledModules = unique([
       ...requested.filter((k) => AVAILABLE_MODULE_KEYS.includes(k)),
       ...current.filter((k) => !AVAILABLE_MODULE_KEYS.includes(k)),

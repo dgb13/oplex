@@ -263,6 +263,24 @@ por el drift viejo).
   `--skip-nx-cache` (el cliente generado de Prisma no entra en el hash de Nx y el bundle queda
   con el enum viejo). En el deploy no pasa porque compila de cero.
 
+**2026-10-26: etapa 3 hecha** (Fichas del cliente).
+
+- Migración `20261103000000_customer_assets` (`customer_asset_types`, `customer_assets`, con RLS).
+- API `apps/api/src/app/customer-assets/` + `ModuleEnabledGuard` (corta el API si el negocio no
+  usa Fichas; abre su propio contexto de tenant como `SubscriptionReadOnlyGuard`).
+- Fichas pasa a "disponible". **Regla nueva**: un negocio previo sin configurar ve prendidos los
+  módulos que ya existían (`legacy`), pero NO los nuevos: Fichas sólo aparece si el negocio lo
+  prende o lo trae su rubro.
+- El tipo de ficha se copia de la plantilla al elegir rubro; los que eligieron antes de esta
+  etapa lo reciben la primera vez que entran. Sin rubro, se crea a mano ("¿Sobre qué trabajás?").
+- Web: menú con el nombre y el ícono del rubro ("Vehículos" con un auto), `/fichas` (buscar por
+  patente o dueño), `/fichas/[id]` (maqueta, pantalla 4; historial queda para la etapa 4),
+  sección en la ficha del cliente, editor de campos en Rubro y módulos.
+- Patente repetida: aviso antes de guardar, no bloquea (decisión 3). Cambio de dueño mueve la ficha.
+- Un campo con datos no se borra (se oculta); el dato principal no se mueve ni se oculta; un campo
+  con datos no cambia de tipo.
+- Se aprovechó para corregir el selector de clientes, que rotulaba "CUIT" a un DNI.
+
 ## 6. Decisiones del usuario (2026-10-26: acepta todas las recomendaciones)
 
 Resueltas: (1) tarjeta opcional para negocios existentes; (2) "disponible en plan X"; (3) avisar, no
