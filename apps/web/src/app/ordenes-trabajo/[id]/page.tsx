@@ -110,14 +110,24 @@ export default function WorkOrderPage() {
   if (!order || !configQuery.data) return <p className="text-sm text-muted-foreground">Cargando…</p>;
 
   const config = configQuery.data;
-  const steps = config.statuses.filter((s) => s.active || s.id === order.status.id);
+  // "Presupuesto rechazado" es un desvío, no un paso del camino: va aparte
+  // (salvo que la orden esté ahí) y "Pasar a" no lo propone. Desde ahí lo
+  // que sigue es entregarlo (el primer estado que cierra).
+  const rejectedStatus = config.statuses.find((s) => s.active && s.quoteOutcome === 'REJECTED');
+  const isRejected = rejectedStatus?.id === order.status.id;
+  const steps = config.statuses.filter(
+    (s) => (s.active && s.id !== rejectedStatus?.id) || s.id === order.status.id,
+  );
   const currentIndex = steps.findIndex((s) => s.id === order.status.id);
-  const next = steps[currentIndex + 1];
+  const next = isRejected
+    ? steps.find((s, i) => i > currentIndex && s.isFinal) ?? steps.find((s) => s.isFinal && s.id !== order.status.id)
+    : steps[currentIndex + 1];
   const statusName = new Map(config.statuses.map((s) => [s.id, s.name]));
   const assetType = typesQuery.data?.find((t) => t.id === order.asset?.typeId);
   const snapshotFields = (assetType?.fields ?? []).filter(
     (f) => f.type === 'NUMBER' && order.assetSnapshot?.[f.key] !== undefined,
   );
+  const quoteClosedWithoutSale = order.quote?.status === 'REJECTED' || order.quote?.status === 'CANCELLED';
   const quoteStatus = order.quote ? describeQuoteStatus({ status: order.quote.status as QuoteDetail['status'], validUntil: null }) : null;
   const quoteNotes = [
     `${config.docName} ${order.number}`,
@@ -192,6 +202,19 @@ export default function WorkOrderPage() {
               </li>
             );
           })}
+          {rejectedStatus && !isRejected && (
+            <li>
+              <button
+                type="button"
+                disabled={!canWrite || statusMutation.isPending}
+                onClick={() => statusMutation.mutate(rejectedStatus.id)}
+                title={`Pasar a "${rejectedStatus.name}" (pasa sola si rechazan el presupuesto vinculado)`}
+                className="rounded-full border border-dashed border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive/80 transition hover:bg-destructive/10"
+              >
+                {rejectedStatus.name}
+              </button>
+            </li>
+          )}
         </ol>
         {canWrite && next && (
           <Button className="mt-3" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate(next.id)}>
@@ -330,6 +353,11 @@ export default function WorkOrderPage() {
             <Button size="sm" variant="outline" onClick={() => setViewingQuote(true)}>
               Ver presupuesto
             </Button>
+            {canWrite && quoteClosedWithoutSale && (
+              <Button size="sm" onClick={() => setQuoting(true)}>
+                Armar otro presupuesto
+              </Button>
+            )}
           </div>
         ) : (
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -347,6 +375,10 @@ export default function WorkOrderPage() {
             <Link href="/invoicing" className="text-indigo-600 hover:underline">
               Ver en Facturación
             </Link>
+          </p>
+        ) : quoteClosedWithoutSale ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Si el cliente cambia de idea, tocá &quot;Armar otro presupuesto&quot;: queda vinculado a esta orden en lugar del anterior.
           </p>
         ) : order.quote ? (
           <p className="mt-3 text-xs text-muted-foreground">

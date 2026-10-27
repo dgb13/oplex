@@ -80,6 +80,71 @@ describe('TemplateUpdatesService.diff', () => {
   });
 });
 
+describe('TemplateUpdatesService: estado según el presupuesto', () => {
+  const BEFORE: BusinessTemplateConfig = {
+    modules: [],
+    suggestedCategories: [],
+    workOrder: { docName: 'Orden de trabajo', statuses: [{ name: 'Recibido' }, { name: 'En reparación' }, { name: 'Entregado', final: true }] },
+  };
+  const NOW: BusinessTemplateConfig = {
+    modules: [],
+    suggestedCategories: [],
+    workOrder: {
+      docName: 'Orden de trabajo',
+      statuses: [
+        { name: 'Recibido' },
+        { name: 'Presupuesto rechazado', quoteOutcome: 'REJECTED' },
+        { name: 'En reparación', quoteOutcome: 'ACCEPTED' },
+        { name: 'Entregado', final: true },
+      ],
+    },
+  };
+
+  function db(statuses: unknown[]) {
+    return {
+      category: { findMany: jest.fn().mockResolvedValue([]) },
+      workOrderStatus: { findMany: jest.fn().mockResolvedValue(statuses) },
+    };
+  }
+
+  it('marks the status the business already has and adds the rejected one', async () => {
+    const service = new TemplateUpdatesService({} as PrismaService);
+    const mine = [
+      { id: 's1', name: 'Recibido', sortOrder: 0, active: true, quoteOutcome: null },
+      { id: 's2', name: 'En reparación', sortOrder: 1, active: true, quoteOutcome: null },
+      { id: 's3', name: 'Entregado', sortOrder: 2, active: true, quoteOutcome: null },
+    ];
+    const items = await runInTenant(db(mine), () => service.diff(BEFORE, NOW, []));
+    expect(items).toEqual([
+      { id: 'statusQuote:ACCEPTED', kind: 'statusQuote', name: 'En reparación', quoteOutcome: 'ACCEPTED' },
+      {
+        id: 'status:Presupuesto rechazado',
+        kind: 'status',
+        name: 'Presupuesto rechazado',
+        after: 'Recibido',
+        final: false,
+        notifiesCustomer: false,
+        quoteOutcome: 'REJECTED',
+      },
+    ]);
+  });
+
+  it('does not offer an outcome the business already marked on its own', async () => {
+    const service = new TemplateUpdatesService({} as PrismaService);
+    const mine = [
+      { id: 's1', name: 'Recibido', sortOrder: 0, active: true, quoteOutcome: null },
+      { id: 's2', name: 'Trabajando', sortOrder: 1, active: true, quoteOutcome: 'ACCEPTED' },
+      { id: 's3', name: 'No quiso', sortOrder: 2, active: true, quoteOutcome: 'REJECTED' },
+      { id: 's4', name: 'En reparación', sortOrder: 3, active: true, quoteOutcome: null },
+      { id: 's5', name: 'Entregado', sortOrder: 4, active: true, quoteOutcome: null },
+    ];
+    const items = await runInTenant(db(mine), () => service.diff(BEFORE, NOW, []));
+    // El estado nuevo se ofrece igual, pero sin la marca (ya la tiene "No quiso").
+    expect(items.map((i) => i.id)).toEqual(['status:Presupuesto rechazado']);
+    expect(items[0]).not.toHaveProperty('quoteOutcome');
+  });
+});
+
 describe('TemplateUpdatesService: un campo pasa a la lista de vehículos', () => {
   const TEXT_FIELDS = [
     { key: 'patente', label: 'Patente', type: 'TEXT' as const, isIdentifier: true, required: true },

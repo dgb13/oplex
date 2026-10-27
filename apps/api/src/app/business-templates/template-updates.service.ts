@@ -8,6 +8,7 @@ import {
   type AssetFieldType,
   type VehicleKind,
 } from '../customer-assets/asset-fields.js';
+import type { QuoteOutcome } from '../work-orders/dto/work-order.dto.js';
 import { BUSINESS_MODULE_KEYS } from './business-modules.js';
 import { readConfig, type BusinessTemplateConfig } from './business-templates.service.js';
 
@@ -19,7 +20,18 @@ export type TemplateUpdateItem =
   // Modelo de la lista de vehículos). Sólo entre tipos de texto: lo cargado
   // sigue valiendo.
   | { id: string; kind: 'fieldType'; typeName: string; key: string; label: string; type: AssetFieldType; vehicleKind?: VehicleKind }
-  | { id: string; kind: 'status'; name: string; after: string | null; final: boolean; notifiesCustomer: boolean };
+  | {
+      id: string;
+      kind: 'status';
+      name: string;
+      after: string | null;
+      final: boolean;
+      notifiesCustomer: boolean;
+      quoteOutcome?: QuoteOutcome;
+    }
+  // Un estado que el negocio ya tiene pasa a recibir solas las órdenes
+  // cuando el cliente acepta o rechaza el presupuesto.
+  | { id: string; kind: 'statusQuote'; name: string; quoteOutcome: QuoteOutcome };
 
 export interface TemplateUpdates {
   templateName: string;
@@ -127,12 +139,24 @@ export class TemplateUpdatesService {
     }
 
     if (now.workOrder) {
-      const beforeNames = new Set((before.workOrder?.statuses ?? []).map((s) => s.name.toLowerCase()));
+      const beforeStatuses = before.workOrder?.statuses ?? [];
+      const beforeNames = new Set(beforeStatuses.map((s) => s.name.toLowerCase()));
       const tenantStatuses = await db.workOrderStatus.findMany({ orderBy: { sortOrder: 'asc' } });
       // Sin estados todavía: se crean todos al entrar a Órdenes de trabajo.
       if (tenantStatuses.length > 0) {
         const have = new Set(tenantStatuses.map((s) => s.name.toLowerCase()));
         const templateStatuses = now.workOrder.statuses;
+        // Resultados que el negocio ya tiene marcados (a mano o por una
+        // novedad anterior): no se ofrece otro.
+        const taken = new Set(tenantStatuses.filter((s) => s.active && s.quoteOutcome).map((s) => s.quoteOutcome));
+        for (const s of templateStatuses) {
+          if (!s.quoteOutcome || taken.has(s.quoteOutcome)) continue;
+          const wasMarked = beforeStatuses.some((b) => b.name.toLowerCase() === s.name.toLowerCase() && b.quoteOutcome === s.quoteOutcome);
+          const mine = tenantStatuses.find((t) => t.active && t.name.toLowerCase() === s.name.toLowerCase());
+          if (wasMarked || !mine) continue;
+          taken.add(s.quoteOutcome);
+          items.push({ id: `statusQuote:${s.quoteOutcome}`, kind: 'statusQuote', name: mine.name, quoteOutcome: s.quoteOutcome });
+        }
         templateStatuses.forEach((s, i) => {
           if (beforeNames.has(s.name.toLowerCase()) || have.has(s.name.toLowerCase())) return;
           have.add(s.name.toLowerCase());
@@ -143,7 +167,9 @@ export class TemplateUpdatesService {
             after: i > 0 ? templateStatuses[i - 1].name : null,
             final: Boolean(s.final),
             notifiesCustomer: Boolean(s.notifiesCustomer),
+            ...(s.quoteOutcome && !taken.has(s.quoteOutcome) ? { quoteOutcome: s.quoteOutcome } : {}),
           });
+          if (s.quoteOutcome) taken.add(s.quoteOutcome);
         });
       }
     }
@@ -164,6 +190,7 @@ export class TemplateUpdatesService {
     const fields = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'assetField' }> => i.kind === 'assetField');
     const retyped = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'fieldType' }> => i.kind === 'fieldType');
     const statuses = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'status' }> => i.kind === 'status');
+    const statusQuotes = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'statusQuote' }> => i.kind === 'statusQuote');
 
     await db.$transaction(async (tx) => {
       if (categories.length > 0) {
@@ -206,8 +233,15 @@ export class TemplateUpdatesService {
             sortOrder: position,
             isFinal: status.final,
             notifiesCustomer: status.notifiesCustomer,
+            quoteOutcome: status.quoteOutcome ?? null,
           },
         });
+      }
+      for (const mark of statusQuotes) {
+        const list = await tx.workOrderStatus.findMany();
+        const target = list.find((s) => s.active && s.name.toLowerCase() === mark.name.toLowerCase());
+        if (!target || list.some((s) => s.active && s.quoteOutcome === mark.quoteOutcome)) continue;
+        await tx.workOrderStatus.update({ where: { tenantId_id: { tenantId, id: target.id } }, data: { quoteOutcome: mark.quoteOutcome } });
       }
       await tx.tenantSettings.update({
         where: { tenantId },

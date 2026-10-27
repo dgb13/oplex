@@ -15,6 +15,8 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   VEHICLE_MODEL: 'modelos según la marca',
 };
 
+const QUOTE_OUTCOME_TEXT = { ACCEPTED: 'acepta el presupuesto', REJECTED: 'rechaza el presupuesto' } as const;
+
 function describe(item: TemplateUpdateItem): { title: string; detail: string } {
   switch (item.kind) {
     case 'module':
@@ -43,7 +45,12 @@ function describe(item: TemplateUpdateItem): { title: string; detail: string } {
         title: 'Estado nuevo de las órdenes',
         detail: `${item.name}${item.after ? `, después de "${item.after}"` : ''}${item.notifiesCustomer ? ' · avisa al cliente' : ''}${
           item.final ? ' · cierra la orden' : ''
-        }`,
+        }${item.quoteOutcome ? ` · la orden pasa sola acá cuando el cliente ${QUOTE_OUTCOME_TEXT[item.quoteOutcome]}` : ''}`,
+      };
+    case 'statusQuote':
+      return {
+        title: 'Estado según el presupuesto',
+        detail: `Cuando el cliente ${QUOTE_OUTCOME_TEXT[item.quoteOutcome]}, la orden pasa sola a "${item.name}"`,
       };
   }
 }

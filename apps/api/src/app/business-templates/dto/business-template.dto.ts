@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { ASSET_FIELD_TYPES, VEHICLE_KINDS, type VehicleKind } from '../../customer-assets/asset-fields.js';
 import { BUSINESS_FAMILIES, BUSINESS_MODULE_KEYS } from '../business-modules.js';
+import { QUOTE_OUTCOMES, type QuoteOutcome } from '../../work-orders/dto/work-order.dto.js';
 
 export class TemplateAssetFieldDto {
   /** Vacío en un campo nuevo: se arma a partir del nombre. */
@@ -80,6 +81,10 @@ export class TemplateStatusDto {
   @IsOptional()
   @IsBoolean()
   notifiesCustomer?: boolean;
+
+  @IsOptional()
+  @IsIn(QUOTE_OUTCOMES)
+  quoteOutcome?: QuoteOutcome;
 }
 
 export class TemplateWorkOrderDto {

@@ -48,6 +48,8 @@ En el detalle de una cotización **Enviada**:
 
 Si el cliente te contestó en persona (en el mostrador, en el taller) no hace falta enviarla: en una cotización en **Borrador** tocá **El cliente la aceptó** o **La rechazó**. Sirve también para un cliente que no tiene email ni teléfono cargado.
 
+Si la cotización está vinculada a una orden de trabajo, la orden cambia de estado sola (por ejemplo a **En reparación** o **Presupuesto rechazado**). Ver [Estados y aviso al cliente](/documentacion/rubros/estados-y-aviso).
+
 ## Convertir a factura
 
 1. **Abrí una cotización Aceptada** y tocá **Convertir a factura**.

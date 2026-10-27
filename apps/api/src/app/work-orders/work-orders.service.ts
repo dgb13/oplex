@@ -1,17 +1,34 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, getTenantId, getUserId, Prisma, PrismaService, takeDocumentNumber } from '@plexo/database';
 import { CustomerAssetsService } from '../customer-assets/customer-assets.service.js';
-import type {
-  CreateWorkOrderDto,
-  ListWorkOrdersQuery,
-  UpdateWorkOrderDto,
-  UpdateWorkOrderStatusesDto,
+import {
+  QUOTE_OUTCOMES,
+  type CreateWorkOrderDto,
+  type ListWorkOrdersQuery,
+  type QuoteOutcome,
+  type UpdateWorkOrderDto,
+  type UpdateWorkOrderStatusesDto,
 } from './dto/work-order.dto.js';
 
 /** Forma de BusinessTemplate.config.workOrder (migración de rubros). */
 export interface TemplateWorkOrder {
   docName: string;
-  statuses: { name: string; final?: boolean; notifiesCustomer?: boolean }[];
+  statuses: { name: string; final?: boolean; notifiesCustomer?: boolean; quoteOutcome?: QuoteOutcome }[];
+}
+
+const QUOTE_OUTCOME_LABEL: Record<QuoteOutcome, string> = {
+  ACCEPTED: 'acepta el presupuesto',
+  REJECTED: 'rechaza el presupuesto',
+};
+
+/** Un solo estado por resultado del presupuesto: si no, no se sabe a cuál
+ * pasar la orden. */
+export function assertOneStatusPerQuoteOutcome(statuses: { quoteOutcome?: string | null }[]): void {
+  for (const outcome of QUOTE_OUTCOMES) {
+    if (statuses.filter((s) => s.quoteOutcome === outcome).length > 1) {
+      throw new BadRequestException(`Marcá un solo estado para cuando el cliente ${QUOTE_OUTCOME_LABEL[outcome]}`);
+    }
+  }
 }
 
 const DEFAULT_DOC_NAME = 'Orden de trabajo';
@@ -47,6 +64,7 @@ function toOrderView(row: OrderRow) {
       name: row.status.name,
       isFinal: row.status.isFinal,
       notifiesCustomer: row.status.notifiesCustomer,
+      quoteOutcome: row.status.quoteOutcome,
     },
   };
 }
@@ -88,6 +106,7 @@ export class WorkOrdersService {
           sortOrder: i,
           isFinal: Boolean(s.final),
           notifiesCustomer: Boolean(s.notifiesCustomer),
+          quoteOutcome: s.quoteOutcome ?? null,
         })),
       });
     }
@@ -118,7 +137,8 @@ export class WorkOrdersService {
           docName: DEFAULT_DOC_NAME,
           statuses: [
             { name: 'Recibido' },
-            { name: 'En proceso' },
+            { name: 'Presupuesto rechazado', quoteOutcome: 'REJECTED' },
+            { name: 'En proceso', quoteOutcome: 'ACCEPTED' },
             { name: 'Listo para retirar', notifiesCustomer: true },
             { name: 'Entregado', final: true },
           ],
@@ -139,6 +159,7 @@ export class WorkOrdersService {
         sortOrder: s.sortOrder,
         isFinal: s.isFinal,
         notifiesCustomer: s.notifiesCustomer,
+        quoteOutcome: s.quoteOutcome,
         active: s.active,
       })),
     };
@@ -155,6 +176,7 @@ export class WorkOrdersService {
     if (active.length < 2) throw new BadRequestException('Tiene que haber al menos dos estados activos');
     if (!active.some((s) => s.isFinal)) throw new BadRequestException('Marcá al menos un estado que cierre la orden (ej. Entregado)');
     if (active[0].isFinal) throw new BadRequestException('El primer estado no puede cerrar la orden');
+    assertOneStatusPerQuoteOutcome(active);
 
     await db.$transaction(async (tx) => {
       for (const [i, s] of dto.statuses.entries()) {
@@ -163,6 +185,8 @@ export class WorkOrdersService {
           sortOrder: i,
           isFinal: Boolean(s.isFinal),
           notifiesCustomer: Boolean(s.notifiesCustomer),
+          // Uno desactivado deja de recibir órdenes solas.
+          quoteOutcome: s.active !== false ? (s.quoteOutcome ?? null) : null,
           active: s.active !== false,
         };
         if (s.id && byId.has(s.id)) {
@@ -174,7 +198,9 @@ export class WorkOrdersService {
       // Los que no vinieron se desactivan (pueden tener órdenes).
       const sent = new Set(dto.statuses.map((s) => s.id).filter(Boolean));
       for (const s of existing) {
-        if (!sent.has(s.id)) await tx.workOrderStatus.update({ where: { tenantId_id: { tenantId, id: s.id } }, data: { active: false } });
+        if (!sent.has(s.id)) {
+          await tx.workOrderStatus.update({ where: { tenantId_id: { tenantId, id: s.id } }, data: { active: false, quoteOutcome: null } });
+        }
       }
       if (dto.docName) {
         await tx.tenantSettings.upsert({

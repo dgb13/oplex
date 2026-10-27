@@ -2,7 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { workOrdersApi, type WorkOrderConfig, type WorkOrderStatus } from '@/lib/workOrders';
+import Select from '@/components/ui/Select';
+import { workOrdersApi, type QuoteOutcome, type WorkOrderConfig, type WorkOrderStatus } from '@/lib/workOrders';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { ArrowDown, ArrowUp } from 'lucide-react';
@@ -37,6 +38,7 @@ function Editor({ config }: { config: WorkOrderConfig }) {
           name: s.name,
           isFinal: Boolean(s.isFinal),
           notifiesCustomer: Boolean(s.notifiesCustomer),
+          ...(s.quoteOutcome && s.active !== false ? { quoteOutcome: s.quoteOutcome } : {}),
           active: s.active !== false,
         })),
       }),
@@ -54,6 +56,23 @@ function Editor({ config }: { config: WorkOrderConfig }) {
     setMessage('');
     setStatuses((list) => list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   }
+  /** Un solo estado por respuesta: elegir uno le saca la marca al anterior. */
+  function setOutcome(outcome: QuoteOutcome, key: string) {
+    setMessage('');
+    setStatuses((list) =>
+      list.map((s) =>
+        s.key === key ? { ...s, quoteOutcome: outcome } : s.quoteOutcome === outcome ? { ...s, quoteOutcome: null } : s,
+      ),
+    );
+  }
+  const outcomeOptions = [
+    { value: '', label: 'No cambia sola' },
+    ...statuses.filter((s) => s.active !== false && s.name.trim()).map((s) => ({ value: s.key, label: s.name })),
+  ];
+  function outcomeKey(outcome: QuoteOutcome): string {
+    return statuses.find((s) => s.quoteOutcome === outcome && s.active !== false)?.key ?? '';
+  }
+
   function move(i: number, delta: number) {
     setStatuses((list) => {
       const copy = [...list];
@@ -135,6 +154,33 @@ function Editor({ config }: { config: WorkOrderConfig }) {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+        <p className="text-sm font-medium">Cuando el cliente responde el presupuesto</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Si la orden tiene un presupuesto vinculado, pasa sola a este estado cuando lo marcás aceptado o rechazado.
+        </p>
+        <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['ACCEPTED', 'Si lo acepta, pasa a'],
+              ['REJECTED', 'Si lo rechaza, pasa a'],
+            ] as const
+          ).map(([outcome, label]) => (
+            <div key={outcome} className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{label}</span>
+              <Select
+                value={outcomeKey(outcome)}
+                onChange={(key) =>
+                  key
+                    ? setOutcome(outcome, key)
+                    : setStatuses((list) => list.map((s) => (s.quoteOutcome === outcome ? { ...s, quoteOutcome: null } : s)))
+                }
+                options={outcomeOptions}
+              />
+            </div>
+          ))}
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
