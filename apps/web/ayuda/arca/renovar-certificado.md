@@ -9,7 +9,7 @@ El certificado de ARCA tiene fecha de vencimiento. Cuando vence, Oplex no puede 
 
 ## Cómo saber cuándo vence
 
-- En **Contabilidad › Conexión con ARCA**, la casilla **Certificado cargado** dice, por ejemplo, *ferreterialosandes · vence 12/09/2028*.
+- En **Conexión con ARCA**, la casilla **Certificado cargado** dice, por ejemplo, *ferreterialosandes · vence 12/09/2028*.
 - Al facturar, arriba de **Nueva factura** aparece la etiqueta **ARCA conectado** con la fecha: *(certificado vence 12/09/2028)*.
 - Cuando faltan menos de 30 días, esa etiqueta se pone ámbar y agrega **· renovalo pronto**. Todavía podés facturar.
 - Si ya venció, la etiqueta dice **ARCA sin conectar** y aparece el aviso **No podés emitir facturas todavía: el certificado de ARCA venció el …** con el enlace **Ir a Conexión con ARCA →**.
@@ -21,7 +21,7 @@ El certificado de ARCA tiene fecha de vencimiento. Cuando vence, Oplex no puede 
 
 ## Pasos
 
-1. **Generá un pedido nuevo.** En **Contabilidad › Conexión con ARCA**, paso 2, con **Generarlos con Oplex** elegido, tocá **Generar clave y pedido** (o **Generar de nuevo**). Podés dejar el mismo nombre de certificado. Oplex te avisa: *El certificado que ya está cargado sigue funcionando: la clave nueva se usa recién cuando subas el certificado que ARCA emita para este pedido.*
+1. **Generá un pedido nuevo.** En **Conexión con ARCA**, paso 2, con **Generarlos con Oplex** elegido, tocá **Generar clave y pedido** (o **Generar de nuevo**). Podés dejar el mismo nombre de certificado. Oplex te avisa: *El certificado que ya está cargado sigue funcionando: la clave nueva se usa recién cuando subas el certificado que ARCA emita para este pedido.*
 2. **Descargá el pedido** con **Descargar pedido (ferreterialosandes.csr)**.
 3. **Sacá el certificado nuevo en ARCA.** Repetí el [paso 3.1 de producción](/documentacion/arca/certificado-produccion#3-1-crear-el-certificado) con el pedido nuevo. Si ARCA no te deja repetir el alias, usá uno nuevo (por ejemplo `ferreterialosandes2`): en ese caso cambialo también en el paso 2 antes de generar.
 4. **Volvé a autorizarlo a facturar.** Repetí el [paso 3.2](/documentacion/arca/certificado-produccion#3-2-autorizarlo-a-facturar): **Nueva Relación** con **Facturación Electrónica** y el Computador Fiscal nuevo.

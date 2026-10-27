@@ -58,7 +58,7 @@ El **Dueño** y los **Administradores** ven siempre todo. Para el resto, esta es
 **Sólo Dueño y Administrador** ven:
 
 - **Ventas › Tienda online**.
-- **Contabilidad › Conexión con ARCA**.
+- **Conexión con ARCA**.
 - **Contabilidad › Contabilidad**, **Contabilidad › Impuestos** y **Contabilidad › Reportes**. Estas tres también las ve un contador externo vinculado (ver más abajo).
 - En el menú de usuario (tu foto, arriba a la derecha): **Equipo**, **Cajas (POS)**, **Rubro y módulos** y **Preferencias**.
 

@@ -62,7 +62,7 @@ La pestaña **Resumen** muestra **Facturas emitidas**, **Total facturado**, **To
 |---|---|---|
 | **No podés emitir facturas todavía: falta el certificado de ARCA de tu empresa.** | No está hecha la conexión con ARCA. | Seguí [Antes de empezar con ARCA](/documentacion/arca/antes-de-empezar). |
 | **No podés emitir facturas todavía: el certificado de ARCA venció el …** | El certificado venció. | [Renová el certificado](/documentacion/arca/renovar-certificado). |
-| **Antes de emitir, cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa: sin ella no se puede saber si corresponde Factura A, B o C.** | Falta tu condición frente al IVA. | Cargala en [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
+| **Antes de emitir, cargá tu condición frente al IVA en Conexión con ARCA → Datos de la empresa: sin ella no se puede saber si corresponde Factura A, B o C.** | Falta tu condición frente al IVA. | Cargala en [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
 | **Falta la condición frente al IVA del cliente "…": ARCA la exige para facturar a un CUIT.** | El cliente tiene CUIT pero no condición (RG 5616). | Abrí el cliente en **Ventas › Clientes**, tocá **Editar empresa** y **Actualizar desde ARCA**, o escribila con **✎ corregir**. |
 | **Hace falta al menos un depósito antes de poder facturar** | No hay depósitos. | Creá uno en Inventario (ver [Depósitos y movimientos](/documentacion/inventario/depositos-y-movimientos)). |
 | **Hay líneas sin precio: cargalo en la línea marcada.** | Un artículo no tiene precio de venta. | Escribí el precio en la línea. |

@@ -10,7 +10,7 @@ roles: Dueño, Administrador
 Para abrirlo, tocá tu foto arriba a la derecha y elegí **Preferencias**. Sólo lo ven el **Dueño** y los **Administradores**.
 
 > [!NOTA]
-> Los datos fiscales (razón social, CUIT, condición frente al IVA, domicilio, Ingresos Brutos e inicio de actividades) y el certificado de ARCA **no están acá**: van en **Contabilidad › Conexión con ARCA**. Ver [Antes de empezar](/documentacion/arca/antes-de-empezar).
+> Los datos fiscales (razón social, CUIT, condición frente al IVA, domicilio, Ingresos Brutos e inicio de actividades) y el certificado de ARCA **no están acá**: van en **Conexión con ARCA**. Ver [Antes de empezar](/documentacion/arca/antes-de-empezar).
 
 La pantalla tiene estas tarjetas, en este orden:
 

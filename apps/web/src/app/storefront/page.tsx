@@ -177,7 +177,7 @@ export default function StorefrontSettingsPage() {
       {noTax && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <span>Antes de publicar, cargá tu condición frente al IVA: sin ella no se sabe qué precio final mostrar.</span>
-          <Link href="/accounting/arca" className="whitespace-nowrap font-semibold underline">
+          <Link href="/arca" className="whitespace-nowrap font-semibold underline">
             Cargarla ahora →
           </Link>
         </div>

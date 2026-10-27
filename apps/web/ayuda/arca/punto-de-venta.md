@@ -41,7 +41,7 @@ El **punto de venta** es el número que va adelante de cada factura (en `00003-0
 2. **Completá el nombre**, por ejemplo **Casa Central**.
 3. **Escribí el número en Punto de venta (ARCA).** Podés poner sólo el número: `3` o `00003` es lo mismo. Oplex lo guarda con 5 dígitos (`00003`), que es como sale impreso en la factura. Si no sabés cuál es, tocá **¿Dónde lo encuentro?**: se abre una ayuda con los mismos pasos de arriba, adaptada a tu condición frente al IVA.
 4. **Tocá Crear sucursal** (o **Guardar cambios** si estabas editando).
-5. **Probá la conexión.** Volvé a **Contabilidad › Conexión con ARCA**, paso 4, y tocá **Probar conexión con ARCA**. Tiene que nombrar tu punto de venta: *punto de venta 00003 (Casa Central)*.
+5. **Probá la conexión.** Volvé a **Conexión con ARCA**, paso 4, y tocá **Probar conexión con ARCA**. Tiene que nombrar tu punto de venta: *punto de venta 00003 (Casa Central)*.
 
 ![Formulario de sucursal con el campo Punto de venta (ARCA) y la ayuda ¿Dónde lo encuentro?](/ayuda/capturas/arca-sucursal-punto-de-venta.png)
 

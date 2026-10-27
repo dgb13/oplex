@@ -5,7 +5,7 @@ minutes: 2
 roles: Dueño, Administrador
 ---
 
-Para emitir facturas electrónicas con CAE, ARCA tiene que autorizar a Oplex con un **certificado digital** de tu empresa. Se hace una vez, en **Contabilidad › Conexión con ARCA** (Dueño o Administrador), y lleva unos 15 a 20 minutos. Necesitás **clave fiscal nivel 3** y saber tu **condición frente al IVA**.
+Para emitir facturas electrónicas con CAE, ARCA tiene que autorizar a Oplex con un **certificado digital** de tu empresa. Se hace una vez, en **Conexión con ARCA** (Dueño o Administrador), y lleva unos 15 a 20 minutos. Necesitás **clave fiscal nivel 3** y saber tu **condición frente al IVA**.
 
 ![Tarjeta de estado de Conexión con ARCA](/ayuda/capturas/arca-estado.jpg)
 

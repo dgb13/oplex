@@ -68,7 +68,7 @@ export function ArcaCertAlert({ state }: { state: ArcaCertState }) {
         {state.kind === 'expired'
           ? `el certificado de ARCA venció el ${DATE.format(state.expiresAt)}.`
           : 'falta el certificado de ARCA de tu empresa.'}{' '}
-        <Link href="/accounting/arca" className="font-bold underline underline-offset-2">
+        <Link href="/arca" className="font-bold underline underline-offset-2">
           Ir a Conexión con ARCA →
         </Link>
       </span>

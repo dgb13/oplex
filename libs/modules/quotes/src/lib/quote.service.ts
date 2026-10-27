@@ -335,7 +335,7 @@ export class QuoteService {
     // Facturación, que no emite sin la condición cargada).
     if (!settings?.ownTaxCondition) {
       throw new BadRequestException(
-        'Cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa para generar cotizaciones',
+        'Cargá tu condición frente al IVA en Conexión con ARCA → Datos de la empresa para generar cotizaciones',
       );
     }
     const resolvedStyle = style ?? (await this.resolveRequesterPdfStyle());

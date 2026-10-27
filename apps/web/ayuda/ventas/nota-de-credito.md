@@ -43,7 +43,7 @@ Podés hacer varias notas de crédito parciales sobre la misma factura. Oplex no
 
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
-| **Todavía no configuraste el certificado ARCA de esta empresa - la nota de crédito no va a poder pedir CAE …** | No hay certificado cargado. | Cargalo en **Contabilidad › Conexión con ARCA**. |
+| **Todavía no configuraste el certificado ARCA de esta empresa - la nota de crédito no va a poder pedir CAE …** | No hay certificado cargado. | Cargalo en **Conexión con ARCA**. |
 | **Indicá un motivo** | El motivo está vacío. | Escribilo. |
 | **Ingresá una cantidad a devolver en al menos una línea** | Todas las cantidades están en 0. | Poné la cantidad a devolver en alguna línea. |
 | **Credit note total exceeds the invoice balance due** | La nota supera el saldo pendiente de la factura (por ejemplo, ya está cobrada). | Ver el aviso de arriba. |

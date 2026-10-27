@@ -91,7 +91,7 @@ export default function PreferencesPage() {
   });
 
   // Mismo ancho para todas las tarjetas (el de "Conexión con ARCA", que ahora
-  // vive en Contabilidad → /accounting/arca).
+  // vive en Contabilidad → /arca).
   return (
     <div className="flex max-w-[980px] flex-col gap-6">
       <h1 className="text-xl font-semibold">Preferencias</h1>

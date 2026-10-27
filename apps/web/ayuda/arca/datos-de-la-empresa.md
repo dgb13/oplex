@@ -14,7 +14,7 @@ En este paso cargás los datos de tu empresa tal como figuran en ARCA. Son los q
 
 ## Pasos
 
-1. **Abrí la pantalla.** Andá a **Contabilidad › Conexión con ARCA** y tocá **Datos de la empresa** (si es la primera vez, ya aparece abierto).
+1. **Abrí la pantalla.** Andá a **Conexión con ARCA** y tocá **Datos de la empresa** (si es la primera vez, ya aparece abierto).
 2. **Tocá Abrir la consulta en ARCA.** Se abre el sitio de ARCA en otra pestaña del navegador. Oplex no se cierra.
 3. **Escribí tu CUIT.** En el campo **CUIT del Contribuyente** escribí el CUIT sin guiones (por ejemplo `30715896321`). Si Oplex ya lo conoce, te lo muestra con un botón **Copiar** para pegarlo.
 4. **Resolvé el código de seguridad.** Podés elegir **Texto distorsionado** o **Cálculo matemático**. Escribí la respuesta en **Ingresá los caracteres visibles** y tocá **Consultar**.

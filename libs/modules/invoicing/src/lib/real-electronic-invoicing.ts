@@ -47,7 +47,7 @@ export class RealElectronicInvoicingService implements ElectronicInvoicingPort {
     const credentials = await this.afipCredentials.getCurrent();
     if (!credentials) {
       throw new BadRequestException(
-        'Esta empresa todavía no configuró su certificado ARCA (Contabilidad → Conexión con ARCA)',
+        'Esta empresa todavía no configuró su certificado ARCA (Conexión con ARCA)',
       );
     }
     try {
@@ -70,7 +70,7 @@ export function explainArcaError(raw: string, pointOfSale?: string): string {
   // [11002] El punto de venta no se encuentra habilitado a usar en el presente WS.
   if (raw.includes('[11002]')) {
     const pv = pointOfSale ? `El punto de venta ${pointOfSale.padStart(4, '0')}` : 'El punto de venta';
-    return `${pv} no está habilitado para Web Services en ARCA. Revisá el número en Sucursales; "Probar conexión" en Contabilidad › Conexión con ARCA te dice cuáles tiene habilitados. Detalle de ARCA: ${raw}`;
+    return `${pv} no está habilitado para Web Services en ARCA. Revisá el número en Sucursales; "Probar conexión" en Conexión con ARCA te dice cuáles tiene habilitados. Detalle de ARCA: ${raw}`;
   }
   return raw;
 }

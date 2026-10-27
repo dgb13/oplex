@@ -51,7 +51,7 @@ Sí, en pesos o en dólares. Ver [Emitir una factura](/documentacion/ventas/emit
 Porque ARCA la exige para facturar a un CUIT (RG 5616). Cargá el CUIT del cliente y Oplex la trae de ARCA. Ver [Clientes](/documentacion/ventas/clientes).
 
 ### Pasé de Monotributo a Responsable Inscripto. ¿Qué hago?
-Subí tu constancia nueva en el paso 1 de **Contabilidad › Conexión con ARCA** y confirmá con **Cambiar condición**. Revisá además tu punto de venta en ARCA: como Responsable Inscripto tiene que ser de "RECE para aplicativo y web services" (consultalo con tu contador). Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
+Subí tu constancia nueva en el paso 1 de **Conexión con ARCA** y confirmá con **Cambiar condición**. Revisá además tu punto de venta en ARCA: como Responsable Inscripto tiene que ser de "RECE para aplicativo y web services" (consultalo con tu contador). Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
 
 ## Cuenta y usuarios
 

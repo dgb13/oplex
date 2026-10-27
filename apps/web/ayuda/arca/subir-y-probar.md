@@ -15,7 +15,7 @@ Con el certificado descargado de ARCA, falta dárselo a Oplex. Antes de guardarl
 
 ## Pasos
 
-1. **Abrí el paso 4.** En **Contabilidad › Conexión con ARCA**, tocá **Subir el certificado**.
+1. **Abrí el paso 4.** En **Conexión con ARCA**, tocá **Subir el certificado**.
 2. **Subí el certificado.** Arrastrá el archivo a la zona **Certificado de ARCA** o hacé clic ahí para elegirlo. Sirve cualquier nombre o extensión (.crt, .pem, .txt…): Oplex lo reconoce por su contenido.
 3. **Fijate la clave privada.** Si generaste el pedido con Oplex, al lado ya dice **Clave privada · Guardada en Oplex (generada en el paso 2)**: no tenés que hacer nada. Si usaste tus archivos, subí la clave en la zona **Clave privada (.key)**.
 4. **Revisá la vista previa.** Debajo aparecen cuatro datos del certificado:
