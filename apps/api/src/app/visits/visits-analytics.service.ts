@@ -221,13 +221,16 @@ export class VisitsAnalyticsService {
         : [[p.chartFrom, p.to]];
 
     try {
-      const parts = await Promise.all(
-        segments.map(([a, b]) => {
+      // Todo en paralelo: en serie, el período anterior sumaba su espera a la
+      // de los tramos.
+      const parts = await Promise.all([
+        ...segments.map(([a, b]) => {
           const curFrom = Math.min(Math.max(a, p.from), b);
           return post(QUERY, { cur: filter(curFrom, b), chart: filter(a, b) });
         }),
-      );
-      const previous = await post(PREVIOUS_QUERY, { prev: filter(p.prevFrom, p.prevTo) });
+        post(PREVIOUS_QUERY, { prev: filter(p.prevFrom, p.prevTo) }),
+      ]);
+      const previous = parts.pop() ?? {};
 
       const visitsOf = (g: Group) => g.sum?.visits ?? 0;
       const merge = (alias: string, key: (g: Group) => string, value: (g: Group) => number): RankRow[] => {

@@ -148,8 +148,9 @@ describe('VisitsAnalyticsService', () => {
     expect(r.cloudflareError).toBe('not authorized');
     expect(r.visits).toBeNull();
     expect(r.signups).toBe(4);
-    // 30 días = 2 tramos por reporte; el error no se cachea, el segundo reintenta.
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // 30 días = 2 tramos + período anterior, en paralelo; el error no se
+    // cachea, el segundo reintenta.
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it('cachea 15 minutos por período', async () => {
