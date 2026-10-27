@@ -12,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ASSET_FIELD_TYPES, type AssetFieldType } from '../asset-fields.js';
+import { ASSET_FIELD_TYPES, VEHICLE_KINDS, type AssetFieldType, type VehicleKind } from '../asset-fields.js';
 
 export class AssetFieldDefDto {
   @IsOptional()
@@ -36,6 +36,10 @@ export class AssetFieldDefDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   options?: string[];
+
+  @IsOptional()
+  @IsIn(VEHICLE_KINDS)
+  vehicleKind?: VehicleKind;
 
   @IsOptional()
   @IsBoolean()

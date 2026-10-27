@@ -84,6 +84,7 @@ function toInput(form: FormState): BusinessTemplateInput {
             fields: form.assetType.fields.map((f) => ({
               ...f,
               ...(f.type === 'SELECT' ? { options: (f.options ?? []).map((o) => o.trim()).filter(Boolean) } : { options: undefined }),
+              vehicleKind: f.type === 'VEHICLE_BRAND' ? (f.vehicleKind ?? 'AUTO') : undefined,
             })),
           }
         : null,

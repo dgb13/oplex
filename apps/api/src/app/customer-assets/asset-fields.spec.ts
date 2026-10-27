@@ -1,4 +1,11 @@
-import { cleanValues, identifierKey, mergeFieldDefs, pluralize, type AssetFieldDef } from './asset-fields.js';
+import {
+  assertVehicleFields,
+  cleanValues,
+  identifierKey,
+  mergeFieldDefs,
+  pluralize,
+  type AssetFieldDef,
+} from './asset-fields.js';
 
 const VEHICULO: AssetFieldDef[] = [
   { key: 'patente', label: 'Patente', type: 'TEXT', required: true, isIdentifier: true },
@@ -77,5 +84,44 @@ describe('mergeFieldDefs', () => {
     expect(() => mergeFieldDefs(VEHICULO, [VEHICULO[0], { key: '', label: 'Tracción', type: 'SELECT', options: [] }])).toThrow(
       'cargá al menos una opción',
     );
+  });
+});
+
+describe('marca y modelo de la lista de vehículos', () => {
+  const LISTA: AssetFieldDef[] = [
+    { key: 'patente', label: 'Patente', type: 'TEXT', required: true, isIdentifier: true },
+    { key: 'marca', label: 'Marca', type: 'VEHICLE_BRAND', vehicleKind: 'AUTO', required: true },
+    { key: 'modelo', label: 'Modelo', type: 'VEHICLE_MODEL' },
+  ];
+
+  it('stores them as text, also when typed by hand', () => {
+    expect(cleanValues(LISTA, { patente: 'AB 123 CD', marca: ' Chery ', modelo: 'Tiggo 4' })).toEqual({
+      patente: 'AB 123 CD',
+      marca: 'Chery',
+      modelo: 'Tiggo 4',
+    });
+  });
+
+  it('lets a text field switch to the list and back, but not to a number', () => {
+    const text = LISTA.map((f) => (f.isIdentifier ? f : { ...f, type: 'TEXT' as const, vehicleKind: undefined }));
+    const toList = mergeFieldDefs(text, LISTA);
+    expect(toList.find((f) => f.key === 'marca')).toMatchObject({ type: 'VEHICLE_BRAND', vehicleKind: 'AUTO' });
+    expect(mergeFieldDefs(LISTA, text).find((f) => f.key === 'marca')?.vehicleKind).toBeUndefined();
+    expect(() =>
+      mergeFieldDefs(LISTA, LISTA.map((f) => (f.key === 'marca' ? { ...f, type: 'NUMBER' as const } : f))),
+    ).toThrow('No se puede cambiar el tipo del campo "Marca"');
+  });
+
+  it('defaults the brand list to cars', () => {
+    const fields = mergeFieldDefs([LISTA[0]], LISTA.map((f) => ({ ...f, vehicleKind: undefined })));
+    expect(fields.find((f) => f.key === 'marca')?.vehicleKind).toBe('AUTO');
+  });
+
+  it('needs the brand for the model, and only one brand', () => {
+    expect(() => assertVehicleFields(LISTA.filter((f) => f.key !== 'marca'))).toThrow('"Modelo" muestra los modelos según la marca');
+    expect(() => assertVehicleFields([...LISTA, { key: 'marca2', label: 'Otra marca', type: 'VEHICLE_BRAND' }])).toThrow(
+      'un solo campo con la lista de marcas',
+    );
+    expect(() => assertVehicleFields(LISTA)).not.toThrow();
   });
 });

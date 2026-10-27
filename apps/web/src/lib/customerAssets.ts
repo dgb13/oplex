@@ -2,7 +2,10 @@ import { api } from '@/lib/api';
 
 /** Fichas del cliente (vehículos, equipos, mascotas...). Espejo de
  * apps/api/src/app/customer-assets. */
-export type AssetFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN';
+export type AssetFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN' | 'VEHICLE_BRAND' | 'VEHICLE_MODEL';
+
+/** De qué lista salen las marcas de un campo VEHICLE_BRAND. */
+export type VehicleKind = 'AUTO' | 'MOTO';
 
 export interface AssetFieldDef {
   key: string;
@@ -11,6 +14,8 @@ export interface AssetFieldDef {
   required?: boolean;
   isIdentifier?: boolean;
   options?: string[];
+  /** Para VEHICLE_BRAND. */
+  vehicleKind?: VehicleKind;
   hidden?: boolean;
 }
 
@@ -20,6 +25,26 @@ export const ASSET_FIELD_TYPE_LABELS: Record<AssetFieldType, string> = {
   DATE: 'Fecha',
   SELECT: 'Lista',
   BOOLEAN: 'Sí / No',
+  VEHICLE_BRAND: 'Lista de marcas de Oplex',
+  VEHICLE_MODEL: 'Modelos según la marca',
+};
+
+/** Tipos que guardan texto: se puede pasar de uno a otro sin perder lo
+ * cargado (mismo criterio que canChangeFieldType en el API). */
+const TEXT_TYPES: AssetFieldType[] = ['TEXT', 'VEHICLE_BRAND', 'VEHICLE_MODEL'];
+
+export function canChangeFieldType(from: AssetFieldType, to: AssetFieldType): boolean {
+  return from === to || (TEXT_TYPES.includes(from) && TEXT_TYPES.includes(to));
+}
+
+export interface VehicleBrandOption {
+  id: string;
+  name: string;
+  models: { id: string; name: string }[];
+}
+
+export const vehicleCatalogApi = {
+  list: async (kind: VehicleKind) => (await api.get<VehicleBrandOption[]>('/vehicle-catalog', { params: { kind } })).data,
 };
 
 export interface CustomerAssetType {

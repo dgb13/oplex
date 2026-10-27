@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
 import {
   ASSET_FIELD_TYPE_LABELS,
+  canChangeFieldType,
   customerAssetsApi,
   type AssetFieldDef,
   type AssetFieldType,
   type CustomerAssetType,
+  type VehicleKind,
 } from '@/lib/customerAssets';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -22,6 +24,28 @@ interface FieldDraft extends AssetFieldDef {
 
 function toDrafts(type: CustomerAssetType): FieldDraft[] {
   return type.fields.map((f) => ({ ...f, optionsText: (f.options ?? []).join(', ') }));
+}
+
+// En el selector de tipo, la lista de marcas va en dos opciones (autos y
+// motos): el valor lleva la lista elegida.
+const TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'TEXT', label: 'Texto' },
+  { value: 'NUMBER', label: 'Número' },
+  { value: 'DATE', label: 'Fecha' },
+  { value: 'SELECT', label: 'Lista' },
+  { value: 'BOOLEAN', label: 'Sí / No' },
+  { value: 'VEHICLE_BRAND:AUTO', label: 'Lista de marcas de autos (Oplex)' },
+  { value: 'VEHICLE_BRAND:MOTO', label: 'Lista de marcas de motos (Oplex)' },
+  { value: 'VEHICLE_MODEL', label: 'Modelos según la marca' },
+];
+
+function typeValue(f: AssetFieldDef): string {
+  return f.type === 'VEHICLE_BRAND' ? `VEHICLE_BRAND:${f.vehicleKind ?? 'AUTO'}` : f.type;
+}
+
+function fromTypeValue(value: string): { type: AssetFieldType; vehicleKind?: VehicleKind } {
+  const [type, kind] = value.split(':') as [AssetFieldType, VehicleKind | undefined];
+  return { type, vehicleKind: kind };
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -99,6 +123,7 @@ function TypeForm({ type }: { type: CustomerAssetType }) {
           type: f.type,
           required: f.required,
           hidden: f.hidden,
+          ...(f.type === 'VEHICLE_BRAND' ? { vehicleKind: f.vehicleKind ?? 'AUTO' } : {}),
           ...(f.type === 'SELECT'
             ? { options: f.optionsText.split(',').map((o) => o.trim()).filter(Boolean) }
             : {}),
@@ -165,14 +190,12 @@ function TypeForm({ type }: { type: CustomerAssetType }) {
                   )}
                 </td>
                 <td className="py-2 pr-2">
-                  {f.isNew ? (
+                  {f.isNew || (!f.isIdentifier && !f.hidden && canChangeFieldType(f.type, 'TEXT')) ? (
                     <Select
-                      value={f.type}
-                      onChange={(v) => update(i, { type: v as AssetFieldType })}
-                      options={(Object.keys(ASSET_FIELD_TYPE_LABELS) as AssetFieldType[]).map((t) => ({
-                        value: t,
-                        label: ASSET_FIELD_TYPE_LABELS[t],
-                      }))}
+                      value={typeValue(f)}
+                      onChange={(v) => update(i, fromTypeValue(v))}
+                      // Un campo con datos sólo pasa entre tipos de texto (lo cargado sigue valiendo).
+                      options={TYPE_OPTIONS.filter((o) => f.isNew || canChangeFieldType(f.type, fromTypeValue(o.value).type))}
                     />
                   ) : (
                     <span className="inline-block pt-2 text-muted-foreground">{ASSET_FIELD_TYPE_LABELS[f.type]}</span>

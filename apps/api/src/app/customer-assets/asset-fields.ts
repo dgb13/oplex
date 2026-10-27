@@ -10,12 +10,41 @@ export interface AssetFieldDef {
   isIdentifier?: boolean;
   /** Para SELECT. */
   options?: string[];
+  /** Para VEHICLE_BRAND: de qué lista salen las marcas (autos o motos). */
+  vehicleKind?: VehicleKind;
   /** Campo que el negocio sacó: no se pide más, pero lo cargado se conserva. */
   hidden?: boolean;
 }
 
-export const ASSET_FIELD_TYPES = ['TEXT', 'NUMBER', 'DATE', 'SELECT', 'BOOLEAN'] as const;
+// VEHICLE_BRAND / VEHICLE_MODEL: se eligen de la lista de marcas y modelos
+// de Oplex (/admin › Marcas y modelos) o se escriben a mano ("Otra, no está
+// en la lista"). Se guardan como texto, igual que TEXT.
+export const ASSET_FIELD_TYPES = ['TEXT', 'NUMBER', 'DATE', 'SELECT', 'BOOLEAN', 'VEHICLE_BRAND', 'VEHICLE_MODEL'] as const;
 export type AssetFieldType = (typeof ASSET_FIELD_TYPES)[number];
+
+export const VEHICLE_KINDS = ['AUTO', 'MOTO'] as const;
+export type VehicleKind = (typeof VEHICLE_KINDS)[number];
+
+/** Tipos que guardan texto libre: se puede pasar de uno a otro sin que lo
+ * cargado quede inválido. */
+const TEXT_TYPES: readonly AssetFieldType[] = ['TEXT', 'VEHICLE_BRAND', 'VEHICLE_MODEL'];
+
+export function canChangeFieldType(from: AssetFieldType, to: AssetFieldType): boolean {
+  return from === to || (TEXT_TYPES.includes(from) && TEXT_TYPES.includes(to));
+}
+
+/** Una sola marca por ficha, y el modelo necesita la marca: sus opciones
+ * salen de la marca elegida. */
+export function assertVehicleFields(fields: AssetFieldDef[]): void {
+  const brands = fields.filter((f) => f.type === 'VEHICLE_BRAND' && !f.hidden);
+  if (brands.length > 1) throw new BadRequestException('La ficha puede tener un solo campo con la lista de marcas');
+  const model = fields.find((f) => f.type === 'VEHICLE_MODEL' && !f.hidden);
+  if (model && brands.length === 0) {
+    throw new BadRequestException(
+      `El campo "${model.label}" muestra los modelos según la marca: poné otro campo como lista de marcas`,
+    );
+  }
+}
 
 export type AssetValues = Record<string, string | number | boolean>;
 
@@ -104,7 +133,7 @@ export function mergeFieldDefs(previous: AssetFieldDef[], incoming: AssetFieldDe
     const prev = prevByKey.get(key);
     // El dato principal queda donde estaba: no se puede mover ni ocultar.
     const isIdentifier = prev ? Boolean(prev.isIdentifier) : false;
-    if (prev && prev.type !== raw.type && !isIdentifier) {
+    if (prev && !canChangeFieldType(prev.type, raw.type) && !isIdentifier) {
       // Cambiar el tipo de un campo con datos los dejaría inválidos.
       throw new BadRequestException(`No se puede cambiar el tipo del campo "${label}": creá uno nuevo`);
     }
@@ -115,6 +144,9 @@ export function mergeFieldDefs(previous: AssetFieldDef[], incoming: AssetFieldDe
       ...(raw.required || isIdentifier ? { required: true } : {}),
       ...(isIdentifier ? { isIdentifier: true } : {}),
       ...(options ? { options } : {}),
+      ...(raw.type === 'VEHICLE_BRAND' && !prev?.isIdentifier
+        ? { vehicleKind: VEHICLE_KINDS.includes(raw.vehicleKind as VehicleKind) ? raw.vehicleKind : 'AUTO' }
+        : {}),
       ...(raw.hidden && !isIdentifier ? { hidden: true } : {}),
     });
   }
@@ -129,6 +161,7 @@ export function mergeFieldDefs(previous: AssetFieldDef[], incoming: AssetFieldDe
   if (result.filter((f) => f.isIdentifier).length !== 1) {
     throw new BadRequestException('La ficha tiene que tener exactamente un dato principal');
   }
+  assertVehicleFields(result);
   return result;
 }
 
@@ -150,7 +183,9 @@ export function cleanValues(fields: AssetFieldDef[], incoming: Record<string, un
       continue;
     }
     switch (field.type) {
-      case 'TEXT': {
+      case 'TEXT':
+      case 'VEHICLE_BRAND':
+      case 'VEHICLE_MODEL': {
         const text = String(raw).trim();
         if (text.length > MAX_TEXT) throw new BadRequestException(`"${field.label}" es demasiado largo`);
         result[field.key] = text;

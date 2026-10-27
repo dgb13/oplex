@@ -44,6 +44,7 @@ import { LegalModule } from './legal/legal.module.js';
 import { SupportModule } from './support/support.module.js';
 import { BusinessTemplatesModule } from './business-templates/business-templates.module.js';
 import { CustomerAssetsModule } from './customer-assets/customer-assets.module.js';
+import { VehicleCatalogModule } from './vehicle-catalog/vehicle-catalog.module.js';
 import { WorkOrdersModule } from './work-orders/work-orders.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { GoodsReceiptsModule } from './goods-receipts/goods-receipts.module.js';
@@ -89,6 +90,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     SupportModule,
     BusinessTemplatesModule,
     CustomerAssetsModule,
+    VehicleCatalogModule,
     WorkOrdersModule,
     CalendarModule,
     AgendaModule,

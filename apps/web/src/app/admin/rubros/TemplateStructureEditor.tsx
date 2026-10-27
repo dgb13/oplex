@@ -6,13 +6,27 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 type AssetType = NonNullable<BusinessTemplateConfig['assetType']>;
 type WorkOrder = NonNullable<BusinessTemplateConfig['workOrder']>;
 
-const FIELD_TYPES: { value: TemplateAssetField['type']; label: string }[] = [
+// La lista de marcas va en dos opciones (autos y motos): el valor lleva la
+// lista elegida (ver typeValue).
+const FIELD_TYPES: { value: string; label: string }[] = [
   { value: 'TEXT', label: 'Texto' },
   { value: 'NUMBER', label: 'Número' },
   { value: 'DATE', label: 'Fecha' },
   { value: 'SELECT', label: 'Lista' },
   { value: 'BOOLEAN', label: 'Sí / No' },
+  { value: 'VEHICLE_BRAND:AUTO', label: 'Marcas de autos (Oplex)' },
+  { value: 'VEHICLE_BRAND:MOTO', label: 'Marcas de motos (Oplex)' },
+  { value: 'VEHICLE_MODEL', label: 'Modelos según la marca' },
 ];
+
+function typeValue(f: TemplateAssetField): string {
+  return f.type === 'VEHICLE_BRAND' ? `VEHICLE_BRAND:${f.vehicleKind ?? 'AUTO'}` : f.type;
+}
+
+function fromTypeValue(value: string): Pick<TemplateAssetField, 'type' | 'vehicleKind'> {
+  const [type, kind] = value.split(':') as [TemplateAssetField['type'], TemplateAssetField['vehicleKind']];
+  return { type, vehicleKind: kind };
+}
 
 const input = 'w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500';
 const small = 'text-xs text-slate-400 hover:text-slate-200';
@@ -91,9 +105,9 @@ export default function TemplateStructureEditor({
                     <input aria-label="Nombre del campo" className={`${input} min-w-0 flex-[1_1_140px]`} value={f.label} onChange={(e) => setField(i, { label: e.target.value })} />
                     <select
                       aria-label="Tipo"
-                      className={`${input} w-28`}
-                      value={f.type}
-                      onChange={(e) => setField(i, { type: e.target.value as TemplateAssetField['type'] })}
+                      className={`${input} w-48`}
+                      value={typeValue(f)}
+                      onChange={(e) => setField(i, fromTypeValue(e.target.value))}
                     >
                       {FIELD_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>

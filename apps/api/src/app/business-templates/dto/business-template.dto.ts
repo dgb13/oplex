@@ -12,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ASSET_FIELD_TYPES } from '../../customer-assets/asset-fields.js';
+import { ASSET_FIELD_TYPES, VEHICLE_KINDS, type VehicleKind } from '../../customer-assets/asset-fields.js';
 import { BUSINESS_FAMILIES, BUSINESS_MODULE_KEYS } from '../business-modules.js';
 
 export class TemplateAssetFieldDto {
@@ -43,6 +43,10 @@ export class TemplateAssetFieldDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   options?: string[];
+
+  @IsOptional()
+  @IsIn(VEHICLE_KINDS)
+  vehicleKind?: VehicleKind;
 }
 
 export class TemplateAssetTypeDto {

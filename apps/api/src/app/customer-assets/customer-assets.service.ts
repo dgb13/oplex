@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, Prisma, PrismaService, type CustomerAssetType } from '@plexo/database';
+import { getTenantDb, getTenantId, onCommit, Prisma, PrismaService, type CustomerAssetType } from '@plexo/database';
+import { VehicleCatalogService } from '../vehicle-catalog/vehicle-catalog.service.js';
 import {
   cleanValues,
   identifierField,
@@ -70,7 +71,10 @@ function toAssetView(row: AssetRow) {
  */
 @Injectable()
 export class CustomerAssetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly vehicleCatalog: VehicleCatalogService,
+  ) {}
 
   /** Crea el tipo de ficha del rubro si el negocio todavía no tiene uno con
    * ese nombre. Lo llama BusinessProfileService.choose y, para los que
@@ -215,6 +219,7 @@ export class CustomerAssetsService {
       },
       include: ASSET_INCLUDE,
     });
+    onCommit(() => this.vehicleCatalog.recordHandTypedQuietly(fields, values, tenantId));
     return toAssetView(row);
   }
 
@@ -231,6 +236,7 @@ export class CustomerAssetsService {
       const values = cleanValues(fields, dto.values, (current.values ?? {}) as AssetValues);
       const identifier = String(values[identifierField(fields).key]);
       valuesUpdate = { identifier, identifierKey: identifierKey(identifier), values: values as Prisma.InputJsonValue };
+      onCommit(() => this.vehicleCatalog.recordHandTypedQuietly(fields, values, tenantId));
     }
     const row = await db.customerAsset.update({
       where: { tenantId_id: { tenantId, id } },

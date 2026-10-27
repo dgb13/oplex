@@ -15,9 +15,13 @@ Oplex va mejorando la plantilla de cada rubro: suma módulos, categorías de art
    - **Neumáticos** (una categoría de artículos).
    - **Campo nuevo en Vehículo**: Tipo de caja.
    - **Estado nuevo de las órdenes**: Esperando repuesto, que se ubica en su lugar, después de **Esperando aprobación**.
+   - **Campo de Vehículo que pasa a una lista**: Marca se elige de la lista de marcas (o se escribe a mano si no está).
 3. Destildá lo que no quieras y tocá **Aplicar las elegidas**.
 
-Aplicar **sólo agrega**: lo que ya tenías (tus campos, tus estados con sus nombres, tus módulos apagados) queda igual. Si Oplex sacó algo de la plantilla, a vos no se te quita.
+Aplicar **sólo agrega**: lo que ya tenías (tus campos, tus estados con sus nombres, tus módulos apagados) queda igual. Si Oplex sacó algo de la plantilla, a vos no se te quita. Un campo que pasa a una lista conserva lo que ya cargaste en cada ficha.
+
+> [!NOTA]
+> **Marca** y **Modelo** van juntos: si aplicás que **Modelo** salga de la lista, aplicá también **Marca**, porque los modelos dependen de la marca elegida.
 
 Si preferís no sumar nada, tocá **Ahora no**: esas novedades no se te vuelven a mostrar. Si más adelante Oplex publica otras, aparece un aviso nuevo.
 

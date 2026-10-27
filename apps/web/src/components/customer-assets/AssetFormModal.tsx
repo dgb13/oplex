@@ -1,6 +1,7 @@
 'use client';
 
 import CompanyFormModal from '@/components/CompanyFormModal';
+import CatalogCombo, { catalogKey } from '@/components/customer-assets/CatalogCombo';
 import CustomerPicker from '@/components/sales/CustomerPicker';
 import { LinkButton } from '@/components/sales/SalesDocumentSheet';
 import { useCompanyPermissions } from '@/components/useCompanyPermissions';
@@ -10,6 +11,7 @@ import Select from '@/components/ui/Select';
 import { companiesApi } from '@/lib/companies';
 import {
   customerAssetsApi,
+  vehicleCatalogApi,
   type AssetFieldDef,
   type AssetValues,
   type CustomerAsset,
@@ -17,7 +19,7 @@ import {
 } from '@/lib/customerAssets';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Props {
   types: CustomerAssetType[];
@@ -67,6 +69,41 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
 
   const visibleFields = (type?.fields ?? []).filter((f) => !f.hidden);
   const identifier = visibleFields.find((f) => f.isIdentifier);
+
+  // Marca y modelo de la lista de Oplex (rubros con vehículos).
+  const brandField = visibleFields.find((f) => f.type === 'VEHICLE_BRAND');
+  const modelField = visibleFields.find((f) => f.type === 'VEHICLE_MODEL');
+  const vehicleKind = brandField?.vehicleKind ?? 'AUTO';
+  const catalogQuery = useQuery({
+    queryKey: ['vehicle-catalog', vehicleKind],
+    queryFn: () => vehicleCatalogApi.list(vehicleKind),
+    enabled: Boolean(brandField),
+    staleTime: 60 * 60_000,
+  });
+  const catalog = catalogQuery.data ?? [];
+  const brandValue = brandField ? String(draft[brandField.key] ?? '') : '';
+  const brandEntry = catalog.find((b) => catalogKey(b.name) === catalogKey(brandValue));
+  const modelOptions = brandEntry?.models.map((m) => m.name) ?? [];
+  // Campos en "Otra, no está en la lista" (escritos a mano).
+  const [manual, setManual] = useState<Record<string, boolean>>({});
+  const brandManual = Boolean(brandField && manual[brandField.key]);
+  // Con la marca escrita a mano no hay modelos para elegir.
+  const modelManual = Boolean(modelField && (manual[modelField.key] || brandManual));
+
+  // Al editar, lo que ya estaba escrito y no figura en la lista se muestra a mano.
+  useEffect(() => {
+    if (!catalogQuery.data || !brandField) return;
+    const brand = String(draft[brandField.key] ?? '');
+    const entry = catalogQuery.data.find((b) => catalogKey(b.name) === catalogKey(brand));
+    const model = modelField ? String(draft[modelField.key] ?? '') : '';
+    setManual({
+      [brandField.key]: Boolean(brand) && !entry,
+      ...(modelField
+        ? { [modelField.key]: Boolean(model) && !entry?.models.some((m) => catalogKey(m.name) === catalogKey(model)) }
+        : {}),
+    });
+    // Sólo al llegar la lista o cambiar de ficha: después lo maneja el formulario.
+  }, [catalogQuery.data, typeId]);
 
   function payload(): AssetValues {
     const values: AssetValues = {};
@@ -186,7 +223,43 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
                 <label htmlFor={id} className="text-sm text-muted-foreground">
                   {label}
                 </label>
-                {field.type === 'SELECT' ? (
+                {field.type === 'VEHICLE_BRAND' ? (
+                  <CatalogCombo
+                    id={id}
+                    value={brandValue}
+                    onChange={(v) => {
+                      setDraft((d) => {
+                        const changed = catalogKey(v) !== catalogKey(String(d[field.key] ?? ''));
+                        // Otra marca: el modelo elegido ya no corresponde.
+                        return changed && modelField ? { ...d, [field.key]: v, [modelField.key]: '' } : { ...d, [field.key]: v };
+                      });
+                    }}
+                    options={catalog.map((b) => b.name)}
+                    manual={brandManual}
+                    onManualChange={(on) =>
+                      setManual((m) => ({ ...m, [field.key]: on, ...(modelField ? { [modelField.key]: false } : {}) }))
+                    }
+                    otherLabel="Otra, no está en la lista"
+                    searchPlaceholder="Buscá la marca"
+                    manualPlaceholder="Escribí la marca"
+                  />
+                ) : field.type === 'VEHICLE_MODEL' ? (
+                  <CatalogCombo
+                    id={id}
+                    value={String(draft[field.key] ?? '')}
+                    onChange={(v) => setField(field, v)}
+                    options={modelOptions}
+                    manual={modelManual}
+                    onManualChange={(on) => setManual((m) => ({ ...m, [field.key]: on }))}
+                    otherLabel="Otro, no está en la lista"
+                    listTitle={brandEntry ? `Modelos de ${brandEntry.name}` : undefined}
+                    disabled={!brandEntry}
+                    disabledPlaceholder={brandField ? 'Elegí primero la marca' : 'Buscá el modelo'}
+                    searchPlaceholder="Buscá el modelo"
+                    manualPlaceholder="Escribí el modelo"
+                    canGoBack={!brandManual}
+                  />
+                ) : field.type === 'SELECT' ? (
                   <Select
                     value={String(draft[field.key] ?? '')}
                     onChange={(v) => setField(field, v)}
@@ -208,6 +281,16 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
             );
           })}
         </div>
+
+        {(brandManual || modelManual) && (
+          <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-900 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-200">
+            <span className="font-semibold">
+              {brandManual ? 'La marca' : 'El modelo'} no está en la lista de Oplex.
+            </span>{' '}
+            Escribil{brandManual ? 'a' : 'o'} como figura en la cédula verde del vehículo. Se guarda igual en esta ficha, y nos
+            llega el aviso para sumarl{brandManual ? 'a' : 'o'} a la lista.
+          </div>
+        )}
 
         {type?.notice && <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{type.notice}</p>}
 

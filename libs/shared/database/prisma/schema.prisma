@@ -4758,6 +4758,65 @@ model BusinessTemplateRequest {
   @@map("business_template_requests")
 }
 
+// Marcas y modelos de vehículos que ofrecen los campos VEHICLE_BRAND /
+// VEHICLE_MODEL de las fichas (taller, gomería, motos...). Tablas de
+// plataforma, sin RLS, administradas en /admin › Marcas y modelos. La lista
+// inicial la cargó Oplex sin verificar contra una fuente oficial: reviewed
+// = false hasta que alguien de Oplex la revisa. Sin DELETE: una marca o un
+// modelo se ocultan (active), porque hay fichas que los nombran.
+model VehicleBrand {
+  id          String   @id @default(uuid())
+  // AUTO | MOTO
+  vehicleKind String
+  name        String
+  active      Boolean  @default(true)
+  reviewed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  models VehicleModel[]
+
+  @@unique([vehicleKind, name])
+  @@map("vehicle_brands")
+}
+
+model VehicleModel {
+  id        String       @id @default(uuid())
+  brandId   String
+  brand     VehicleBrand @relation(fields: [brandId], references: [id])
+  name      String
+  active    Boolean      @default(true)
+  reviewed  Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([brandId, name])
+  @@map("vehicle_models")
+}
+
+// Marcas y modelos que los negocios escribieron a mano ("Otra, no está en
+// la lista"), para que Oplex los sume a la lista, los una con uno que ya
+// existe o los descarte. Una fila por texto (normalizado en matchKey);
+// tenantIds son los negocios que lo escribieron, sólo informativo.
+model VehicleCatalogSuggestion {
+  id          String   @id @default(uuid())
+  vehicleKind String
+  // BRAND | MODEL
+  field       String
+  // Para MODEL: la marca tal como quedó en la ficha.
+  brandName   String?
+  text        String
+  matchKey    String   @unique
+  tenantIds   String[] @default([])
+  // NEW / ADDED / MERGED / DISCARDED
+  status      String   @default("NEW")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@map("vehicle_catalog_suggestions")
+}
+
 // Fichas del cliente (etapa 3 del plan de rubros): el tipo de "bien" sobre
 // el que trabaja el negocio - Vehículo en un taller, Equipo en un service,
 // Mascota en una veterinaria. Se copia de la plantilla del rubro
