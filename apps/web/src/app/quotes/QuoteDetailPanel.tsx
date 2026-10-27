@@ -228,6 +228,27 @@ export default function QuoteDetailPanel({ quoteId, onClose, onEdit }: Props) {
                     >
                       {sendEmailMutation.isPending ? 'Enviando...' : 'Enviar por email'}
                     </Button>
+                    {/* El cliente decidió en persona (mostrador, taller): no hace falta
+                        enviarla, y puede no tener email ni teléfono. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => acceptMutation.mutate()}
+                      disabled={acceptMutation.isPending}
+                      className="bg-green-600 text-white hover:bg-green-500"
+                    >
+                      El cliente la aceptó
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rejectMutation.mutate()}
+                      disabled={rejectMutation.isPending}
+                      className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                    >
+                      La rechazó
+                    </Button>
                     <Button
                       type="button"
                       size="sm"

@@ -350,7 +350,8 @@ export default function WorkOrderPage() {
           </p>
         ) : order.quote ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            Cuando el cliente lo acepte, se factura desde el presupuesto (&quot;Ver presupuesto&quot; → Convertir a factura).
+            Para facturar: &quot;Ver presupuesto&quot; → &quot;El cliente la aceptó&quot; (si te dijo que sí en persona) o, si se lo
+            mandaste, &quot;Marcar aceptada&quot; → Convertir a factura.
           </p>
         ) : null}
       </section>

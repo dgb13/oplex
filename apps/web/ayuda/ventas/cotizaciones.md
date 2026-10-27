@@ -46,6 +46,8 @@ En el detalle de una cotización **Enviada**:
 - **Marcar rechazada** si dijo que no.
 - **Cancelar** si la querés dar de baja.
 
+Si el cliente te contestó en persona (en el mostrador, en el taller) no hace falta enviarla: en una cotización en **Borrador** tocá **El cliente la aceptó** o **La rechazó**. Sirve también para un cliente que no tiene email ni teléfono cargado.
+
 ## Convertir a factura
 
 1. **Abrí una cotización Aceptada** y tocá **Convertir a factura**.

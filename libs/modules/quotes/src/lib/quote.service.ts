@@ -39,7 +39,9 @@ export type QuoteDetail = Prisma.QuoteGetPayload<{ include: typeof DETAIL_INCLUD
  * since a customer-facing quote doesn't need that internal working-draft
  * step). DRAFT -> SENT (email/WhatsApp) -> ACCEPTED/REJECTED (the
  * customer's decision, recorded by hand) or CANCELLED at any point before
- * a decision.
+ * a decision. DRAFT -> ACCEPTED/REJECTED directly too: a customer who
+ * decides in person (mostrador, taller) never gets it sent, and may not
+ * even have an email or phone cargado.
  */
 @Injectable()
 export class QuoteService {
@@ -275,8 +277,8 @@ export class QuoteService {
 
   private async resolveDecision(id: string, status: 'ACCEPTED' | 'REJECTED'): Promise<QuoteDetail> {
     const existing = await this.findOrThrow(id);
-    if (existing.status !== 'SENT') {
-      throw new BadRequestException('Sólo se puede aceptar o rechazar una cotización enviada');
+    if (existing.status !== 'SENT' && existing.status !== 'DRAFT') {
+      throw new BadRequestException('Esta cotización ya tiene una respuesta del cliente o está cancelada');
     }
     return getTenantDb().quote.update({ where: { id }, data: { status }, include: DETAIL_INCLUDE });
   }
