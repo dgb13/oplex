@@ -186,14 +186,28 @@ describe('QuoteService.create', () => {
 });
 
 describe('QuoteService status transitions', () => {
-  it('accept() rejects a quote that has not been SENT yet', async () => {
+  it('accept() rejects a quote that already has an answer or was cancelled', async () => {
+    for (const status of ['ACCEPTED', 'REJECTED', 'CANCELLED']) {
+      const findUnique = jest.fn().mockResolvedValue({ id: 'quote-1', status });
+      const db = { quote: { findUnique } };
+      const service = makeService();
+
+      await expect(runAsUser(db, () => service.accept('quote-1'))).rejects.toThrow(
+        'Esta cotización ya tiene una respuesta del cliente o está cancelada',
+      );
+    }
+  });
+
+  it('accept() takes a DRAFT quote straight to ACCEPTED (accepted in person, never sent)', async () => {
     const findUnique = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'DRAFT' });
-    const db = { quote: { findUnique } };
+    const update = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'ACCEPTED' });
+    const db = { quote: { findUnique, update } };
     const service = makeService();
 
-    await expect(runAsUser(db, () => service.accept('quote-1'))).rejects.toThrow(
-      'Sólo se puede aceptar o rechazar una cotización enviada',
-    );
+    const result = await runAsUser(db, () => service.accept('quote-1'));
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'ACCEPTED' } }));
+    expect(result.status).toBe('ACCEPTED');
   });
 
   it('accept() transitions a SENT quote to ACCEPTED', async () => {

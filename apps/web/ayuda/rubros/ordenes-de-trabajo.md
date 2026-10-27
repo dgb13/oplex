@@ -41,7 +41,7 @@ La orden de trabajo sigue cada trabajo de punta a punta: qué pidió el cliente,
 
 ## Facturar el trabajo
 
-Cuando el cliente acepta, tocá **Ver presupuesto** y después **Convertir a factura**. La factura conserva los precios, los descuentos, el IVA y el detalle de cada línea del presupuesto. La orden la reconoce sola y muestra **Ver en Facturación**.
+Cuando el cliente acepta, tocá **Ver presupuesto**, marcalo como aceptado (**El cliente la aceptó** si te dijo que sí en persona, o **Marcar aceptada** si se lo habías mandado) y después tocá **Convertir a factura**. La factura conserva los precios, los descuentos, el IVA y el detalle de cada línea del presupuesto. La orden la reconoce sola y muestra **Ver en Facturación**.
 
 > [!NOTA]
 > Si el cliente supera su límite de crédito, al facturar aparece un aviso con su saldo y su límite. Podés emitirla igual; el límite se cambia en la ficha del cliente.
