@@ -43,6 +43,8 @@ La orden de trabajo sigue cada trabajo de punta a punta: qué pidió el cliente,
 
 Cuando el cliente acepta, tocá **Ver presupuesto**, marcalo como aceptado (**El cliente la aceptó** si te dijo que sí en persona, o **Marcar aceptada** si se lo habías mandado) y después tocá **Convertir a factura**. La factura conserva los precios, los descuentos, el IVA y el detalle de cada línea del presupuesto. La orden la reconoce sola y muestra **Ver en Facturación**.
 
+Al marcar la respuesta del cliente, la orden cambia de estado sola: si lo acepta pasa a **En reparación**; si lo rechaza, a **Presupuesto rechazado** (y sigue abierta hasta que retira el vehículo). Si cambia de idea, tocá **Armar otro presupuesto**. Ver [Estados y aviso al cliente](/documentacion/rubros/estados-y-aviso).
+
 > [!NOTA]
 > Si el cliente supera su límite de crédito, al facturar aparece un aviso con su saldo y su límite. Podés emitirla igual; el límite se cambia en la ficha del cliente.
 

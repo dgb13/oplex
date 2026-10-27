@@ -280,7 +280,34 @@ export class QuoteService {
     if (existing.status !== 'SENT' && existing.status !== 'DRAFT') {
       throw new BadRequestException('Esta cotización ya tiene una respuesta del cliente o está cancelada');
     }
-    return getTenantDb().quote.update({ where: { id }, data: { status }, include: DETAIL_INCLUDE });
+    const updated = await getTenantDb().quote.update({ where: { id }, data: { status }, include: DETAIL_INCLUDE });
+    await this.moveLinkedWorkOrders(id, status);
+    return updated;
+  }
+
+  /** Las órdenes de trabajo abiertas con esta cotización pasan solas al
+   * estado que el negocio marcó para esa respuesta (Configuración de las
+   * órdenes). Al aceptar sólo avanza: si la orden ya está más adelante (ej.
+   * Listo para retirar) no vuelve atrás. Sin estado marcado, no se toca. */
+  private async moveLinkedWorkOrders(quoteId: string, outcome: 'ACCEPTED' | 'REJECTED'): Promise<void> {
+    const db = getTenantDb();
+    const tenantId = getTenantId();
+    const orders = await db.workOrder.findMany({ where: { quoteId, closedAt: null }, include: { status: true } });
+    if (orders.length === 0) return;
+    const target = await db.workOrderStatus.findFirst({ where: { quoteOutcome: outcome, active: true } });
+    if (!target) return;
+    for (const order of orders) {
+      if (order.statusId === target.id) continue;
+      if (outcome === 'ACCEPTED' && order.status.sortOrder >= target.sortOrder) continue;
+      await db.workOrder.update({
+        where: { tenantId_id: { tenantId, id: order.id } },
+        data: {
+          statusId: target.id,
+          closedAt: target.isFinal ? new Date() : null,
+          statusChanges: { create: { fromStatusId: order.statusId, toStatusId: target.id, userId: getUserId() } },
+        },
+      });
+    }
   }
 
   /** "Enviar por Email" - attaches the user's default PDF style, marks

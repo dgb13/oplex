@@ -76,4 +76,20 @@ describe('WorkOrdersService.updateConfig', () => {
       runInTenant(db, () => service.updateConfig({ statuses: [{ name: 'Entregado', isFinal: true }, { name: 'Recibido' }] })),
     ).rejects.toThrow('El primer estado no puede cerrar la orden');
   });
+
+  it('allows a single status per quote outcome', async () => {
+    const service = makeService();
+    await expect(
+      runInTenant(db, () =>
+        service.updateConfig({
+          statuses: [
+            { name: 'Recibido' },
+            { name: 'En proceso', quoteOutcome: 'ACCEPTED' },
+            { name: 'En reparación', quoteOutcome: 'ACCEPTED' },
+            { name: 'Entregado', isFinal: true },
+          ],
+        }),
+      ),
+    ).rejects.toThrow('Marcá un solo estado para cuando el cliente acepta el presupuesto');
+  });
 });

@@ -185,6 +185,8 @@ describe('QuoteService.create', () => {
   });
 });
 
+const NO_WORK_ORDERS = { workOrder: { findMany: jest.fn().mockResolvedValue([]) } };
+
 describe('QuoteService status transitions', () => {
   it('accept() rejects a quote that already has an answer or was cancelled', async () => {
     for (const status of ['ACCEPTED', 'REJECTED', 'CANCELLED']) {
@@ -201,7 +203,7 @@ describe('QuoteService status transitions', () => {
   it('accept() takes a DRAFT quote straight to ACCEPTED (accepted in person, never sent)', async () => {
     const findUnique = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'DRAFT' });
     const update = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'ACCEPTED' });
-    const db = { quote: { findUnique, update } };
+    const db = { quote: { findUnique, update }, ...NO_WORK_ORDERS };
     const service = makeService();
 
     const result = await runAsUser(db, () => service.accept('quote-1'));
@@ -213,7 +215,7 @@ describe('QuoteService status transitions', () => {
   it('accept() transitions a SENT quote to ACCEPTED', async () => {
     const findUnique = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'SENT' });
     const update = jest.fn().mockResolvedValue({ id: 'quote-1', status: 'ACCEPTED' });
-    const db = { quote: { findUnique, update } };
+    const db = { quote: { findUnique, update }, ...NO_WORK_ORDERS };
     const service = makeService();
 
     const result = await runAsUser(db, () => service.accept('quote-1'));
@@ -222,6 +224,58 @@ describe('QuoteService status transitions', () => {
       expect.objectContaining({ where: { id: 'quote-1' }, data: { status: 'ACCEPTED' } }),
     );
     expect(result.status).toBe('ACCEPTED');
+  });
+
+  describe('linked work orders', () => {
+    const STATUSES = {
+      received: { id: 's-received', sortOrder: 0, isFinal: false },
+      rejected: { id: 's-rejected', sortOrder: 1, isFinal: false, quoteOutcome: 'REJECTED' },
+      repair: { id: 's-repair', sortOrder: 2, isFinal: false, quoteOutcome: 'ACCEPTED' },
+      ready: { id: 's-ready', sortOrder: 3, isFinal: false },
+    };
+
+    function makeDb(orders: { id: string; statusId: string; status: { sortOrder: number } }[], target: unknown) {
+      return {
+        quote: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'quote-1', status: 'SENT' }),
+          update: jest.fn().mockResolvedValue({ id: 'quote-1' }),
+        },
+        workOrder: { findMany: jest.fn().mockResolvedValue(orders), update: jest.fn() },
+        workOrderStatus: { findFirst: jest.fn().mockResolvedValue(target) },
+      };
+    }
+
+    it('reject() moves the open order to the status marked for a rejection, and logs it', async () => {
+      const db = makeDb([{ id: 'wo-1', statusId: 's-received', status: STATUSES.received }], STATUSES.rejected);
+      await runAsUser(db, () => makeService().reject('quote-1'));
+
+      expect(db.workOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { quoteId: 'quote-1', closedAt: null } }));
+      expect(db.workOrderStatus.findFirst).toHaveBeenCalledWith({ where: { quoteOutcome: 'REJECTED', active: true } });
+      const data = db.workOrder.update.mock.calls[0][0].data;
+      expect(data.statusId).toBe('s-rejected');
+      expect(data.closedAt).toBeNull();
+      expect(data.statusChanges.create).toEqual({ fromStatusId: 's-received', toStatusId: 's-rejected', userId: 'user-1' });
+    });
+
+    it('accept() only moves orders forward', async () => {
+      const db = makeDb(
+        [
+          { id: 'wo-1', statusId: 's-received', status: STATUSES.received },
+          { id: 'wo-2', statusId: 's-ready', status: STATUSES.ready },
+        ],
+        STATUSES.repair,
+      );
+      await runAsUser(db, () => makeService().accept('quote-1'));
+
+      expect(db.workOrder.update).toHaveBeenCalledTimes(1);
+      expect(db.workOrder.update.mock.calls[0][0].where).toEqual({ tenantId_id: { tenantId: 'tenant-1', id: 'wo-1' } });
+    });
+
+    it('leaves the order alone when no status is marked', async () => {
+      const db = makeDb([{ id: 'wo-1', statusId: 's-received', status: STATUSES.received }], null);
+      await runAsUser(db, () => makeService().reject('quote-1'));
+      expect(db.workOrder.update).not.toHaveBeenCalled();
+    });
   });
 
   it('cancel() refuses to cancel an already-cancelled quote', async () => {

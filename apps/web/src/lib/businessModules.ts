@@ -78,6 +78,8 @@ export interface TemplateStatus {
   name: string;
   final?: boolean;
   notifiesCustomer?: boolean;
+  // La orden pasa sola acá cuando el cliente acepta o rechaza el presupuesto.
+  quoteOutcome?: 'ACCEPTED' | 'REJECTED';
 }
 
 export interface BusinessTemplateConfig {
@@ -103,7 +105,16 @@ export type TemplateUpdateItem =
       type: TemplateAssetField['type'];
       vehicleKind?: 'AUTO' | 'MOTO';
     }
-  | { id: string; kind: 'status'; name: string; after: string | null; final: boolean; notifiesCustomer: boolean };
+  | {
+      id: string;
+      kind: 'status';
+      name: string;
+      after: string | null;
+      final: boolean;
+      notifiesCustomer: boolean;
+      quoteOutcome?: 'ACCEPTED' | 'REJECTED';
+    }
+  | { id: string; kind: 'statusQuote'; name: string; quoteOutcome: 'ACCEPTED' | 'REJECTED' };
 
 export interface TemplateUpdates {
   templateName: string;

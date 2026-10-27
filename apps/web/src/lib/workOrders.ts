@@ -1,12 +1,18 @@
 import { api } from '@/lib/api';
 
 /** Órdenes de trabajo. Espejo de apps/api/src/app/work-orders. */
+
+/** La orden pasa sola a ese estado cuando el cliente acepta o rechaza el
+ * presupuesto vinculado. */
+export type QuoteOutcome = 'ACCEPTED' | 'REJECTED';
+
 export interface WorkOrderStatus {
   id: string;
   name: string;
   sortOrder: number;
   isFinal: boolean;
   notifiesCustomer: boolean;
+  quoteOutcome: QuoteOutcome | null;
   active: boolean;
 }
 
@@ -32,7 +38,7 @@ export interface WorkOrder {
   updatedAt: string;
   customer: { id: string; name: string; phone: string | null };
   asset: { id: string; identifier: string; typeId: string; typeName: string } | null;
-  status: { id: string; name: string; isFinal: boolean; notifiesCustomer: boolean };
+  status: { id: string; name: string; isFinal: boolean; notifiesCustomer: boolean; quoteOutcome: QuoteOutcome | null };
 }
 
 export interface WorkOrderDetail extends WorkOrder {
@@ -84,8 +90,9 @@ export const workOrdersApi = {
       .then((r) => r.data),
 };
 
-/** Color de la pastilla de un estado: abierto, listo (avisa) o cerrado. */
-export function statusTone(status: { isFinal: boolean; notifiesCustomer: boolean }): string {
+/** Color de la pastilla de un estado: rechazado, abierto, listo (avisa) o cerrado. */
+export function statusTone(status: { isFinal: boolean; notifiesCustomer: boolean; quoteOutcome?: QuoteOutcome | null }): string {
+  if (status.quoteOutcome === 'REJECTED') return 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300';
   if (status.isFinal) return 'bg-muted text-muted-foreground';
   if (status.notifiesCustomer) return 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300';
   return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300';

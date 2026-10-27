@@ -59,6 +59,18 @@ export default function TemplateStructureEditor({
     if (!workOrder) return;
     onWorkOrder({ ...workOrder, statuses: workOrder.statuses.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   }
+  /** Un solo estado por respuesta del presupuesto: marcar uno se lo saca al otro. */
+  function setQuoteOutcome(i: number, outcome: TemplateStatus['quoteOutcome']) {
+    if (!workOrder) return;
+    onWorkOrder({
+      ...workOrder,
+      statuses: workOrder.statuses.map((s, j) => {
+        if (j === i) return { ...s, quoteOutcome: outcome };
+        if (outcome && s.quoteOutcome === outcome) return { ...s, quoteOutcome: undefined };
+        return s;
+      }),
+    });
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -214,6 +226,17 @@ export default function TemplateStructureEditor({
                     <input type="checkbox" checked={Boolean(s.final)} onChange={(e) => setStatus(i, { final: e.target.checked })} className="accent-indigo-500" />
                     Cierra
                   </label>
+                  <select
+                    aria-label="Presupuesto"
+                    title="La orden pasa sola a este estado cuando el cliente acepta o rechaza el presupuesto"
+                    className={`${input} w-40`}
+                    value={s.quoteOutcome ?? ''}
+                    onChange={(e) => setQuoteOutcome(i, (e.target.value || undefined) as TemplateStatus['quoteOutcome'])}
+                  >
+                    <option value="">Presupuesto: —</option>
+                    <option value="ACCEPTED">Al aceptar presupuesto</option>
+                    <option value="REJECTED">Al rechazar presupuesto</option>
+                  </select>
                   <span className="flex gap-1">
                     <button type="button" aria-label="Subir" disabled={i === 0} onClick={() => onWorkOrder({ ...workOrder, statuses: move(workOrder.statuses, i, -1) })} className="rounded p-0.5 hover:bg-slate-800 disabled:opacity-30">
                       <ArrowUp className="h-3.5 w-3.5" />
@@ -232,7 +255,7 @@ export default function TemplateStructureEditor({
               + Agregar estado
             </button>
             <p className="mt-2 text-xs text-slate-500">
-              Un estado nuevo les llega a los negocios como novedad, en el lugar que ocupa acá.
+              Un estado nuevo les llega a los negocios como novedad, en el lugar que ocupa acá. &quot;Al aceptar / rechazar presupuesto&quot;: la orden pasa sola a ese estado cuando el cliente responde.
             </p>
           </>
         )}

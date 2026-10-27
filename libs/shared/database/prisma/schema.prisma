@@ -4882,6 +4882,9 @@ model WorkOrderStatus {
   isFinal          Boolean  @default(false)
   // Muestra "Avisar por WhatsApp" (Listo para retirar).
   notifiesCustomer Boolean  @default(false)
+  // La orden pasa sola acá cuando el cliente acepta o rechaza el
+  // presupuesto vinculado ('ACCEPTED' | 'REJECTED'). Uno por resultado.
+  quoteOutcome     String?
   active           Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

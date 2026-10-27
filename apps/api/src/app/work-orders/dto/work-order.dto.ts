@@ -15,6 +15,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+/** Estado al que pasa sola la orden cuando el cliente acepta o rechaza el
+ * presupuesto vinculado (WorkOrderStatus.quoteOutcome). */
+export const QUOTE_OUTCOMES = ['ACCEPTED', 'REJECTED'] as const;
+export type QuoteOutcome = (typeof QUOTE_OUTCOMES)[number];
+
 export class CreateWorkOrderDto {
   @IsUUID()
   customerId!: string;
@@ -101,6 +106,10 @@ export class WorkOrderStatusInputDto {
   @IsOptional()
   @IsBoolean()
   notifiesCustomer?: boolean;
+
+  @IsOptional()
+  @IsIn(QUOTE_OUTCOMES)
+  quoteOutcome?: QuoteOutcome;
 
   @IsOptional()
   @IsBoolean()

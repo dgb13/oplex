@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { getTenantDb, Prisma, PrismaService, withTenantContext, type BusinessTemplate } from '@plexo/database';
 import { assertVehicleFields, slugKey } from '../customer-assets/asset-fields.js';
 import type { TemplateAssetType } from '../customer-assets/customer-assets.service.js';
-import type { TemplateWorkOrder } from '../work-orders/work-orders.service.js';
+import { assertOneStatusPerQuoteOutcome, type TemplateWorkOrder } from '../work-orders/work-orders.service.js';
 import { BUSINESS_FAMILIES } from './business-modules.js';
 import type {
   BusinessTemplateConfigDto,
@@ -122,7 +122,12 @@ export function cleanAssetType(dto: TemplateAssetTypeDto): TemplateAssetType {
 
 export function cleanWorkOrder(dto: TemplateWorkOrderDto): TemplateWorkOrder {
   const statuses = dto.statuses
-    .map((s) => ({ name: s.name.trim(), ...(s.final ? { final: true } : {}), ...(s.notifiesCustomer ? { notifiesCustomer: true } : {}) }))
+    .map((s) => ({
+      name: s.name.trim(),
+      ...(s.final ? { final: true } : {}),
+      ...(s.notifiesCustomer ? { notifiesCustomer: true } : {}),
+      ...(s.quoteOutcome ? { quoteOutcome: s.quoteOutcome } : {}),
+    }))
     .filter((s) => s.name);
   if (statuses.length < 2) throw new BadRequestException('Las órdenes necesitan al menos dos estados');
   const names = statuses.map((s) => s.name.toLowerCase());
@@ -130,6 +135,7 @@ export function cleanWorkOrder(dto: TemplateWorkOrderDto): TemplateWorkOrder {
   if (repeatedStatus) throw new BadRequestException(`Hay dos estados "${repeatedStatus}"`);
   if (!statuses.some((s) => s.final)) throw new BadRequestException('Marcá al menos un estado que cierre la orden');
   if (statuses[0].final) throw new BadRequestException('El primer estado no puede cerrar la orden');
+  assertOneStatusPerQuoteOutcome(statuses);
   return { docName: dto.docName.trim(), statuses };
 }
 
