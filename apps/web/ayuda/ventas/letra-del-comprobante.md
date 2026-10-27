@@ -44,7 +44,7 @@ La **M** aparece en el selector, pero Oplex nunca la sugiere: es un régimen esp
 
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
-| **Cargá la condición frente al IVA de tu empresa en Contabilidad → Conexión con ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).** | Falta tu condición. | Cargala en [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
+| **Cargá la condición frente al IVA de tu empresa en Conexión con ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).** | Falta tu condición. | Cargala en [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
 | **No se conoce la condición IVA de este cliente (en su ficha, Editar empresa → "Actualizar desde ARCA") - se sugiere Factura B por defecto.** | El cliente tiene CUIT pero no condición. | Completala en su ficha con **Actualizar desde ARCA**. Desde el 1/12/2026 ARCA no acepta la factura sin ese dato. |
 | **Tu empresa es Monotributo: sólo puede emitir Factura C, no …** | Se intentó emitir una A o B siendo Monotributo. | Emití Factura C. |
 | **Tu empresa es Responsable Inscripto: no puede emitir Factura C (corresponde A o B)** | Se intentó emitir una C siendo Responsable Inscripto. | Emití A o B según el cliente. |

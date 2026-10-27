@@ -11,8 +11,8 @@ Cuando entrás por primera vez, el Tablero te muestra la tarjeta **Primeros paso
 
 | Tarea | Qué hacer | Dónde |
 |---|---|---|
-| **Cargá tu condición frente al IVA** | Decí si sos Monotributo, Responsable Inscripto o Exento: define si facturás A, B o C | **Contabilidad › Conexión con ARCA** |
-| **Conectá tu certificado de ARCA** | Subí el certificado para poder emitir facturas con CAE | **Contabilidad › Conexión con ARCA** |
+| **Cargá tu condición frente al IVA** | Decí si sos Monotributo, Responsable Inscripto o Exento: define si facturás A, B o C | **Conexión con ARCA** |
+| **Conectá tu certificado de ARCA** | Subí el certificado para poder emitir facturas con CAE | **Conexión con ARCA** |
 | **Agregá tu primera sucursal** | Cargá tu local, por ejemplo "Casa Central", con su punto de venta de ARCA | **Sucursales** |
 | **Cargá tu primer artículo** | Cargá un artículo o importá tu lista entera | **Inventario** |
 | **Emití tu primera factura** | Hacé una factura a un cliente | **Ventas › Facturación** |
@@ -27,7 +27,7 @@ Debajo de cada tarea pendiente está el link **Comenzar →**, que te lleva dire
 
 Para que tu primera factura salga bien, seguí este orden:
 
-1. **Cargá tus datos de empresa y conectá ARCA.** En **Contabilidad › Conexión con ARCA** cargás la razón social, el CUIT (30-71589632-1 en el ejemplo), la condición frente al IVA y el domicilio, y subís el certificado. Sin esto no se pueden emitir facturas electrónicas. Ver [Antes de empezar](/documentacion/arca/antes-de-empezar).
+1. **Cargá tus datos de empresa y conectá ARCA.** En **Conexión con ARCA** cargás la razón social, el CUIT (30-71589632-1 en el ejemplo), la condición frente al IVA y el domicilio, y subís el certificado. Sin esto no se pueden emitir facturas electrónicas. Ver [Antes de empezar](/documentacion/arca/antes-de-empezar).
 2. **Creá tu sucursal con el punto de venta.** En **Sucursales**, tocá **+ Nueva sucursal** y cargá "Casa Central" con el punto de venta 00003. Ver [Punto de venta](/documentacion/arca/punto-de-venta).
 3. **Poné tu logo y tus datos de contacto.** En **Preferencias › Tu empresa en los documentos**. Ver [Tu empresa en los documentos](/documentacion/primeros-pasos/tu-empresa-en-los-documentos).
 4. **Cargá tus artículos.** Uno por uno en **Inventario**, o todos juntos con **Importar artículos**. Ver [Importar datos](/documentacion/primeros-pasos/importar-datos).

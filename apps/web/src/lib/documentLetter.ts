@@ -37,7 +37,7 @@ export function suggestDocumentLetter(
       letter: null,
       locked: false,
       reason:
-        'Cargá la condición frente al IVA de tu empresa en Contabilidad → Conexión con ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).',
+        'Cargá la condición frente al IVA de tu empresa en Conexión con ARCA → Datos de la empresa: sin ella no se puede saber qué factura corresponde (A, B o C).',
     };
   }
 

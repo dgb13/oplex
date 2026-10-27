@@ -130,7 +130,7 @@ export default function DocumentBrandingCard({ settings }: { settings: TenantSet
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">Tu empresa en los documentos</h2>
           <p className="text-xs text-muted-foreground">
             Lo que ve tu cliente en el PDF de las cotizaciones y las facturas. Razón social, CUIT, condición frente al IVA, domicilio e
-            Ingresos Brutos se cargan en Contabilidad → Conexión con ARCA → Datos de la empresa.
+            Ingresos Brutos se cargan en Conexión con ARCA → Datos de la empresa.
           </p>
         </div>
 

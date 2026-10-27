@@ -28,7 +28,7 @@ Estos avisos aparecen sin consultar a ARCA, para que no pierdas tiempo con una f
 | **ARCA sin conectar** y **No podés emitir facturas todavía: falta el certificado de ARCA de tu empresa.** | No hay certificado cargado. | El Dueño o un Administrador tiene que hacer la [Conexión con ARCA](/documentacion/arca/antes-de-empezar). |
 | **No podés emitir facturas todavía: el certificado de ARCA venció el …** | Venció el certificado. | [Renovar el certificado](/documentacion/arca/renovar-certificado). |
 | **ARCA WSAA rechazó la solicitud: [ns1:cms.cert.untrusted] Certificado no emitido por AC de confianza** | El certificado cargado no lo emitió ARCA para ese ambiente: es de homologación (pruebas) y estás en producción, o al revés, o no es un certificado de ARCA. | Revisá el **Ambiente** del certificado en [Subir el certificado y probar la conexión](/documentacion/arca/subir-y-probar) y sacá el del ambiente correcto ([producción](/documentacion/arca/certificado-produccion)). |
-| **Antes de emitir, cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa** | Tu empresa no tiene condición frente al IVA. | [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
+| **Antes de emitir, cargá tu condición frente al IVA en Conexión con ARCA → Datos de la empresa** | Tu empresa no tiene condición frente al IVA. | [Datos de la empresa](/documentacion/arca/datos-de-la-empresa). |
 | **Falta la condición frente al IVA del cliente "…": ARCA la exige para facturar a un CUIT.** | El cliente tiene CUIT pero no condición frente al IVA. Desde la RG 5616 es obligatoria. | Abrí el cliente en **Ventas › Clientes**, tocá **Editar empresa** y **Actualizar desde ARCA**, o cargala a mano. |
 | **Tu empresa es Monotributo: sólo puede emitir Factura C, no …** | Se eligió una letra que no te corresponde. | Elegí C. Ver [La letra del comprobante](/documentacion/ventas/letra-del-comprobante). |
 | **Tu empresa es Responsable Inscripto: no puede emitir Factura C (corresponde A o B)** | Ídem. | Elegí A (cliente Responsable Inscripto) o B (el resto). |
@@ -55,7 +55,7 @@ Estos avisos aparecen sin consultar a ARCA, para que no pierdas tiempo con una f
 | **No se pudo conectar con ARCA WSFE: …** | Los servidores de ARCA no responden. | Esperá unos minutos y volvé a emitir. Pasa en días de vencimientos o cortes de ARCA. |
 | **ARCA WSAA rechazó la solicitud: …** con "Computador no autorizado" o "notAuthorized" | El certificado no está autorizado a facturar. | Hacé el paso 3.2 de [Certificado de producción](/documentacion/arca/certificado-produccion#3-2-autorizarlo-a-facturar). |
 | **ARCA ya entregó un ticket de acceso vigente para este certificado que Oplex no tiene guardado. …** | El mismo certificado se usó desde otro sistema. | Esperá unas horas (máximo 12) y volvé a intentar. |
-| **No se puede numerar el comprobante: ARCA informa como último autorizado el … pero Oplex ya tiene registrado el …** | Mezcla de ambientes (homologación y producción) en el mismo punto de venta. | Revisá el ambiente del certificado en **Contabilidad › Conexión con ARCA**. Consultá con soporte. |
+| **No se puede numerar el comprobante: ARCA informa como último autorizado el … pero Oplex ya tiene registrado el …** | Mezcla de ambientes (homologación y producción) en el mismo punto de venta. | Revisá el ambiente del certificado en **Conexión con ARCA**. Consultá con soporte. |
 
 La lista completa de mensajes está en [Errores frecuentes con ARCA](/documentacion/arca/errores-arca).
 

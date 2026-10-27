@@ -9,7 +9,7 @@ Cada artículo tiene un **precio de venta**, una **alícuota de IVA** y un **cos
 
 ## Antes de empezar
 
-- Cargá tu condición frente al IVA en **Contabilidad › Conexión con ARCA** (datos de la empresa). Sin ese dato, Oplex no sabe si el precio que escribís es neto o final, ni si tiene que sacarle o sumarle el IVA al costo. Mientras falte, vas a ver el aviso **Falta tu condición frente al IVA.** Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
+- Cargá tu condición frente al IVA en **Conexión con ARCA** (datos de la empresa). Sin ese dato, Oplex no sabe si el precio que escribís es neto o final, ni si tiene que sacarle o sumarle el IVA al costo. Mientras falte, vas a ver el aviso **Falta tu condición frente al IVA.** Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
 - Si querés una remarca general para todos los artículos, configurala en **Preferencias › Precios de Inventario** (menú de tu usuario, arriba a la derecha). Ver [Preferencias](/documentacion/cuenta/preferencias).
 
 ## Precio con IVA o sin IVA
@@ -83,7 +83,7 @@ Debajo del campo vas a ver cómo queda. Por ejemplo, si Los Andes escribe $100.0
 
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
-| Falta tu condición frente al IVA. | La empresa no tiene cargada su condición. | Cargala en **Contabilidad › Conexión con ARCA** › Datos de la empresa. Mientras tanto los costos se guardan tal cual los escribís. |
+| Falta tu condición frente al IVA. | La empresa no tiene cargada su condición. | Cargala en **Conexión con ARCA** › Datos de la empresa. Mientras tanto los costos se guardan tal cual los escribís. |
 | Ingresá un precio de venta válido | El precio está vacío o en cero. | Escribí un precio mayor a 0. |
 | No aparece el precio sugerido | El artículo todavía no tiene costo, o no hay remarca cargada. | Registrá una compra o cargá un **% remarca**. |
 | No se pudo asignar. Probá de nuevo. | Falló la asignación de IVA en lote. | Volvé a tocar **Asignar a los N**. Si sigue, asignalo desde la ficha de cada artículo. |

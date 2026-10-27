@@ -7,7 +7,7 @@ roles: Dueño, Administrador
 
 Para que Oplex emita facturas electrónicas con CAE, ARCA (la ex AFIP) tiene que saber que Oplex factura en nombre de tu empresa. Eso se logra con un **certificado digital**: un archivo que ARCA te da a vos, que vos autorizás para facturar y que después cargás en Oplex. Se hace una sola vez (y se renueva cuando vence). Este capítulo te lleva de la mano, pantalla por pantalla, aunque nunca hayas hecho algo así.
 
-Todo se hace en **Contabilidad › Conexión con ARCA**. Sólo lo ven el **Dueño** y los **Administradores** de la empresa.
+Todo se hace en **Conexión con ARCA**. Sólo lo ven el **Dueño** y los **Administradores** de la empresa.
 
 ## Antes de empezar
 

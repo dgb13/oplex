@@ -14,6 +14,7 @@ import MembershipSessionBanner from './MembershipSessionBanner';
 import TrialBanner from './TrialBanner';
 import { UserAvatar } from './UserAvatar';
 import { MERCADOPAGO_NEEDS_RECONNECT, mercadoPagoApi } from '@/lib/mercadopago';
+import { arcaMenuBadge, tenantSettingsApi } from '@/lib/tenantSettings';
 import { disconnectSocket, getSocket } from '@/lib/socket';
 import { subscriptionsApi } from '@/lib/subscriptions';
 import { businessProfileApi, isModuleEnabled } from '@/lib/businessModules';
@@ -33,6 +34,7 @@ import {
   ChevronDown,
   ClipboardList,
   Factory,
+  Landmark,
   LayoutDashboard,
   PanelLeft,
   Package,
@@ -127,9 +129,11 @@ const NAV_ENTRIES: NavEntry[] = [
         label: 'Reportes',
         module: ['reports-sales', 'reports-purchases', 'reports-pnl', 'reports-financial'],
       },
-      { href: '/accounting/arca', label: 'Conexión con ARCA', roles: [] },
     ],
   },
+  // Sección propia, como Mercado Pago: sin el certificado no se factura y
+  // dentro de Contabilidad no se encontraba. Sólo Dueño/Admin (como la API).
+  { kind: 'link', href: '/arca', label: 'ARCA', icon: Landmark, roles: [] },
   // Sección propia (plan-seccion-mercadopago.md): conexión, movimientos y
   // configuración. Dueño/Admin todo; el Contador ve los movimientos.
   { kind: 'link', href: '/mercadopago', label: 'Mercado Pago', icon: Wallet, roles: ['ACCOUNTANT'] },
@@ -301,6 +305,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         ? null
         : 'Conectar';
 
+  // Lo mismo para ARCA: sin certificado no se factura, y el vencimiento no
+  // se avisaba en ningún lado. Mismo queryKey que la pantalla de ARCA.
+  const { data: tenantSettings } = useQuery({
+    queryKey: ['tenant-settings'],
+    queryFn: tenantSettingsApi.get,
+    enabled: canManageMercadoPago,
+  });
+  const arcaBadge = arcaMenuBadge(tenantSettings);
+
   useEffect(() => {
     if (profile?.mustChangePassword && pathname !== '/profile') {
       router.replace('/profile');
@@ -408,6 +421,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       {mercadoPagoBadge}
+                    </span>
+                  )}
+                  {entry.href === '/arca' && arcaBadge && (
+                    <span
+                      className={`ml-auto whitespace-nowrap rounded-full bg-orange-700 px-1.5 py-0.5 text-[10px] font-bold text-white ${
+                        sidebarCollapsed ? 'md:hidden' : ''
+                      }`}
+                    >
+                      {arcaBadge}
                     </span>
                   )}
                 </Link>

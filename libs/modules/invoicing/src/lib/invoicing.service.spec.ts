@@ -2226,7 +2226,7 @@ describe('InvoicingService.createInvoice - Factura C sin IVA', () => {
 
     await expect(
       runInTenant(db, () => makeService(electronicInvoicing).createInvoice({ ...baseDto, documentLetter: 'B' })),
-    ).rejects.toThrow(/Contabilidad → Conexión con ARCA/);
+    ).rejects.toThrow(/Conexión con ARCA/);
     expect(electronicInvoicing.lastAuthorizedNumber).not.toHaveBeenCalled();
     expect(db.invoice.create).not.toHaveBeenCalled();
   });

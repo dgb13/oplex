@@ -159,6 +159,23 @@ export interface ArcaCheckResult {
   checkedAt: string;
 }
 
+const CERT_WARNING_DAYS = 30;
+
+/** Etiqueta de "Conexión con ARCA" en el menú: falta el certificado, vence en
+ * menos de 30 días o ya venció. null = está todo bien (o todavía no cargó). */
+export function arcaMenuBadge(
+  settings: Pick<TenantSettings, 'afipConfigured' | 'afipCertExpiresAt'> | undefined,
+  now: Date = new Date(),
+): 'Conectar' | 'Vence pronto' | 'Vencido' | null {
+  if (!settings) return null;
+  if (!settings.afipConfigured) return 'Conectar';
+  if (!settings.afipCertExpiresAt) return null;
+  const msLeft = new Date(settings.afipCertExpiresAt).getTime() - now.getTime();
+  if (msLeft <= 0) return 'Vencido';
+  if (msLeft < CERT_WARNING_DAYS * 86_400_000) return 'Vence pronto';
+  return null;
+}
+
 export const afipCertificateApi = {
   // keyPem opcional: sin ella se usa la clave que generó Oplex (paso 2).
   // env opcional: se deduce del certificado.

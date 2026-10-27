@@ -66,9 +66,9 @@ export default function OnboardingChecklist() {
           {
             label: 'Cargá tu condición frente al IVA',
             done: Boolean(settings.ownTaxCondition),
-            href: '/accounting/arca',
+            href: '/arca',
           },
-          { label: 'Conectá tu certificado de ARCA', done: settings.afipConfigured, href: '/accounting/arca' },
+          { label: 'Conectá tu certificado de ARCA', done: settings.afipConfigured, href: '/arca' },
           {
             label: 'Agregá tu primera sucursal',
             done: companies.some((c) => c.roles.some((r) => r.role === 'BRANCH')),

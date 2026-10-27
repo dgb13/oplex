@@ -213,11 +213,11 @@ export default function NewInvoiceModal({
       return;
     }
     if (missingTaxCondition) {
-      setError('Cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa antes de emitir.');
+      setError('Cargá tu condición frente al IVA en Conexión con ARCA → Datos de la empresa antes de emitir.');
       return;
     }
     if (!afipConfigured) {
-      setError('Configurá el certificado ARCA en Contabilidad → Conexión con ARCA antes de emitir.');
+      setError('Cargá el certificado en Conexión con ARCA antes de emitir.');
       return;
     }
     // Si falta stock, se avisa y se deja seguir: lo que falta queda
@@ -377,8 +377,8 @@ export default function NewInvoiceModal({
               {missingTaxCondition && (
                 <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   Antes de emitir, cargá tu condición frente al IVA en{' '}
-                  <Link href="/accounting/arca" className="font-medium underline">
-                    Contabilidad → Conexión con ARCA → Datos de la empresa
+                  <Link href="/arca" className="font-medium underline">
+                    Conexión con ARCA → Datos de la empresa
                   </Link>
                   : sin ella no se puede saber si corresponde Factura A, B o C.
                 </p>
@@ -396,7 +396,7 @@ export default function NewInvoiceModal({
                 size="lg"
                 className="w-full"
                 disabled={mutation.isPending || checkingStock || !ready || missingWarehouse || !afipConfigured || missingTaxCondition}
-                title={!afipConfigured ? 'Configurá el certificado ARCA en Contabilidad → Conexión con ARCA primero' : undefined}
+                title={!afipConfigured ? 'Cargá el certificado en Conexión con ARCA primero' : undefined}
               >
                 {mutation.isPending ? 'Emitiendo...' : checkingStock ? 'Revisando stock...' : 'Emitir factura'}
               </Button>

@@ -29,7 +29,7 @@ export default function TaxConditionGate({ children }: { children: React.ReactNo
           sola vez y tarda un minuto.
         </p>
         <Link
-          href="/accounting/arca"
+          href="/arca"
           className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
         >
           Cargarla ahora

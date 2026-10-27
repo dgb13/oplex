@@ -12,7 +12,7 @@ Este es el paso central: entrás al sitio de ARCA con tu clave fiscal, le das el
 - **Clave fiscal nivel 3 o superior** del titular. En una sociedad, la de quien administra sus relaciones en ARCA.
 - El archivo del pedido, por ejemplo `ferreterialosandes.csr`, que descargaste en el [paso 2](/documentacion/arca/clave-y-pedido-csr).
 - El nombre del certificado (alias) que elegiste en el paso 2, por ejemplo `ferreterialosandes`.
-- Dejá Oplex abierto en otra pestaña, en **Contabilidad › Conexión con ARCA**, paso 3 **Obtener el certificado en ARCA**, con la opción **Producción (facturas reales)** elegida (es la que viene marcada). Ahí ves los mismos pasos con tu alias y un botón **Copiar**.
+- Dejá Oplex abierto en otra pestaña, en **Conexión con ARCA**, paso 3 **Obtener el certificado en ARCA**, con la opción **Producción (facturas reales)** elegida (es la que viene marcada). Ahí ves los mismos pasos con tu alias y un botón **Copiar**.
 
 ![Paso 3 de Oplex con la opción Producción elegida](/ayuda/capturas/arca-paso3-produccion.jpg)
 

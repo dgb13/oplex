@@ -8,7 +8,7 @@ roles: Todos
 **El recorrido de Oplex, en orden:**
 
 1. **Cuenta**: creala con **Empezá gratis** (15 días de prueba) e invitá a tu equipo.
-2. **ARCA**: en **Contabilidad › Conexión con ARCA**, datos de la empresa, clave y pedido, certificado, autorización a Facturación Electrónica, subir y probar.
+2. **ARCA**: en **Conexión con ARCA**, datos de la empresa, clave y pedido, certificado, autorización a Facturación Electrónica, subir y probar.
 3. **Sucursal y punto de venta**: uno de Web Services, cargado en **Sucursales**.
 4. **Artículos y clientes**: en **Inventario** y **Ventas › Clientes** (con su condición frente al IVA).
 5. **Primera factura, cobro y caja**: **+ Nueva factura**, **Emitir factura**, registrar el cobro; en el local, **Caja**.

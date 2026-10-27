@@ -86,8 +86,8 @@ export function MissingTaxConditionBanner() {
   return (
     <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
       <b>Falta tu condición frente al IVA.</b> Cargala en{' '}
-      <Link href="/accounting/arca" className="underline">
-        Contabilidad → Conexión con ARCA → Datos de la empresa
+      <Link href="/arca" className="underline">
+        Conexión con ARCA → Datos de la empresa
       </Link>{' '}
       para que Oplex calcule bien costos y ganancias. Mientras tanto, los costos se guardan tal cual los escribís.
     </div>

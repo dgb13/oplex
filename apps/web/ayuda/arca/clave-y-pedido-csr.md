@@ -13,7 +13,7 @@ Para que ARCA te dé un certificado, primero hay que pedírselo con un archivo e
 
 ## Pasos
 
-1. **Abrí el paso 2.** En **Contabilidad › Conexión con ARCA**, tocá **Clave privada y pedido de certificado**.
+1. **Abrí el paso 2.** En **Conexión con ARCA**, tocá **Clave privada y pedido de certificado**.
 2. **Dejá elegida la opción Generarlos con Oplex** (tiene la etiqueta **recomendado**). La clave privada queda guardada cifrada en Oplex y nunca sale de acá; vos sólo descargás el pedido.
 3. **Revisá el nombre del certificado.** En **Nombre del certificado (el alias que vas a usar en ARCA)** Oplex te sugiere uno armado con el nombre de tu empresa, por ejemplo `ferreterialosandes`. Podés cambiarlo: sólo acepta letras y números, sin espacios ni acentos. Anotalo: lo vas a escribir en ARCA.
 4. **Tocá Generar clave y pedido.** Mientras trabaja dice **Generando...**. Al terminar aparecen dos botones nuevos y la casilla **Clave y pedido (CSR)** de arriba pasa a **Generados**.

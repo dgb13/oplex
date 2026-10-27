@@ -19,7 +19,7 @@ Entrá a Oplex, tocá **Empezá gratis** y creá tu cuenta con tu email (te lleg
 
 ## 2. Conectar con ARCA
 
-Lo más importante para facturar. En **Contabilidad › Conexión con ARCA**, en unos 15-20 minutos y con clave fiscal nivel 3:
+Lo más importante para facturar. En **Conexión con ARCA**, en unos 15-20 minutos y con clave fiscal nivel 3:
 
 - [ ] Datos de la empresa (subí tu constancia) · [ver](/documentacion/arca/datos-de-la-empresa)
 - [ ] Clave y pedido (CSR) con Oplex · [ver](/documentacion/arca/clave-y-pedido-csr)

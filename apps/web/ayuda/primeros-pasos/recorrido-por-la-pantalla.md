@@ -22,7 +22,9 @@ Ahí están todos los módulos. Cada persona ve sólo los que su rol le permite 
 - **Ventas**: Facturación, Cotizaciones, Pendientes de entrega, Cuentas a Cobrar, Clientes, Tienda online y Pedidos de la tienda.
 - **Compras**: Compras, Cuentas a Pagar y Proveedores.
 - **Producción**: aparece sólo si tu plan la incluye.
-- **Contabilidad**: Contabilidad, Impuestos, Cartera de Cheques, Reportes y Conexión con ARCA.
+- **Contabilidad**: Contabilidad, Impuestos, Cartera de Cheques y Reportes.
+- **ARCA**: abre **Conexión con ARCA**, con el certificado para facturar con CAE (sólo Dueño y Administradores). Al lado aparece **Conectar** si todavía no lo cargaste, **Vence pronto** cuando le quedan menos de 30 días y **Vencido** cuando ya no sirve. Ver [Conectar ARCA](/documentacion/arca).
+- **Mercado Pago**: la conexión con tu cuenta, los movimientos y los cobros. Al lado aparece **Conectar** si todavía no la conectaste.
 - **Empresas**: todas las empresas que cargaste (clientes, proveedores y sucursales) en una sola lista.
 - **Sucursales**: tus locales, cada uno con su punto de venta de ARCA.
 - **Contadores**: para trabajar con tu estudio contable.

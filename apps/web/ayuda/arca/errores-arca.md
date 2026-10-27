@@ -12,7 +12,7 @@ Esta página junta en un solo lugar los mensajes que puede mostrar Oplex sobre A
 
 ## Dónde mirar primero
 
-En **Contabilidad › Conexión con ARCA**, la tarjeta de estado de arriba te dice qué paso falta:
+En **Conexión con ARCA**, la tarjeta de estado de arriba te dice qué paso falta:
 
 | Casilla | Lo que dice | Qué significa |
 |---|---|---|
@@ -61,7 +61,7 @@ En **Contabilidad › Conexión con ARCA**, la tarjeta de estado de arriba te di
 |---|---|---|
 | **ARCA sin conectar** y **No podés emitir facturas todavía: falta el certificado de ARCA de tu empresa.** | No hay certificado cargado. | Tocá **Ir a Conexión con ARCA →** y completá los pasos. |
 | **No podés emitir facturas todavía: el certificado de ARCA venció el ….** | Venció el certificado. | [Renovalo](/documentacion/arca/renovar-certificado). |
-| **Antes de emitir, cargá tu condición frente al IVA en Contabilidad → Conexión con ARCA → Datos de la empresa** | Falta la condición de tu empresa. | Completá el [paso 1](/documentacion/arca/datos-de-la-empresa). |
+| **Antes de emitir, cargá tu condición frente al IVA en Conexión con ARCA → Datos de la empresa** | Falta la condición de tu empresa. | Completá el [paso 1](/documentacion/arca/datos-de-la-empresa). |
 | **Falta la condición frente al IVA del cliente "…": ARCA la exige para facturar a un CUIT.** | El cliente tiene CUIT pero no condición frente al IVA. ARCA la pide obligatoriamente. | Abrí el cliente, tocá **Editar empresa** y luego **Actualizar desde ARCA**, o cargá la condición a mano. Ver [Clientes](/documentacion/ventas/clientes). |
 | **Tu empresa es Monotributo: sólo puede emitir Factura C, no …** / **Tu empresa es Responsable Inscripto: no puede emitir Factura C (corresponde A o B)** | La letra no corresponde a tu condición. | Revisá tu condición en el paso 1. Ver [La letra del comprobante](/documentacion/ventas/letra-del-comprobante). |
 | **No se puede numerar el comprobante: ARCA informa como último autorizado el … en el punto de venta …, pero Oplex ya tiene registrado el …. Revisá que el certificado ARCA sea del ambiente correcto (homologación o producción).** | Oplex tiene facturas con ese número que ARCA no conoce: típico al pasar de homologación a producción usando el mismo punto de venta, o con datos cargados antes de conectar ARCA. | Revisá el ambiente del certificado. Si recién pasaste a producción, consultá con soporte antes de seguir. |

@@ -13,7 +13,7 @@ Lo que ve tu cliente en el PDF de una cotización o de una factura sale de esta 
 - Tu logo en **PNG o JPG**, de hasta **2 MB**. Si es cuadrado o casi cuadrado, se ve mejor.
 
 > [!NOTA]
-> La **razón social**, el **CUIT**, la **condición frente al IVA**, el **domicilio** e **Ingresos Brutos** no se cargan acá: van en **Contabilidad › Conexión con ARCA › Datos de la empresa**, porque son los mismos que conoce ARCA. Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
+> La **razón social**, el **CUIT**, la **condición frente al IVA**, el **domicilio** e **Ingresos Brutos** no se cargan acá: van en **Conexión con ARCA › Datos de la empresa**, porque son los mismos que conoce ARCA. Ver [Datos de la empresa](/documentacion/arca/datos-de-la-empresa).
 
 ## Pasos
 

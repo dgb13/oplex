@@ -81,7 +81,7 @@ export function assertDocumentLetterAllowed(
 ): void {
   if (!ownTaxCondition) {
     throw new BadRequestException(
-      'Cargá la condición frente al IVA de tu empresa en Contabilidad → Conexión con ARCA antes de facturar',
+      'Cargá la condición frente al IVA de tu empresa en Conexión con ARCA antes de facturar',
     );
   }
   const noVatIssuer = ownTaxCondition === 'MONOTRIBUTO' || ownTaxCondition === 'EXENTO';

@@ -62,7 +62,7 @@ function downloadText(text: string, filename: string) {
 }
 
 /**
- * Contabilidad → "Conexión con ARCA": todo lo necesario para emitir con CAE
+ * "Conexión con ARCA": todo lo necesario para emitir con CAE
  * como un asistente de 4 pasos con un resumen de estado arriba (ver el
  * mockup aprobado el 2026-09-26). Reemplaza la tarjeta "Certificado ARCA"
  * vieja (inputs de archivo nativos casi invisibles, guía escondida en un
