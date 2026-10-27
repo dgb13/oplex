@@ -35,6 +35,7 @@ La orden de trabajo sigue cada trabajo de punta a punta: qué pidió el cliente,
 
 - **Estados.** Arriba ves todos los pasos, con el actual marcado. **Pasar a "…"** avanza al siguiente; también podés tocar cualquier paso para ir directo. Cada cambio queda en el historial de abajo, con quién y cuándo. Ver [Estados y aviso al cliente](/documentacion/rubros/estados-y-aviso).
 - **Comprobante de ingreso.** Imprime una hoja con el cliente, el vehículo o equipo, el trabajo pedido, cómo ingresó y lugar para las firmas. No es una factura.
+- **Hoja de trabajo.** Imprime una hoja A4 para quien hace el trabajo, para dejar en el vehículo o el equipo (por ejemplo en el parabrisas). Lleva bien grande el número de orden y el dato principal (la patente, el IMEI), qué hay que hacer, cómo vino, para cuándo está prometido y el responsable. Abajo tiene renglones para completar a mano el trabajo realizado, los repuestos usados, las horas, la fecha en que terminó y lo que conviene avisarle al cliente. No lleva precios ni el teléfono del cliente.
 - **El trabajo.** Podés corregir **Qué hay que hacer** y **Cómo vino**, cambiar el **Responsable** y **Prometido para**, y con **+ Agendar turno en la Agenda** reservar día y hora.
 - **Presupuesto y factura.** Tocá **Armar presupuesto**: se abre la cotización con el cliente y el trabajo ya cargados. Sumá los repuestos y la mano de obra; los servicios que se cobran por hora se cargan con la cantidad de horas. Con **Ver presupuesto** lo mandás por WhatsApp o email.
 

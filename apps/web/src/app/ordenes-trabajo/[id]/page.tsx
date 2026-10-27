@@ -15,7 +15,7 @@ import { formatMoney } from '@/lib/vatCost';
 import { formatDate, workOrdersApi } from '@/lib/workOrders';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, FileText, Printer } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -153,6 +153,16 @@ export default function WorkOrderPage() {
             <a href={`/comprobante-ingreso/${order.id}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'outline' })}>
               <Printer className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Comprobante de ingreso
+            </a>
+            <a
+              href={`/hoja-trabajo/${order.id}`}
+              target="_blank"
+              rel="noopener"
+              className={buttonVariants({ variant: 'outline' })}
+              title="Para quien hace el trabajo: sin precios, para dejar en el vehículo o el equipo"
+            >
+              <FileText className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Hoja de trabajo
             </a>
           </div>
         </div>
