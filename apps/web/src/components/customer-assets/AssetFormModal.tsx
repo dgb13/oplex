@@ -1,6 +1,9 @@
 'use client';
 
+import CompanyFormModal from '@/components/CompanyFormModal';
 import CustomerPicker from '@/components/sales/CustomerPicker';
+import { LinkButton } from '@/components/sales/SalesDocumentSheet';
+import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
@@ -53,6 +56,8 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
   const [draft, setDraft] = useState<Draft>(() => toDraft(type, asset?.values));
   const [duplicates, setDuplicates] = useState<CustomerAsset[] | null>(null);
   const [error, setError] = useState('');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const perms = useCompanyPermissions();
 
   const customersQuery = useQuery({
     queryKey: ['companies', 'CUSTOMER'],
@@ -149,7 +154,12 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
 
         {!asset && !companyId && (
           <div className="mb-4 flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Cliente dueño</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">Cliente dueño</span>
+              {perms.can('CUSTOMER') && (
+                <LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>
+              )}
+            </div>
             <CustomerPicker customers={customersQuery.data ?? []} value={ownerId} onChange={setOwnerId} />
           </div>
         )}
@@ -230,6 +240,13 @@ export default function AssetFormModal({ types, asset, companyId, onClose, onSav
           </Button>
         </div>
       </form>
+      {creatingCustomer && (
+        <CompanyFormModal
+          lockedRole="CUSTOMER"
+          onClose={() => setCreatingCustomer(false)}
+          onSaved={(c) => setOwnerId(c.id)}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 'use client';
 
+import CompanyFormModal from '@/components/CompanyFormModal';
 import AssetFormModal from '@/components/customer-assets/AssetFormModal';
 import CustomerPicker from '@/components/sales/CustomerPicker';
+import { LinkButton } from '@/components/sales/SalesDocumentSheet';
+import { useCompanyPermissions } from '@/components/useCompanyPermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Select from '@/components/ui/Select';
@@ -35,6 +38,8 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
   const [assignedUserId, setAssignedUserId] = useState('');
   const [promisedAt, setPromisedAt] = useState('');
   const [creatingAsset, setCreatingAsset] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const perms = useCompanyPermissions();
   const [error, setError] = useState('');
 
   const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
@@ -110,7 +115,12 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
 
         {!defaultCustomerId && (
           <div className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Cliente</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">Cliente</span>
+              {perms.can('CUSTOMER') && (
+                <LinkButton onClick={() => setCreatingCustomer(true)}>+ Nuevo cliente</LinkButton>
+              )}
+            </div>
             <CustomerPicker
               customers={customersQuery.data ?? []}
               value={customerId}
@@ -233,6 +243,17 @@ export default function NewWorkOrderModal({ docName, defaultCustomerId, defaultA
           onSaved={(saved) => {
             void queryClient.invalidateQueries({ queryKey: ['customer-assets', 'company', customerId] });
             setAssetId(saved.id);
+          }}
+        />
+      )}
+      {creatingCustomer && (
+        <CompanyFormModal
+          lockedRole="CUSTOMER"
+          onClose={() => setCreatingCustomer(false)}
+          onSaved={(c) => {
+            setCustomerId(c.id);
+            setAssetId('');
+            setIntakeValues({});
           }}
         />
       )}
