@@ -11,6 +11,8 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   DATE: 'fecha',
   SELECT: 'lista',
   BOOLEAN: 'sí / no',
+  VEHICLE_BRAND: 'lista de marcas',
+  VEHICLE_MODEL: 'modelos según la marca',
 };
 
 function describe(item: TemplateUpdateItem): { title: string; detail: string } {
@@ -25,6 +27,16 @@ function describe(item: TemplateUpdateItem): { title: string; detail: string } {
         detail: `${item.field.label} (${FIELD_TYPE_LABELS[item.field.type] ?? item.field.type}${
           item.field.options?.length ? `: ${item.field.options.join(', ')}` : ''
         })`,
+      };
+    case 'fieldType':
+      return {
+        title: `Campo de ${item.typeName} que pasa a una lista`,
+        detail:
+          item.type === 'VEHICLE_BRAND'
+            ? `${item.label}: se elige de la lista de marcas de ${item.vehicleKind === 'MOTO' ? 'motos' : 'autos'} (o se escribe a mano si no está)`
+            : item.type === 'VEHICLE_MODEL'
+              ? `${item.label}: se elige de los modelos de la marca (o se escribe a mano si no está)`
+              : `${item.label} (${FIELD_TYPE_LABELS[item.type] ?? item.type})`,
       };
     case 'status':
       return {

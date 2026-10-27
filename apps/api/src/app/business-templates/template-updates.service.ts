@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { getTenantDb, getTenantId, Prisma, PrismaService } from '@plexo/database';
-import { readFields, type AssetFieldDef } from '../customer-assets/asset-fields.js';
+import {
+  assertVehicleFields,
+  canChangeFieldType,
+  readFields,
+  type AssetFieldDef,
+  type AssetFieldType,
+  type VehicleKind,
+} from '../customer-assets/asset-fields.js';
 import { BUSINESS_MODULE_KEYS } from './business-modules.js';
 import { readConfig, type BusinessTemplateConfig } from './business-templates.service.js';
 
@@ -8,6 +15,10 @@ export type TemplateUpdateItem =
   | { id: string; kind: 'module'; key: string }
   | { id: string; kind: 'category'; name: string }
   | { id: string; kind: 'assetField'; typeName: string; field: AssetFieldDef }
+  // Un campo que el negocio ya tiene pasa a elegirse de una lista (Marca y
+  // Modelo de la lista de vehículos). Sólo entre tipos de texto: lo cargado
+  // sigue valiendo.
+  | { id: string; kind: 'fieldType'; typeName: string; key: string; label: string; type: AssetFieldType; vehicleKind?: VehicleKind }
   | { id: string; kind: 'status'; name: string; after: string | null; final: boolean; notifiesCustomer: boolean };
 
 export interface TemplateUpdates {
@@ -77,17 +88,39 @@ export class TemplateUpdatesService {
     }
 
     if (now.assetType) {
-      const beforeKeys = new Set(readFields(before.assetType?.fields).map((f) => f.key));
-      const newFields = readFields(now.assetType.fields).filter((f) => !beforeKeys.has(f.key) && !f.isIdentifier);
-      if (newFields.length > 0) {
+      const beforeFields = readFields(before.assetType?.fields);
+      const beforeKeys = new Set(beforeFields.map((f) => f.key));
+      const nowFields = readFields(now.assetType.fields);
+      const newFields = nowFields.filter((f) => !beforeKeys.has(f.key) && !f.isIdentifier);
+      const retyped = nowFields.filter((f) => {
+        const prev = beforeFields.find((b) => b.key === f.key);
+        return prev && prev.type !== f.type && !f.isIdentifier && canChangeFieldType(prev.type, f.type);
+      });
+      if (newFields.length > 0 || retyped.length > 0) {
         const type = await db.customerAssetType.findFirst({ where: { name: now.assetType.name, active: true } });
-        const have = new Set(readFields(type?.fields).map((f) => f.key));
+        const tenantFields = readFields(type?.fields);
+        const have = new Set(tenantFields.map((f) => f.key));
         // Sin ficha todavía: se crea entera al prender Fichas, no hace falta ofrecer campos.
         if (type) {
           for (const field of newFields) {
             if (have.has(field.key)) continue;
             have.add(field.key);
             items.push({ id: `assetField:${field.key}`, kind: 'assetField', typeName: now.assetType.name, field });
+          }
+          for (const field of retyped) {
+            const prevType = beforeFields.find((b) => b.key === field.key)?.type;
+            const mine = tenantFields.find((f) => f.key === field.key);
+            // Sólo si el negocio no le cambió el tipo por su cuenta.
+            if (!mine || mine.hidden || mine.type !== prevType) continue;
+            items.push({
+              id: `fieldType:${field.key}`,
+              kind: 'fieldType',
+              typeName: now.assetType.name,
+              key: field.key,
+              label: mine.label,
+              type: field.type,
+              ...(field.vehicleKind ? { vehicleKind: field.vehicleKind } : {}),
+            });
           }
         }
       }
@@ -129,20 +162,32 @@ export class TemplateUpdatesService {
     const modules = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'module' }> => i.kind === 'module').map((i) => i.key);
     const categories = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'category' }> => i.kind === 'category');
     const fields = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'assetField' }> => i.kind === 'assetField');
+    const retyped = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'fieldType' }> => i.kind === 'fieldType');
     const statuses = chosen.filter((i): i is Extract<TemplateUpdateItem, { kind: 'status' }> => i.kind === 'status');
 
     await db.$transaction(async (tx) => {
       if (categories.length > 0) {
         await tx.category.createMany({ data: categories.map((c) => ({ tenantId, name: c.name })) });
       }
-      if (fields.length > 0) {
-        const type = await tx.customerAssetType.findFirst({ where: { name: fields[0].typeName, active: true } });
+      if (fields.length > 0 || retyped.length > 0) {
+        const typeName = fields[0]?.typeName ?? retyped[0].typeName;
+        const type = await tx.customerAssetType.findFirst({ where: { name: typeName, active: true } });
         if (type) {
-          const current = readFields(type.fields);
+          const current = readFields(type.fields).map((f) => {
+            const change = retyped.find((r) => r.key === f.key);
+            if (!change) return f;
+            const next: AssetFieldDef = { ...f, type: change.type };
+            delete next.vehicleKind;
+            if (change.vehicleKind) next.vehicleKind = change.vehicleKind;
+            return next;
+          });
           const added = fields.map((f) => f.field).filter((f) => !current.some((c) => c.key === f.key));
+          const next = [...current, ...added];
+          // Ej.: Modelo según la marca sin elegir también Marca.
+          assertVehicleFields(next);
           await tx.customerAssetType.update({
             where: { tenantId_id: { tenantId, id: type.id } },
-            data: { fields: [...current, ...added] as unknown as Prisma.InputJsonValue },
+            data: { fields: next as unknown as Prisma.InputJsonValue },
           });
         }
       }

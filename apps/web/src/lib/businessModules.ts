@@ -67,10 +67,11 @@ export function isModuleEnabled(profile: BusinessProfile | undefined, key: strin
 export interface TemplateAssetField {
   key: string;
   label: string;
-  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN';
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN' | 'VEHICLE_BRAND' | 'VEHICLE_MODEL';
   required?: boolean;
   isIdentifier?: boolean;
   options?: string[];
+  vehicleKind?: 'AUTO' | 'MOTO';
 }
 
 export interface TemplateStatus {
@@ -93,6 +94,15 @@ export type TemplateUpdateItem =
   | { id: string; kind: 'module'; key: string }
   | { id: string; kind: 'category'; name: string }
   | { id: string; kind: 'assetField'; typeName: string; field: TemplateAssetField }
+  | {
+      id: string;
+      kind: 'fieldType';
+      typeName: string;
+      key: string;
+      label: string;
+      type: TemplateAssetField['type'];
+      vehicleKind?: 'AUTO' | 'MOTO';
+    }
   | { id: string; kind: 'status'; name: string; after: string | null; final: boolean; notifiesCustomer: boolean };
 
 export interface TemplateUpdates {

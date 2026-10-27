@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { getTenantDb, Prisma, PrismaService, withTenantContext, type BusinessTemplate } from '@plexo/database';
-import { slugKey } from '../customer-assets/asset-fields.js';
+import { assertVehicleFields, slugKey } from '../customer-assets/asset-fields.js';
 import type { TemplateAssetType } from '../customer-assets/customer-assets.service.js';
 import type { TemplateWorkOrder } from '../work-orders/work-orders.service.js';
 import { BUSINESS_FAMILIES } from './business-modules.js';
@@ -107,6 +107,7 @@ export function cleanAssetType(dto: TemplateAssetTypeDto): TemplateAssetType {
       ...(f.required || f.isIdentifier ? { required: true } : {}),
       ...(f.isIdentifier ? { isIdentifier: true } : {}),
       ...(options ? { options } : {}),
+      ...(f.type === 'VEHICLE_BRAND' ? { vehicleKind: f.vehicleKind ?? 'AUTO' } : {}),
     };
   });
   if (fields.filter((f) => f.isIdentifier).length !== 1) {
@@ -115,6 +116,7 @@ export function cleanAssetType(dto: TemplateAssetTypeDto): TemplateAssetType {
   const labels = fields.map((f) => f.label.toLowerCase());
   const repeatedField = labels.find((l, i) => labels.indexOf(l) !== i);
   if (repeatedField) throw new BadRequestException(`La ficha tiene dos campos "${repeatedField}"`);
+  assertVehicleFields(fields);
   return { name: dto.name.trim(), ...(dto.notice?.trim() ? { notice: dto.notice.trim() } : {}), fields };
 }
 

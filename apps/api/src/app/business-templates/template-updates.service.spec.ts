@@ -79,3 +79,49 @@ describe('TemplateUpdatesService.diff', () => {
     expect(items).toEqual([]);
   });
 });
+
+describe('TemplateUpdatesService: un campo pasa a la lista de vehículos', () => {
+  const TEXT_FIELDS = [
+    { key: 'patente', label: 'Patente', type: 'TEXT' as const, isIdentifier: true, required: true },
+    { key: 'marca', label: 'Marca', type: 'TEXT' as const, required: true },
+    { key: 'modelo', label: 'Modelo', type: 'TEXT' as const, required: true },
+  ];
+  const BEFORE: BusinessTemplateConfig = { modules: [], suggestedCategories: [], assetType: { name: 'Vehículo', fields: TEXT_FIELDS } };
+  const NOW: BusinessTemplateConfig = {
+    modules: [],
+    suggestedCategories: [],
+    assetType: {
+      name: 'Vehículo',
+      fields: [
+        TEXT_FIELDS[0],
+        { ...TEXT_FIELDS[1], type: 'VEHICLE_BRAND', vehicleKind: 'MOTO' },
+        { ...TEXT_FIELDS[2], type: 'VEHICLE_MODEL' },
+      ],
+    },
+  };
+
+  function db(fields: unknown[]) {
+    return {
+      category: { findMany: jest.fn().mockResolvedValue([]) },
+      customerAssetType: { findFirst: jest.fn().mockResolvedValue({ id: 'type-1', fields }) },
+      workOrderStatus: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+  }
+
+  it('offers it with the name the business gave the field', async () => {
+    const service = new TemplateUpdatesService({} as PrismaService);
+    const mine = [TEXT_FIELDS[0], { ...TEXT_FIELDS[1], label: 'Marca del auto' }, TEXT_FIELDS[2]];
+    const items = await runInTenant(db(mine), () => service.diff(BEFORE, NOW, []));
+    expect(items).toEqual([
+      { id: 'fieldType:marca', kind: 'fieldType', typeName: 'Vehículo', key: 'marca', label: 'Marca del auto', type: 'VEHICLE_BRAND', vehicleKind: 'MOTO' },
+      { id: 'fieldType:modelo', kind: 'fieldType', typeName: 'Vehículo', key: 'modelo', label: 'Modelo', type: 'VEHICLE_MODEL' },
+    ]);
+  });
+
+  it('skips a field the business changed or hid on its own', async () => {
+    const service = new TemplateUpdatesService({} as PrismaService);
+    const mine = [TEXT_FIELDS[0], { ...TEXT_FIELDS[1], type: 'SELECT', options: ['Ford'] }, { ...TEXT_FIELDS[2], hidden: true }];
+    const items = await runInTenant(db(mine), () => service.diff(BEFORE, NOW, []));
+    expect(items).toEqual([]);
+  });
+});

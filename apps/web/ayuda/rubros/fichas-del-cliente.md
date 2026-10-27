@@ -20,6 +20,14 @@ Una ficha guarda los datos de algo de tu cliente sobre lo que trabajás: el veh�
 3. Completá los datos. Los obligatorios dependen de tu rubro; en un taller son **Patente**, **Marca** y **Modelo**, y además podés cargar **Año**, **Kilómetros**, **N° de motor**, **N° de chasis / VIN** y **Combustible**.
 4. Tocá **Guardar**. Se abre la ficha.
 
+### Marca y modelo de la lista
+
+En los rubros con vehículos (taller, gomería, lubricentro, chapa y pintura, motos…), **Marca** y **Modelo** se eligen de la lista de Oplex:
+
+1. Tocá **Marca** y escribí parte del nombre (por ejemplo "toy"). Elegí la marca.
+2. Tocá **Modelo**: aparecen sólo los modelos de esa marca. Elegí uno.
+3. Si no está, elegí **Otra, no está en la lista** (u **Otro**, en el modelo) y escribila a mano, como figura en la cédula verde del vehículo. La ficha se guarda igual y a Oplex le llega el aviso para sumarla a la lista. Con **Volver a la lista** dejás de escribirla a mano.
+
 > [!NOTA]
 > Si ya hay otra ficha con el mismo dato principal (por ejemplo la misma patente de otro cliente), Oplex te avisa **Ya hay otro con patente …** y te dice de quién es. Si es el mismo vehículo y cambió de dueño, conviene abrir esa ficha y usar **Cambiar dueño**. Si no, tocá **Guardar igual**: no se bloquea.
 
@@ -49,8 +57,10 @@ El Dueño o un Administrador, en tu foto › **Rubro y módulos** › **Tus fich
 4. Con **Ocultar** un campo deja de pedirse, sin borrar lo que ya cargaste; **Mostrar** lo vuelve a poner.
 5. Tocá **Guardar ficha**.
 
+En los rubros con vehículos, **Marca** tiene el tipo **Lista de marcas de autos (Oplex)** (o **de motos**) y **Modelo** el tipo **Modelos según la marca**. Si preferís escribirlos a mano, cambiá los dos a **Texto**: lo ya cargado se mantiene. Para volver a la lista, cambialos otra vez.
+
 > [!IMPORTANTE]
-> El tipo de un campo ya guardado no se puede cambiar (por ejemplo de texto a número): creá un campo nuevo y ocultá el viejo.
+> El tipo de un campo ya guardado no se puede cambiar (por ejemplo de texto a número): creá un campo nuevo y ocultá el viejo. La única excepción es pasar entre **Texto** y las listas de marcas y modelos, porque guardan lo mismo.
 
 Si tu rubro no traía ficha, en **Tus fichas** escribí sobre qué trabajás (por ejemplo **Equipo**) y tocá **Crear ficha**.
 
@@ -62,3 +72,5 @@ Si tu rubro no traía ficha, en **Tus fichas** escribí sobre qué trabajás (po
 | Todavía no definiste qué fichas usás. | Prendiste Fichas pero no hay ninguna ficha creada. | Creala en **Rubro y módulos** › **Tus fichas**. |
 | "…" tiene que ser un número | Escribiste letras en un campo numérico. | Escribí sólo el número (por ejemplo 85000). |
 | No se puede cambiar el tipo del campo "…": creá uno nuevo | Intentaste cambiar el tipo de un campo guardado. | Agregá un campo nuevo y ocultá el viejo. |
+| El campo "Modelo" muestra los modelos según la marca… | Dejaste **Modelo** como lista y sacaste la lista de **Marca**. | Cambiá los dos juntos: los dos a **Texto** o los dos a la lista. |
+| Modelo dice **Elegí primero la marca** | Todavía no elegiste la marca. | Elegí la marca; si la escribiste a mano, el modelo también se escribe a mano. |
