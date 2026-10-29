@@ -4,6 +4,7 @@ import { Prisma, tenantContextStorage } from '@plexo/database';
 import type { MercadoPagoQrService } from '@plexo/mercadopago';
 import type { CashRegistersService, CashSessionsService } from '@plexo/pos';
 import type { ReportsFinancialService } from '@plexo/reports-financial';
+import type { PosPointChargesService } from './pos-point-charges.service.js';
 import { PosService } from './pos.service.js';
 import type { SalesService } from '../sales/sales.service.js';
 
@@ -73,6 +74,7 @@ describe('PosService.checkout', () => {
       {} as AccountingService,
       {} as ReportsFinancialService,
       {} as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
 
     await expect(
@@ -108,6 +110,7 @@ describe('PosService.checkout', () => {
       {} as AccountingService,
       {} as ReportsFinancialService,
       {} as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
 
     await expect(
@@ -149,6 +152,7 @@ describe('PosService.checkout', () => {
       {} as AccountingService,
       reportsFinancialService,
       {} as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
 
     const result = await runInTenant({}, () =>
@@ -204,6 +208,7 @@ describe('PosService - cobros QR sin venta', () => {
       {} as AccountingService,
       {} as ReportsFinancialService,
       (overrides.mercadoPagoQrService ?? {}) as unknown as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
   }
 
@@ -249,6 +254,7 @@ describe('PosService - cobros QR sin venta', () => {
       {} as AccountingService,
       {} as ReportsFinancialService,
       {} as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
 
     await expect(
@@ -368,6 +374,7 @@ describe('PosService.closeSession - diferencia de arqueo', () => {
       accountingService,
       reportsFinancialService,
       { listUnclaimedCharges: jest.fn().mockResolvedValue([]) } as unknown as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
 
     await runInTenant({}, () => service.closeSession('session-1', { countedAmount: 950 } as never));
@@ -406,6 +413,7 @@ describe('PosService.recordCashMovement - ingresos y egresos de la Caja', () => 
       accountingService,
       reportsFinancialService,
       {} as MercadoPagoQrService,
+      {} as PosPointChargesService,
     );
     const run = <T>(fn: () => T) => runInTenant(db, fn);
     return { service, reportsFinancialService, accountingService, cashSessionsService, run };

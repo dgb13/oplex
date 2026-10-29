@@ -2,7 +2,7 @@
 
 import { supplyNotice } from '@/components/sales/SalesLinesEditor';
 import { buildVariantLabel, inventoryApi, resolveUploadUrl, type Article } from '@/lib/inventory';
-import { formatPaidAt, posApi } from '@/lib/pos';
+import { describePointPayment, formatPaidAt, pointChargesApi, posApi } from '@/lib/pos';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownCircle, ArrowUpCircle, LogOut, Minus, Plus, ShoppingBasket, Trash2 } from 'lucide-react';
@@ -104,6 +104,15 @@ function PosSellScreen() {
     refetchInterval: 15000,
   });
   const unclaimed = unclaimedQuery.data ?? [];
+  // "Cargar la venta ahora" (Control de cobros con Point): el pago que ya
+  // entró paga la venta que se arme acá.
+  const pointPaymentId = searchParams.get('pointPayment');
+  const pointPaymentQuery = useQuery({
+    queryKey: ['pos-point-payment', pointPaymentId],
+    queryFn: () => pointChargesApi.payment(pointPaymentId as string),
+    enabled: !!pointPaymentId,
+    retry: false,
+  });
   // Desde Mercado Pago › Movimientos ("Asignar a venta") se llega con
   // ?cobrosQr=1: se abre directo la lista de cobros sin venta, una vez.
   const openedFromMovements = useRef(false);
@@ -328,6 +337,34 @@ function PosSellScreen() {
         </div>
       )}
 
+      {pointPaymentId && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-200 bg-sky-50 px-5 py-2.5 text-sm text-sky-900 pos-dark:border-sky-900 pos-dark:bg-sky-950 pos-dark:text-sky-200 pos-contrast:border-sky-800 pos-contrast:bg-sky-950 pos-contrast:text-sky-200 pos-emerald:border-sky-200 pos-emerald:bg-sky-50 pos-emerald:text-sky-900"
+        >
+          <span>
+            {pointPaymentQuery.data ? (
+              <>
+                <span className="font-semibold">Venta para un pago de Point que ya entró</span>
+                {' · '}
+                {formatMoney(Number(pointPaymentQuery.data.amount))} · {describePointPayment(pointPaymentQuery.data)}. Cargá
+                los artículos y cobrá con &quot;Point de Mercado Pago&quot;: no se le vuelve a cobrar al cliente.
+              </>
+            ) : pointPaymentQuery.isError ? (
+              'Ese pago de Point ya tiene venta o no se encontró.'
+            ) : (
+              'Buscando el pago de Point…'
+            )}
+          </span>
+          <button
+            onClick={() => router.replace(`/pos/sell?registerId=${registerId}`)}
+            className="rounded-lg border border-current px-3 py-1 text-sm font-semibold"
+          >
+            Quitar
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <div className="flex w-2/3 flex-col gap-4 overflow-hidden p-5">
           <input
@@ -503,11 +540,13 @@ function PosSellScreen() {
           registerId={registerId}
           lines={lines}
           totals={totals}
+          pointPayment={pointPaymentQuery.data}
           onClose={() => setCheckingOut(false)}
           onCompleted={() => {
             setLines([]);
             setCheckingOut(false);
             refetchSession();
+            if (pointPaymentId) router.replace(`/pos/sell?registerId=${registerId}`);
           }}
         />
       )}

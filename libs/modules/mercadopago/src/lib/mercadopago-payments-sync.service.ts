@@ -98,6 +98,33 @@ export class MercadoPagoPaymentsSyncService {
     return { synced, lastSyncAt: reached, partial: true };
   }
 
+  /** Los pagos creados en un rango (Control de cobros con Point: cada pocos
+   * minutos mientras haya ventas con Point sin pago). No toca
+   * mercadoPagoLastSyncAt: es una consulta corta aparte de la sincronización
+   * de Movimientos. */
+  async syncRange(begin: Date, end: Date): Promise<number> {
+    const accessToken = await this.accessToken();
+    let offset = 0;
+    let synced = 0;
+    for (let page = 0; page < MAX_PAGES_PER_SYNC; page++) {
+      const result = await this.paymentClient.searchPayments(accessToken, {
+        sort: 'date_created',
+        criteria: 'asc',
+        range: 'date_created',
+        begin_date: begin.toISOString(),
+        end_date: end.toISOString(),
+        limit: PAGE_SIZE,
+        offset,
+      });
+      const results = result.results ?? [];
+      await this.upsertMany(results);
+      synced += results.length;
+      offset += results.length;
+      if (results.length < PAGE_SIZE || offset >= (result.paging?.total ?? 0) || offset >= MAX_OFFSET) break;
+    }
+    return synced;
+  }
+
   /** Un solo pago (webhook de un link): GET /v1/payments/{id} y upsert. */
   async syncOne(mpPaymentId: string): Promise<void> {
     const accessToken = await this.accessToken();
@@ -154,6 +181,17 @@ export class MercadoPagoPaymentsSyncService {
       });
     }
   }
+}
+
+/**
+ * ¿El pago se hizo con un posnet Point? Lo marca point_of_interaction.type
+ * (los QR llegan como "INSTORE" y los links como "CHECKOUT").
+ * A CONFIRMAR con un pago real de Point: si Mercado Pago lo informa con
+ * otro valor, se corrige sólo acá.
+ */
+export function isPointPayment(raw: unknown): boolean {
+  const type = (raw as { point_of_interaction?: { type?: string } } | null)?.point_of_interaction?.type;
+  return type === 'POINT';
 }
 
 function toDate(value: string | undefined | null): Date | null {

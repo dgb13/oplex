@@ -151,7 +151,111 @@ export interface CheckoutPaymentInput {
   check?: ReceiptCheckInput;
   // Sólo MERCADOPAGO cobrado con el QR de la caja (ver QrChargePanel).
   paymentIntentId?: string;
+  // Sólo MP_POINT: el pago de Point que ya llegó ("Cargar la venta ahora").
+  mpPaymentId?: string;
 }
+
+// ── Cobro con Point de Mercado Pago (PosPointChargesService) ──
+
+export type PointChargeStatus = 'WAITING' | 'MISSING' | 'AMBIGUOUS' | 'CONFIRMED' | 'RESOLVED';
+
+export interface PointPayment {
+  mpPaymentId: string;
+  amount: string;
+  dateCreated: string;
+  paymentMethodId: string | null;
+  paymentTypeId: string | null;
+  installments: number | null;
+}
+
+export interface PointChargeRow {
+  id: string;
+  soldAt: string;
+  amount: string;
+  status: PointChargeStatus;
+  resolution: string | null;
+  invoiceId: string;
+  invoiceLabel: string | null;
+  registerName: string | null;
+  payment: PointPayment | null;
+  candidates: PointPayment[];
+}
+
+export interface PointChargesList {
+  rows: PointChargeRow[];
+  unmatched: (PointPayment & { reviewed: boolean })[];
+  totals: {
+    confirmedCount: number;
+    confirmedAmount: string;
+    missing: number;
+    ambiguous: number;
+    waiting: number;
+    unmatched: number;
+  };
+  rule: { windowBeforeMinutes: number; windowAfterMinutes: number; missingAfterMinutes: number };
+}
+
+export interface PointSessionSummary {
+  count: number;
+  total: string;
+  confirmedCount: number;
+  confirmedTotal: string;
+  pendingCount: number;
+  pendingTotal: string;
+}
+
+const CARD_NAMES: Record<string, string> = {
+  visa: 'Visa',
+  debvisa: 'Visa',
+  master: 'Mastercard',
+  debmaster: 'Mastercard',
+  maestro: 'Maestro',
+  amex: 'American Express',
+  naranja: 'Naranja',
+  cabal: 'Cabal',
+  debcabal: 'Cabal',
+  argencard: 'Argencard',
+  cencosud: 'Cencosud',
+  cmr: 'CMR',
+  tarshop: 'Tarjeta Shopping',
+};
+const CARD_TYPES: Record<string, string> = { debit_card: 'débito', credit_card: 'crédito', prepaid_card: 'prepaga' };
+
+/** "Visa débito", "Mastercard crédito · 3 cuotas". */
+export function describePointPayment(p: Pick<PointPayment, 'paymentMethodId' | 'paymentTypeId' | 'installments'>): string {
+  const name = p.paymentMethodId ? (CARD_NAMES[p.paymentMethodId] ?? p.paymentMethodId) : 'Tarjeta';
+  const type = p.paymentTypeId ? CARD_TYPES[p.paymentTypeId] : undefined;
+  const installments = p.installments && p.installments > 1 ? ` · ${p.installments} cuotas` : '';
+  return `${name}${type ? ` ${type}` : ''}${installments}`;
+}
+
+export const pointChargesApi = {
+  list: (params: { from?: string; to?: string }) =>
+    api.get<PointChargesList>('/pos/point-charges', { params }).then((r) => r.data),
+  refresh: () => api.post<{ syncError: string | null }>('/pos/point-charges/refresh').then((r) => r.data),
+  byInvoice: (invoiceId: string) =>
+    api
+      .get<{ id: string; amount: string; status: PointChargeStatus; payment: PointPayment | null }[]>(
+        `/pos/point-charges/by-invoice/${invoiceId}`,
+      )
+      .then((r) => r.data),
+  sessionSummary: (sessionId: string) =>
+    api.get<PointSessionSummary>(`/pos/point-charges/session/${sessionId}`).then((r) => r.data),
+  payment: (mpPaymentId: string) =>
+    api.get<PointPayment>(`/pos/point-charges/payments/${encodeURIComponent(mpPaymentId)}`).then((r) => r.data),
+  salesForPayment: (mpPaymentId: string) =>
+    api
+      .get<{ id: string; soldAt: string; amount: string; invoiceLabel: string | null }[]>(
+        `/pos/point-charges/payments/${encodeURIComponent(mpPaymentId)}/sales`,
+      )
+      .then((r) => r.data),
+  dismiss: (mpPaymentId: string) =>
+    api.post(`/pos/point-charges/payments/${encodeURIComponent(mpPaymentId)}/dismiss`).then((r) => r.data),
+  confirm: (chargeId: string, mpPaymentId: string) =>
+    api.post(`/pos/point-charges/${chargeId}/confirm`, { mpPaymentId }).then((r) => r.data),
+  changeMethod: (chargeId: string, method: 'CASH' | 'CARD') =>
+    api.post(`/pos/point-charges/${chargeId}/change-method`, { method }).then((r) => r.data),
+};
 
 // QR de Mercado Pago de una caja (ver MercadoPagoQrService en el backend).
 export interface RegisterQrAddress {
@@ -240,7 +344,8 @@ export interface CheckoutInput {
 export const POS_PAYMENT_METHODS = [
   { value: 'CASH', label: 'Efectivo' },
   { value: 'CARD', label: 'Tarjeta' },
-  { value: 'MERCADOPAGO', label: 'Mercado Pago' },
+  { value: 'MERCADOPAGO', label: 'Mercado Pago (QR)' },
+  { value: 'MP_POINT', label: 'Point de Mercado Pago' },
   { value: 'BANK_TRANSFER', label: 'Transferencia' },
   { value: 'CHECK', label: 'Cheque' },
 ] as const;

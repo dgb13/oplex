@@ -93,6 +93,7 @@ export type {
   CashRegister,
   CashSession,
   CashMovement,
+  PosPointCharge,
   TenantMembership,
   TenantMembershipLink,
   TenantMembershipAssignment,

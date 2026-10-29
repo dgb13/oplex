@@ -475,14 +475,14 @@ export class SalesService {
 
     // Dónde entró la plata: la cuenta elegida; si no se eligió ninguna, la
     // de Mercado Pago › Configuración para los cobros por Mercado Pago
-    // (QR/link; si no hay, la de sistema "Mercado Pago") y "Cobranzas a
+    // (QR/link/Point; si no hay, la de sistema "Mercado Pago") y "Cobranzas a
     // depositar" para el resto (tarjeta, transferencia, Facturación sin
     // cuenta) - de ahí se pasa con una transferencia entre cuentas. Un
     // cheque de tercero no entra a ninguna cuenta hasta depositarlo.
     const financialAccountId = dto.check
       ? dto.financialAccountId
       : (dto.financialAccountId ??
-        (dto.method === 'MERCADOPAGO'
+        (dto.method === 'MERCADOPAGO' || dto.method === 'MP_POINT'
           ? (await getMercadoPagoReceiptAccount(getTenantDb(), getTenantId())).id
           : (await getOrCreateSystemFinancialAccount(getTenantDb(), getTenantId(), 'PENDING_DEPOSIT')).id));
 

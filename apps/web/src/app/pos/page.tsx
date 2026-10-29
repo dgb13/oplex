@@ -10,6 +10,14 @@ import CreateRegisterModal from './CreateRegisterModal';
 import OpenSessionModal from './OpenSessionModal';
 import PosThemePicker from './PosThemePicker';
 
+/** "Cargar la venta ahora" (Control de cobros con Point) llega a /pos con
+ * ?pointPayment=: se pasa a la caja elegida. Leído al hacer clic, sin
+ * useSearchParams (que pediría un Suspense en esta página). */
+function pointPaymentQuery(): string {
+  const id = new URLSearchParams(window.location.search).get('pointPayment');
+  return id ? `&pointPayment=${encodeURIComponent(id)}` : '';
+}
+
 export default function PosSelectorPage() {
   const router = useRouter();
   const [openingRegisterId, setOpeningRegisterId] = useState<string | null>(null);
@@ -32,7 +40,7 @@ export default function PosSelectorPage() {
   function handleCardClick(registerId: string) {
     const session = openSessionByRegister.get(registerId);
     if (session) {
-      router.push(`/pos/sell?registerId=${registerId}`);
+      router.push(`/pos/sell?registerId=${registerId}${pointPaymentQuery()}`);
     } else {
       setOpeningRegisterId(registerId);
     }
@@ -120,7 +128,7 @@ export default function PosSelectorPage() {
         <OpenSessionModal
           registerId={openingRegisterId}
           onClose={() => setOpeningRegisterId(null)}
-          onOpened={() => router.push(`/pos/sell?registerId=${openingRegisterId}`)}
+          onOpened={() => router.push(`/pos/sell?registerId=${openingRegisterId}${pointPaymentQuery()}`)}
         />
       )}
 

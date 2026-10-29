@@ -31,14 +31,14 @@ Un artículo **Sin precio** tampoco se puede vender: el precio se carga en Inven
 1. **Tocá Cobrar.** Se abre la ventana **Cobrar**.
 2. **Elegí el cliente.** En **Cliente** viene **Consumidor Final**. Para otro, elegilo de la lista. Abajo ves la factura que corresponde, por ejemplo **Factura B - Cliente sin CUIT (Consumidor Final): corresponde Factura B.**
 3. **Si el cliente no está cargado, buscalo por CUIT.** En **Cargar cliente por CUIT** escribí el CUIT y tocá **Buscar**. Si ya es cliente, se elige solo (**Cliente ya cargado: …**). Si no, aparecen sus datos de ARCA y el botón **Usar este cliente**, que lo crea en el momento.
-4. **Elegí el medio de pago.** La primera fila viene en **Efectivo** por el total. Podés cambiarlo a **Tarjeta**, **Mercado Pago**, **Transferencia** o **Cheque**.
+4. **Elegí el medio de pago.** La primera fila viene en **Efectivo** por el total. Podés cambiarlo a **Tarjeta**, **Mercado Pago (QR)**, **Point de Mercado Pago**, **Transferencia** o **Cheque**. Con **Point de Mercado Pago** cobrás en el posnet y Oplex controla el pago solo: ver [Cobrar con Point de Mercado Pago](/documentacion/caja/cobro-con-point).
 5. **Calculá el vuelto.** En efectivo, escribí en **Paga con** lo que te entrega el cliente: Oplex muestra **Vuelto: $…**. No cambies el monto de la fila para eso.
 6. **Si paga con dos medios, sumá una fila.** Tocá **+ Agregar otro método de pago** y repartí el total (por ejemplo, una parte en efectivo y el resto con tarjeta). La suma tiene que dar exacto el total.
 7. **Tocá Confirmar cobro.** Aparece **Venta confirmada** con el número de factura.
 8. **Imprimí el ticket.** **Imprimir ticket** abre la factura en formato ticket de 80 mm. **Nueva venta** limpia el ticket para el próximo cliente.
 
 > [!NOTA]
-> Si la caja tiene el QR de Mercado Pago activo y elegís **Mercado Pago**, el botón cambia a **Generar QR** y el cobro se hace con el QR (ver [QR de Mercado Pago](/documentacion/caja/qr-mercado-pago)). Sin QR activo, **Mercado Pago** se registra como cualquier otro medio, sin conexión con Mercado Pago.
+> Si la caja tiene el QR de Mercado Pago activo y elegís **Mercado Pago (QR)**, el botón cambia a **Generar QR** y el cobro se hace con el QR (ver [QR de Mercado Pago](/documentacion/caja/qr-mercado-pago)). Sin QR activo, **Mercado Pago (QR)** se registra como cualquier otro medio, sin conexión con Mercado Pago.
 
 El efectivo cobrado suma al **Efectivo esperado** del turno. Los demás medios no, porque no entran al cajón.
 
