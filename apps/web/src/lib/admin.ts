@@ -143,6 +143,9 @@ export interface SystemErrorLog {
   method: string;
   tenantId: string | null;
   userId: string | null;
+  tenantName: string | null;
+  userName: string | null;
+  userEmail: string | null;
   createdAt: string;
 }
 

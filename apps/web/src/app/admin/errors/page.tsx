@@ -75,7 +75,7 @@ export default function AdminErrorsPage() {
                   <th className="p-3">Código</th>
                   <th className="p-3">Mensaje</th>
                   <th className="p-3">Ruta</th>
-                  <th className="p-3">Tenant</th>
+                  <th className="p-3">Empresa</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,7 +114,18 @@ function ErrorRow({ error }: { error: SystemErrorLog }) {
         <td className="p-3 font-mono text-xs text-slate-500">
           {error.method} {error.path}
         </td>
-        <td className="p-3 text-slate-400">{error.tenantId ?? '—'}</td>
+        <td className="max-w-[200px] p-3">
+          {error.tenantId ? (
+            <div className="flex flex-col leading-tight" title={error.tenantId}>
+              <span className="truncate text-slate-300">{error.tenantName ?? `${error.tenantId.slice(0, 8)}…`}</span>
+              {(error.userName || error.userEmail) && (
+                <span className="truncate text-xs text-slate-500">{error.userName ?? error.userEmail}</span>
+              )}
+            </div>
+          ) : (
+            <span className="text-slate-500">—</span>
+          )}
+        </td>
       </tr>
       {expanded && error.stack && (
         <tr className="border-b border-slate-800/50 bg-slate-950/60">
