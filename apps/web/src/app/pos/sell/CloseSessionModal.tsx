@@ -1,7 +1,7 @@
 'use client';
 
-import { posApi } from '@/lib/pos';
-import { useMutation } from '@tanstack/react-query';
+import { pointChargesApi, posApi } from '@/lib/pos';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useMemo, useState } from 'react';
 import DenominationBreakdownEditor, { breakdownTotal, buildDenominationBreakdown } from '../DenominationBreakdownEditor';
@@ -22,6 +22,11 @@ export default function CloseSessionModal({ sessionId, expectedAmount, onClose, 
   const [counts, setCounts] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+
+  const { data: point } = useQuery({
+    queryKey: ['pos-point-session', sessionId],
+    queryFn: () => pointChargesApi.sessionSummary(sessionId),
+  });
 
   const breakdownAmount = useMemo(() => breakdownTotal(counts), [counts]);
 
@@ -59,8 +64,38 @@ export default function CloseSessionModal({ sessionId, expectedAmount, onClose, 
           Cerrar turno
         </h2>
         <p className="mb-4 text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
-          Esperado: ${expectedAmount.toFixed(2)}
+          Efectivo esperado: ${expectedAmount.toFixed(2)}
         </p>
+
+        {point && point.count > 0 && (
+          <div className="mb-4 flex flex-col gap-1.5 rounded-lg border border-slate-200 p-3 text-xs text-slate-700 pos-dark:border-slate-700 pos-dark:text-slate-200 pos-contrast:border-slate-700 pos-contrast:text-slate-100 pos-emerald:border-emerald-100 pos-emerald:text-slate-700">
+            <div className="flex justify-between gap-2 font-semibold">
+              <span>
+                Point de Mercado Pago <span className="font-normal opacity-70">· {point.count} {point.count === 1 ? 'cobro' : 'cobros'}</span>
+              </span>
+              <span className="tabular-nums">${Number(point.total).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between gap-2 pl-3 opacity-80">
+              <span>↳ confirmados con Mercado Pago</span>
+              <span className="tabular-nums">
+                {point.confirmedCount} · ${Number(point.confirmedTotal).toFixed(2)} ✓
+              </span>
+            </div>
+            {point.pendingCount > 0 && (
+              <div className="flex justify-between gap-2 pl-3 font-semibold text-amber-700 pos-dark:text-amber-400 pos-contrast:text-amber-300 pos-emerald:text-amber-700">
+                <span>↳ todavía sin pago en Mercado Pago</span>
+                <span className="tabular-nums">
+                  {point.pendingCount} · ${Number(point.pendingTotal).toFixed(2)}
+                </span>
+              </div>
+            )}
+            <p className="mt-1 border-l-2 border-orange-400 pl-2 opacity-80">
+              El Point no entra en el arqueo del cajón: esa plata va a la cuenta de Mercado Pago.
+              {point.pendingCount > 0 &&
+                ' Podés cerrar el turno igual; lo pendiente sigue en Control de cobros con Point y se confirma solo si el pago aparece más tarde.'}
+            </p>
+          </div>
+        )}
 
         <div className="mb-4 flex rounded-lg bg-slate-100 p-1 text-xs font-medium pos-dark:bg-slate-800 pos-contrast:bg-slate-900 pos-emerald:bg-emerald-50">
           <button

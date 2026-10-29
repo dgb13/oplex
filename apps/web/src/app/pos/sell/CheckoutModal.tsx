@@ -5,11 +5,14 @@ import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { suggestDocumentLetter, type DocumentLetter } from '@/lib/documentLetter';
 import { invoicingApi } from '@/lib/invoicing';
 import {
+  describePointPayment,
   formatPaidAt,
+  pointChargesApi,
   posApi,
   POS_PAYMENT_METHODS,
   type CheckoutPaymentInput,
   type CheckoutSaleInput,
+  type PointPayment,
   type QrCharge,
 } from '@/lib/pos';
 import { profileApi } from '@/lib/profile';
@@ -29,6 +32,9 @@ interface Props {
   totals: { subtotal: number; taxTotal: number; total: number };
   onClose: () => void;
   onCompleted: () => void;
+  // "Cargar la venta ahora" desde Control de cobros con Point: el pago que
+  // ya entró paga esta venta.
+  pointPayment?: PointPayment;
 }
 
 const inputClass =
@@ -42,15 +48,23 @@ interface PaymentRow {
   // se manda como pago real; el vuelto de la fila es pagaCon - amount,
   // calculado en el cliente solamente (ver rowChange).
   pagaCon?: string;
+  // Sólo MP_POINT: el pago de Point que ya llegó (ver Props.pointPayment).
+  mpPaymentId?: string;
 }
+
+const formatArs = (value: number) => value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Sólo lectura de "Consumidor Final" en pantalla si no se elige otro
  * cliente - el placeholder real (Company sin CUIT) lo crea el backend la
  * primera vez que hace falta, ver PosService.resolveDefaultCustomer. */
-export default function CheckoutModal({ registerId, lines, totals, onClose, onCompleted }: Props) {
+export default function CheckoutModal({ registerId, lines, totals, onClose, onCompleted, pointPayment }: Props) {
   const queryClient = useQueryClient();
   const [customerId, setCustomerId] = useState('');
-  const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'CASH', amount: totals.total.toFixed(2) }]);
+  const [payments, setPayments] = useState<PaymentRow[]>(() => [
+    pointPayment
+      ? { method: 'MP_POINT', amount: totals.total.toFixed(2), mpPaymentId: pointPayment.mpPaymentId }
+      : { method: 'CASH', amount: totals.total.toFixed(2) },
+  ]);
   const [error, setError] = useState('');
   // ARCA rechazó el punto de venta de la sucursal: aviso con los habilitados.
   const [pointOfSaleError, setPointOfSaleError] = useState<PointOfSaleNotEnabledError | null>(null);
@@ -192,6 +206,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
         method: p.method,
         amount: Number(p.amount.replace(',', '.')),
         ...(charge && p.method === 'MERCADOPAGO' ? { paymentIntentId: charge.id } : {}),
+        ...(p.method === 'MP_POINT' && p.mpPaymentId ? { mpPaymentId: p.mpPaymentId } : {}),
       }));
     return {
       customerId: customerId || undefined,
@@ -295,6 +310,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   }
 
   if (completedInvoice) {
+    const hasPoint = payments.some((p) => p.method === 'MP_POINT' && Number(p.amount) > 0);
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-6 text-center shadow-2xl pos-dark:border-slate-700 pos-dark:bg-slate-900 pos-contrast:border-slate-700 pos-contrast:bg-black pos-emerald:border-emerald-100 pos-emerald:bg-white">
@@ -310,6 +326,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           <p className="mb-4 text-sm text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300 pos-emerald:text-slate-500">
             {completedInvoice.documentLetter}-{completedInvoice.number}
           </p>
+          {hasPoint && <PointSaleStatus invoiceId={completedInvoice.id} />}
           <div className="flex flex-col gap-2">
             <button
               onClick={() => invoicingApi.openPdf(completedInvoice.id, 'TICKET')}
@@ -506,6 +523,43 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
                   )}
                 </div>
               )}
+              {payment.method === 'MP_POINT' && (
+                <div className="flex flex-col gap-1.5 rounded-xl border border-sky-400 bg-sky-50 p-3 text-[13px] text-slate-800 pos-dark:border-sky-700 pos-dark:bg-sky-950/50 pos-dark:text-slate-100 pos-contrast:border-sky-500 pos-contrast:bg-black pos-contrast:text-white pos-emerald:border-sky-400 pos-emerald:bg-sky-50">
+                  {payment.mpPaymentId && pointPayment ? (
+                    <>
+                      <span className="text-[11px] font-bold tracking-wide text-sky-700 uppercase pos-dark:text-sky-300 pos-contrast:text-sky-300">
+                        Pago de Point que ya entró
+                      </span>
+                      <span className="font-mono text-xl font-extrabold text-sky-700 pos-dark:text-sky-300 pos-contrast:text-sky-300">
+                        $ {formatArs(Number(pointPayment.amount))}
+                      </span>
+                      <span className="text-xs opacity-75">
+                        {describePointPayment(pointPayment)} · {new Date(pointPayment.dateCreated).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })}.
+                        No hay que cobrar de nuevo: esta venta queda confirmada con ese pago.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[11px] font-bold tracking-wide text-sky-700 uppercase pos-dark:text-sky-300 pos-contrast:text-sky-300">
+                        Cobralo en el posnet
+                      </span>
+                      <span className="font-mono text-2xl font-extrabold text-sky-700 pos-dark:text-sky-300 pos-contrast:text-sky-300">
+                        $ {formatArs(Number(payment.amount.replace(',', '.')) || 0)}
+                      </span>
+                      <ol className="ml-4 list-decimal text-xs">
+                        <li>Escribí ese monto en el Point y pasá la tarjeta.</li>
+                        <li>
+                          Cuando salga aprobado, tocá <b>Confirmar cobro</b>.
+                        </li>
+                      </ol>
+                      <span className="text-xs opacity-75">
+                        No hace falta anotar nada más: Oplex busca el pago en tu cuenta de Mercado Pago y lo marca como
+                        confirmado.
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
           <button
@@ -606,6 +660,37 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Venta hecha con Point: si el pago ya llegó a Mercado Pago. Se actualiza
+ * sola mientras espera (el emparejamiento corre cada 2 minutos). */
+function PointSaleStatus({ invoiceId }: { invoiceId: string }) {
+  const { data } = useQuery({
+    queryKey: ['pos-point-charges', invoiceId],
+    queryFn: () => pointChargesApi.byInvoice(invoiceId),
+    refetchInterval: (query) => (query.state.data?.every((c) => c.status === 'CONFIRMED') ? false : 15_000),
+  });
+  const charges = data ?? [];
+  const confirmed = charges.length > 0 && charges.every((c) => c.status === 'CONFIRMED');
+  const payment = charges.find((c) => c.payment)?.payment;
+  return (
+    <div className="mb-4 flex flex-col items-center gap-1.5">
+      {confirmed ? (
+        <p className="inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 pos-dark:bg-green-950 pos-dark:text-green-300 pos-contrast:bg-green-950 pos-contrast:text-green-300">
+          ✓ Pago confirmado en Mercado Pago{payment ? ` · ${describePointPayment(payment)}` : ''}
+        </p>
+      ) : (
+        <p className="inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 pos-dark:bg-slate-800 pos-dark:text-slate-300 pos-contrast:bg-slate-900 pos-contrast:text-slate-200">
+          ⏳ Esperando el pago en Mercado Pago
+        </p>
+      )}
+      {!confirmed && (
+        <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300">
+          No hace falta esperar: Oplex lo confirma solo. Si a los 30 minutos no aparece, avisa.
+        </p>
+      )}
     </div>
   );
 }

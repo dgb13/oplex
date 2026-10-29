@@ -4126,6 +4126,10 @@ model MercadoPagoPayment {
   payerEmail         String?
   // Nuestro cobro (link o QR) que originó el pago - null = fuera de Oplex.
   paymentIntentId    String?
+  // Pago de Point sin venta en Oplex que alguien marcó "No es una venta"
+  // en Control de cobros con Point (ver PosPointChargesService).
+  pointReviewedAt       DateTime?
+  pointReviewedByUserId String?
   raw                Json
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -4135,6 +4139,52 @@ model MercadoPagoPayment {
   @@index([tenantId, moneyReleaseDate])
   @@index([tenantId, paymentIntentId])
   @@map("mercadopago_payments")
+}
+
+// Venta de la Caja cobrada con Point de Mercado Pago (forma de pago
+// MP_POINT). El posnet suelto no sabe nada de Oplex: el pago se empareja
+// después contra MercadoPagoPayment por monto exacto y ventana de tiempo
+// (ver PosPointChargesService). Una fila por cada fila de pago Point.
+model PosPointCharge {
+  id              String               @id @default(uuid())
+  tenantId        String
+  invoiceId       String
+  receiptId       String               @unique
+  registerId      String
+  sessionId       String
+  amount          Decimal              @db.Decimal(14, 2)
+  soldAt          DateTime             @default(now())
+  createdByUserId String?
+  status          PosPointChargeStatus @default(PENDING)
+  // Pago de MP emparejado (MercadoPagoPayment.mpPaymentId).
+  mpPaymentId     String?
+  // Cuántos pagos encajaban la última vez que no se pudo decidir solo.
+  candidateCount  Int                  @default(0)
+  // Aviso de "Sin pago en Mercado Pago" ya mandado a la campana.
+  notifiedAt      DateTime?
+  // Cómo se resolvió a mano ("Fue en efectivo", "Elegido a mano"...).
+  resolution       String?
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([tenantId, mpPaymentId])
+  @@index([tenantId, status])
+  @@index([tenantId, soldAt])
+  @@index([tenantId, sessionId])
+  @@map("pos_point_charges")
+}
+
+enum PosPointChargeStatus {
+  // Sin pago todavía (después de 30 min se muestra "Sin pago en Mercado Pago").
+  PENDING
+  // Más de un pago encaja: lo decide una persona ("Para elegir").
+  AMBIGUOUS
+  // Emparejado con un pago de Point (solo o a mano).
+  CONFIRMED
+  // Se corrigió la forma de pago (efectivo / otra tarjeta).
+  CHANGED
 }
 
 // Global como Plan/SystemErrorLog - sin tenantId requerido ni RLS, a

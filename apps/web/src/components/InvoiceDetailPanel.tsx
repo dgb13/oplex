@@ -49,6 +49,8 @@ const METHOD_LABELS: Record<string, string> = {
   BANK_TRANSFER: 'Transferencia',
   CARD: 'Tarjeta',
   CHECK: 'Cheque',
+  MERCADOPAGO: 'Mercado Pago',
+  MP_POINT: 'Point de Mercado Pago',
 };
 
 export default function InvoiceDetailPanel({ invoice, onClose }: Props) {

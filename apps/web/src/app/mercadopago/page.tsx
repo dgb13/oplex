@@ -15,10 +15,11 @@ import ConfigurationSection from './ConfigurationSection';
 import ConnectPanel from './ConnectPanel';
 import LinksTab from './LinksTab';
 import MovementsTab from './MovementsTab';
+import PointTab from './PointTab';
 import SummaryTab from './SummaryTab';
 import type { MovementOriginFilter } from '@/lib/mercadopago';
 
-type Tab = 'summary' | 'movements' | 'links' | 'config';
+type Tab = 'summary' | 'movements' | 'point' | 'links' | 'config';
 
 function errorMessage(err: AxiosError<{ message?: string | string[] }>, fallback: string): string {
   const message = err.response?.data?.message ?? fallback;
@@ -79,7 +80,8 @@ function MercadoPagoPageInner() {
     connectMutation.mutate();
   }
 
-  const [tab, setTab] = useState<Tab>('summary');
+  // ?tab=point: el aviso de la campana de una venta con Point sin pago.
+  const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'point' ? 'point' : 'summary'));
   // "Ver y asignar" del Resumen abre Movimientos ya filtrado.
   const [movementsOrigin, setMovementsOrigin] = useState<MovementOriginFilter>('all');
 
@@ -117,6 +119,7 @@ function MercadoPagoPageInner() {
   const tabs: { value: Tab; label: string }[] = [
     { value: 'summary', label: 'Resumen' },
     { value: 'movements', label: 'Movimientos' },
+    { value: 'point', label: 'Point' },
     ...(canManage
       ? [
           { value: 'links' as const, label: 'Links de pago' },
@@ -177,6 +180,7 @@ function MercadoPagoPageInner() {
               initialOrigin={movementsOrigin}
             />
           )}
+          {tab === 'point' && <PointTab canManage={canManage} />}
           {tab === 'links' && canManage && (
             <LinksTab connected={status.status === 'CONNECTED'} linksEnabled={status.linksEnabled} />
           )}

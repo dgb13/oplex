@@ -10,6 +10,7 @@ import type { CheckoutDto, CheckoutSaleDto } from './dto/checkout.dto.js';
 import type { CreateRegisterDto } from './dto/create-register.dto.js';
 import type { CreateQrChargeDto } from './dto/mercadopago-qr.dto.js';
 import type { PosCashMovementDto } from './dto/pos-cash-movement.dto.js';
+import { PosPointChargesService } from './pos-point-charges.service.js';
 import { SalesService } from '../sales/sales.service.js';
 
 // Lo que un cajero puede elegir como gasto o ingreso en la Caja.
@@ -34,6 +35,7 @@ export class PosService {
     private readonly accountingService: AccountingService,
     private readonly reportsFinancialService: ReportsFinancialService,
     private readonly mercadoPagoQrService: MercadoPagoQrService,
+    private readonly pointChargesService: PosPointChargesService,
   ) {}
 
   async createRegister(dto: CreateRegisterDto) {
@@ -99,8 +101,12 @@ export class PosService {
         });
       }
 
+      if (payment.mpPaymentId && payment.method !== 'MP_POINT') {
+        throw new BadRequestException('Un pago de Point sólo puede pagar una fila de Point');
+      }
+
       const isCash = payment.method === 'CASH';
-      await this.salesService.recordReceipt({
+      const receipt = await this.salesService.recordReceipt({
         invoiceId: invoice.id,
         amount: payment.amount,
         method: payment.method,
@@ -110,6 +116,17 @@ export class PosService {
 
       if (isCash) {
         await this.cashSessionsService.recordSaleMovement(session.id, invoice.id, payment.amount);
+      }
+      // Cobrado en el posnet: queda para emparejar con el pago de Mercado Pago.
+      if (payment.method === 'MP_POINT') {
+        await this.pointChargesService.recordSale({
+          invoiceId: invoice.id,
+          receiptId: receipt.id,
+          registerId: register.id,
+          sessionId: session.id,
+          amount: payment.amount,
+          mpPaymentId: payment.mpPaymentId,
+        });
       }
     }
 

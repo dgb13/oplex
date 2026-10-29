@@ -40,6 +40,13 @@ export class CheckoutPaymentDto {
   @IsOptional()
   @IsUUID()
   paymentIntentId?: string;
+
+  // Sólo method MP_POINT: el pago de Point ya acreditado que paga esta fila
+  // ("Cargar la venta ahora" en Control de cobros con Point). Sin esto la
+  // venta queda esperando que el pago aparezca (PosPointChargesService).
+  @IsOptional()
+  @IsString()
+  mpPaymentId?: string;
 }
 
 // La venta sin la caja: lo que CheckoutModal arma al cobrar. Se guarda tal
