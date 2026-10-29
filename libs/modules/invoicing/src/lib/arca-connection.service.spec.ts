@@ -61,6 +61,17 @@ describe('ArcaConnectionService.check', () => {
     expect(result.message).toContain('El punto de venta 00001 de la sucursal "Casa Central" no está habilitado para Web Services');
   });
 
+  it('marks a point-of-sale failure as POINT_OF_SALE so the screen sends it to step 5', async () => {
+    lastAuthorized.mockRejectedValueOnce(new Error('ARCA WSFE: [11002] El punto de venta no se encuentra habilitado.'));
+    const enabled = jest.spyOn(AfipWsfeClient.prototype, 'enabledPointsOfSale').mockResolvedValue([]);
+    const db = dbWith([{ name: 'Casa Central', pointOfSaleNumber: '00001' }]);
+
+    const result = await runInTenant(db, () => new ArcaConnectionService(afipCredentials).check());
+
+    expect(result.problem).toBe('POINT_OF_SALE');
+    enabled.mockRestore();
+  });
+
   it('asks for a branch instead of guessing point of sale 1 when there is none', async () => {
     const db = dbWith([]);
 
@@ -69,5 +80,43 @@ describe('ArcaConnectionService.check', () => {
     expect(lastAuthorized).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/Falta una sucursal con punto de venta/);
+  });
+});
+
+describe('ArcaConnectionService.pointsOfSale', () => {
+  const credentials = { certPem: 'c', keyPem: 'k', env: 'produccion', cuitRepresentada: '20270403949' };
+
+  it('crosses the Web Services points of sale with the branches, leaving out blocked or deregistered ones', async () => {
+    const afipCredentials = { getCurrent: jest.fn().mockResolvedValue(credentials) } as unknown as AfipCredentialsService;
+    const enabled = jest.spyOn(AfipWsfeClient.prototype, 'enabledPointsOfSale').mockResolvedValue([
+      { number: 2, emissionType: 'CAE - RECE', blocked: false, deregisteredOn: null },
+      { number: 4, emissionType: 'CAE - RECE', blocked: true, deregisteredOn: null },
+    ]);
+    const db = {
+      company: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'b1', name: 'Casa Central', pointOfSaleNumber: '00001' },
+          { id: 'b2', name: 'Sucursal Norte', pointOfSaleNumber: '00002' },
+          { id: 'b3', name: 'Depósito', pointOfSaleNumber: null },
+        ]),
+      },
+    };
+
+    const result = await runInTenant(db, () => new ArcaConnectionService(afipCredentials).pointsOfSale());
+
+    expect(result.ok).toBe(true);
+    expect(result.enabled).toEqual([2]);
+    expect(result.unavailable).toEqual([{ number: 4, blocked: true, deregisteredOn: null }]);
+    expect(result.branches.map((b) => b.enabled)).toEqual([false, true, false]);
+    enabled.mockRestore();
+  });
+
+  it('says what is missing when there is no certificate', async () => {
+    const afipCredentials = { getCurrent: jest.fn().mockResolvedValue(null) } as unknown as AfipCredentialsService;
+    const db = { company: { findMany: jest.fn().mockResolvedValue([]) } };
+
+    const result = await runInTenant(db, () => new ArcaConnectionService(afipCredentials).pointsOfSale());
+
+    expect(result).toMatchObject({ ok: false, problem: 'NOT_CONFIGURED', enabled: [] });
   });
 });

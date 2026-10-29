@@ -151,12 +151,34 @@ export interface AfipFileInspection {
 
 export interface ArcaCheckResult {
   ok: boolean;
-  problem: 'NOT_CONFIGURED' | 'NOT_AUTHORIZED' | 'CERTIFICATE' | 'NETWORK' | 'OTHER' | null;
+  problem: 'NOT_CONFIGURED' | 'NOT_AUTHORIZED' | 'CERTIFICATE' | 'NETWORK' | 'POINT_OF_SALE' | 'OTHER' | null;
   message: string;
   pointOfSale: number | null;
   documentLetter: string | null;
   lastNumber: number | null;
+  points: { pointOfSale: number; branchName: string; lastNumber: number }[];
   checkedAt: string;
+}
+
+/** Paso 5 de Conexión con ARCA: puntos de venta de Web Services según ARCA,
+ * cruzados con las sucursales. ARCA no informa los de Comprobantes en línea. */
+export interface ArcaPointsOfSaleResult {
+  ok: boolean;
+  problem: ArcaCheckResult['problem'];
+  message: string | null;
+  enabled: number[];
+  unavailable: { number: number; blocked: boolean; deregisteredOn: string | null }[];
+  branches: { id: string; name: string; pointOfSaleNumber: string | null; enabled: boolean }[];
+}
+
+/** Cuerpo del 502 al facturar con un punto de venta que no es de Web
+ * Services (ver RealElectronicInvoicingService). */
+export interface PointOfSaleNotEnabledError {
+  message: string;
+  code: 'ARCA_POINT_OF_SALE_NOT_ENABLED';
+  pointOfSale: string;
+  enabledPointsOfSale: number[];
+  branch: { id: string; name: string } | null;
 }
 
 const CERT_WARNING_DAYS = 30;
@@ -186,6 +208,7 @@ export const afipCertificateApi = {
   inspect: (text: string) =>
     api.post<AfipFileInspection>('/tenant-settings/afip-certificate/inspect', { text }).then((r) => r.data),
   check: () => api.post<ArcaCheckResult>('/invoicing/arca/check').then((r) => r.data),
+  pointsOfSale: () => api.get<ArcaPointsOfSaleResult>('/invoicing/arca/points-of-sale').then((r) => r.data),
   remove: () =>
     api.delete<TenantSettings>('/tenant-settings/afip-certificate').then((r) => r.data),
 };

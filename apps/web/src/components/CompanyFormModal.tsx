@@ -8,7 +8,7 @@ import { formatCuitInput, normalizeCuit } from '@/lib/cuit';
 import { lookupError, SourceBadge, ValueBox, type Source } from '@/components/arca/ArcaFields';
 import { PointOfSaleHelpModal } from '@/components/arca/PointOfSaleHelpModal';
 import { suggestDocumentLetter } from '@/lib/documentLetter';
-import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { afipCertificateApi, tenantSettingsApi } from '@/lib/tenantSettings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
@@ -82,6 +82,10 @@ export default function CompanyFormModal({
   const [creditLimit, setCreditLimit] = useState(company?.creditLimit ?? '0');
   const [pointOfSaleNumber, setPointOfSaleNumber] = useState(company?.pointOfSaleNumber ?? '');
   const [showPointOfSaleHelp, setShowPointOfSaleHelp] = useState(false);
+  // Puntos de venta de Web Services según ARCA, cuando el cargado no está
+  // entre ellos (null = sin aviso).
+  const [pointOfSaleWarning, setPointOfSaleWarning] = useState<number[] | null>(null);
+  const [checkingPointOfSale, setCheckingPointOfSale] = useState(false);
   const [taxCondition, setTaxCondition] = useState(company?.taxCondition ?? '');
   const [fiscalAddress, setFiscalAddress] = useState(company?.fiscalAddress ?? '');
   const [industry, setIndustry] = useState<CompanyIndustry | ''>(company?.industry ?? '');
@@ -278,6 +282,29 @@ export default function CompanyFormModal({
       setError('El punto de venta tiene que ser un número de 1 a 99999 (por ejemplo 8 o 00008)');
       return;
     }
+    // Con certificado cargado, se le pregunta a ARCA si el punto de venta es
+    // de Web Services. Sólo avisa: si ARCA no responde (o el rol no puede
+    // consultarlo) se guarda igual.
+    if (effectiveRoles.includes('BRANCH') && ownSettings?.afipConfigured) {
+      setCheckingPointOfSale(true);
+      afipCertificateApi
+        .pointsOfSale()
+        .then((result) => {
+          if (result.ok && !result.enabled.includes(Number.parseInt(pointOfSaleNumber, 10))) {
+            setPointOfSaleWarning(result.enabled);
+            return;
+          }
+          save();
+        })
+        .catch(() => save())
+        .finally(() => setCheckingPointOfSale(false));
+      return;
+    }
+    save();
+  }
+
+  function save() {
+    setPointOfSaleWarning(null);
     // Duplicate-CUIT detection only applies to a brand-new, role-locked
     // company - the generic multi-role form (no lockedRole) still allows
     // picking multiple roles up front, so there's nothing to "merge" there.
@@ -551,9 +578,47 @@ export default function CompanyFormModal({
               <Field label="Punto de venta (ARCA)">
                 <Input
                   value={pointOfSaleNumber}
-                  onChange={(e) => setPointOfSaleNumber(e.target.value)}
+                  onChange={(e) => {
+                    setPointOfSaleNumber(e.target.value);
+                    setPointOfSaleWarning(null);
+                  }}
                   placeholder="00001"
                 />
+                {pointOfSaleWarning && (
+                  <div className="flex flex-col gap-1.5 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                    <span>
+                      ⚠ <b className="font-mono">{pointOfSaleNumber.trim().padStart(5, '0')}</b> no está habilitado para Web
+                      Services en ARCA.{' '}
+                      {pointOfSaleWarning.length > 0
+                        ? `Tenés: ${pointOfSaleWarning.map((n) => String(n).padStart(5, '0')).join(', ')}.`
+                        : 'No tenés ninguno todavía.'}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {pointOfSaleWarning.length > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            setPointOfSaleNumber(String(pointOfSaleWarning[0]));
+                            setPointOfSaleWarning(null);
+                          }}
+                        >
+                          Usar {String(pointOfSaleWarning[0]).padStart(5, '0')}
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={save}>
+                        Guardar igual
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setShowPointOfSaleHelp(true)}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        Cómo crear uno
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Número de punto de venta habilitado para Web Services en ARCA.{' '}
                   <button
@@ -576,8 +641,10 @@ export default function CompanyFormModal({
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={mutation.isPending || collisionCheck.isPending}>
-                {mutation.isPending || collisionCheck.isPending
+              <Button type="submit" disabled={mutation.isPending || collisionCheck.isPending || checkingPointOfSale}>
+                {checkingPointOfSale
+                  ? 'Consultando a ARCA...'
+                  : mutation.isPending || collisionCheck.isPending
                   ? 'Guardando...'
                   : isEdit
                     ? 'Guardar cambios'

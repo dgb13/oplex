@@ -6,12 +6,28 @@ import { AfipWsfeClient, CBTE_TIPO } from './afip-wsfe-client.js';
 export interface ArcaConnectionCheckResult {
   ok: boolean;
   // Qué falló, para que la pantalla lleve al paso correcto.
-  problem: 'NOT_CONFIGURED' | 'NOT_AUTHORIZED' | 'CERTIFICATE' | 'NETWORK' | 'OTHER' | null;
+  problem: 'NOT_CONFIGURED' | 'NOT_AUTHORIZED' | 'CERTIFICATE' | 'NETWORK' | 'POINT_OF_SALE' | 'OTHER' | null;
   message: string;
   pointOfSale: number | null;
   documentLetter: DocumentLetter | null;
   lastNumber: number | null;
+  // Cada punto de venta probado con éxito (paso 5: "la primera va a ser...").
+  points: { pointOfSale: number; branchName: string; lastNumber: number }[];
   checkedAt: string;
+}
+
+/** Paso 5 de "Conexión con ARCA": los puntos de venta de Web Services que
+ * ARCA tiene para el CUIT, cruzados con las sucursales de Oplex. ARCA sólo
+ * informa los de Web Services: los de "Comprobantes en línea" no aparecen. */
+export interface ArcaPointsOfSaleResult {
+  ok: boolean;
+  problem: ArcaConnectionCheckResult['problem'];
+  message: string | null;
+  // Habilitados (ni bloqueados ni dados de baja).
+  enabled: number[];
+  // Los que ARCA informa pero no se pueden usar.
+  unavailable: { number: number; blocked: boolean; deregisteredOn: string | null }[];
+  branches: { id: string; name: string; pointOfSaleNumber: string | null; enabled: boolean }[];
 }
 
 /**
@@ -41,6 +57,7 @@ export class ArcaConnectionService {
         pointOfSale: null,
         documentLetter: null,
         lastNumber: null,
+        points: [],
         checkedAt: checkedAt.toISOString(),
       };
     } else {
@@ -65,23 +82,24 @@ export class ArcaConnectionService {
       if (pointsOfSale.size === 0) {
         result = {
           ok: false,
-          problem: 'OTHER',
+          problem: 'POINT_OF_SALE',
           message:
-            'Falta una sucursal con punto de venta. Creala en Sucursales con el número de punto de venta de Web Services que diste de alta en ARCA y volvé a probar.',
+            'Falta una sucursal con punto de venta. Hacé el paso 5 (Punto de venta): Oplex busca en ARCA el de Web Services y lo carga en tu sucursal.',
           pointOfSale: null,
           documentLetter,
           lastNumber: null,
+          points: [],
           checkedAt: checkedAt.toISOString(),
         };
       } else {
         const client = new AfipWsfeClient(credentials);
         const lines: string[] = [];
         let failure: ArcaConnectionCheckResult | null = null;
-        let first: { pointOfSale: number; lastNumber: number } | null = null;
+        const points: ArcaConnectionCheckResult['points'] = [];
         for (const [pointOfSale, branchName] of pointsOfSale) {
           try {
             const lastNumber = await client.lastAuthorizedNumber(pointOfSale, CBTE_TIPO.FACTURA[documentLetter]);
-            first ??= { pointOfSale, lastNumber };
+            points.push({ pointOfSale, branchName, lastNumber });
             lines.push(
               `punto de venta ${formatPointOfSale(pointOfSale)} (${branchName}): Factura ${documentLetter} ${String(lastNumber).padStart(8, '0')}`,
             );
@@ -93,6 +111,7 @@ export class ArcaConnectionService {
               pointOfSale,
               documentLetter,
               lastNumber: null,
+              points,
               checkedAt: checkedAt.toISOString(),
             };
             break;
@@ -113,9 +132,10 @@ export class ArcaConnectionService {
             ok: true,
             problem: null,
             message: `Conexión correcta. Último comprobante autorizado en el ${lines.join('; en el ')}.${unregisteredNote}`,
-            pointOfSale: first?.pointOfSale ?? null,
+            pointOfSale: points[0]?.pointOfSale ?? null,
             documentLetter,
-            lastNumber: first?.lastNumber ?? null,
+            lastNumber: points[0]?.lastNumber ?? null,
+            points,
             checkedAt: checkedAt.toISOString(),
           };
         }
@@ -129,19 +149,60 @@ export class ArcaConnectionService {
     });
     return result;
   }
+
+  async pointsOfSale(): Promise<ArcaPointsOfSaleResult> {
+    const branchRows = await getTenantDb().company.findMany({
+      where: { active: true, roles: { some: { role: 'BRANCH' } } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, pointOfSaleNumber: true },
+    });
+    const withStatus = (enabled: number[]) =>
+      branchRows.map((branch) => ({
+        ...branch,
+        enabled: branch.pointOfSaleNumber !== null && enabled.includes(Number.parseInt(branch.pointOfSaleNumber, 10)),
+      }));
+
+    const credentials = await this.afipCredentials.getCurrent();
+    if (!credentials) {
+      return {
+        ok: false,
+        problem: 'NOT_CONFIGURED',
+        message: 'Falta cargar el certificado o el CUIT de la empresa.',
+        enabled: [],
+        unavailable: [],
+        branches: withStatus([]),
+      };
+    }
+    try {
+      const points = await new AfipWsfeClient(credentials).enabledPointsOfSale();
+      const enabled = points.filter((p) => !p.blocked && !p.deregisteredOn).map((p) => p.number);
+      return {
+        ok: true,
+        problem: null,
+        message: null,
+        enabled,
+        unavailable: points
+          .filter((p) => p.blocked || p.deregisteredOn)
+          .map((p) => ({ number: p.number, blocked: p.blocked, deregisteredOn: p.deregisteredOn })),
+        branches: withStatus(enabled),
+      };
+    } catch (err) {
+      return { ...describeFailure((err as Error).message), enabled: [], unavailable: [], branches: withStatus([]) };
+    }
+  }
 }
 
 /** Traduce lo que devuelve ARCA a algo accionable. */
 function describeFailure(
   raw: string,
-  context: { pointOfSale: number; branchName: string; enabled: string },
+  context?: { pointOfSale: number; branchName: string; enabled: string },
 ): Pick<ArcaConnectionCheckResult, 'ok' | 'problem' | 'message'> {
   // [11002] El punto de venta no se encuentra habilitado a usar en el presente WS.
-  if (raw.includes('[11002]')) {
+  if (context && raw.includes('[11002]')) {
     return {
       ok: false,
-      problem: 'OTHER',
-      message: `El punto de venta ${formatPointOfSale(context.pointOfSale)} de la sucursal "${context.branchName}" no está habilitado para Web Services en ARCA. Corregí el número en Sucursales (ahí está la ayuda "¿Dónde lo encuentro?") o desactivá esa sucursal si ya no la usás. ${context.enabled} Detalle de ARCA: ${raw}`,
+      problem: 'POINT_OF_SALE',
+      message: `El punto de venta ${formatPointOfSale(context.pointOfSale)} de la sucursal "${context.branchName}" no está habilitado para Web Services en ARCA. Hacé el paso 5 (Punto de venta) para asignarle uno habilitado, o desactivá esa sucursal si ya no la usás. ${context.enabled} Detalle de ARCA: ${raw}`,
     };
   }
   if (raw.includes('notAuthorized')) {

@@ -24,7 +24,7 @@ Tené a mano esta lista. Si te falta algo, conseguilo primero: te ahorra dar vue
 
 ## El mapa: 6 etapas
 
-Así se ve todo el recorrido. La pantalla de Oplex está dividida en 4 pasos numerados; las etapas 3 y 4 de este mapa son el paso 3 de la pantalla (3.1 y 3.2).
+Así se ve todo el recorrido. La pantalla de Oplex está dividida en 5 pasos numerados; las etapas 3 y 4 de este mapa son el paso 3 de la pantalla (3.1 y 3.2).
 
 | Etapa | Dónde se hace | Qué lográs | Artículo |
 |---|---|---|---|
@@ -33,14 +33,14 @@ Así se ve todo el recorrido. La pantalla de Oplex está dividida en 4 pasos num
 | 3. Certificado en ARCA | Sitio de ARCA, paso 3.1 | ARCA te devuelve el certificado | [Certificado de producción](/documentacion/arca/certificado-produccion) |
 | 4. Autorizarlo a facturar | Sitio de ARCA, paso 3.2 | El certificado queda habilitado para Facturación Electrónica (wsfe) | [Certificado de producción](/documentacion/arca/certificado-produccion) |
 | 5. Subirlo y probar | Oplex, paso 4 | Oplex confirma que ARCA lo acepta | [Subir el certificado y probar la conexión](/documentacion/arca/subir-y-probar) |
-| 6. Punto de venta | Sitio de ARCA + Oplex, Sucursales | El número de punto de venta "Web Services" cargado en tu sucursal | [Punto de venta](/documentacion/arca/punto-de-venta) |
+| 6. Punto de venta | Sitio de ARCA + Oplex, paso 5 | El número de punto de venta "Web Services" cargado en tu sucursal | [Punto de venta](/documentacion/arca/punto-de-venta) |
 
 > [!IMPORTANTE]
-> Para que la prueba de la etapa 5 salga bien, Oplex necesita al menos una sucursal con su punto de venta (etapa 6). Si ya tenés el punto de venta de Web Services dado de alta en ARCA, cargalo antes de probar. Si no, hacé la etapa 6 y después volvé a probar.
+> Si hoy facturás desde "Comprobantes en línea" o "Factura en línea", ese punto de venta **no sirve** para Oplex: en la etapa 6 vas a crear uno nuevo, de Web Services. El que tenés lo seguís usando igual.
 
-![Tarjeta de estado de Conexión con ARCA con las 4 casillas](/ayuda/capturas/arca-estado.jpg)
+![Tarjeta de estado de Conexión con ARCA](/ayuda/capturas/arca-estado.jpg)
 
-Arriba de la pantalla vas a ver una tarjeta de estado con cuatro casillas: **Datos de la empresa**, **Clave y pedido (CSR)**, **Certificado cargado** y **Autorización a facturar**. Cada una se tilda sola cuando ese paso queda listo. Cuando las cuatro están tildadas, ya podés facturar.
+Arriba de la pantalla vas a ver una tarjeta de estado con cinco casillas: **Datos de la empresa**, **Clave y pedido (CSR)**, **Certificado cargado**, **Autorización a facturar** y **Punto de venta**. Cada una se tilda sola cuando ese paso queda listo. Cuando las cinco están tildadas, ya podés facturar.
 
 ## Producción u homologación: cuál te toca
 
