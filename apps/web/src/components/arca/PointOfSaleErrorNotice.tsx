@@ -58,16 +58,16 @@ export function PointOfSaleErrorNotice({ error }: { error: PointOfSaleNotEnabled
 
   if (fixed !== null && error.branch) {
     return (
-      <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-3 text-[13px] dark:border-emerald-900 dark:bg-emerald-950/40">
-        <b className="text-emerald-700 dark:text-emerald-400">✓ Listo:</b> {error.branch.name} ahora factura con el punto de
+      <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-3 text-left text-[13px] text-slate-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-slate-100 pos-dark:border-emerald-900 pos-dark:bg-emerald-950/60 pos-dark:text-slate-100 pos-contrast:border-emerald-700 pos-contrast:bg-black pos-contrast:text-white">
+        <b className="text-emerald-700 dark:text-emerald-400 pos-dark:text-emerald-400 pos-contrast:text-emerald-300">✓ Listo:</b> {error.branch.name} ahora factura con el punto de
         venta <b className="font-mono">{pad(fixed)}</b>. Volvé a tocar el botón para facturar.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-red-300 bg-red-50 px-3.5 py-3 text-[13px] dark:border-red-900 dark:bg-red-950/40">
-      <b className="text-red-700 dark:text-red-400">
+    <div className="flex flex-col gap-2 rounded-xl border border-red-300 bg-red-50 px-3.5 py-3 text-left text-[13px] text-slate-800 dark:border-red-900 dark:bg-red-950/40 dark:text-slate-100 pos-dark:border-red-900 pos-dark:bg-red-950/60 pos-dark:text-slate-100 pos-contrast:border-red-600 pos-contrast:bg-black pos-contrast:text-white">
+      <b className="text-red-700 dark:text-red-400 pos-dark:text-red-400 pos-contrast:text-red-400">
         No se pudo facturar: el punto de venta {pad(error.pointOfSale)} no es de Web Services.
       </b>
       <span>
@@ -98,7 +98,7 @@ export function PointOfSaleErrorNotice({ error }: { error: PointOfSaleNotEnabled
         </Link>
       </div>
       {saveError && <span className="text-destructive">{saveError}</span>}
-      <span className="text-xs text-muted-foreground">No se emitió la factura. Corregí el punto de venta y volvé a intentar.</span>
+      <span className="text-xs opacity-75">No se emitió la factura. Corregí el punto de venta y volvé a intentar.</span>
     </div>
   );
 }
