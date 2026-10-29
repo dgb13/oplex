@@ -14,6 +14,6 @@ Para emitir facturas electrónicas con CAE, ARCA tiene que autorizar a Oplex con
 3. **Certificado en ARCA (paso 3.1).** En **Administración de Certificados Digitales**: **Agregar alias**, elegí el `.csr`, y descargá el certificado con **Ver** › **Descargar**. (Para pruebas sin validez fiscal se usa WSASS, en homologación.)
 4. **Autorizarlo (paso 3.2).** En **Administrador de Relaciones de Clave Fiscal**: **Nueva Relación** › ARCA › WebServices › **Facturación Electrónica**, representante **Computador Fiscal** con tu alias, **Confirmar**.
 5. **Subir y probar (paso 4).** Subí el certificado, revisá titular, ambiente y vencimiento, **Guardar certificado** y **Probar conexión con ARCA**.
-6. **Punto de venta.** Dalo de alta en ARCA como Web Services (Monotributo: "Factura Electrónica - Monotributo - Web Services"; RI y Exento: "RECE para aplicativo y web services") y cargalo en **Sucursales**.
+6. **Punto de venta (paso 5).** El de "Comprobantes en línea" o "Factura en línea" no sirve: creá en ARCA uno de Web Services (Monotributo: "Factura Electrónica - Monotributo - Web Services"; RI y Exento: "RECE para aplicativo y web services"). Después tocá **Buscar mis puntos de venta en ARCA** y **Guardar y probar**: Oplex lo carga en tu sucursal.
 
 Cuando vence el certificado, se repiten los pasos 2 a 4 (incluida la autorización).

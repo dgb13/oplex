@@ -20,8 +20,6 @@ import './landing.css';
 // brillo del punto no se corten en el borde.
 const LOOP_VIEWBOX = '-6 -6 76 76';
 const RECOMMENDED_PLAN = 'SILVER';
-// Número de contacto comercial (formato wa.me: país + 9 + área + número).
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5492616590127';
 
 const ars = new Intl.NumberFormat('es-AR');
 
@@ -415,21 +413,21 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
               </span>
               <h1>
                 <span className="line">
-                  <span className="word">Vendés</span>{' '}
-                  <span className="word" style={{ animationDelay: '.08s' }}>una</span>{' '}
-                  <span className="word" style={{ animationDelay: '.16s' }}>vez.</span>
+                  <span className="word">Todo</span>{' '}
+                  <span className="word" style={{ animationDelay: '.08s' }}>tu</span>{' '}
+                  <span className="word" style={{ animationDelay: '.16s' }}>negocio</span>
                 </span>
                 <span className="line">
-                  <span className="word grad-text" style={{ animationDelay: '.3s' }}>Oplex</span>{' '}
-                  <span className="word grad-text" style={{ animationDelay: '.38s' }}>hace</span>{' '}
-                  <span className="word grad-text" style={{ animationDelay: '.46s' }}>el</span>{' '}
-                  <span className="word grad-text" style={{ animationDelay: '.54s' }}>resto.</span>
+                  <span className="word grad-text" style={{ animationDelay: '.3s' }}>en</span>{' '}
+                  <span className="word grad-text" style={{ animationDelay: '.38s' }}>un</span>{' '}
+                  <span className="word grad-text" style={{ animationDelay: '.46s' }}>solo</span>{' '}
+                  <span className="word grad-text" style={{ animationDelay: '.54s' }}>sistema.</span>
                 </span>
               </h1>
               <p className="sub">
-                En cada venta se piden el <b>CAE a ARCA</b>, se descuenta el <b>stock</b>, se registra el{' '}
-                <b>asiento contable</b> y se actualiza el <b>tablero</b>. Sin pasar datos de un lado a otro, sin
-                planillas.
+                <b>Facturación, caja, stock, compras, producción, roles de usuarios, lectura de facturas con IA, Mercado
+                Pago y contabilidad</b> conectados entre sí. Y un asistente único que te responde por WhatsApp cómo va tu
+                negocio.
               </p>
               <div className="hero-ctas">
                 <Link className="btn btn-primary" href="/signup">
@@ -1015,20 +1013,6 @@ export default function Landing({ plans }: { plans: PublicPlan[] }) {
           </div>
         </div>
       </footer>
-
-      {WHATSAPP_NUMBER && (
-        <a
-          className="wa"
-          href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola, quiero saber más sobre Oplex')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Escribinos por WhatsApp"
-        >
-          <svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
-            <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.6a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z" />
-          </svg>
-        </a>
-      )}
     </div>
   );
 }

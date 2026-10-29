@@ -14,10 +14,11 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { Check, ChevronRight, Copy, Download, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CompanyDataStep } from './CompanyDataStep';
+import { PointOfSaleStep } from './PointOfSaleStep';
 
-type StepKey = 1 | 2 | 3 | 4;
+type StepKey = 1 | 2 | 3 | 4 | 5;
 
 const TAX_CONDITION_LABELS: Record<TenantTaxCondition, string> = {
   RESPONSABLE_INSCRIPTO: 'Responsable Inscripto',
@@ -78,10 +79,36 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
   const authOk = settings.afipLastCheckOk === true;
   const authFailed = settings.afipLastCheckOk === false;
   const notAuthorized = authFailed && /no lo tiene autorizado|notAuthorized/i.test(settings.afipLastCheckMessage ?? '');
+  // Falló sólo el punto de venta (11002 o sin sucursal): ARCA ya aceptó el
+  // certificado, lo que falta es el paso 5. Mismo criterio de texto que
+  // notAuthorized (el resultado guardado es sólo ok + mensaje).
+  const pointOfSaleFailed = authFailed && /punto de venta/i.test(settings.afipLastCheckMessage ?? '');
+  const certAccepted = authOk || pointOfSaleFailed;
 
-  const firstPending: StepKey = !companyDone ? 1 : !keyDone ? 2 : !certDone ? (settings.afipHasPendingKey ? 3 : 4) : !authOk ? 3 : 4;
+  const firstPending: StepKey = !companyDone
+    ? 1
+    : !keyDone
+      ? 2
+      : !certDone
+        ? settings.afipHasPendingKey
+          ? 3
+          : 4
+        : authFailed && !pointOfSaleFailed
+          ? 3
+          : 5;
   const [open, setOpen] = useState<Set<StepKey>>(() => new Set(certDone && authOk ? [] : [firstPending]));
   const step32Ref = useRef<HTMLDivElement>(null);
+  const step5Ref = useRef<HTMLElement>(null);
+  const showStep5 = () => {
+    setOpen((prev) => new Set(prev).add(5));
+    setTimeout(() => step5Ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  // /arca#paso-5: el aviso al facturar con un punto de venta que no sirve.
+  useEffect(() => {
+    if (window.location.hash !== '#paso-5') return;
+    setOpen((prev) => new Set(prev).add(5));
+    setTimeout(() => step5Ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, []);
   const toggle = (step: StepKey) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -123,7 +150,7 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
           <StatusCheck
             state={companyDone ? 'ok' : 'pending'}
             title="Datos de la empresa"
@@ -148,21 +175,46 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
             }
           />
           <StatusCheck
-            state={authOk ? 'ok' : authFailed ? 'bad' : 'pending'}
+            state={certAccepted ? 'ok' : authFailed ? 'bad' : 'pending'}
             title="Autorización a facturar"
             detail={
               authOk
                 ? `Verificada el ${formatDate(settings.afipLastCheckAt)}`
-                : notAuthorized
-                  ? 'Falta autorizar "wsfe"'
-                  : authFailed
-                    ? 'ARCA rechazó la conexión'
-                    : 'Sin probar'
+                : certAccepted
+                  ? 'ARCA aceptó el certificado'
+                  : notAuthorized
+                    ? 'Falta autorizar "wsfe"'
+                    : authFailed
+                      ? 'ARCA rechazó la conexión'
+                      : 'Sin probar'
+            }
+          />
+          <StatusCheck
+            state={authOk ? 'ok' : pointOfSaleFailed ? 'bad' : 'pending'}
+            title="Punto de venta"
+            detail={
+              authOk
+                ? `Listo para facturar · ${formatDate(settings.afipLastCheckAt)}`
+                : pointOfSaleFailed
+                  ? 'Falta asignarlo a la sucursal'
+                  : 'Sin revisar'
             }
           />
         </div>
 
-        {authFailed && settings.afipLastCheckMessage && (
+        {pointOfSaleFailed && (
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-3.5 py-3 text-sm dark:border-red-900 dark:bg-red-950/40">
+            <p>
+              <span className="font-semibold text-red-700 dark:text-red-400">Falta el punto de venta.</span> ARCA aceptó el
+              certificado, pero la sucursal no tiene un punto de venta de Web Services. Hacé el paso 5.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={showStep5}>
+              Ir al paso 5
+            </Button>
+          </div>
+        )}
+
+        {authFailed && !pointOfSaleFailed && settings.afipLastCheckMessage && (
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-3.5 py-3 text-sm dark:border-red-900 dark:bg-red-950/40">
             <p>
               <span className="font-semibold text-red-700 dark:text-red-400">ARCA rechazó la conexión.</span>{' '}
@@ -210,7 +262,7 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
 
         <Step
           number={3}
-          done={certDone && authOk}
+          done={certDone && certAccepted}
           open={open.has(3)}
           onToggle={() => toggle(3)}
           title="Obtener el certificado en ARCA"
@@ -225,10 +277,22 @@ export default function ArcaConnectionCard({ settings }: { settings: TenantSetti
           open={open.has(4)}
           onToggle={() => toggle(4)}
           title="Subir el certificado"
-          subtitle="y probar la conexión"
+          subtitle="y comprobar que ARCA lo acepta"
+        >
+          <UploadStep settings={settings} onSaved={invalidate} onShowStep32={showStep32} onShowStep5={showStep5} />
+        </Step>
+
+        <Step
+          number={5}
+          done={authOk}
+          open={open.has(5)}
+          onToggle={() => toggle(5)}
+          title="Punto de venta"
+          subtitle="uno nuevo, sólo para Oplex"
+          sectionRef={step5Ref}
           last
         >
-          <UploadStep settings={settings} onSaved={invalidate} onShowStep32={showStep32} />
+          <PointOfSaleStep settings={settings} onSaved={invalidate} onShowStep32={showStep32} />
         </Step>
       </Card>
     </div>
@@ -269,6 +333,7 @@ function Step({
   title,
   subtitle,
   last,
+  sectionRef,
   children,
 }: {
   number: StepKey;
@@ -278,10 +343,11 @@ function Step({
   title: string;
   subtitle: string;
   last?: boolean;
+  sectionRef?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`grid grid-cols-[44px_minmax(0,1fr)] gap-x-3.5 px-5 py-4.5 ${last ? '' : 'border-b'}`}>
+    <section ref={sectionRef} className={`grid grid-cols-[44px_minmax(0,1fr)] gap-x-3.5 px-5 py-4.5 ${last ? '' : 'border-b'}`}>
       <span
         className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
           done ? 'bg-emerald-600 text-white dark:bg-emerald-500' : 'bg-primary text-primary-foreground'
@@ -765,10 +831,12 @@ function UploadStep({
   settings,
   onSaved,
   onShowStep32,
+  onShowStep5,
 }: {
   settings: TenantSettings;
   onSaved: () => void;
   onShowStep32: () => void;
+  onShowStep5: () => void;
 }) {
   const [certPem, setCertPem] = useState('');
   const [certName, setCertName] = useState('');
@@ -856,6 +924,7 @@ function UploadStep({
         pointOfSale: null,
         documentLetter: null,
         lastNumber: null,
+        points: [],
         checkedAt: new Date().toISOString(),
       }),
   });
@@ -951,34 +1020,38 @@ function UploadStep({
           </button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Para probar hace falta al menos una sucursal con su punto de venta de Web Services, cargado en{' '}
-        <Link href="/branches" className="font-medium text-primary underline underline-offset-2">
-          Sucursales
-        </Link>
-        .{' '}
-        <Link href="/documentacion/arca/punto-de-venta" className="underline underline-offset-2">
-          Cómo saber cuál es
-        </Link>
-      </p>
-
       {checkResult && (
         <div
           className={`rounded-xl px-3.5 py-3 text-[13px] ${
-            checkResult.ok
+            checkResult.ok || checkResult.problem === 'POINT_OF_SALE'
               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
               : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
           }`}
         >
-          <b>{checkResult.ok ? '✓ Conexión correcta.' : checkResult.problem === 'NOT_AUTHORIZED' ? '✕ Sin autorización para facturar.' : '✕ No se pudo conectar.'}</b>{' '}
+          <b>
+            {checkResult.ok
+              ? '✓ Conexión correcta.'
+              : checkResult.problem === 'POINT_OF_SALE'
+                ? '✓ ARCA aceptó el certificado.'
+                : checkResult.problem === 'NOT_AUTHORIZED'
+                  ? '✕ Sin autorización para facturar.'
+                  : '✕ No se pudo conectar.'}
+          </b>{' '}
           {checkResult.ok
             ? `${checkResult.message.replace(/^Conexión correcta\.\s*/, '')} Ya podés facturar.`
-            : checkResult.problem === 'NOT_AUTHORIZED'
-              ? 'ARCA reconoce el certificado pero no lo tiene autorizado para "wsfe". Hacé el paso 3.2 y volvé a probar.'
-              : checkResult.message}
+            : checkResult.problem === 'POINT_OF_SALE'
+              ? 'Falta el punto de venta: seguí con el paso 5.'
+              : checkResult.problem === 'NOT_AUTHORIZED'
+                ? 'ARCA reconoce el certificado pero no lo tiene autorizado para "wsfe". Hacé el paso 3.2 y volvé a probar.'
+                : checkResult.message}
           {checkResult.problem === 'NOT_AUTHORIZED' && (
             <button type="button" onClick={onShowStep32} className="ml-1.5 font-semibold underline">
               Ver paso 3.2
+            </button>
+          )}
+          {checkResult.problem === 'POINT_OF_SALE' && (
+            <button type="button" onClick={onShowStep5} className="ml-1.5 font-semibold underline">
+              Ir al paso 5
             </button>
           )}
         </div>

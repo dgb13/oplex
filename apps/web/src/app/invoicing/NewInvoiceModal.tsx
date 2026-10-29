@@ -4,6 +4,7 @@ import CompanyFormModal from '@/components/CompanyFormModal';
 import InvoiceTaxLinesEditor from '@/components/InvoiceTaxLinesEditor';
 import { ArcaCertAlert, ArcaCertPill, arcaCertState, canIssueWith } from '@/components/sales/ArcaCertStatus';
 import CustomerPicker from '@/components/sales/CustomerPicker';
+import { pointOfSaleNotEnabled, PointOfSaleErrorNotice } from '@/components/arca/PointOfSaleErrorNotice';
 import { PendingDeliveryDialog } from '@/components/sales/PendingDeliveryDialog';
 import { computeSalesTotals, type SalesLine } from '@/components/sales/salesDocument';
 import SalesDocumentSheet, { LinkButton, SectionLabel, Segmented } from '@/components/sales/SalesDocumentSheet';
@@ -18,7 +19,7 @@ import { suggestDocumentLetter } from '@/lib/documentLetter';
 import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi, type InvoiceTaxLineInput, type StockShortage } from '@/lib/invoicing';
 import { receivablesApi } from '@/lib/receivables';
-import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { tenantSettingsApi, type PointOfSaleNotEnabledError } from '@/lib/tenantSettings';
 import { formatMoney } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -79,6 +80,7 @@ export default function NewInvoiceModal({
   const [showOtherTaxes, setShowOtherTaxes] = useState(false);
   const [notes, setNotes] = useState(initialNotes ?? '');
   const [error, setError] = useState('');
+  const [pointOfSaleError, setPointOfSaleError] = useState<PointOfSaleNotEnabledError | null>(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
   // Aviso "Falta stock para entregar todo" (null = cerrado).
@@ -169,6 +171,7 @@ export default function NewInvoiceModal({
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       setShortages(null);
+      setPointOfSaleError(pointOfSaleNotEnabled(err));
       const message = err.response?.data?.message ?? 'No se pudo emitir la factura';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
@@ -189,6 +192,7 @@ export default function NewInvoiceModal({
 
   function handleSubmit() {
     setError('');
+    setPointOfSaleError(null);
     if (!customerId) {
       setError('Elegí a quién le facturás.');
       return;
@@ -390,7 +394,11 @@ export default function NewInvoiceModal({
                   emitirla igual; el límite se cambia en la ficha del cliente.
                 </p>
               )}
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {pointOfSaleError ? (
+                <PointOfSaleErrorNotice error={pointOfSaleError} />
+              ) : (
+                error && <p className="text-sm text-destructive">{error}</p>
+              )}
               <Button
                 type="submit"
                 size="lg"

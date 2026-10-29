@@ -1,5 +1,6 @@
 'use client';
 
+import { pointOfSaleNotEnabled, PointOfSaleErrorNotice } from '@/components/arca/PointOfSaleErrorNotice';
 import { PendingDeliveryDialog } from '@/components/sales/PendingDeliveryDialog';
 import { Button } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
@@ -9,7 +10,7 @@ import { inventoryApi } from '@/lib/inventory';
 import { invoicingApi, type StockShortage } from '@/lib/invoicing';
 import { quotesApi, type QuoteDetail } from '@/lib/quotes';
 import { receivablesApi } from '@/lib/receivables';
-import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { tenantSettingsApi, type PointOfSaleNotEnabledError } from '@/lib/tenantSettings';
 import { formatMoney } from '@/lib/vatCost';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -29,6 +30,7 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   const [warehouseId, setWarehouseId] = useState('');
   const [documentLetter, setDocumentLetter] = useState<DocumentLetter>('B');
   const [error, setError] = useState('');
+  const [pointOfSaleError, setPointOfSaleError] = useState<PointOfSaleNotEnabledError | null>(null);
   // Aviso "Falta stock para entregar todo" (null = cerrado).
   const [shortages, setShortages] = useState<StockShortage[] | null>(null);
   const [checkingStock, setCheckingStock] = useState(false);
@@ -78,6 +80,7 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
       setShortages(null);
+      setPointOfSaleError(pointOfSaleNotEnabled(err));
       const message = err.response?.data?.message ?? 'No se pudo convertir la cotización';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
@@ -86,6 +89,7 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
   // Igual que Nueva factura: si falta stock, se avisa y se puede seguir.
   function convert() {
     setError('');
+    setPointOfSaleError(null);
     setCheckingStock(true);
     invoicingApi
       .checkStock({ warehouseId, quoteId: quote.id })
@@ -156,7 +160,11 @@ export default function ConvertQuoteToInvoiceModal({ quote, onClose, onConverted
               {formatMoney(creditLimit)}. Podés facturar igual; el límite se cambia en la ficha del cliente.
             </p>
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {pointOfSaleError ? (
+            <PointOfSaleErrorNotice error={pointOfSaleError} />
+          ) : (
+            error && <p className="text-sm text-destructive">{error}</p>
+          )}
           <div className="mt-2 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancelar

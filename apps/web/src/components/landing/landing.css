@@ -319,9 +319,6 @@ html:has(.lp) { scroll-behavior: smooth; }
 .lp .foot-links .withdrawal { color: var(--text); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 12px; }
 .lp .foot-contact { display: flex; flex-direction: column; gap: 4px; }
 .lp .foot-contact a, .lp .plans-note a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
-.lp .wa { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); z-index: 30; width: 56px; height: 56px; border-radius: 50%; background: #22c55e; display: grid; place-items: center; box-shadow: 0 12px 30px -8px rgba(34,197,94,.7); animation: lp-bob 3s ease-in-out infinite; }
-.lp .wa svg { width: 28px; height: 28px; }
-@keyframes lp-bob { 50% { transform: translateY(-4px); } }
 .lp .mock-flag { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 30; font: 600 11px/1 var(--mono); letter-spacing: .06em; color: var(--amber); background: rgba(6,10,19,.85); border: 1px dashed rgba(251,191,36,.5); padding: 8px 10px; border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) {
 .lp *, .lp *::before, .lp *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }

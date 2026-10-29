@@ -20,6 +20,12 @@ const SYSTEM_NAMES = {
   },
 } as const;
 
+/** Qué sistema elegir en ARCA según la condición IVA propia (también lo usa
+ * el paso 5 de Conexión con ARCA). */
+export function pointOfSaleSystemNames(taxCondition: TenantTaxCondition | null | undefined) {
+  return taxCondition === 'MONOTRIBUTO' || !taxCondition ? SYSTEM_NAMES.MONOTRIBUTO : SYSTEM_NAMES.RECE;
+}
+
 export function PointOfSaleHelpModal({
   taxCondition,
   onClose,
@@ -35,10 +41,7 @@ export function PointOfSaleHelpModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const names =
-    taxCondition === 'MONOTRIBUTO' || !taxCondition
-      ? SYSTEM_NAMES.MONOTRIBUTO
-      : SYSTEM_NAMES.RECE;
+  const names = pointOfSaleSystemNames(taxCondition);
 
   return (
     <div

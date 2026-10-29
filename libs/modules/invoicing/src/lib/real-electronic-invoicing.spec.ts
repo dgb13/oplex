@@ -54,8 +54,15 @@ describe('explainArcaError', () => {
   it('explica el punto de venta no habilitado para Web Services', () => {
     const raw = 'ARCA WSFE: [11002] El punto de venta no se encuentra habilitado a usar en el presente WS. Ver metodo FEParamGetPtosVenta';
     const text = explainArcaError(raw, '1');
-    expect(text).toMatch(/^El punto de venta 0001 no está habilitado para Web Services en ARCA\. Revisá el número en Sucursales/);
+    expect(text).toMatch(/^El punto de venta 00001 no es de Web Services en ARCA/);
+    expect(text).toContain('paso 5 (Punto de venta)');
     expect(text).toContain(`Detalle de ARCA: ${raw}`);
+  });
+
+  it('lista los habilitados, o avisa que no hay ninguno', () => {
+    const raw = 'ARCA WSFE: [11002] El punto de venta no se encuentra habilitado a usar en el presente WS.';
+    expect(explainArcaError(raw, '00001', [2, 3])).toContain('Habilitados para Web Services: 00002, 00003.');
+    expect(explainArcaError(raw, '00001', [])).toContain('ARCA no informa ningún punto de venta de Web Services');
   });
 
   it('deja el resto como lo manda ARCA', () => {

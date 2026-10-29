@@ -22,6 +22,8 @@ En **Conexión con ARCA**, la tarjeta de estado de arriba te dice qué paso falt
 | **Autorización a facturar** | **Sin probar** | Tocá **Probar conexión con ARCA** en el paso 4. |
 | **Autorización a facturar** | **Falta autorizar "wsfe"** (en rojo) | Falta el paso 3.2. Tocá **Ver cómo hacerlo**. |
 | **Autorización a facturar** | **ARCA rechazó la conexión** (en rojo) | Leé el mensaje rojo debajo de las casillas y buscalo en esta página. |
+| **Punto de venta** | **Sin revisar** | Hacé el [paso 5](/documentacion/arca/punto-de-venta). |
+| **Punto de venta** | **Falta asignarlo a la sucursal** (en rojo) | ARCA aceptó el certificado pero la sucursal no tiene un punto de venta de Web Services. Tocá **Ir al paso 5**. |
 
 ## Al cargar los datos y el certificado
 
@@ -44,8 +46,8 @@ En **Conexión con ARCA**, la tarjeta de estado de arriba te dice qué paso falt
 | Lo que ves | Por qué pasa | Qué hacer |
 |---|---|---|
 | **✕ Sin autorización para facturar.** ARCA reconoce el certificado pero no lo tiene autorizado para "wsfe". | Falta el paso 3.2, o se autorizó otro servicio. | Hacé la relación con **Facturación Electrónica** ([producción](/documentacion/arca/certificado-produccion#3-2-autorizarlo-a-facturar)) o **wsfe - Facturación Electrónica** ([homologación](/documentacion/arca/certificado-homologacion#3-2-autorizarlo-a-facturar)). |
-| **✕ No se pudo conectar.** Falta una sucursal con punto de venta. … | Ninguna sucursal activa tiene punto de venta. | Cargalo en **Sucursales** ([Punto de venta](/documentacion/arca/punto-de-venta)). |
-| **✕ No se pudo conectar.** El punto de venta … de la sucursal "…" no está habilitado para Web Services en ARCA. … | Es un punto de venta de Comprobantes en línea, está mal escrito, dado de baja, o todavía no se habilitó (código **11002** de ARCA). | Usá uno de la lista **Puntos de venta habilitados para Web Services según ARCA**, o creá uno de Web Services. |
+| **✓ ARCA aceptó el certificado. Falta el punto de venta: seguí con el paso 5.** | El certificado está bien; ninguna sucursal tiene un punto de venta de Web Services. | Tocá **Ir al paso 5** ([Punto de venta](/documentacion/arca/punto-de-venta)). |
+| **El punto de venta … de la sucursal "…" no está habilitado para Web Services en ARCA. …** | Es un punto de venta de Comprobantes en línea, está mal escrito, dado de baja, o todavía no se habilitó (código **11002** de ARCA). | En el paso 5 tocá **Buscar mis puntos de venta en ARCA** y elegí uno de la lista, o creá uno de Web Services. |
 | **ARCA no informa ningún punto de venta habilitado para Web Services en este CUIT.** | No hay ninguno de Web Services, o es muy nuevo. | Creá uno en ARCA y probá más tarde. |
 | **✕ No se pudo conectar.** ARCA no aceptó el certificado. Revisá que sea del ambiente elegido (homologación o producción) y que no esté vencido. | Certificado vencido, o la autorización se hizo en el otro ambiente. | Mirá la fecha en **Certificado cargado**. Si venció, [renovalo](/documentacion/arca/renovar-certificado). Si es de homologación, recordá que no sirve para producción. |
 | **✕ No se pudo conectar.** No se pudo llegar a ARCA. Probá de nuevo en unos minutos. | Los servidores de ARCA no responden. | Esperá y volvé a probar. Pasa seguido en horarios de mucho uso y en vencimientos. |
@@ -67,6 +69,7 @@ En **Conexión con ARCA**, la tarjeta de estado de arriba te dice qué paso falt
 | **No se puede numerar el comprobante: ARCA informa como último autorizado el … en el punto de venta …, pero Oplex ya tiene registrado el …. Revisá que el certificado ARCA sea del ambiente correcto (homologación o producción).** | Oplex tiene facturas con ese número que ARCA no conoce: típico al pasar de homologación a producción usando el mismo punto de venta, o con datos cargados antes de conectar ARCA. | Revisá el ambiente del certificado. Si recién pasaste a producción, consultá con soporte antes de seguir. |
 | **AFIP WSFE no autorizó el comprobante: [código] …** | ARCA rechazó la factura; el código y el texto explican por qué. | Ver [ARCA rechaza la factura](/documentacion/problemas/arca-rechaza-la-factura). |
 | **No se pudo conectar con ARCA WSFE: …** | ARCA no responde. | Esperá unos minutos y volvé a emitir. |
+| **No se pudo facturar: el punto de venta … no es de Web Services.** | La sucursal tiene el punto de venta de Comprobantes en línea / Factura en línea, o uno que no existe. | Tocá **Usar … en …** (aparece si ARCA tiene uno de Web Services) y volvé a emitir. Si no tenés ninguno, tocá **Ver cómo crear uno**. |
 
 ## Comprobantes de ARCA que no están en Oplex
 
