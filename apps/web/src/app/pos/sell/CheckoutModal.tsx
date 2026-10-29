@@ -13,7 +13,8 @@ import {
   type QrCharge,
 } from '@/lib/pos';
 import { profileApi } from '@/lib/profile';
-import { tenantSettingsApi } from '@/lib/tenantSettings';
+import { tenantSettingsApi, type PointOfSaleNotEnabledError } from '@/lib/tenantSettings';
+import { pointOfSaleNotEnabled, PointOfSaleErrorNotice } from '@/components/arca/PointOfSaleErrorNotice';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
@@ -51,6 +52,8 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   const [customerId, setCustomerId] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: 'CASH', amount: totals.total.toFixed(2) }]);
   const [error, setError] = useState('');
+  // ARCA rechazó el punto de venta de la sucursal: aviso con los habilitados.
+  const [pointOfSaleError, setPointOfSaleError] = useState<PointOfSaleNotEnabledError | null>(null);
   const [completedInvoice, setCompletedInvoice] = useState<{ id: string; documentLetter: string; number: string } | null>(
     null,
   );
@@ -215,6 +218,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
       void queryClient.invalidateQueries({ queryKey: ['pos-unclaimed-qr', registerId] });
     },
     onError: (err: AxiosError<{ message?: string | string[] }>) => {
+      setPointOfSaleError(pointOfSaleNotEnabled(err));
       const message = err.response?.data?.message ?? 'No se pudo completar el cobro';
       setError(Array.isArray(message) ? message.join(', ') : message);
     },
@@ -235,6 +239,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
 
   function handleConfirm() {
     setError('');
+    setPointOfSaleError(null);
     // El backend valida Σpayments.amount === Invoice.total exacto (ver
     // PosService.checkout) - antes acá se dejaba pasar un monto de más
     // "para ver el vuelto" y el cobro se rechazaba recién al confirmar.
@@ -340,7 +345,11 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
               </p>
               {mutation.isError ? (
                 <>
-                  <p className="text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400">{error}</p>
+                  {pointOfSaleError ? (
+                    <PointOfSaleErrorNotice error={pointOfSaleError} />
+                  ) : (
+                    <p className="text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400">{error}</p>
+                  )}
                   <p className="text-xs text-slate-500 pos-dark:text-slate-400 pos-contrast:text-slate-300">
                     El pago ya está acreditado. Reintentá confirmar la venta: no se le vuelve a cobrar al cliente.
                   </p>
@@ -569,10 +578,16 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
           </p>
         )}
 
-        {error && (
-          <p className="mt-3 text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400 pos-emerald:text-red-600">
-            {error}
-          </p>
+        {pointOfSaleError ? (
+          <div className="mt-3">
+            <PointOfSaleErrorNotice error={pointOfSaleError} />
+          </div>
+        ) : (
+          error && (
+            <p className="mt-3 text-sm text-red-600 pos-dark:text-red-400 pos-contrast:text-red-400 pos-emerald:text-red-600">
+              {error}
+            </p>
+          )
         )}
 
         <div className="mt-4 flex justify-end gap-3">
