@@ -41,13 +41,14 @@ const RI: PdfSourceEmitter = { name: 'Metalúrgica del Sur SRL', taxId: '30-7123
 const noImages = { logo: null, lineImages: [] };
 
 describe('resolveVatMode', () => {
-  it('desglosa sólo entre dos Responsables Inscriptos (factura A)', () => {
+  it('desglosa para un cliente Responsable Inscripto o Monotributo (factura A, RG 5003/2021)', () => {
     expect(resolveVatMode('RESPONSABLE_INSCRIPTO', '30-1', 'IVA Responsable Inscripto')).toBe('DISCRIMINATED');
+    expect(resolveVatMode('RESPONSABLE_INSCRIPTO', '20-1', 'Responsable Monotributo')).toBe('DISCRIMINATED');
   });
 
-  it('muestra precios finales para consumidor final, monotributo o condición desconocida (factura B)', () => {
+  it('muestra precios finales para consumidor final, exento o condición desconocida (factura B)', () => {
     expect(resolveVatMode('RESPONSABLE_INSCRIPTO', null, null)).toBe('INCLUDED');
-    expect(resolveVatMode('RESPONSABLE_INSCRIPTO', '20-1', 'Responsable Monotributo')).toBe('INCLUDED');
+    expect(resolveVatMode('RESPONSABLE_INSCRIPTO', '20-1', 'IVA Exento')).toBe('INCLUDED');
     expect(resolveVatMode('RESPONSABLE_INSCRIPTO', '20-1', null)).toBe('INCLUDED');
   });
 

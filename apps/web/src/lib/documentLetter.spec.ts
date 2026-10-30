@@ -47,11 +47,22 @@ describe('suggestDocumentLetter', () => {
     });
   });
 
-  it('forces Factura B when the customer is Monotributo or Exento', () => {
-    expect(
-      suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'Monotributo (Categoría B)').letter,
-    ).toBe('B');
-    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'IVA Exento').letter).toBe('B');
+  it('forces Factura A when the customer is Monotributo (RG 5003/2021)', () => {
+    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'Monotributo (Categoría B)')).toEqual({
+      letter: 'A',
+      locked: true,
+      reason: expect.stringContaining('RG 5003/2021'),
+    });
+    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'Responsable Monotributo').letter).toBe('A');
+    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'Monotributista Social').letter).toBe('A');
+  });
+
+  it('forces Factura B when the customer is Exento', () => {
+    expect(suggestDocumentLetter('RESPONSABLE_INSCRIPTO', '20-11111111-2', 'IVA Exento')).toEqual({
+      letter: 'B',
+      locked: true,
+      reason: expect.stringContaining('Exento'),
+    });
   });
 
   it('suggests (but does not lock) Factura B when the customer has a CUIT but an unknown tax condition', () => {
