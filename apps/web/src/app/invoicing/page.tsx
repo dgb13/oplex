@@ -9,6 +9,7 @@ import ArcaUnregisteredModal, { voucherLabel } from './ArcaUnregisteredModal';
 import AssistantInvoiceDraft from './AssistantInvoiceDraft';
 import GestionTab from './GestionTab';
 import ResumenTab from './ResumenTab';
+import { hasAnyRole } from '@/lib/team';
 
 const TABS = [
   { id: 'resumen', label: 'Resumen' },
@@ -26,7 +27,7 @@ function InvoicingScreen() {
   const [tab, setTab] = useState<TabId>('resumen');
 
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canSeeArca = !!profile && ARCA_ROLES.includes(profile.role);
+  const canSeeArca = hasAnyRole(profile?.roles, ARCA_ROLES);
   const arcaQuery = useQuery({
     queryKey: ['arca-unregistered'],
     queryFn: arcaUnregisteredApi.list,

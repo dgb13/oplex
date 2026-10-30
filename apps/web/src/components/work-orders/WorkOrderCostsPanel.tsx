@@ -7,6 +7,7 @@ import { formatDate, formatDay, workOrderCostsApi, workOrdersApi, type WorkOrder
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import { hasAnyRole } from '@/lib/team';
 
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
@@ -18,13 +19,14 @@ const HOURS = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
 /** Costo y margen de una orden: horas, repuestos, compras para el trabajo
  * y lo cobrado. Dueño/admin/contador ven importes; Ventas sólo las horas. */
-export default function WorkOrderCostsPanel({ orderId, role }: { orderId: string; role: string | undefined }) {
+export default function WorkOrderCostsPanel({ orderId, roles }: { orderId: string; roles: string[] | undefined }) {
   const queryClient = useQueryClient();
   const costsQuery = useQuery({ queryKey: ['work-order-costs', orderId], queryFn: () => workOrderCostsApi.get(orderId) });
   const assigneesQuery = useQuery({ queryKey: ['work-order-assignees'], queryFn: workOrdersApi.assignees });
-  const canLabor = role === 'OWNER' || role === 'ADMIN' || role === 'SALES';
-  const canPurchases = role === 'OWNER' || role === 'ADMIN' || role === 'PURCHASES' || role === 'ACCOUNTANT';
-  const seeMoney = role === 'OWNER' || role === 'ADMIN' || role === 'ACCOUNTANT';
+  const canLabor = hasAnyRole(roles, ['OWNER', 'ADMIN', 'SALES']);
+  const canPurchases = hasAnyRole(roles, ['OWNER', 'ADMIN', 'PURCHASES', 'ACCOUNTANT']);
+  const seeMoney = hasAnyRole(roles, ['OWNER', 'ADMIN', 'ACCOUNTANT']);
+  const isPurchases = hasAnyRole(roles, ['PURCHASES']);
   const ratesQuery = useQuery({ queryKey: ['work-order-labor-rates'], queryFn: workOrderCostsApi.rates, enabled: seeMoney });
 
   const [worker, setWorker] = useState('');
@@ -89,7 +91,7 @@ export default function WorkOrderCostsPanel({ orderId, role }: { orderId: string
 
   return (
     <section className="rounded-xl border bg-card p-5">
-      <h2 className="text-base font-semibold">{seeMoney ? 'Costo y margen' : role === 'PURCHASES' ? 'Horas y compras' : 'Horas trabajadas'}</h2>
+      <h2 className="text-base font-semibold">{seeMoney ? 'Costo y margen' : isPurchases ? 'Horas y compras' : 'Horas trabajadas'}</h2>
 
       {seeMoney && !costs.hidden && (
         <>
@@ -208,7 +210,7 @@ export default function WorkOrderCostsPanel({ orderId, role }: { orderId: string
       )}
 
       {/* Compras ve las compras que vincula, sin ingreso ni margen. */}
-      {(seeMoney ? !costs.hidden : role === 'PURCHASES') && (
+      {(seeMoney ? !costs.hidden : isPurchases) && (
         <>
           <h3 className="mt-5 text-sm font-semibold">Compras para este trabajo</h3>
           <p className="text-xs text-muted-foreground">El repuesto o la tornería que compraste especialmente para esta orden.</p>

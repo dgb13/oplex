@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { hasAnyRole } from '@/lib/team';
 
 type Scope = 'open' | 'closed' | 'all';
 
@@ -60,12 +61,12 @@ export default function WorkOrdersPage() {
   const orders = ordersQuery.data ?? [];
   const counts = new Map<string, number>();
   for (const o of openQuery.data ?? []) counts.set(o.status.id, (counts.get(o.status.id) ?? 0) + 1);
-  const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
+  const canWrite = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
   // Reporte de márgenes: con "Costo por trabajo" y para quien ve importes.
   const showMargins =
     Boolean(business) &&
     isModuleEnabled(business, 'costo-trabajo') &&
-    (profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'ACCOUNTANT');
+    hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'ACCOUNTANT']);
   // Hoy en hora local, "2026-10-28" (en-CA da ese formato).
   const today = new Date().toLocaleDateString('en-CA');
 

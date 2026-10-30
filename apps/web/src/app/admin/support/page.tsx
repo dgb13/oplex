@@ -304,7 +304,7 @@ function TicketThread({ tenantId, ticketId }: { tenantId: string; ticketId: stri
                       {k}: {v}
                     </span>
                   ))}
-                  {t.userRole && <span className="block">Rol: {t.userRole}</span>}
+                  {t.userRoles.length > 0 && <span className="block">Rol: {t.userRoles.join(', ')}</span>}
                 </div>
               )}
             </article>

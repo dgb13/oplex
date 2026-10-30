@@ -237,7 +237,7 @@ export default function ArticlePicker({
                 </p>
                 {allowCreate && query.trim() && !createAccess.allowed && (
                   <p className="border-t border-slate-200 dark:border-slate-800 px-3 py-2 text-xs text-slate-500">
-                    {roleLockTitle(createAccess.role, 'cargar artículos nuevos')}
+                    {roleLockTitle(createAccess.roles, 'cargar artículos nuevos')}
                   </p>
                 )}
                 {allowCreate && query.trim() && createAccess.allowed && (

@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { hasAnyRole } from '@/lib/team';
 
 function firstOfMonth(): string {
   const d = new Date();
@@ -23,7 +24,7 @@ export default function MarginReportPage() {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
   const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
   const enabled = Boolean(business) && isModuleEnabled(business, 'costo-trabajo');
-  const allowed = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'ACCOUNTANT';
+  const allowed = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'ACCOUNTANT']);
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(new Date().toLocaleDateString('en-CA'));
   const reportQuery = useQuery({

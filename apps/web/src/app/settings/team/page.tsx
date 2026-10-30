@@ -4,7 +4,7 @@ import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
 import Select from '@/components/ui/Select';
 import { profileApi } from '@/lib/profile';
-import { ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/team';
+import { ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole, isOwnerOrAdmin } from '@/lib/team';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -39,7 +39,7 @@ export default function TeamPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [activityMember, setActivityMember] = useState<TeamMember | null>(null);
 
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
 
   if (profile && !canManage) {
     return (
@@ -119,7 +119,7 @@ function MemberRow({
   }
 
   const roleMutation = useMutation({
-    mutationFn: (role: TeamRole) => teamApi.changeRole(member.id, role),
+    mutationFn: (role: TeamRole) => teamApi.changeRoles(member.id, [role]),
     onSuccess: () => {
       setFeedback(null);
       invalidate();
@@ -164,15 +164,15 @@ function MemberRow({
           >
             Contador externo
           </span>
-        ) : member.role === 'OWNER' ? (
+        ) : member.roles.includes('OWNER') ? (
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES.OWNER}`}>
             {ROLE_LABELS.OWNER}
           </span>
         ) : (
           <Select
             className="w-fit"
-            buttonClassName={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES[member.role]}`}
-            value={member.role}
+            buttonClassName={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES[member.roles[0]]}`}
+            value={member.roles[0]}
             onChange={(role) => roleMutation.mutate(role as TeamRole)}
             disabled={roleMutation.isPending}
             options={ASSIGNABLE_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))}

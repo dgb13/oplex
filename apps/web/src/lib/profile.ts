@@ -5,7 +5,7 @@ export interface UserProfile {
   email: string;
   name: string | null;
   avatarUrl: string | null;
-  role: string;
+  roles: string[];
   tenantId: string;
   showOnlinePresence: boolean;
   mustChangePassword: boolean;

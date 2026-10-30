@@ -323,7 +323,7 @@ export default function InventoryPage() {
 
       {!writeAccess.allowed && (
         <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {roleLockTitle(writeAccess.role, 'cargar ni editar artículos, depósitos o stock (sí podés consultarlos)')}
+          {roleLockTitle(writeAccess.roles, 'cargar ni editar artículos, depósitos o stock (sí podés consultarlos)')}
         </p>
       )}
 

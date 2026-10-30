@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { hasAnyRole, isOwnerOrAdmin } from '@/lib/team';
 
 /** Fichas del cliente: vehículos de un taller, equipos de un service... Se
  * busca por el dato principal (patente, n° de serie) o por el dueño. */
@@ -44,8 +45,8 @@ export default function FichasPage() {
     enabled: Boolean(activeTypeId),
   });
   const assets = assetsQuery.data ?? [];
-  const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
-  const canConfigure = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canWrite = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
+  const canConfigure = isOwnerOrAdmin(profile?.roles);
   const identifierLabel = type?.fields.find((f) => f.isIdentifier)?.label ?? 'Dato principal';
 
   if (enabled === false) {

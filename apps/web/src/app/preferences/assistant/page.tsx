@@ -15,7 +15,7 @@ import {
   type AssistantHistoryStatus,
   type UpdateAssistantConfig,
 } from '@/lib/assistant';
-import { ROLE_LABELS, type TeamRole } from '@/lib/team';
+import { formatRoles, ROLE_LABELS } from '@/lib/team';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
@@ -306,7 +306,7 @@ function HistoryRow({
   // Con acción, el estado que importa es el de la acción (esperando, hecha...).
   const status = action ? ACTION_STATUS[action.status] : STATUS[entry.status];
   const channel = entry.channel ? CHANNEL[entry.channel] : null;
-  const role = entry.user.role ? (ROLE_LABELS[entry.user.role as TeamRole] ?? entry.user.role) : null;
+  const role = entry.user.roles.length > 0 ? formatRoles(entry.user.roles) : null;
   const facts = [
     action ? `Acción: ${action.label} (${action.level === 'DIRECT' ? 'Directa' : 'Borrador'})` : null,
     action?.status === 'DONE' && !action.undoable ? 'Ya no se puede deshacer desde acá.' : null,

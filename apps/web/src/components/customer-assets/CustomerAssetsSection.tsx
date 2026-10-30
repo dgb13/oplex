@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 import AssetFormModal from './AssetFormModal';
+import { hasAnyRole } from '@/lib/team';
 
 /** Vehículos / equipos / mascotas de un cliente, dentro de su ficha. Sólo
  * si el negocio usa el módulo Fichas. */
@@ -24,7 +25,7 @@ export default function CustomerAssetsSection({ companyId, readOnly }: { company
 
   const types = typesQuery.data ?? [];
   if (!enabled || types.length === 0) return null;
-  const canWrite = !readOnly && (profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES');
+  const canWrite = !readOnly && hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
   const title = types.length === 1 ? types[0].pluralName : 'Fichas';
   const assets = assetsQuery.data ?? [];
 

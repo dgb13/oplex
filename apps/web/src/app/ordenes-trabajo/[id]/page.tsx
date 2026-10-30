@@ -19,6 +19,7 @@ import { ArrowLeft, FileText, Printer } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { hasAnyRole } from '@/lib/team';
 
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as AxiosError<{ message?: string | string[] }> | undefined)?.response?.data?.message;
@@ -53,7 +54,7 @@ export default function WorkOrderPage() {
   const [scheduling, setScheduling] = useState(false);
   const [appointment, setAppointment] = useState('');
   const [scheduled, setScheduled] = useState('');
-  const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
+  const canWrite = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
 
   function refresh(saved?: Awaited<ReturnType<typeof workOrdersApi.get>>) {
     if (saved) queryClient.setQueryData(['work-order', id], saved);
@@ -389,7 +390,7 @@ export default function WorkOrderPage() {
       </section>
 
       {/* Costo y margen (módulo "Costo por trabajo"). */}
-      {costsOn && <WorkOrderCostsPanel orderId={order.id} role={profile?.role} />}
+      {costsOn && <WorkOrderCostsPanel orderId={order.id} roles={profile?.roles} />}
 
       <section className="rounded-xl border bg-card p-5">
         <h2 className="text-base font-semibold">Historial</h2>

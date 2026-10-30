@@ -4,12 +4,13 @@ import { profileApi } from '@/lib/profile';
 import { tenantSettingsApi } from '@/lib/tenantSettings';
 import { useQuery } from '@tanstack/react-query';
 import ArcaConnectionCard from './ArcaConnectionCard';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 // "Conexión con ARCA" (antes una tarjeta de Preferencias).
 // Mismos roles que pueden cargar el certificado en la API: OWNER/ADMIN.
 export default function ArcaConnectionPage() {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canEdit = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canEdit = isOwnerOrAdmin(profile?.roles);
   const { data: settings, isLoading } = useQuery({
     queryKey: ['tenant-settings'],
     queryFn: tenantSettingsApi.get,

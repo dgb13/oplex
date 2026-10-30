@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react';
 import PosSelect from '../PosSelect';
 import QrChargePanel from './QrChargePanel';
 import type { TicketLine } from './types';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 interface Props {
   registerId: string;
@@ -95,7 +96,7 @@ export default function CheckoutModal({ registerId, lines, totals, onClose, onCo
   const [paidCharge, setPaidCharge] = useState<QrCharge | null>(null);
   const qrActive = registerQrQuery.data?.active ?? false;
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canSetUpQr = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canSetUpQr = isOwnerOrAdmin(profile?.roles);
 
   const selectedCustomer = (customersQuery.data ?? []).find((c) => c.id === customerId);
   const baseCurrency = (currenciesQuery.data ?? []).find((c) => c.isBase) ?? currenciesQuery.data?.[0];

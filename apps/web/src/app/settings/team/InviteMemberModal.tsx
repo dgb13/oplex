@@ -33,7 +33,7 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
   const [copied, setCopied] = useState(false);
 
   const inviteMutation = useMutation({
-    mutationFn: () => teamApi.invite({ email, role }),
+    mutationFn: () => teamApi.invite({ email, roles: [role] }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['team-members'] });
       onClose();
@@ -42,7 +42,7 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
   });
 
   const createMutation = useMutation({
-    mutationFn: () => teamApi.createWithPassword({ email, name: name || undefined, role }),
+    mutationFn: () => teamApi.createWithPassword({ email, name: name || undefined, roles: [role] }),
     onSuccess: (result) => {
       setError('');
       setCreated(result);

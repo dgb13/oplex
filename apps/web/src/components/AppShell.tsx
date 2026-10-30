@@ -50,6 +50,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { hasAnyRole, isOwnerOrAdmin } from '@/lib/team';
 
 interface NavLink {
   href: string;
@@ -149,13 +150,13 @@ interface ModuleGrant {
   canRead: boolean;
 }
 
-function canSee(item: NavLink, role: string | undefined, grants: ModuleGrant[]): boolean {
+function canSee(item: NavLink, roles: string[] | undefined, grants: ModuleGrant[]): boolean {
   if (!item.roles && !item.module) return true;
   // Hasta que carga el perfil, lo restringido no se muestra (evita que
   // aparezca y desaparezca un item que el rol no puede usar).
-  if (!role) return false;
-  if (role === 'OWNER' || role === 'ADMIN') return true;
-  if (item.roles?.includes(role)) return true;
+  if (!roles) return false;
+  if (isOwnerOrAdmin(roles)) return true;
+  if (item.roles && hasAnyRole(roles, item.roles)) return true;
   return (item.module ?? []).some((m) => grants.some((g) => g.module === m && g.canRead));
 }
 
@@ -278,20 +279,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const fichasIcon = BUSINESS_TEMPLATE_ICONS[businessProfile?.template?.iconKey ?? ''] ?? ClipboardList;
   const navEntries = planEntries.flatMap((entry): NavEntry[] => {
     if (entry.kind === 'link') {
-      if (!canSee(entry, profile?.role, grants) || !moduleOn(entry.businessModule)) return [];
+      if (!canSee(entry, profile?.roles, grants) || !moduleOn(entry.businessModule)) return [];
       if (entry.href === '/fichas') return [{ ...entry, label: fichasLabel, icon: fichasIcon }];
       if (entry.href === '/ordenes-trabajo' && workOrderConfig) return [{ ...entry, label: workOrderConfig.pluralName }];
       return [entry];
     }
     if (!moduleOn(entry.businessModule)) return [];
-    const items = entry.items.filter((item) => canSee(item, profile?.role, grants) && moduleOn(item.businessModule));
+    const items = entry.items.filter((item) => canSee(item, profile?.roles, grants) && moduleOn(item.businessModule));
     return items.length > 0 ? [{ ...entry, items }] : [];
   });
 
   // Etiqueta "Conectar"/"Reconectar" junto a Mercado Pago en el menú: es
   // lo que hace encontrable la conexión (antes escondida en Preferencias).
   // Mismo queryKey que la sección - react-query lo dedupe.
-  const canManageMercadoPago = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManageMercadoPago = isOwnerOrAdmin(profile?.roles);
   const { data: mercadoPagoStatus } = useQuery({
     queryKey: ['mercadopago-status'],
     queryFn: mercadoPagoApi.getStatus,
@@ -322,7 +323,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Alta nueva que todavía no eligió rubro: primero eso (sólo quien puede
   // elegirlo; un invitado entra normal).
-  const canChooseBusiness = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canChooseBusiness = isOwnerOrAdmin(profile?.roles);
   useEffect(() => {
     if (businessProfile?.pending && canChooseBusiness && !profile?.mustChangePassword) {
       router.replace('/bienvenida');
@@ -741,7 +742,7 @@ function UserMenu() {
           {/* Mismo gate que /preferences abajo: gestionar el equipo es
            * política del tenant, no algo personal - sólo tiene sentido
            * mostrarlo a quien puede invitar/suspender gente. */}
-          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+          {(isOwnerOrAdmin(profile?.roles)) && (
             <Link
               href="/settings/team"
               onClick={() => setOpen(false)}
@@ -753,7 +754,7 @@ function UserMenu() {
 
           {/* Mismo gate que "Equipo" arriba: administrar cajas es política
            * del tenant, sólo tiene sentido para quien puede crear/desactivar. */}
-          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+          {(isOwnerOrAdmin(profile?.roles)) && (
             <Link
               href="/settings/pos"
               onClick={() => setOpen(false)}
@@ -765,7 +766,7 @@ function UserMenu() {
 
           {/* Rubro y módulos: configuración de todo el negocio, mismos roles
            * que PATCH /business-profile/modules. */}
-          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+          {(isOwnerOrAdmin(profile?.roles)) && (
             <Link
               href="/settings/modules"
               onClick={() => setOpen(false)}
@@ -778,7 +779,7 @@ function UserMenu() {
           {/* Tenant-wide business policy, not a personal preference - same
            * write restriction as PATCH /tenant-settings (OWNER/ADMIN), so
            * this only shows to roles that can actually save a change here. */}
-          {(profile?.role === 'OWNER' || profile?.role === 'ADMIN') && (
+          {(isOwnerOrAdmin(profile?.roles)) && (
             <Link
               href="/preferences"
               onClick={() => setOpen(false)}

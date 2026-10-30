@@ -72,7 +72,7 @@ export function CollabPanel({ entityType, entityId }: { entityType: string; enti
   const me = meQuery.data;
   const people = peopleQuery.data ?? [];
   const everyone = useMemo<Person[]>(
-    () => (me ? [{ id: me.id, name: me.name, email: me.email, avatarUrl: me.avatarUrl, role: me.role }, ...people] : people),
+    () => (me ? [{ id: me.id, name: me.name, email: me.email, avatarUrl: me.avatarUrl, roles: me.roles }, ...people] : people),
     [me, people],
   );
   const byId = useMemo(() => new Map(everyone.map((p) => [p.id, p])), [everyone]);

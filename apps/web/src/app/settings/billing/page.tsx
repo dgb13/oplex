@@ -19,6 +19,7 @@ import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import { useState } from 'react';
 import CheckoutDialog from './CheckoutDialog';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 const STATUS_PILL: Record<string, { label: string; className: string }> = {
   TRIALING: { label: 'En prueba', className: 'bg-primary/10 text-primary' },
@@ -61,7 +62,7 @@ export default function BillingPage() {
   const { data: plans, isLoading: plansLoading } = useQuery({ queryKey: ['plans'], queryFn: plansApi.list });
   const { data: billing, isLoading: billingLoading } = useQuery({ queryKey: ['billing'], queryFn: billingApi.get });
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
   const [planToSwitch, setPlanToSwitch] = useState<Plan | null>(null);
   const [notice, setNotice] = useState('');
@@ -512,7 +513,7 @@ function CancellationCard() {
   const [receipt, setReceipt] = useState<LegalRequestReceipt | null>(null);
   const request = useMutation({ mutationFn: () => legalApi.cancellation(message || undefined), onSuccess: setReceipt });
 
-  if (profile?.role !== 'OWNER' && profile?.role !== 'ADMIN') return null;
+  if (!isOwnerOrAdmin(profile?.roles)) return null;
 
   return (
     <section className="max-w-2xl rounded-xl border p-5">

@@ -11,7 +11,7 @@ import {
   type StudioMembershipSummary,
 } from '@/lib/memberships';
 import { profileApi } from '@/lib/profile';
-import { teamApi } from '@/lib/team';
+import { teamApi, isOwnerOrAdmin } from '@/lib/team';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -31,13 +31,13 @@ export default function PortfolioSection() {
   const router = useRouter();
 
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
   // Sólo OWNER/ADMIN puede repartir cartera (GET /users es OWNER/ADMIN-only
   // en el backend) - y sólo tiene sentido mostrar contadores (ACCOUNTANT):
   // asignarle a un OWNER/ADMIN sería un no-op, ya ven todo sin importar la
   // asignación (ver filterVisibleForCaller).
   const { data: team } = useQuery({ queryKey: ['team-members'], queryFn: teamApi.list, enabled: canManage });
-  const accountants = (team ?? []).filter((m) => m.role === 'ACCOUNTANT' && !m.isExternalAccountant);
+  const accountants = (team ?? []).filter((m) => m.roles.includes('ACCOUNTANT') && !m.isExternalAccountant);
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery({
     queryKey: ['membership-portfolio'],
