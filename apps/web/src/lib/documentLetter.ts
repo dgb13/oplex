@@ -16,8 +16,11 @@ export interface DocumentLetterSuggestion {
  * Deriva la letra de comprobante (A/B/C) según las reglas reales de AFIP:
  * - Emisor Monotributo/Exento → siempre C, sin importar el cliente.
  * - Emisor Responsable Inscripto + cliente Responsable Inscripto → A.
- * - Emisor Responsable Inscripto + cliente sin CUIT (Consumidor Final),
- *   Monotributo o Exento → B.
+ * - Emisor Responsable Inscripto + cliente Monotributo (incluido el
+ *   Monotributista Social) → A, con la leyenda de la Ley 27.618 que agrega
+ *   el PDF (RG 5003/2021; antes de esa resolución correspondía B).
+ * - Emisor Responsable Inscripto + cliente sin CUIT (Consumidor Final) o
+ *   Exento → B.
  * - Emisor Responsable Inscripto + cliente con CUIT pero condición IVA
  *   desconocida (nunca se corrió "Buscar en AFIP" en su ficha) → se sugiere
  *   B sin bloquear, porque asumir A y estar equivocado es el error más
@@ -65,8 +68,15 @@ export function suggestDocumentLetter(
   if (normalized.includes('responsable inscripto')) {
     return { letter: 'A', locked: true, reason: 'Cliente Responsable Inscripto: corresponde Factura A.' };
   }
-  if (normalized.includes('monotribut') || normalized.includes('exent')) {
-    return { letter: 'B', locked: true, reason: 'Cliente Monotributo/Exento: corresponde Factura B.' };
+  if (normalized.includes('monotribut')) {
+    return {
+      letter: 'A',
+      locked: true,
+      reason: 'Cliente Monotributo: corresponde Factura A con la leyenda de la Ley 27.618 (RG 5003/2021).',
+    };
+  }
+  if (normalized.includes('exent')) {
+    return { letter: 'B', locked: true, reason: 'Cliente Exento: corresponde Factura B.' };
   }
 
   return {

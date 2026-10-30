@@ -109,14 +109,16 @@ export function taxIdLabel(taxId: string | null): string {
 }
 
 /** Misma regla que la letra de la factura (ver suggestDocumentLetter en la
- * web): A sólo con cliente RI con CUIT; ante la duda, B. */
+ * web): A con cliente RI o Monotributo con CUIT (RG 5003/2021); ante la
+ * duda, B. */
 export function resolveVatMode(
   ownTaxCondition: TenantTaxConditionValue,
   customerTaxId: string | null,
   customerTaxCondition: string | null | undefined,
 ): QuoteVatMode {
   if (ownTaxCondition !== 'RESPONSABLE_INSCRIPTO') return 'NONE';
-  if (customerTaxId && (customerTaxCondition ?? '').toLowerCase().includes('responsable inscripto')) {
+  const condition = (customerTaxCondition ?? '').toLowerCase();
+  if (customerTaxId && (condition.includes('responsable inscripto') || condition.includes('monotribut'))) {
     return 'DISCRIMINATED';
   }
   return 'INCLUDED';
