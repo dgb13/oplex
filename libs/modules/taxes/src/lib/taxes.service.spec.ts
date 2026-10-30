@@ -5,10 +5,10 @@ import { TaxesService } from './taxes.service.js';
 function runInTenant<T>(
   db: Record<string, unknown>,
   fn: () => T,
-  opts: { userId?: string; role?: string } = {},
+  opts: { userId?: string; roles?: string[] } = {},
 ): T {
   return tenantContextStorage.run(
-    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', role: opts.role as never, tx: db as never },
+    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', roles: opts.roles as never, tx: db as never },
     fn,
   );
 }
@@ -70,7 +70,7 @@ describe('TaxesService.reviseTaxDefinition', () => {
       runInTenant(
         db,
         () => service.reviseTaxDefinition({ code: 'IVA_21', rate: 22 }),
-        { role: 'ACCOUNTANT' },
+        { roles: ['ACCOUNTANT'] },
       ),
     ).rejects.toThrow(ForbiddenException);
   });
@@ -98,7 +98,7 @@ describe('TaxesService.reviseTaxDefinition', () => {
     await runInTenant(
       db,
       () => service.reviseTaxDefinition({ code: 'IIBB_CABA', rate: 3.5 }),
-      { role: 'ACCOUNTANT' },
+      { roles: ['ACCOUNTANT'] },
     );
 
     expect(db.taxDefinition.create).toHaveBeenCalled();
@@ -125,7 +125,7 @@ describe('TaxesService.reviseTaxDefinition', () => {
     const service = new TaxesService();
 
     await runInTenant(db, () => service.reviseTaxDefinition({ code: 'IVA_21', rate: 22 }), {
-      role: 'OWNER',
+      roles: ['OWNER'],
     });
 
     expect(db.taxDefinition.create).toHaveBeenCalled();

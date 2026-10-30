@@ -64,7 +64,7 @@ describe('accessFromConfig', () => {
   it('gives OWNER and ADMIN every topic regardless of the matrix', () => {
     const empty = config({ topicsByRole: normalizeTopicsByRole(Object.fromEntries(Object.keys(DEFAULT_TOPICS_BY_ROLE).map((k) => [k, []]))) });
 
-    const access = accessFromConfig(empty, { sub: 'u', role: 'ADMIN' });
+    const access = accessFromConfig(empty, { sub: 'u', roles: ['ADMIN'] });
 
     expect([...access.allowedTopics].sort()).toEqual(['ayuda', 'caja', 'compras', 'costos', 'deudas', 'stock', 'ventas']);
     expect(access.allowedTools).toEqual(
@@ -75,21 +75,32 @@ describe('accessFromConfig', () => {
   });
 
   it('gives a configurable role only the topics enabled for it', () => {
-    const access = accessFromConfig(config(), { sub: 'u', role: 'INVENTORY' });
+    const access = accessFromConfig(config(), { sub: 'u', roles: ['INVENTORY'] });
 
     expect([...access.allowedTopics].sort()).toEqual(['ayuda', 'compras', 'stock']);
     expect(access.allowedTools).toEqual(new Set(['stock_articulo', 'compras_resumen', 'crear_recordatorio']));
   });
 
   it('scopes SALES to its own invoices only when "salesOwnDataOnly" is on', () => {
-    expect(accessFromConfig(config(), { sub: 'seller-1', role: 'SALES' }).scope).toEqual({ onlyIssuedBy: 'seller-1' });
-    expect(accessFromConfig(config({ salesOwnDataOnly: false }), { sub: 'seller-1', role: 'SALES' }).scope).toEqual({});
-    expect(accessFromConfig(config(), { sub: 'acc-1', role: 'ACCOUNTANT' }).scope).toEqual({});
+    expect(accessFromConfig(config(), { sub: 'seller-1', roles: ['SALES'] }).scope).toEqual({ onlyIssuedBy: 'seller-1' });
+    expect(accessFromConfig(config({ salesOwnDataOnly: false }), { sub: 'seller-1', roles: ['SALES'] }).scope).toEqual({});
+    expect(accessFromConfig(config(), { sub: 'acc-1', roles: ['ACCOUNTANT'] }).scope).toEqual({});
+  });
+
+  it('with several roles, adds up the topics of each one', () => {
+    const sales = accessFromConfig(config(), { sub: 'u', roles: ['SALES'] });
+    const inventory = accessFromConfig(config(), { sub: 'u', roles: ['INVENTORY'] });
+    const both = accessFromConfig(config(), { sub: 'u', roles: ['SALES', 'INVENTORY'] });
+    expect([...both.allowedTopics].sort()).toEqual([...new Set([...sales.allowedTopics, ...inventory.allowedTopics])].sort());
+  });
+
+  it('keeps Ventas + another role scoped to its own invoices', () => {
+    expect(accessFromConfig(config(), { sub: 'seller-1', roles: ['SALES', 'INVENTORY'] }).scope).toEqual({ onlyIssuedBy: 'seller-1' });
   });
 });
 
 describe('blockedTopicFor', () => {
-  const viewer = accessFromConfig(config(), { sub: 'u', role: 'VIEWER' });
+  const viewer = accessFromConfig(config(), { sub: 'u', roles: ['VIEWER'] });
 
   it('blocks a data question about a topic the person does not have', () => {
     expect(blockedTopicFor(viewer, { intent: 'datos', topic: 'ventas' })).toBe('ventas');
@@ -101,7 +112,7 @@ describe('blockedTopicFor', () => {
 
   it('blocks help questions only when "ayuda" is off for the role', () => {
     expect(blockedTopicFor(viewer, { intent: 'ayuda', topic: 'otro' })).toBeNull();
-    const noHelp = accessFromConfig(config({ topicsByRole: normalizeTopicsByRole({ ayuda: [] }) }), { sub: 'u', role: 'VIEWER' });
+    const noHelp = accessFromConfig(config({ topicsByRole: normalizeTopicsByRole({ ayuda: [] }) }), { sub: 'u', roles: ['VIEWER'] });
     expect(blockedTopicFor(noHelp, { intent: 'ayuda', topic: 'otro' })).toBe('ayuda');
   });
 });

@@ -23,7 +23,7 @@ function makeUser(): AuthenticatedUser {
     sub: 'user-1',
     tenantId: 'tenant-1',
     email: 'a@b.com',
-    role: 'OWNER',
+    roles: ['OWNER'],
     moduleAccess: [],
     mustChangePassword: false,
   };
@@ -34,7 +34,7 @@ const TURN: ActionTurn = { conversationId: 'conv-1', questionMessageId: 'q-1', c
 // Dueño: todos los temas.
 const FULL: AssistantAccess = accessFromConfig(
   { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
-  { sub: 'user-1', role: 'OWNER' },
+  { sub: 'user-1', roles: ['OWNER'] },
 );
 
 /** Fake mínimo de lo que devuelve `anthropic.messages.stream()` - un async
@@ -198,7 +198,7 @@ describe('AssistantOrchestratorService', () => {
     stream.mockReturnValue(fakeStream(textStreamEvents('Hola.')));
     const salesOnlyStock = accessFromConfig(
       { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: ['SALES'], costos: [], compras: [], ayuda: [] } },
-      { sub: 'user-2', role: 'SALES' },
+      { sub: 'user-2', roles: ['SALES'] },
     );
 
     await service.chat(makeUser(), salesOnlyStock, [], 'hola', TURN);
@@ -211,7 +211,7 @@ describe('AssistantOrchestratorService', () => {
     stream.mockReturnValue(fakeStream(textStreamEvents('No tengo cómo consultar eso.')));
     const viewer = accessFromConfig(
       { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: ['VIEWER'] } },
-      { sub: 'user-3', role: 'VIEWER' },
+      { sub: 'user-3', roles: ['VIEWER'] },
     );
 
     await service.chat(makeUser(), viewer, [], '¿cuánto vendimos?', TURN);
@@ -223,7 +223,7 @@ describe('AssistantOrchestratorService', () => {
     const { service, stream, toolsService } = makeService();
     const noCaja = accessFromConfig(
       { webEnabled: true, whatsappEnabled: true, salesOwnDataOnly: true, actionLevels: normalizeActionLevels({ recordatorio: 'OFF' }), actionRoles: normalizeActionRoles(null), maxQuoteAmountWhatsapp: null, maxActionsPerDay: 40, confirmExpiryMinutes: 10, topicsByRole: { ventas: ['SALES'], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] } },
-      { sub: 'user-2', role: 'SALES' },
+      { sub: 'user-2', roles: ['SALES'] },
     );
     stream
       .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'saldo_caja', {})))
@@ -252,7 +252,7 @@ describe('AssistantOrchestratorService', () => {
         confirmExpiryMinutes: 10,
         topicsByRole: { ventas: [], deudas: [], caja: [], stock: [], costos: [], compras: [], ayuda: [] },
       },
-      { sub: 'user-2', role: 'SALES' },
+      { sub: 'user-2', roles: ['SALES'] },
     );
     stream
       .mockReturnValueOnce(fakeStream(toolUseStreamEvents('tool-1', 'crear_recordatorio', { titulo: 'x', fecha: '2099-01-01' })))

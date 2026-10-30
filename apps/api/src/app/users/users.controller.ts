@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { CurrentUser, Public, Roles } from '@plexo/auth';
 import type { AuthenticatedUser } from '@plexo/types';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto.js';
-import { ChangeRoleDto } from './dto/change-role.dto.js';
+import { ChangeRolesDto } from './dto/change-roles.dto.js';
 import { InviteUserDto } from './dto/invite-user.dto.js';
 import { SendInvitationDto } from './dto/send-invitation.dto.js';
 import { ToggleStatusDto } from './dto/toggle-status.dto.js';
@@ -21,8 +21,8 @@ export class UsersController {
 
   @Roles('OWNER', 'ADMIN')
   @Post()
-  invite(@Body() dto: InviteUserDto) {
-    return this.usersService.inviteUser(dto);
+  invite(@Body() dto: InviteUserDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.usersService.inviteUser(dto, actor);
   }
 
   @Roles('OWNER', 'ADMIN')
@@ -38,9 +38,9 @@ export class UsersController {
   }
 
   @Roles('OWNER', 'ADMIN')
-  @Patch(':id/role')
-  changeRole(@Param('id') id: string, @Body() dto: ChangeRoleDto) {
-    return this.usersService.changeRole(id, dto);
+  @Patch(':id/roles')
+  changeRoles(@Param('id') id: string, @Body() dto: ChangeRolesDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.usersService.changeRoles(id, dto, actor);
   }
 
   @Roles('OWNER', 'ADMIN')

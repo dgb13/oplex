@@ -4,6 +4,7 @@ import { getTenantDb, PrismaService, withTenantContext } from '@plexo/database';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { AuthService } from '../auth/auth.service.js';
+import { isOwnerOrAdmin, type UserRole } from '@plexo/types';
 
 const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:4200';
 
@@ -91,10 +92,10 @@ export interface StudioMembershipSummary {
  * comentario ahí). */
 export function filterVisibleForCaller<T extends { assignedStudioUserIds: string[] }>(
   rows: T[],
-  callerRole: string,
+  callerRoles: readonly UserRole[],
   callerUserId: string,
 ): T[] {
-  if (callerRole === 'OWNER' || callerRole === 'ADMIN') {
+  if (isOwnerOrAdmin(callerRoles)) {
     return rows;
   }
   return rows.filter((r) => r.assignedStudioUserIds.length === 0 || r.assignedStudioUserIds.includes(callerUserId));
@@ -147,7 +148,7 @@ export class MembershipsService {
       const { admins, tenantName } = await withTenantContext(this.prisma, tenantId, async () => {
         const db = getTenantDb();
         const [admins, tenant] = await Promise.all([
-          db.user.findMany({ where: { role: { in: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } }),
+          db.user.findMany({ where: { roles: { hasSome: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } }),
           db.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
         ]);
         return { admins, tenantName: tenant.name };
@@ -218,9 +219,9 @@ export class MembershipsService {
   async getPortfolio(
     studioTenantId: string,
     callerUserId: string,
-    callerRole: string,
+    callerRoles: readonly UserRole[],
   ): Promise<PortfolioClientSummary[]> {
-    const memberships = filterVisibleForCaller(await this.listMine(studioTenantId), callerRole, callerUserId);
+    const memberships = filterVisibleForCaller(await this.listMine(studioTenantId), callerRoles, callerUserId);
     const accepted = memberships.filter((m) => m.status === 'ACCEPTED');
     const { from, to } = currentMonthRangeUtc();
 
@@ -312,7 +313,7 @@ export class MembershipsService {
     membershipId: string,
     actorUserId: string,
     actorTenantId: string,
-    actorRole: string,
+    actorRoles: readonly UserRole[],
   ): Promise<{ accessToken: string; expiresAt: string }> {
     // Todavía dentro del contexto RLS del PROPIO tenant del que llama (el
     // estudio) - TenantContextInterceptor ya lo abrió para este request.
@@ -324,7 +325,7 @@ export class MembershipsService {
       throw new NotFoundException('User not found');
     }
 
-    const memberships = filterVisibleForCaller(await this.listMine(actorTenantId), actorRole, actorUserId);
+    const memberships = filterVisibleForCaller(await this.listMine(actorTenantId), actorRoles, actorUserId);
     const membership = memberships.find((m) => m.id === membershipId);
     if (!membership) {
       throw new NotFoundException('Membership not found');
@@ -362,7 +363,7 @@ export class MembershipsService {
           tenantId: clientTenantId,
           email: studioUser.email,
           name: studioUser.name,
-          role: 'ACCOUNTANT',
+          roles: ['ACCOUNTANT'],
           passwordHash,
           isExternalAccountant: true,
           emailVerifiedAt: new Date(),

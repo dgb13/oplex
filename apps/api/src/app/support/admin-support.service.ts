@@ -111,7 +111,7 @@ export class AdminSupportService {
           },
         }),
         db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true, taxId: true } }),
-        db.user.findUnique({ where: { id: ticket.userId }, select: { id: true, role: true } }),
+        db.user.findUnique({ where: { id: ticket.userId }, select: { id: true, roles: true } }),
       ]);
       if (ticket.unreadByAdmin) {
         await db.supportTicket.update({ where: { id: ticketId }, data: { unreadByAdmin: false } });
@@ -121,7 +121,7 @@ export class AdminSupportService {
         unreadByAdmin: false,
         tenantName: tenant.name,
         tenantTaxId: tenant.taxId,
-        userRole: user?.role ?? null,
+        userRoles: user?.roles ?? [],
         userExists: Boolean(user),
         messages,
       };

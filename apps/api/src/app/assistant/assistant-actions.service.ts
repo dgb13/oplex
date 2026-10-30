@@ -17,7 +17,7 @@ import {
   type DocumentLetter,
   type Prisma,
 } from '@plexo/database';
-import type { AuthenticatedUser } from '@plexo/types';
+import { isOwnerOrAdmin, type AuthenticatedUser } from '@plexo/types';
 import { AssistantAccessService, type AssistantAccess } from './assistant-access.service.js';
 import { actionByKind, actionByTool, type AssistantActionDef } from './assistant-actions.catalog.js';
 import { startOfArgentinaDay } from './assistant-history.service.js';
@@ -323,7 +323,7 @@ export class AssistantActionsService {
     if (!action) {
       throw new NotFoundException('Acción no encontrada');
     }
-    if (action.userId !== user.sub && user.role !== 'OWNER' && user.role !== 'ADMIN') {
+    if (action.userId !== user.sub && !isOwnerOrAdmin(user.roles)) {
       throw new ForbiddenException('Sólo quien la pidió, el Dueño o un administrador pueden deshacerla');
     }
     if (action.status !== AssistantActionStatus.DONE || !action.entityId) {
@@ -823,7 +823,7 @@ export class AssistantActionsService {
     if (!action || action.kind !== 'INVOICE_PREPARE') {
       throw new NotFoundException('No encontré esa factura preparada');
     }
-    if (action.userId !== user.sub && user.role !== 'OWNER' && user.role !== 'ADMIN') {
+    if (action.userId !== user.sub && !isOwnerOrAdmin(user.roles)) {
       throw new ForbiddenException('Esa factura la preparó otra persona');
     }
     if (action.status !== AssistantActionStatus.DONE) {

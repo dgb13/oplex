@@ -202,7 +202,7 @@ export class WhatsAppWebhookService {
           sub: user.id,
           tenantId: link.tenant_id,
           email: user.email,
-          role: user.role,
+          roles: user.roles,
           moduleAccess: moduleAccess.map(
             (grant): ModuleAccessClaim => ({ module: grant.module, canRead: grant.canRead, canWrite: grant.canWrite }),
           ),
@@ -216,7 +216,7 @@ export class WhatsAppWebhookService {
         // CompaniesService.createCompany → assertCanManageAll).
         const store = tenantContextStorage.getStore();
         await (store
-          ? tenantContextStorage.run({ ...store, role: user.role }, () => this.answerAndReply(identity, phoneE164, text))
+          ? tenantContextStorage.run({ ...store, roles: user.roles }, () => this.answerAndReply(identity, phoneE164, text))
           : this.answerAndReply(identity, phoneE164, text));
       },
       link.user_id,

@@ -1,8 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { hasAnyRole } from '@plexo/types';
 import {
   getTenantDb,
   getTenantId,
-  getUserRole,
+  getUserRoles,
   type WithholdingRegime,
   type WithholdingTaxType,
 } from '@plexo/database';
@@ -73,12 +74,12 @@ export class WithholdingRegimeService {
   async reviseRegime(dto: ReviseWithholdingRegimeDto): Promise<WithholdingRegime> {
     const db = getTenantDb();
     const tenantId = getTenantId();
-    const role = getUserRole();
+    const roles = getUserRoles();
     const effectiveFrom = dto.effectiveFrom ? new Date(dto.effectiveFrom) : new Date();
 
     const current = await this.getActiveRegime(dto.code, effectiveFrom);
 
-    if (role === 'ACCOUNTANT' && !current.managedByAccountant) {
+    if (hasAnyRole(roles, ['ACCOUNTANT']) && !current.managedByAccountant) {
       throw new ForbiddenException(
         `Withholding regime ${dto.code} is not delegated to accountants - an OWNER/ADMIN must revise it`,
       );

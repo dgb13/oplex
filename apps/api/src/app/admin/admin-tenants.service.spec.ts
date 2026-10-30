@@ -60,17 +60,17 @@ describe('AdminTenantsService.listTenantUsers', () => {
   it('returns the tenant users ordered by email, scoped to that tenant context', async () => {
     const { prisma, fakeTx } = makePrisma();
     (fakeTx as unknown as { user: { findMany: unknown } }).user.findMany = jest.fn().mockResolvedValue([
-      { id: 'user-1', email: 'a@acme.com', name: 'A', role: 'OWNER' },
+      { id: 'user-1', email: 'a@acme.com', name: 'A', roles: ['OWNER'] },
     ]);
     const service = new AdminTenantsService(prisma, makeAuthService(), makeTenantProvisioningService());
 
     const result = await service.listTenantUsers('tenant-1');
 
-    expect(result).toEqual([{ id: 'user-1', email: 'a@acme.com', name: 'A', role: 'OWNER' }]);
+    expect(result).toEqual([{ id: 'user-1', email: 'a@acme.com', name: 'A', roles: ['OWNER'] }]);
     expect(
       (fakeTx as unknown as { user: { findMany: jest.Mock } }).user.findMany,
     ).toHaveBeenCalledWith({
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, roles: true },
       orderBy: { email: 'asc' },
     });
   });

@@ -35,10 +35,10 @@ import { DEFAULT_TOPICS_BY_ROLE } from './assistant-topics.js';
 const TURN: ActionTurn = { conversationId: 'conv-1', questionMessageId: 'q-1', channel: 'WHATSAPP' };
 
 function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
-  return { sub: 'user-1', tenantId: 'tenant-1', email: 'a@b.com', role: 'SALES', moduleAccess: [], mustChangePassword: false, ...overrides };
+  return { sub: 'user-1', tenantId: 'tenant-1', email: 'a@b.com', roles: ['SALES'], moduleAccess: [], mustChangePassword: false, ...overrides };
 }
 
-function access(levels: Record<string, string>, role: AuthenticatedUser['role'] = 'SALES', maxActionsPerDay = 40): AssistantAccess {
+function access(levels: Record<string, string>, role: AuthenticatedUser['roles'][number] = 'SALES', maxActionsPerDay = 40): AssistantAccess {
   return accessFromConfig(
     {
       webEnabled: true,
@@ -51,7 +51,7 @@ function access(levels: Record<string, string>, role: AuthenticatedUser['role'] 
       maxActionsPerDay,
       confirmExpiryMinutes: 10,
     },
-    { sub: 'user-1', role },
+    { sub: 'user-1', roles: [role] },
   );
 }
 
@@ -300,7 +300,7 @@ describe('AssistantActionsService', () => {
       const { service, calendar } = makeService();
       const db = makeDb();
 
-      await expect(run(db, () => service.confirm(makeUser({ sub: 'owner-1', role: 'OWNER' }), 'act-1'))).rejects.toThrow(/Sólo la persona/);
+      await expect(run(db, () => service.confirm(makeUser({ sub: 'owner-1', roles: ['OWNER'] }), 'act-1'))).rejects.toThrow(/Sólo la persona/);
       expect(calendar.create).not.toHaveBeenCalled();
     });
 
@@ -401,7 +401,7 @@ describe('AssistantActionsService', () => {
         action({ kind: 'CUSTOMER_CREATE', status: 'DONE', entityType: 'company', entityId: 'co-1', summary: 'Cliente “ACME SA”' }),
       );
 
-      const card = await run(db, () => service.undo(makeUser({ sub: 'owner-1', role: 'OWNER' }), 'act-1'));
+      const card = await run(db, () => service.undo(makeUser({ sub: 'owner-1', roles: ['OWNER'] }), 'act-1'));
 
       expect(companies.updateCompany).toHaveBeenCalledWith('co-1', { active: false });
       expect(card.status).toBe('UNDONE');
@@ -413,7 +413,7 @@ describe('AssistantActionsService', () => {
       const db = makeDb();
       db.assistantAction.findUnique.mockResolvedValue(action({ status: 'DONE', entityId: 'ev-1' }));
 
-      await expect(run(db, () => service.undo(makeUser({ sub: 'other', role: 'SALES' }), 'act-1'))).rejects.toThrow(/Sólo quien la pidió/);
+      await expect(run(db, () => service.undo(makeUser({ sub: 'other', roles: ['SALES'] }), 'act-1'))).rejects.toThrow(/Sólo quien la pidió/);
     });
   });
 
@@ -738,7 +738,7 @@ describe('AssistantActionsService', () => {
       });
 
       await run(db, () =>
-        service.propose(makeUser({ role: 'OWNER' }), access({ factura: 'DRAFT' }, 'OWNER'), 'preparar_factura', { cliente: 'kiosco', lineas: [{ articulo: 'galletitas', cantidad: 12 }] }, TURN),
+        service.propose(makeUser({ roles: ['OWNER'] }), access({ factura: 'DRAFT' }, 'OWNER'), 'preparar_factura', { cliente: 'kiosco', lineas: [{ articulo: 'galletitas', cantidad: 12 }] }, TURN),
       );
 
       expect(db.assistantAction.create.mock.calls[0][0].data.summary).toBe(
@@ -752,7 +752,7 @@ describe('AssistantActionsService', () => {
       const db = makeDb();
       db.assistantAction.findUnique.mockResolvedValue(draftAction({ status: 'PENDING_CONFIRMATION' }));
 
-      const result = await run(db, () => service.confirm(makeUser({ role: 'OWNER' }), 'act-inv'));
+      const result = await run(db, () => service.confirm(makeUser({ roles: ['OWNER'] }), 'act-inv'));
 
       expect(result.card.status).toBe('DONE');
       expect(result.reply).toMatch(/\/invoicing\?asistente=act-inv/);
@@ -770,8 +770,8 @@ describe('AssistantActionsService', () => {
         lines: [{ articleVariantId: 'v-1', quantity: 12, unitPrice: 1500 }],
         notes: null,
       });
-      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'other', role: 'SALES' }), 'act-inv'))).rejects.toThrow(/otra persona/);
-      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'boss', role: 'ADMIN' }), 'act-inv'))).resolves.toBeTruthy();
+      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'other', roles: ['SALES'] }), 'act-inv'))).rejects.toThrow(/otra persona/);
+      await expect(run(db, () => service.getInvoiceDraft(makeUser({ sub: 'boss', roles: ['ADMIN'] }), 'act-inv'))).resolves.toBeTruthy();
 
       db.assistantAction.findUnique.mockResolvedValue(draftAction({ status: 'PENDING_CONFIRMATION' }));
       await expect(run(db, () => service.getInvoiceDraft(makeUser(), 'act-inv'))).rejects.toThrow(/todavía no se confirmó/);

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getTenantId, getUserRole, type TaxDefinition } from '@plexo/database';
+import { hasAnyRole } from '@plexo/types';
+import { getTenantDb, getTenantId, getUserRoles, type TaxDefinition } from '@plexo/database';
 import type { CreateTaxDefinitionDto } from './dto/create-tax-definition.dto.js';
 import type { ReviseTaxDefinitionDto } from './dto/revise-tax-definition.dto.js';
 
@@ -55,12 +56,12 @@ export class TaxesService {
   async reviseTaxDefinition(dto: ReviseTaxDefinitionDto): Promise<TaxDefinition> {
     const db = getTenantDb();
     const tenantId = getTenantId();
-    const role = getUserRole();
+    const roles = getUserRoles();
     const effectiveFrom = dto.effectiveFrom ? new Date(dto.effectiveFrom) : new Date();
 
     const current = await this.getActiveDefinition(dto.code, effectiveFrom);
 
-    if (role === 'ACCOUNTANT' && !current.managedByAccountant) {
+    if (hasAnyRole(roles, ['ACCOUNTANT']) && !current.managedByAccountant) {
       throw new ForbiddenException(
         `Tax definition ${dto.code} is not delegated to accountants - an OWNER/ADMIN must revise it`,
       );

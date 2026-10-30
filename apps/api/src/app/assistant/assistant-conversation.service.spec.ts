@@ -12,7 +12,7 @@ function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser
     sub: 'user-1',
     tenantId: 'tenant-1',
     email: 'a@b.com',
-    role: 'OWNER',
+    roles: ['OWNER'],
     moduleAccess: [],
     mustChangePassword: false,
     ...overrides,

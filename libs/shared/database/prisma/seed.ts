@@ -33,7 +33,7 @@ async function main() {
         tenantId,
         email,
         passwordHash: await bcrypt.hash(password, 10),
-        role: 'OWNER',
+        roles: ['OWNER'],
       },
     });
   });

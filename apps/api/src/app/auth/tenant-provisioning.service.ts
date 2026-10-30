@@ -80,7 +80,7 @@ export class TenantProvisioningService {
           email: input.ownerEmail,
           name: input.ownerName,
           passwordHash: input.passwordHash,
-          role: 'OWNER',
+          roles: ['OWNER'],
           mustChangePassword: input.mustChangePassword,
           emailVerifiedAt: input.autoVerifyEmail ? new Date() : null,
         },

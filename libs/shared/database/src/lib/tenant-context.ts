@@ -5,7 +5,7 @@ import type { UserRole } from '../generated/enums.js';
 export interface TenantStore {
   tenantId: string;
   userId?: string;
-  role?: UserRole;
+  roles?: UserRole[];
   tx: Prisma.TransactionClient;
   // Callbacks a correr recién cuando la transacción confirma (ver onCommit).
   afterCommit?: (() => void)[];
@@ -46,14 +46,16 @@ export function getUserId(): string | undefined {
 }
 
 /**
- * The acting user's role, if any - for the rare case where business logic
- * itself needs to branch on role (e.g. TaxesService gating a rate change
- * by managedByAccountant only for ACCOUNTANT, never for OWNER/ADMIN).
- * Prefer RolesGuard/@Roles() at the route level for anything that isn't
- * this kind of per-record, data-dependent check.
+ * The acting user's roles (varios roles por usuario; vacío si no hay
+ * usuario) - for the rare case where business logic itself needs to branch
+ * on role (e.g. TaxesService gating a rate change by managedByAccountant
+ * only for ACCOUNTANT, never for OWNER/ADMIN). Ask with hasAnyRole
+ * (@plexo/types), never compare against a single role. Prefer
+ * RolesGuard/@Roles() at the route level for anything that isn't this kind
+ * of per-record, data-dependent check.
  */
-export function getUserRole(): UserRole | undefined {
-  return requireStore().role;
+export function getUserRoles(): UserRole[] {
+  return requireStore().roles ?? [];
 }
 
 /**
@@ -131,7 +133,7 @@ export async function withTenantContext<T>(
   tenantId: string,
   fn: () => Promise<T>,
   userId?: string,
-  role?: UserRole,
+  roles?: UserRole[],
   // Prisma corta la transacción a los 5000ms (su default) sin importar si
   // hay actividad de DB en el medio - sólo hace falta cuando fn() hace una
   // llamada de red lenta adentro (ver @LongRunningTransaction). Nunca subir
@@ -148,7 +150,7 @@ export async function withTenantContext<T>(
         await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
       }
       return tenantContextStorage.run(
-        { tenantId, userId, role, tx, afterCommit, beforeCommit: beforeCommitSteps },
+        { tenantId, userId, roles, tx, afterCommit, beforeCommit: beforeCommitSteps },
         async () => {
           const value = await fn();
           // Índice y no for..of: un paso puede registrar otro.

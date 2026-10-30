@@ -4,7 +4,7 @@ import { CalendarEventService } from './calendar-event.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T, opts: { userId?: string } = {}): T {
   return tenantContextStorage.run(
-    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', role: 'OWNER' as never, tx: db as never },
+    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', roles: ['OWNER'], tx: db as never },
     fn,
   );
 }

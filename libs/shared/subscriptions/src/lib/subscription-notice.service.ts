@@ -189,7 +189,7 @@ export class SubscriptionNoticeService {
     const [tenant, owners] = await Promise.all([
       db.tenant.findUnique({ where: { id: getTenantId() }, select: { name: true } }),
       db.user.findMany({
-        where: { role: 'OWNER', status: 'ACTIVE', isExternalAccountant: false },
+        where: { roles: { has: 'OWNER' }, status: 'ACTIVE', isExternalAccountant: false },
         select: { email: true, name: true },
       }),
     ]);

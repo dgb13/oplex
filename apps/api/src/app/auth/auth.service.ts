@@ -27,7 +27,7 @@ export interface UserProfile {
   email: string;
   name: string | null;
   avatarUrl: string | null;
-  role: string;
+  roles: string[];
   tenantId: string;
   showOnlinePresence: boolean;
   mustChangePassword: boolean;
@@ -106,9 +106,11 @@ export class AuthService {
     if (!found) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    // Chequeado sólo acá, no en cada request (TenantStatus/UserStatus, ver
-    // schema.prisma) - un JWT ya emitido es una foto fija, mismo criterio
-    // ya aceptado para mustChangePassword/role (MustChangePasswordGuard).
+    // TenantStatus chequeado sólo acá, no en cada request - un JWT ya emitido
+    // es una foto fija (igual que mustChangePassword, MustChangePasswordGuard).
+    // Los roles y el UserStatus sí se releen en cada request
+    // (CurrentUserRolesService): un cambio de rol o una suspensión aplican al
+    // instante.
     // code: 'ACCOUNT_SUSPENDED' en ambos - igual que EMAIL_NOT_VERIFIED más
     // abajo, es lo que el login del frontend usa para mostrar el mensaje
     // real en vez de pisarlo con el genérico "Credenciales inválidas" que
@@ -165,7 +167,7 @@ export class AuthService {
       sub: user.id,
       tenantId,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       moduleAccess: moduleAccess.map((grant): ModuleAccessClaim => ({
         module: grant.module,
         canRead: grant.canRead,
@@ -396,7 +398,7 @@ function toProfile(user: User): UserProfile {
     email: user.email,
     name: user.name,
     avatarUrl: user.avatarUrl,
-    role: user.role,
+    roles: user.roles,
     tenantId: user.tenantId,
     showOnlinePresence: user.showOnlinePresence,
     mustChangePassword: user.mustChangePassword,

@@ -48,7 +48,7 @@ describe('JwtAuthGuard', () => {
       sub: 'user-1',
       tenantId: 'tenant-1',
       email: 'a@b.com',
-      role: 'OWNER',
+      roles: ['OWNER'],
       moduleAccess: [],
       mustChangePassword: false,
     };
@@ -68,5 +68,42 @@ describe('JwtAuthGuard', () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(request.user).toEqual(payload);
+  });
+
+  function run(guard: JwtAuthGuard) {
+    const request: { headers: Record<string, string>; user?: AuthenticatedUser } = {
+      headers: { authorization: 'Bearer good' },
+    };
+    const context = {
+      switchToHttp: () => ({ getRequest: () => request }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+    return { request, result: guard.canActivate(context) };
+  }
+
+  const base = { sub: 'user-1', tenantId: 'tenant-1', email: 'a@b.com', moduleAccess: [], mustChangePassword: false };
+
+  it('accepts a token issued before multiple roles (single role) as a one-role list', async () => {
+    const jwtService = { verifyAsync: jest.fn().mockResolvedValue({ ...base, role: 'SALES' }) } as unknown as JwtService;
+    const { request, result } = run(new JwtAuthGuard(jwtService, makeReflector(false)));
+    await expect(result).resolves.toBe(true);
+    expect(request.user?.roles).toEqual(['SALES']);
+    expect(request.user).not.toHaveProperty('role');
+  });
+
+  it('uses the current roles from the loader instead of the ones in the token', async () => {
+    const jwtService = { verifyAsync: jest.fn().mockResolvedValue({ ...base, roles: ['SALES'] }) } as unknown as JwtService;
+    const loader = { load: jest.fn().mockResolvedValue(['SALES', 'INVENTORY']) };
+    const { request, result } = run(new JwtAuthGuard(jwtService, makeReflector(false), loader));
+    await expect(result).resolves.toBe(true);
+    expect(loader.load).toHaveBeenCalledWith('tenant-1', 'user-1');
+    expect(request.user?.roles).toEqual(['SALES', 'INVENTORY']);
+  });
+
+  it('rejects the session when the loader says the user is no longer active', async () => {
+    const jwtService = { verifyAsync: jest.fn().mockResolvedValue({ ...base, roles: ['SALES'] }) } as unknown as JwtService;
+    const loader = { load: jest.fn().mockResolvedValue(null) };
+    await expect(run(new JwtAuthGuard(jwtService, makeReflector(false), loader)).result).rejects.toThrow(UnauthorizedException);
   });
 });

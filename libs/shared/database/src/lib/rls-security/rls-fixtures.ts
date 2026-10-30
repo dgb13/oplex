@@ -70,7 +70,7 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
     tenantId,
     email: `rls-${label}@test.local`,
     passwordHash: 'x',
-    role: 'OWNER',
+    roles: ['OWNER'],
   });
   await ins('user_module_access', { tenantId, userId, module: 'inventory', canRead: true, canWrite: true });
   await ins('email_verification_codes', {
@@ -88,7 +88,7 @@ export async function seedTenantGraph(client: PoolClient, tenantId: string, labe
   await ins('team_invitations', {
     tenantId,
     email: `invitee-${label}@test.local`,
-    role: 'SALES',
+    roles: ['SALES'],
     tokenHash: `invite-${label}`,
     expiresAt: new Date(Date.now() + 3600_000),
     invitedByUserId: userId,

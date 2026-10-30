@@ -97,7 +97,7 @@ export async function notify(input: NotifyInput): Promise<Notification[]> {
 /** Usuarios activos de la empresa con alguno de estos roles. */
 export async function userIdsWithRoles(roles: UserRole[]): Promise<string[]> {
   const users = await getTenantDb().user.findMany({
-    where: { role: { in: roles }, status: 'ACTIVE' },
+    where: { roles: { hasSome: roles }, status: 'ACTIVE' },
     select: { id: true },
   });
   return users.map((u) => u.id);

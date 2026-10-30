@@ -20,7 +20,7 @@ describe('ModuleAccessGuard', () => {
   it('allows the request through when no module access is required', () => {
     const guard = new ModuleAccessGuard(makeReflector(undefined));
     expect(
-      guard.canActivate(makeContext({ role: 'ACCOUNTANT', moduleAccess: [] })),
+      guard.canActivate(makeContext({ roles: ['ACCOUNTANT'], moduleAccess: [] })),
     ).toBe(true);
   });
 
@@ -28,7 +28,7 @@ describe('ModuleAccessGuard', () => {
     const guard = new ModuleAccessGuard(
       makeReflector({ module: 'accounting', level: 'write' }),
     );
-    expect(guard.canActivate(makeContext({ role: 'OWNER', moduleAccess: [] }))).toBe(
+    expect(guard.canActivate(makeContext({ roles: ['OWNER'], moduleAccess: [] }))).toBe(
       true,
     );
   });
@@ -38,7 +38,7 @@ describe('ModuleAccessGuard', () => {
       makeReflector({ module: 'accounting', level: 'read' }),
     );
     expect(() =>
-      guard.canActivate(makeContext({ role: 'ACCOUNTANT', moduleAccess: [] })),
+      guard.canActivate(makeContext({ roles: ['ACCOUNTANT'], moduleAccess: [] })),
     ).toThrow(ForbiddenException);
   });
 
@@ -47,7 +47,7 @@ describe('ModuleAccessGuard', () => {
       makeReflector({ module: 'accounting', level: 'write' }),
     );
     const user: Partial<AuthenticatedUser> = {
-      role: 'ACCOUNTANT',
+      roles: ['ACCOUNTANT'],
       moduleAccess: [{ module: 'accounting', canRead: true, canWrite: false }],
     };
     expect(() => guard.canActivate(makeContext(user))).toThrow(ForbiddenException);
@@ -58,7 +58,7 @@ describe('ModuleAccessGuard', () => {
       makeReflector({ module: 'accounting', level: 'read' }),
     );
     const user: Partial<AuthenticatedUser> = {
-      role: 'ACCOUNTANT',
+      roles: ['ACCOUNTANT'],
       moduleAccess: [{ module: 'accounting', canRead: true, canWrite: false }],
     };
     expect(guard.canActivate(makeContext(user))).toBe(true);

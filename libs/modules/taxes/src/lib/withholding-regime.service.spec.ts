@@ -5,10 +5,10 @@ import { WithholdingRegimeService } from './withholding-regime.service.js';
 function runInTenant<T>(
   db: Record<string, unknown>,
   fn: () => T,
-  opts: { userId?: string; role?: string } = {},
+  opts: { userId?: string; roles?: string[] } = {},
 ): T {
   return tenantContextStorage.run(
-    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', role: opts.role as never, tx: db as never },
+    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', roles: opts.roles as never, tx: db as never },
     fn,
   );
 }
@@ -66,7 +66,7 @@ describe('WithholdingRegimeService.reviseRegime', () => {
     const service = new WithholdingRegimeService();
 
     await expect(
-      runInTenant(db, () => service.reviseRegime({ code: 'IIBB_CABA', rate: 3.5 }), { role: 'ACCOUNTANT' }),
+      runInTenant(db, () => service.reviseRegime({ code: 'IIBB_CABA', rate: 3.5 }), { roles: ['ACCOUNTANT'] }),
     ).rejects.toThrow(ForbiddenException);
   });
 

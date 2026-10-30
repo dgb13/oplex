@@ -55,7 +55,7 @@ export class TenantContextInterceptor implements NestInterceptor {
         tenantId,
         () => lastValueFrom(next.handle(), { defaultValue: undefined }),
         request.user?.sub,
-        request.user?.role,
+        request.user?.roles,
         timeoutMs,
       ),
     );

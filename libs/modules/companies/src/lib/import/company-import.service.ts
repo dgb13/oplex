@@ -289,7 +289,7 @@ export class CompanyImportService {
     };
     const job: Job = { status, tenantId: getTenantId(), rows: plan.rows };
     this.jobs.set(importId, job);
-    const context = { tenantId: getTenantId(), userId: getUserId() ?? undefined, role: tenantContextStorage.getStore()?.role };
+    const context = { tenantId: getTenantId(), userId: getUserId() ?? undefined, roles: tenantContextStorage.getStore()?.roles };
     void this.run(job, grid, headerRow, options, refs, check, plan.cuits, context);
     return status;
   }
@@ -429,7 +429,7 @@ export class CompanyImportService {
     refs: CompanyRefs,
     check: ArcaCheck | null,
     cuits: string[],
-    context: { tenantId: string; userId?: string; role?: Parameters<typeof withTenantContext>[4] },
+    context: { tenantId: string; userId?: string; roles?: Parameters<typeof withTenantContext>[4] },
   ): Promise<void> {
     try {
       // Primero se termina de verificar en ARCA, así lo que completa ARCA
@@ -486,7 +486,7 @@ export class CompanyImportService {
             }
           },
           context.userId,
-          context.role,
+          context.roles,
           120_000,
         );
       }

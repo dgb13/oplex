@@ -65,8 +65,8 @@ describe('AssistantHistoryService', () => {
       });
       const r2 = message({ id: 'r2', conversationId: 'conv-2', role: 'ASSISTANT', content: 'Andá a Clientes', intent: 'AYUDA', createdAt: t('2026-10-19T11:00:03Z') });
       const db = makeDb([q1, q2], [q2, r2, q1, r1], [
-        { id: 'user-1', name: 'Lucía Gómez', email: 'l@x.com', role: 'OWNER' },
-        { id: 'user-2', name: null, email: 'm@x.com', role: 'SALES' },
+        { id: 'user-1', name: 'Lucía Gómez', email: 'l@x.com', roles: ['OWNER'] },
+        { id: 'user-2', name: null, email: 'm@x.com', roles: ['SALES'] },
       ]);
 
       const page = await runInTenant(db, () => service.list());
@@ -76,7 +76,7 @@ describe('AssistantHistoryService', () => {
         expect.objectContaining({
           id: 'q1',
           channel: 'WEB',
-          user: { id: 'user-1', name: 'Lucía Gómez', role: 'OWNER' },
+          user: { id: 'user-1', name: 'Lucía Gómez', roles: ['OWNER'] },
           answer: 'Debe $ 342.000',
           status: 'ANSWERED_WITH_DATA',
           tools: ['deuda por cliente'],
@@ -85,7 +85,7 @@ describe('AssistantHistoryService', () => {
         expect.objectContaining({
           id: 'q2',
           channel: 'WHATSAPP',
-          user: { id: 'user-2', name: 'm@x.com', role: 'SALES' },
+          user: { id: 'user-2', name: 'm@x.com', roles: ['SALES'] },
           status: 'HELP',
           tools: [],
         }),

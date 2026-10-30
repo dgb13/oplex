@@ -37,7 +37,7 @@ export interface TenantUserDetail {
   id: string;
   email: string;
   name: string | null;
-  role: string;
+  roles: string[];
   createdAt: Date;
   lastLoginAt: Date | null;
   whatsappPhone: string | null; // enmascarado, sólo los últimos 4 dígitos
@@ -201,7 +201,7 @@ export class AdminTenantInsightsService {
           },
         }),
         db.user.findMany({
-          select: { id: true, email: true, name: true, role: true, createdAt: true },
+          select: { id: true, email: true, name: true, roles: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         }),
         db.userActivityLog.groupBy({

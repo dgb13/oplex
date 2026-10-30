@@ -22,7 +22,10 @@ export interface AuthenticatedUser {
   sub: string;
   tenantId: string;
   email: string;
-  role: UserRole;
+  // Varios roles por usuario: preguntar siempre con hasAnyRole (user-roles.ts).
+  // JwtAuthGuard los relee de la base en cada pedido (con un caché corto),
+  // así un cambio de rol se aplica sin volver a iniciar sesión.
+  roles: UserRole[];
   moduleAccess: ModuleAccessClaim[];
   // True for a user invited with a temporary password (see
   // UsersService.inviteUser) who hasn't changed it yet - MustChangePasswordGuard
