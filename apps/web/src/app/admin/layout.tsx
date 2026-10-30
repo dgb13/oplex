@@ -10,6 +10,7 @@ import {
   Car,
   ChartLine,
   CircleAlert,
+  Clapperboard,
   CreditCard,
   Database,
   DollarSign,
@@ -37,7 +38,15 @@ interface NavEntry {
   icon: LucideIcon;
 }
 
-const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
+interface NavGroup {
+  label: string;
+  entries: NavEntry[];
+  // Pantallas sin endpoint propio (no hay 403 que las frene): se muestran
+  // sólo si el token trae isPlatformAdmin.
+  platformAdminOnly?: boolean;
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Negocio',
     entries: [
@@ -73,6 +82,11 @@ const NAV_GROUPS: Array<{ label: string; entries: NavEntry[] }> = [
       { href: '/admin/assistant', label: 'Asistente de IA', icon: Bot },
       { href: '/admin/membership-settings', label: 'Sesión de contadores', icon: UserCheck },
     ],
+  },
+  {
+    label: 'Marketing',
+    platformAdminOnly: true,
+    entries: [{ href: '/admin/marketing/videos', label: 'Videos', icon: Clapperboard }],
   },
 ];
 
@@ -111,6 +125,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const chips = useAdminNavStatus();
 
   useEffect(() => {
@@ -119,13 +134,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace('/login');
       return;
     }
-    setEmail(decodeToken(token)?.email ?? null);
+    const decoded = decodeToken(token);
+    setEmail(decoded?.email ?? null);
+    setIsPlatformAdmin(Boolean(decoded?.isPlatformAdmin));
   }, [router]);
 
   // Al navegar en el celular, la barra se cierra sola.
   useEffect(() => setMobileOpen(false), [pathname]);
 
-  const currentGroup = NAV_GROUPS.find((g) => g.entries.some((e) => isActive(pathname, e.href)));
+  const navGroups = NAV_GROUPS.filter((g) => !g.platformAdminOnly || isPlatformAdmin);
+  const currentGroup = navGroups.find((g) => g.entries.some((e) => isActive(pathname, e.href)));
   const currentEntry = currentGroup?.entries.find((e) => isActive(pathname, e.href));
 
   return (
@@ -143,7 +161,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Admin
           </span>
         </span>
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label}>
             <h3 className="mb-1 px-2 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">{group.label}</h3>
             {group.entries.map((entry) => {
