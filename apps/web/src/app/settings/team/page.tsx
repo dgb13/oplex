@@ -2,14 +2,14 @@
 
 import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import { Button } from '@/components/ui/button';
-import Select from '@/components/ui/Select';
 import { profileApi } from '@/lib/profile';
-import { ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole, isOwnerOrAdmin } from '@/lib/team';
+import { formatRoles, ROLE_LABELS, teamApi, type TeamMember, type TeamMemberStatus, type TeamRole, isOwnerOrAdmin } from '@/lib/team';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
 import ToggleSwitch from '@/components/ToggleSwitch';
+import EditRolesModal from './EditRolesModal';
 import InviteMemberModal from './InviteMemberModal';
 import UserActivityDrawer from './UserActivityDrawer';
 
@@ -30,8 +30,6 @@ const ROLE_BADGE_CLASSES: Record<TeamRole, string> = {
   ACCOUNTANT: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300',
   VIEWER: 'bg-muted text-muted-foreground',
 };
-
-const ASSIGNABLE_ROLES: TeamRole[] = ['ADMIN', 'SALES', 'PURCHASES', 'INVENTORY', 'ACCOUNTANT', 'VIEWER'];
 
 export default function TeamPage() {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
@@ -56,7 +54,8 @@ export default function TeamPage() {
         <div>
           <h1 className="text-xl font-semibold">Equipo</h1>
           <p className="text-sm text-muted-foreground">
-            Quién tiene acceso a esta cuenta, con qué rol y qué tan activo está.
+            Quién tiene acceso a esta cuenta, con qué roles y qué tan activo está. Una persona puede tener varios
+            roles: puede todo lo que permita cualquiera de ellos.
           </p>
         </div>
         <ReadOnlyLock>
@@ -76,7 +75,7 @@ export default function TeamPage() {
             <thead>
               <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
                 <th className="p-3">Miembro</th>
-                <th className="p-3">Rol</th>
+                <th className="p-3">Roles</th>
                 <th className="p-3">Estado</th>
                 <th className="p-3">Desde</th>
                 <th className="p-3" />
@@ -94,6 +93,11 @@ export default function TeamPage() {
             </tbody>
           </table>
         </div>
+      )}
+      {members && members.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Los cambios de roles se aplican en el momento: la persona no necesita volver a iniciar sesión.
+        </p>
       )}
 
       {inviteOpen && <InviteMemberModal onClose={() => setInviteOpen(false)} />}
@@ -113,18 +117,19 @@ function MemberRow({
 }) {
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+  const [editingRoles, setEditingRoles] = useState(false);
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ['team-members'] });
   }
 
   const roleMutation = useMutation({
-    mutationFn: (role: TeamRole) => teamApi.changeRoles(member.id, [role]),
-    onSuccess: () => {
-      setFeedback(null);
+    mutationFn: (roles: TeamRole[]) => teamApi.changeRoles(member.id, roles),
+    onSuccess: (_data, roles) => {
+      setEditingRoles(false);
+      setFeedback({ text: `Listo: ahora es ${formatRoles(roles)}. Ya lo puede usar.`, isError: false });
       invalidate();
     },
-    onError: (err) => setFeedback({ text: extractErrorMessage(err, 'No se pudo cambiar el rol'), isError: true }),
   });
 
   const statusMutation = useMutation({
@@ -169,13 +174,32 @@ function MemberRow({
             {ROLE_LABELS.OWNER}
           </span>
         ) : (
-          <Select
-            className="w-fit"
-            buttonClassName={`rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES[member.roles[0]]}`}
-            value={member.roles[0]}
-            onChange={(role) => roleMutation.mutate(role as TeamRole)}
-            disabled={roleMutation.isPending}
-            options={ASSIGNABLE_ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {member.roles.map((role) => (
+              <span key={role} className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${ROLE_BADGE_CLASSES[role]}`}>
+                {ROLE_LABELS[role]}
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                roleMutation.reset();
+                setEditingRoles(true);
+              }}
+              aria-label={`Editar roles de ${member.name ?? member.email}`}
+              className="rounded-full border border-dashed px-2.5 py-1 text-xs text-primary transition hover:border-primary"
+            >
+              Editar
+            </button>
+          </div>
+        )}
+        {editingRoles && (
+          <EditRolesModal
+            member={member}
+            isPending={roleMutation.isPending}
+            error={roleMutation.error ? extractErrorMessage(roleMutation.error, 'No se pudieron cambiar los roles') : null}
+            onSave={(roles) => roleMutation.mutate(roles)}
+            onClose={() => setEditingRoles(false)}
           />
         )}
       </td>
