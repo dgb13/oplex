@@ -1,6 +1,8 @@
 'use client';
 
+import { profileApi } from '@/lib/profile';
 import { subscriptionsApi } from '@/lib/subscriptions';
+import { ROLE_LABELS, type TeamRole } from '@/lib/team';
 import { useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -18,16 +20,45 @@ export function useReadOnly(): boolean {
 }
 
 /**
- * Pone el candado en un botón de carga ("Nueva factura", "Nuevo artículo"…)
- * cuando la cuenta está en sólo lectura: lo deshabilita, le antepone el
- * candado y deja el motivo en el tooltip. Con la cuenta activa devuelve el
- * botón tal cual.
+ * Rol de quien está usando la app y si alcanza para `allowed` (Dueño/a y
+ * Admin siempre). Mientras no llegó el perfil devuelve allowed=true: el
+ * botón no parpadea bloqueado, y la API lo frena igual (RolesGuard).
  */
-export function ReadOnlyLock({ children }: { children: ReactElement<{ disabled?: boolean; className?: string; children?: ReactNode }> }) {
+export function useRoleAllowed(allowed: readonly TeamRole[] | undefined): { allowed: boolean; role: TeamRole | null } {
+  const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe, enabled: Boolean(allowed) });
+  const role = (profile?.role ?? null) as TeamRole | null;
+  if (!allowed || !role) return { allowed: true, role };
+  return { allowed: role === 'OWNER' || role === 'ADMIN' || allowed.includes(role), role };
+}
+
+/** "Tu rol (Ventas) no puede cargar artículos. …" - el motivo y dónde se cambia. */
+export function roleLockTitle(role: TeamRole | null, action: string): string {
+  return `Tu rol (${role ? ROLE_LABELS[role] : 'actual'}) no puede ${action}. Pedile al dueño/a o a un admin que te cambie el rol en Configuración › Equipo.`;
+}
+
+/**
+ * Pone el candado en un botón de carga ("Nueva factura", "Nuevo artículo"…)
+ * cuando la cuenta está en sólo lectura o, si se pasan `roles`, cuando el
+ * rol de quien la usa no puede hacer esa carga (la misma lista que el
+ * @Roles del endpoint): lo deshabilita, le antepone el candado y deja el
+ * motivo en el tooltip. Si no hay motivo devuelve el botón tal cual.
+ */
+export function ReadOnlyLock({
+  children,
+  roles,
+  action = 'hacer esto',
+}: {
+  children: ReactElement<{ disabled?: boolean; className?: string; children?: ReactNode }>;
+  roles?: readonly TeamRole[];
+  /** Qué no puede hacer, para el tooltip: "cargar artículos". */
+  action?: string;
+}) {
   const readOnly = useReadOnly();
-  if (!readOnly || !isValidElement(children)) return children;
+  const { allowed, role } = useRoleAllowed(roles);
+  if ((!readOnly && allowed) || !isValidElement(children)) return children;
+  const title = readOnly ? READ_ONLY_TITLE : roleLockTitle(role, action);
   return (
-    <span title={READ_ONLY_TITLE} className="inline-flex cursor-not-allowed">
+    <span title={title} className="inline-flex cursor-not-allowed">
       {cloneElement(children, {
         disabled: true,
         'aria-disabled': true,

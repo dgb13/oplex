@@ -1,6 +1,7 @@
 'use client';
 
-import { buildVariantLabel, inventoryApi, resolveUploadUrl, stockUnitLabel, type Article } from '@/lib/inventory';
+import { buildVariantLabel, INVENTORY_WRITE_ROLES, inventoryApi, resolveUploadUrl, stockUnitLabel, type Article } from '@/lib/inventory';
+import { ReadOnlyLock, roleLockTitle, useRoleAllowed } from './ReadOnlyLock';
 import {
   Combobox,
   ComboboxButton,
@@ -108,6 +109,7 @@ export default function ArticlePicker({
   });
   const [query, setQuery] = useState('');
   const [creatingArticle, setCreatingArticle] = useState(false);
+  const createAccess = useRoleAllowed(allowCreate ? INVENTORY_WRITE_ROLES : undefined);
   // Lo tipeado al tocar "+ Crear" desde una búsqueda sin resultados.
   const [createName, setCreateName] = useState('');
 
@@ -204,17 +206,21 @@ export default function ArticlePicker({
               placeholder={isEmpty ? emptyPlaceholder : (placeholder ?? 'Buscar artículo o SKU...')}
             />
             {allowCreate && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCreateName('');
-                  setCreatingArticle(true);
-                }}
-                title="Nuevo artículo"
-                className="absolute inset-y-0 right-7 flex items-center px-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+              <span className="absolute inset-y-0 right-7 flex items-center">
+                <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="cargar artículos">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateName('');
+                      setCreatingArticle(true);
+                    }}
+                    title="Nuevo artículo"
+                    className="flex items-center gap-0.5 px-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </ReadOnlyLock>
+              </span>
             )}
             <ComboboxButton className="absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
               <ChevronDown className="h-4 w-4" />
@@ -229,7 +235,12 @@ export default function ArticlePicker({
                 <p className="px-3 py-2 text-sm text-slate-500">
                   {query.trim() ? 'No hay ningún artículo con ese nombre.' : 'Sin artículos que coincidan'}
                 </p>
-                {allowCreate && query.trim() && (
+                {allowCreate && query.trim() && !createAccess.allowed && (
+                  <p className="border-t border-slate-200 dark:border-slate-800 px-3 py-2 text-xs text-slate-500">
+                    {roleLockTitle(createAccess.role, 'cargar artículos nuevos')}
+                  </p>
+                )}
+                {allowCreate && query.trim() && createAccess.allowed && (
                   <button
                     type="button"
                     onClick={() => {

@@ -2,11 +2,13 @@
 
 import { type CreatedArticleVariantRef } from '@/components/ArticleFormModal';
 import GuidedArticleModal from '@/components/GuidedArticleModal';
+import { ReadOnlyLock } from '@/components/ReadOnlyLock';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { computeLineTotals } from '@/components/VatLineSummary';
 import VatRateSelect from '@/components/VatRateSelect';
 import {
   buildVariantLabel,
+  INVENTORY_WRITE_ROLES,
   inventoryApi,
   resolveUploadUrl,
   stockUnitLabel,
@@ -16,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Package, PencilLine, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatAmount, newLineKey, type SalesLine } from './salesDocument';
-import { LinkButton, SectionLabel } from './SalesDocumentSheet';
+import { SectionLabel } from './SalesDocumentSheet';
 
 interface ArticleOption {
   id: string; // articleVariantId
@@ -592,9 +594,15 @@ export default function SalesLinesEditor({
             <Kbd>↓</Kbd> para elegir · <Kbd>2*mesa</Kbd> agrega 2 · si ya
             está, suma a la cantidad
           </span>
-          <LinkButton onClick={() => setCreatingArticle(true)}>
-            + Nuevo artículo
-          </LinkButton>
+          <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="cargar artículos">
+            <button
+              type="button"
+              onClick={() => setCreatingArticle(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+            >
+              + Nuevo artículo
+            </button>
+          </ReadOnlyLock>
         </div>
       </div>
 
