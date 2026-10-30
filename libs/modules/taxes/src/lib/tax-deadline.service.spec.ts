@@ -8,7 +8,7 @@ function runInTenant<T>(
   opts: { userId?: string } = {},
 ): T {
   return tenantContextStorage.run(
-    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', role: 'ACCOUNTANT' as never, tx: db as never },
+    { tenantId: 'tenant-1', userId: opts.userId ?? 'user-1', roles: ['ACCOUNTANT'], tx: db as never },
     fn,
   );
 }

@@ -2,11 +2,11 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import Select from '@/components/ui/Select';
-import { INVITABLE_ROLES, ROLE_LABELS, teamApi, type CreatedMemberWithPassword, type TeamRole } from '@/lib/team';
+import { teamApi, type CreatedMemberWithPassword, type TeamRole } from '@/lib/team';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useState } from 'react';
+import RolesPicker from './RolesPicker';
 
 type Mode = 'INVITE' | 'PASSWORD';
 
@@ -27,13 +27,13 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
   const [mode, setMode] = useState<Mode>('INVITE');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<TeamRole>('SALES');
+  const [roles, setRoles] = useState<TeamRole[]>(['SALES']);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<CreatedMemberWithPassword | null>(null);
   const [copied, setCopied] = useState(false);
 
   const inviteMutation = useMutation({
-    mutationFn: () => teamApi.invite({ email, role }),
+    mutationFn: () => teamApi.invite({ email, roles }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['team-members'] });
       onClose();
@@ -42,7 +42,7 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
   });
 
   const createMutation = useMutation({
-    mutationFn: () => teamApi.createWithPassword({ email, name: name || undefined, role }),
+    mutationFn: () => teamApi.createWithPassword({ email, name: name || undefined, roles }),
     onSuccess: (result) => {
       setError('');
       setCreated(result);
@@ -56,6 +56,10 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
     setError('');
     if (!email.trim()) {
       setError('El email es obligatorio');
+      return;
+    }
+    if (roles.length === 0) {
+      setError('Elegí al menos un rol');
       return;
     }
     if (mode === 'INVITE') {
@@ -75,7 +79,7 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-2xl">
+      <div className="max-h-full w-full max-w-md overflow-y-auto rounded-xl border bg-card p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{created ? 'Usuario creado' : 'Invitar / Agregar colaborador'}</h2>
           <button onClick={onClose} className="text-muted-foreground transition hover:text-foreground">
@@ -150,12 +154,8 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
             )}
 
             <div className="flex flex-col gap-1">
-              <label className="text-sm text-muted-foreground">Rol</label>
-              <Select
-                value={role}
-                onChange={(r) => setRole(r as TeamRole)}
-                options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
-              />
+              <span className="text-sm text-muted-foreground">Roles (uno o más)</span>
+              <RolesPicker value={roles} onChange={setRoles} idPrefix="invite-role" />
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -164,7 +164,7 @@ export default function InviteMemberModal({ onClose }: { onClose: () => void }) 
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending || roles.length === 0}>
                 {isPending ? 'Enviando...' : mode === 'INVITE' ? 'Enviar invitación' : 'Crear usuario'}
               </Button>
             </div>

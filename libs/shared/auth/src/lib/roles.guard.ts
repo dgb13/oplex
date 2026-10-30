@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { AuthenticatedUser, UserRole } from '@plexo/types';
+import { hasAnyRole, type AuthenticatedUser, type UserRole } from '@plexo/types';
 import type { FastifyRequest } from 'fastify';
 import { ROLES_KEY } from './roles.decorator.js';
 
@@ -29,7 +29,8 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       throw new ForbiddenException('No authenticated user on request');
     }
-    if (!requiredRoles.includes(user.role)) {
+    // Varios roles por usuario: alcanza con que uno esté en la lista.
+    if (!hasAnyRole(user.roles, requiredRoles)) {
       throw new ForbiddenException(
         `Requires one of roles: ${requiredRoles.join(', ')}`,
       );

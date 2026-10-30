@@ -21,7 +21,7 @@ function makeUser(overrides: Partial<AuthenticatedUser>): AuthenticatedUser {
     sub: 'user-1',
     tenantId: 'tenant-1',
     email: 'user@test.local',
-    role: 'VIEWER',
+    roles: ['VIEWER'],
     moduleAccess: [],
     mustChangePassword: false,
     ...overrides,
@@ -85,7 +85,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices();
     const service = makeService(services);
 
-    const entries = await service.getCalendarEntries(makeUser({ role: 'OWNER' }), FROM, TO);
+    const entries = await service.getCalendarEntries(makeUser({ roles: ['OWNER'] }), FROM, TO);
 
     expect(entries.map((e) => e.source)).toEqual(['collect', 'prod', 'tax', 'sale', 'custom', 'cash', 'pay']);
   });
@@ -94,7 +94,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices();
     const service = makeService(services);
     const accountantLike = makeUser({
-      role: 'VIEWER',
+      roles: ['VIEWER'],
       moduleAccess: [{ module: 'taxes', canRead: true, canWrite: false }],
     });
 
@@ -113,7 +113,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices();
     const service = makeService(services);
 
-    const entries = await service.getCalendarEntries(makeUser({ role: 'VIEWER' }), FROM, TO);
+    const entries = await service.getCalendarEntries(makeUser({ roles: ['VIEWER'] }), FROM, TO);
 
     expect(entries.map((e) => e.source).sort()).toEqual(['custom', 'prod', 'sale']);
     expect(services.taxDeadlineService.getCalendarEntries).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices();
     const service = makeService(services);
 
-    const entries = await service.getCalendarEntries(makeUser({ role: 'SALES' }), FROM, TO);
+    const entries = await service.getCalendarEntries(makeUser({ roles: ['SALES'] }), FROM, TO);
 
     expect(entries.map((e) => e.source).sort()).toEqual(['cash', 'collect', 'custom', 'prod', 'sale']);
   });
@@ -132,7 +132,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices({ productionEnabled: false });
     const service = makeService(services);
 
-    const entries = await service.getCalendarEntries(makeUser({ role: 'OWNER' }), FROM, TO);
+    const entries = await service.getCalendarEntries(makeUser({ roles: ['OWNER'] }), FROM, TO);
 
     expect(entries.map((e) => e.source)).not.toContain('prod');
     expect(services.productionOrderService.getCalendarEntries).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe('AgendaService.getCalendarEntries', () => {
     const services = makeServices();
     const service = makeService(services);
 
-    const entries = await service.getCalendarEntries(makeUser({ role: 'OWNER' }), FROM, TO, ['tax']);
+    const entries = await service.getCalendarEntries(makeUser({ roles: ['OWNER'] }), FROM, TO, ['tax']);
 
     expect(entries.map((e) => e.source)).toEqual(['tax']);
   });

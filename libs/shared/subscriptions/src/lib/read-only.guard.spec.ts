@@ -40,7 +40,7 @@ function context(cls: object, handler: () => void, request: Record<string, unkno
   } as unknown as ExecutionContext;
 }
 
-const user = { sub: 'u1', tenantId: 't1', role: 'OWNER' };
+const user = { sub: 'u1', tenantId: 't1', roles: ['OWNER'] };
 
 describe('SubscriptionReadOnlyGuard', () => {
   const guard = new SubscriptionReadOnlyGuard(new Reflector(), {} as PrismaService);

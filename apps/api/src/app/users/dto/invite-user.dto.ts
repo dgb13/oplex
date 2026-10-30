@@ -1,5 +1,5 @@
 import { UserRole } from '@plexo/database';
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class InviteUserDto {
   @IsEmail()
@@ -9,6 +9,8 @@ export class InviteUserDto {
   @IsString()
   name?: string;
 
-  @IsEnum(UserRole)
-  role!: UserRole;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(UserRole, { each: true })
+  roles!: UserRole[];
 }

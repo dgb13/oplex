@@ -5,6 +5,7 @@ export * from './lib/module-access.guard.js';
 export * from './lib/current-user.decorator.js';
 export * from './lib/public.decorator.js';
 export * from './lib/jwt-auth.guard.js';
+export * from './lib/user-roles-loader.js';
 export * from './lib/platform-admin.guard.js';
 export * from './lib/allow-when-password-change-required.decorator.js';
 export * from './lib/must-change-password.guard.js';

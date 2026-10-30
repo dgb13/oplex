@@ -70,7 +70,7 @@ describe('AuthService', () => {
   it('throws when the password does not match', async () => {
     const passwordHash = await bcrypt.hash('a-different-password', 4);
     const service = new AuthService(
-      makePrisma({ id: 'user-1', email: dto.email, role: 'OWNER', passwordHash }),
+      makePrisma({ id: 'user-1', email: dto.email, roles: ['OWNER'], passwordHash }),
       makeJwt(),
       makeActivityLogService(),
       makeAuthEmailSender(),
@@ -86,7 +86,7 @@ describe('AuthService', () => {
         {
           id: 'user-1',
           email: dto.email,
-          role: 'OWNER',
+          roles: ['OWNER'],
           passwordHash,
           mustChangePassword: false,
           emailVerifiedAt: new Date('2026-01-01'),
@@ -105,7 +105,7 @@ describe('AuthService', () => {
       sub: 'user-1',
       tenantId: dto.tenantId,
       email: dto.email,
-      role: 'OWNER',
+      roles: ['OWNER'],
       moduleAccess: [{ module: 'accounting', canRead: true, canWrite: false }],
       mustChangePassword: false,
       isPlatformAdmin: false,
@@ -119,7 +119,7 @@ describe('AuthService', () => {
       makePrisma({
         id: 'user-1',
         email: dto.email,
-        role: 'VIEWER',
+        roles: ['VIEWER'],
         passwordHash,
         mustChangePassword: true,
         emailVerifiedAt: new Date('2026-01-01'),
@@ -144,7 +144,7 @@ describe('AuthService', () => {
       makePrisma({
         id: 'user-1',
         email: dto.email,
-        role: 'OWNER',
+        roles: ['OWNER'],
         passwordHash,
         mustChangePassword: false,
         emailVerifiedAt: new Date('2026-01-01'),
@@ -169,7 +169,7 @@ describe('AuthService', () => {
         {
           id: 'user-1',
           email: dto.email,
-          role: 'OWNER',
+          roles: ['OWNER'],
           passwordHash,
           mustChangePassword: false,
           emailVerifiedAt: new Date('2026-01-01'),
@@ -193,7 +193,7 @@ describe('AuthService', () => {
       makePrisma({
         id: 'user-1',
         email: dto.email,
-        role: 'SALES',
+        roles: ['SALES'],
         status: 'SUSPENDED',
         passwordHash,
         mustChangePassword: false,
@@ -215,7 +215,7 @@ describe('AuthService', () => {
       makePrisma({
         id: 'user-1',
         email: dto.email,
-        role: 'OWNER',
+        roles: ['OWNER'],
         passwordHash,
         mustChangePassword: false,
         emailVerifiedAt: null,
@@ -236,7 +236,7 @@ describe('AuthService', () => {
       makePrisma({
         id: 'user-1',
         email: dto.email,
-        role: 'OWNER',
+        roles: ['OWNER'],
         passwordHash,
         mustChangePassword: false,
         emailVerifiedAt: new Date('2026-01-01'),
@@ -277,7 +277,7 @@ describe('AuthService', () => {
     it('signs a 15-minute token forcing mustChangePassword false and carrying impersonatedBy', async () => {
       const jwt = makeJwt();
       const { prisma } = makeImpersonationPrisma(
-        { id: 'user-2', email: 'target@acme.test', role: 'ADMIN', mustChangePassword: true },
+        { id: 'user-2', email: 'target@acme.test', roles: ['ADMIN'], mustChangePassword: true },
         [{ module: 'sales', canRead: true, canWrite: true }],
       );
       const service = new AuthService(prisma, jwt, makeActivityLogService(), makeAuthEmailSender());
@@ -302,7 +302,7 @@ describe('AuthService', () => {
       const { prisma, fakeTx } = makeImpersonationPrisma({
         id: 'user-2',
         email: 'target@acme.test',
-        role: 'ADMIN',
+        roles: ['ADMIN'],
         mustChangePassword: false,
       });
       const service = new AuthService(prisma, makeJwt(), makeActivityLogService(), makeAuthEmailSender());

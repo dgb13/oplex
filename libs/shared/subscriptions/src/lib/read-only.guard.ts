@@ -59,7 +59,7 @@ export class SubscriptionReadOnlyGuard implements CanActivate {
       user.tenantId,
       () => getTenantDb().tenantSubscription.findUnique({ where: { tenantId: user.tenantId }, select: { status: true } }),
       user.sub,
-      user.role,
+      user.roles,
     );
     if (subscription && READ_ONLY_STATUSES.has(subscription.status)) {
       throw new ForbiddenException({

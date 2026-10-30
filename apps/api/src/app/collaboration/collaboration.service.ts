@@ -19,7 +19,7 @@ export interface PersonSummary {
   name: string | null;
   email: string;
   avatarUrl: string | null;
-  role: string;
+  roles: string[];
 }
 
 export interface NotificationView extends Notification {
@@ -30,7 +30,7 @@ export interface CommentView extends DocumentComment {
   author: PersonSummary | null;
 }
 
-const PERSON_SELECT = { id: true, name: true, email: true, avatarUrl: true, role: true } as const;
+const PERSON_SELECT = { id: true, name: true, email: true, avatarUrl: true, roles: true } as const;
 const PAGE_SIZE = 50;
 
 function me(): string {

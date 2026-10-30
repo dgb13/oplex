@@ -78,7 +78,7 @@ describe('RLS cross-tenant write rejection (WITH CHECK)', () => {
       tenantId: tenantBId,
       email: 'spoofed@test.local',
       passwordHash: 'x',
-      role: 'OWNER',
+      roles: ['OWNER'],
     });
   });
 

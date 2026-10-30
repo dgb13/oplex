@@ -111,7 +111,7 @@ function AccountCard({ profile, onSaved }: { profile: UserProfile; onSaved: () =
           <div className="grid grid-cols-2 gap-4 border-t pt-4 text-xs sm:grid-cols-3">
             <div>
               <p className="text-muted-foreground">Rol</p>
-              <p>{ROLE_LABELS[profile.role] ?? profile.role}</p>
+              <p>{profile.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Miembro desde</p>

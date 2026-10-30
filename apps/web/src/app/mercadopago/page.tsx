@@ -18,6 +18,7 @@ import MovementsTab from './MovementsTab';
 import PointTab from './PointTab';
 import SummaryTab from './SummaryTab';
 import type { MovementOriginFilter } from '@/lib/mercadopago';
+import { hasAnyRole, isOwnerOrAdmin } from '@/lib/team';
 
 type Tab = 'summary' | 'movements' | 'point' | 'links' | 'config';
 
@@ -85,8 +86,8 @@ function MercadoPagoPageInner() {
   // "Ver y asignar" del Resumen abre Movimientos ya filtrado.
   const [movementsOrigin, setMovementsOrigin] = useState<MovementOriginFilter>('all');
 
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
-  const canRead = canManage || profile?.role === 'ACCOUNTANT';
+  const canManage = isOwnerOrAdmin(profile?.roles);
+  const canRead = canManage || hasAnyRole(profile?.roles, ['ACCOUNTANT']);
   if (profile && !canRead) {
     return (
       <div className="flex flex-col gap-2">

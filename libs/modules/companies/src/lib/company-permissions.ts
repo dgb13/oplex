@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { getTenantDb, getUserRole, type CompanyRoleType, type UserRole } from '@plexo/database';
+import { getTenantDb, getUserRoles, type CompanyRoleType, type UserRole } from '@plexo/database';
+import { hasAnyRole, isOwnerOrAdmin } from '@plexo/types';
 
 /**
  * Quién crea y edita cada tipo de empresa (decisión con el usuario,
@@ -21,15 +22,15 @@ export const COMPANY_WRITE_ROLES = ['OWNER', 'ADMIN', 'SALES', 'PURCHASES', 'INV
 
 const LABEL: Record<CompanyRoleType, string> = { CUSTOMER: 'clientes', SUPPLIER: 'proveedores', BRANCH: 'sucursales' };
 
-export function canManageCompanyRole(userRole: UserRole | undefined, companyRole: CompanyRoleType): boolean {
-  return !!userRole && COMPANY_ROLE_EDITORS[companyRole].includes(userRole);
+export function canManageCompanyRole(userRoles: readonly UserRole[], companyRole: CompanyRoleType): boolean {
+  return hasAnyRole(userRoles, COMPANY_ROLE_EDITORS[companyRole]);
 }
 
 /** Tiene que poder manejar TODOS estos tipos (alta, agregar/quitar un tipo,
  * desactivar una empresa, que la saca de todas las listas). */
 export function assertCanManageAll(companyRoles: CompanyRoleType[], action: string): void {
-  const role = getUserRole();
-  const denied = companyRoles.find((r) => !canManageCompanyRole(role, r));
+  const roles = getUserRoles();
+  const denied = companyRoles.find((r) => !canManageCompanyRole(roles, r));
   if (denied) {
     throw new ForbiddenException(`Tu rol no puede ${action} ${LABEL[denied]}.`);
   }
@@ -38,11 +39,11 @@ export function assertCanManageAll(companyRoles: CompanyRoleType[], action: stri
 /** Alcanza con poder manejar ALGUNO de sus tipos (datos generales y
  * contactos de una empresa que es, por ejemplo, cliente y proveedor). */
 export function assertCanManageAny(companyRoles: CompanyRoleType[]): void {
-  const role = getUserRole();
+  const roles = getUserRoles();
   if (companyRoles.length === 0) {
     // Sin tipo (no debería pasar): sólo la dirección.
-    if (role === 'OWNER' || role === 'ADMIN') return;
-  } else if (companyRoles.some((r) => canManageCompanyRole(role, r))) {
+    if (isOwnerOrAdmin(roles)) return;
+  } else if (companyRoles.some((r) => canManageCompanyRole(roles, r))) {
     return;
   }
   throw new ForbiddenException(

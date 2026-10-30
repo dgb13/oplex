@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { hasAnyRole } from '@/lib/team';
 
 export type CompanyRoleType = 'CUSTOMER' | 'SUPPLIER' | 'BRANCH';
 
@@ -172,6 +173,6 @@ export const COMPANY_ROLE_EDITORS: Record<CompanyRoleType, readonly string[]> = 
   BRANCH: ['OWNER', 'ADMIN', 'SALES'],
 };
 
-export function canManageCompanyRole(userRole: string | undefined, companyRole: CompanyRoleType): boolean {
-  return !!userRole && COMPANY_ROLE_EDITORS[companyRole].includes(userRole);
+export function canManageCompanyRole(userRoles: readonly string[] | undefined, companyRole: CompanyRoleType): boolean {
+  return hasAnyRole(userRoles, COMPANY_ROLE_EDITORS[companyRole]);
 }

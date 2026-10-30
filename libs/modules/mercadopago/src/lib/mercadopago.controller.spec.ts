@@ -42,7 +42,7 @@ function makeReply(): jest.Mocked<FastifyReply> {
 
 function runAsUser<T>(fn: () => T): T {
   const tx = { tenantSettings: { findUnique: jest.fn().mockResolvedValue(null) } };
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: tx as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', roles: ['OWNER'], tx: tx as never }, fn);
 }
 
 describe('MercadoPagoController.authorize', () => {
@@ -171,7 +171,7 @@ describe('MercadoPagoController.status', () => {
       {
         tenantId: 'tenant-1',
         userId: 'user-1',
-        role: 'OWNER',
+        roles: ['OWNER'],
         tx: {
           user: { findUnique },
           tenantSettings: { findUnique: jest.fn().mockResolvedValue({ mercadoPagoLinksEnabled: false }) },

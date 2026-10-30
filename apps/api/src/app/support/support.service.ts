@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AUTH_EMAIL_SENDER, type AuthEmailSender } from '@plexo/auth-email';
 import { getTenantDb, getTenantId, getUserId, type SupportTicketType } from '@plexo/database';
-import { OPLEX_SUPPORT_EMAIL } from '@plexo/types';
+import { formatRoles, OPLEX_SUPPORT_EMAIL } from '@plexo/types';
 import { newTicketForSupportMail, ticketReceivedMail, userReplyForSupportMail } from './support-email.js';
 import { readSupportFile, storeSupportFile, validateSupportFiles, type IncomingSupportFile } from './support-files.js';
 
@@ -54,7 +54,7 @@ export class SupportService {
     const userId = getUserId();
     if (!userId) throw new BadRequestException('Sesión inválida');
     const [user, tenant] = await Promise.all([
-      db.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, role: true } }),
+      db.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true, roles: true } }),
       db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true, taxId: true } }),
     ]);
 
@@ -102,7 +102,7 @@ export class SupportService {
           tenantTaxId: tenant.taxId,
           userEmail: user.email,
           userName: user.name,
-          role: user.role,
+          role: formatRoles(user.roles),
           context: input.context,
           attachmentCount: stored.length,
           adminUrl: adminTicketUrl(tenantId, ticket.id),

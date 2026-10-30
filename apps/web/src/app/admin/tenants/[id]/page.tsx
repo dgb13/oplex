@@ -153,7 +153,7 @@ export default function AdminTenantDetailPage() {
                         {u.email}
                         {u.name && <span className="block text-[11px] text-slate-500">{u.name}</span>}
                       </td>
-                      <td className="py-2 pr-3 text-slate-400">{ROLE_LABELS[u.role] ?? u.role}</td>
+                      <td className="py-2 pr-3 text-slate-400">{u.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}</td>
                       <td className="py-2 pr-3 text-slate-400">{u.lastLoginAt ? formatAgo(u.lastLoginAt) : 'nunca'}</td>
                       <td className="py-2 text-slate-400">{u.whatsappPhone ? '✓' : '—'}</td>
                     </tr>
@@ -305,7 +305,7 @@ function Header({ t }: { t: TenantDetail }) {
                 value={userId}
                 onChange={setUserId}
                 placeholder="Elegí un usuario"
-                options={t.users.map((u) => ({ value: u.id, label: `${u.email} (${ROLE_LABELS[u.role] ?? u.role})` }))}
+                options={t.users.map((u) => ({ value: u.id, label: `${u.email} (${u.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')})` }))}
               />
               <ConfirmButton onClick={() => userId && impersonate.mutate()} pending={impersonate.isPending} disabled={!userId} />
             </>

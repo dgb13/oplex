@@ -63,7 +63,7 @@ export interface AssistantHistoryEntry {
   createdAt: string;
   /** null = mensaje de antes de que se guardara el canal. */
   channel: AssistantChannel | null;
-  user: { id: string; name: string; role: string | null };
+  user: { id: string; name: string; roles: string[] };
   question: string;
   answer: string | null;
   status: AssistantHistoryStatus;

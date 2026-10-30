@@ -2,7 +2,7 @@
 
 import { profileApi } from '@/lib/profile';
 import { subscriptionsApi } from '@/lib/subscriptions';
-import { ROLE_LABELS, type TeamRole } from '@/lib/team';
+import { formatRoles, hasAnyRole, isOwnerOrAdmin, type TeamRole } from '@/lib/team';
 import { useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -20,20 +20,22 @@ export function useReadOnly(): boolean {
 }
 
 /**
- * Rol de quien está usando la app y si alcanza para `allowed` (Dueño/a y
- * Admin siempre). Mientras no llegó el perfil devuelve allowed=true: el
- * botón no parpadea bloqueado, y la API lo frena igual (RolesGuard).
+ * Roles de quien está usando la app y si alguno alcanza para `allowed`
+ * (Dueño/a y Admin siempre). Mientras no llegó el perfil devuelve
+ * allowed=true: el botón no parpadea bloqueado, y la API lo frena igual
+ * (RolesGuard).
  */
-export function useRoleAllowed(allowed: readonly TeamRole[] | undefined): { allowed: boolean; role: TeamRole | null } {
+export function useRoleAllowed(allowed: readonly TeamRole[] | undefined): { allowed: boolean; roles: TeamRole[] | null } {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe, enabled: Boolean(allowed) });
-  const role = (profile?.role ?? null) as TeamRole | null;
-  if (!allowed || !role) return { allowed: true, role };
-  return { allowed: role === 'OWNER' || role === 'ADMIN' || allowed.includes(role), role };
+  const roles = (profile?.roles ?? null) as TeamRole[] | null;
+  if (!allowed || !roles) return { allowed: true, roles };
+  return { allowed: isOwnerOrAdmin(roles) || hasAnyRole(roles, allowed), roles };
 }
 
 /** "Tu rol (Ventas) no puede cargar artículos. …" - el motivo y dónde se cambia. */
-export function roleLockTitle(role: TeamRole | null, action: string): string {
-  return `Tu rol (${role ? ROLE_LABELS[role] : 'actual'}) no puede ${action}. Pedile al dueño/a o a un admin que te cambie el rol en Configuración › Equipo.`;
+export function roleLockTitle(roles: TeamRole[] | null, action: string): string {
+  const who = roles && roles.length > 1 ? `Tus roles (${formatRoles(roles)})` : `Tu rol (${roles?.length ? formatRoles(roles) : 'actual'})`;
+  return `${who} no puede${roles && roles.length > 1 ? 'n' : ''} ${action}. Pedile al dueño/a o a un admin que te sume el rol que corresponde en Configuración › Equipo.`;
 }
 
 /**
@@ -54,9 +56,9 @@ export function ReadOnlyLock({
   action?: string;
 }) {
   const readOnly = useReadOnly();
-  const { allowed, role } = useRoleAllowed(roles);
+  const { allowed, roles: myRoles } = useRoleAllowed(roles);
   if ((!readOnly && allowed) || !isValidElement(children)) return children;
-  const title = readOnly ? READ_ONLY_TITLE : roleLockTitle(role, action);
+  const title = readOnly ? READ_ONLY_TITLE : roleLockTitle(myRoles, action);
   return (
     <span title={title} className="inline-flex cursor-not-allowed">
       {cloneElement(children, {

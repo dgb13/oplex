@@ -1,12 +1,13 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { AUTH_EMAIL_SENDER, type AuthEmailSender } from '@plexo/auth-email';
 import { getTenantDb, getTenantId, PrismaService, withTenantContext, type UserRole, type UserStatus } from '@plexo/database';
 import { SubscriptionService } from '@plexo/subscriptions';
-import type { AuthenticatedUser } from '@plexo/types';
+import { formatRoles, normalizeRoles, type AuthenticatedUser } from '@plexo/types';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
+import { CurrentUserRolesService } from '../auth/current-user-roles.service.js';
 import type { AcceptInvitationDto } from './dto/accept-invitation.dto.js';
-import type { ChangeRoleDto } from './dto/change-role.dto.js';
+import type { ChangeRolesDto } from './dto/change-roles.dto.js';
 import type { InviteUserDto } from './dto/invite-user.dto.js';
 import type { SendInvitationDto } from './dto/send-invitation.dto.js';
 import type { ToggleStatusDto } from './dto/toggle-status.dto.js';
@@ -19,6 +20,20 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** Roles a guardar al invitar o cambiar roles: combinación válida (ver
+ * normalizeRoles) y Dueño/a sólo lo asigna otro Dueño/a - un Admin no puede
+ * nombrar dueños (antes sólo lo impedía la pantalla). */
+function rolesToSave(input: UserRole[], actor: AuthenticatedUser): UserRole[] {
+  const result = normalizeRoles(input);
+  if (!result.ok) {
+    throw new BadRequestException(result.error);
+  }
+  if (result.roles.includes('OWNER') && !actor.roles.includes('OWNER')) {
+    throw new ForbiddenException('Sólo el Dueño/a puede nombrar a otro Dueño/a');
+  }
+  return result.roles;
+}
+
 export interface InvitedUser {
   id: string;
   email: string;
@@ -29,7 +44,7 @@ export interface TeamMember {
   id: string;
   email: string;
   name: string | null;
-  role: UserRole;
+  roles: UserRole[];
   status: UserStatus;
   mustChangePassword: boolean;
   createdAt: Date;
@@ -55,6 +70,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly rolesLoader: CurrentUserRolesService,
     @Inject(AUTH_EMAIL_SENDER) private readonly authEmailSender: AuthEmailSender,
   ) {}
 
@@ -66,7 +82,7 @@ export class UsersService {
         id: true,
         email: true,
         name: true,
-        role: true,
+        roles: true,
         status: true,
         mustChangePassword: true,
         createdAt: true,
@@ -75,7 +91,8 @@ export class UsersService {
     });
   }
 
-  async inviteUser(dto: InviteUserDto): Promise<InvitedUser> {
+  async inviteUser(dto: InviteUserDto, actor: AuthenticatedUser): Promise<InvitedUser> {
+    const roles = rolesToSave(dto.roles, actor);
     await this.subscriptionService.assertCanAddUser();
 
     const tempPassword = randomBytes(9).toString('base64url');
@@ -86,7 +103,7 @@ export class UsersService {
         tenantId: getTenantId(),
         email: dto.email,
         name: dto.name,
-        role: dto.role,
+        roles,
         passwordHash,
         mustChangePassword: true,
       },
@@ -96,6 +113,7 @@ export class UsersService {
   }
 
   async inviteMember(dto: SendInvitationDto, actor: AuthenticatedUser): Promise<{ ok: true }> {
+    const roles = rolesToSave(dto.roles, actor);
     await this.subscriptionService.assertCanAddUser();
 
     const tenantId = getTenantId();
@@ -119,7 +137,7 @@ export class UsersService {
       data: { usedAt: new Date() },
     });
     await db.teamInvitation.create({
-      data: { tenantId, email: dto.email, role: dto.role, tokenHash, expiresAt, invitedByUserId: actor.sub },
+      data: { tenantId, email: dto.email, roles, tokenHash, expiresAt, invitedByUserId: actor.sub },
     });
 
     const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
@@ -127,7 +145,7 @@ export class UsersService {
     await this.authEmailSender.sendInvitation({
       to: dto.email,
       tenantName: tenant?.name ?? 'tu equipo',
-      role: dto.role,
+      role: formatRoles(roles),
       acceptUrl,
       expiresInMinutes: TEAM_INVITATION_EXPIRY_MINUTES,
     });
@@ -164,7 +182,7 @@ export class UsersService {
           tenantId: dto.tenantId,
           email: invitation.email,
           name: dto.name,
-          role: invitation.role,
+          roles: invitation.roles,
           passwordHash,
           // Llegó por un link a su propia casilla, ya está verificado - mismo
           // criterio que el resto de la app para "email confirmado".
@@ -184,7 +202,8 @@ export class UsersService {
     return { ok: true };
   }
 
-  async changeRole(userId: string, dto: ChangeRoleDto): Promise<void> {
+  async changeRoles(userId: string, dto: ChangeRolesDto, actor: AuthenticatedUser): Promise<void> {
+    const roles = rolesToSave(dto.roles, actor);
     const tenantId = getTenantId();
     const db = getTenantDb();
 
@@ -193,11 +212,12 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
     this.assertNotExternalAccountant(target);
-    if (target.role === 'OWNER' && dto.role !== 'OWNER') {
+    if (target.roles.includes('OWNER') && !roles.includes('OWNER')) {
       await this.assertNotLastActiveOwner(tenantId, userId);
     }
 
-    await db.user.update({ where: { id: userId }, data: { role: dto.role } });
+    await db.user.update({ where: { id: userId }, data: { roles } });
+    this.rolesLoader.invalidate(tenantId, userId);
   }
 
   async toggleStatus(userId: string, dto: ToggleStatusDto, actor: AuthenticatedUser): Promise<void> {
@@ -213,11 +233,12 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
     this.assertNotExternalAccountant(target);
-    if (dto.status === 'SUSPENDED' && target.role === 'OWNER') {
+    if (dto.status === 'SUSPENDED' && target.roles.includes('OWNER')) {
       await this.assertNotLastActiveOwner(tenantId, userId);
     }
 
     await db.user.update({ where: { id: userId }, data: { status: dto.status } });
+    this.rolesLoader.invalidate(tenantId, userId);
   }
 
   /** Defensa en profundidad para la fila espejo de un contador externo
@@ -274,7 +295,7 @@ export class UsersService {
 
   private async assertNotLastActiveOwner(tenantId: string, excludingUserId: string): Promise<void> {
     const otherActiveOwners = await getTenantDb().user.count({
-      where: { tenantId, role: 'OWNER', status: 'ACTIVE', id: { not: excludingUserId } },
+      where: { tenantId, roles: { has: 'OWNER' }, status: 'ACTIVE', id: { not: excludingUserId } },
     });
     if (otherActiveOwners === 0) {
       throw new ForbiddenException('Tiene que quedar al menos un OWNER activo en el equipo');

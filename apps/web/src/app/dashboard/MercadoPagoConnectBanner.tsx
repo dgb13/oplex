@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 type Kind = 'connect' | 'reconnect';
 
@@ -20,7 +21,7 @@ function dismissKey(kind: Kind): string {
  * conectado o venció (plan-seccion-mercadopago.md, etapa 1). */
 export default function MercadoPagoConnectBanner() {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
   const { data: status } = useQuery({
     queryKey: ['mercadopago-status'],
     queryFn: mercadoPagoApi.getStatus,

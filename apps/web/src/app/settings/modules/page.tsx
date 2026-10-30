@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import { useState } from 'react';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 const ALWAYS_ON = [
   { label: 'Artículos y stock', description: 'Productos, servicios, depósitos y movimientos.' },
@@ -49,7 +50,7 @@ export default function ModulesPage() {
     enabled: picking,
   });
 
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
 
   function onSaved(next: BusinessProfile) {
     queryClient.setQueryData(['business-profile'], next);

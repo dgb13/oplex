@@ -12,7 +12,7 @@ export interface Person {
   name: string | null;
   email: string;
   avatarUrl: string | null;
-  role: string;
+  roles: string[];
 }
 
 export interface AppNotification {

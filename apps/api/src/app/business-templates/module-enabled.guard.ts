@@ -34,7 +34,7 @@ export class ModuleEnabledGuard implements CanActivate {
       user.tenantId,
       () => getTenantDb().tenantSettings.findUnique({ where: { tenantId: user.tenantId } }),
       user.sub,
-      user.role,
+      user.roles,
     );
     if (!isBusinessModuleEnabled(settings, key)) {
       throw new ForbiddenException('Este módulo está apagado. Se prende en tu menú de usuario → Rubro y módulos.');

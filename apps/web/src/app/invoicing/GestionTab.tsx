@@ -18,6 +18,7 @@ import CreditNoteModal from './CreditNoteModal';
 import MercadoPagoPaymentModal from './MercadoPagoPaymentModal';
 import NewInvoiceModal from './NewInvoiceModal';
 import ReceiptModal from './ReceiptModal';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Borrador',
@@ -71,7 +72,7 @@ export default function GestionTab() {
   const canConnectMercadoPago =
     !!mercadoPagoStatus &&
     mercadoPagoStatus.status !== 'CONNECTED' &&
-    (profile?.role === 'OWNER' || profile?.role === 'ADMIN');
+    isOwnerOrAdmin(profile?.roles);
 
   useEffect(() => {
     const socket = getSocket();

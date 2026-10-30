@@ -43,7 +43,7 @@ export interface AssistantHistoryEntry {
   id: string;
   createdAt: Date;
   channel: AssistantChannel | null;
-  user: { id: string; name: string; role: UserRole | null };
+  user: { id: string; name: string; roles: UserRole[] };
   question: string;
   answer: string | null;
   status: AssistantHistoryStatus;
@@ -213,7 +213,7 @@ export class AssistantHistoryService {
     const userIds = [...new Set(page.map((q) => q.conversation.userId))];
     const users = await db.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, roles: true },
     });
     const userById = new Map(users.map((u) => [u.id, u]));
 
@@ -235,7 +235,7 @@ export class AssistantHistoryService {
         createdAt: question.createdAt,
         channel: question.channel,
         // Un usuario borrado no rompe la fila: se muestra igual, sin nombre.
-        user: { id: question.conversation.userId, name: user?.name || user?.email || 'Usuario eliminado', role: user?.role ?? null },
+        user: { id: question.conversation.userId, name: user?.name || user?.email || 'Usuario eliminado', roles: user?.roles ?? [] },
         question: question.content,
         answer: reply?.content ?? null,
         status: statusOf(question, reply),

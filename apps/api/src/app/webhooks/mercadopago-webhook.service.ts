@@ -296,7 +296,7 @@ export class MercadoPagoWebhookService {
     // OWNER rather than leave the payment unreconciled.
     const authorId =
       intent.createdByUserId ??
-      (await db.user.findFirst({ where: { role: 'OWNER' }, orderBy: { createdAt: 'asc' }, select: { id: true } }))?.id;
+      (await db.user.findFirst({ where: { roles: { has: 'OWNER' } }, orderBy: { createdAt: 'asc' }, select: { id: true } }))?.id;
     if (!authorId) {
       throw new NotFoundException('No user to author the Mercado Pago receipt journal entry');
     }

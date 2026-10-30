@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Store, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 const DISMISSED_KEY = 'oplex-business-template-card-dismissed';
 
@@ -42,7 +43,7 @@ export default function BusinessTemplateCard() {
 
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
   const { data: business } = useQuery({ queryKey: ['business-profile'], queryFn: businessProfileApi.get });
-  const canChoose = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canChoose = isOwnerOrAdmin(profile?.roles);
 
   if (!canChoose || !business || business.pending) return null;
   // Negocio con rubro: aviso si Oplex publicó novedades para su plantilla.

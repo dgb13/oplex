@@ -6,7 +6,7 @@ import { CashSessionsService, type DailyPosition } from '@plexo/pos';
 import { PurchaseOrderService } from '@plexo/purchases';
 import { ReceivablesService, type CustomerAging } from '@plexo/receivables';
 import { ReportsSalesService } from '@plexo/reports-sales';
-import type { AuthenticatedUser } from '@plexo/types';
+import { hasAnyRole, isOwnerOrAdmin, type AuthenticatedUser, type UserRole } from '@plexo/types';
 
 export const RECEIVABLES_READ_ROLES = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'SALES'] as const;
 export const POS_READ_ROLES = ['OWNER', 'ADMIN', 'SALES'] as const;
@@ -40,7 +40,7 @@ export interface VentasPorArticuloParams {
  * llama a estos métodos directo. No se reusa el guard en sí porque está
  * acoplado a leer metadata de Reflector sobre un handler de Nest. */
 function assertModuleAccess(user: AuthenticatedUser, module: string, toolName: string): void {
-  if (user.role === 'OWNER' || user.role === 'ADMIN') {
+  if (isOwnerOrAdmin(user.roles)) {
     return;
   }
   const grant = user.moduleAccess.find((m) => m.module === module);
@@ -51,8 +51,8 @@ function assertModuleAccess(user: AuthenticatedUser, module: string, toolName: s
 
 /** Equivalente de RolesGuard, misma razón que la función de arriba. */
 function assertRole(user: AuthenticatedUser, allowedRoles: readonly string[], toolName: string): void {
-  if (!allowedRoles.includes(user.role)) {
-    throw new ForbiddenException(`El rol "${user.role}" no puede usar la herramienta "${toolName}"`);
+  if (!hasAnyRole(user.roles, allowedRoles as readonly UserRole[])) {
+    throw new ForbiddenException(`Tu rol (${user.roles.join(', ')}) no puede usar la herramienta "${toolName}"`);
   }
 }
 

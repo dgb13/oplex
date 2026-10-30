@@ -916,7 +916,14 @@ model User {
   tenantId                 String
   email                    String
   passwordHash             String
-  role                     UserRole   @default(VIEWER)
+  // Una persona puede tener varios roles (ej. Ventas + Inventario) y puede
+  // lo que permita cualquiera de ellos (hasAnyRole en @plexo/types). Dueño,
+  // Admin y Solo lectura van solos (ver normalizeRoles). Nunca vacío.
+  roles                    UserRole[] @default([VIEWER])
+  // Respaldo del rol único de antes de varios roles (migración
+  // 20261110000000_user_roles_array): el código ya no lo lee ni lo escribe.
+  // Se borra en el deploy siguiente, cuando se confirme en producción.
+  legacyRole               UserRole?  @map("role")
   // Suspender a un compañero de equipo (ver UsersService.toggleStatus) le
   // corta el login (chequeado en AuthService.login, mismo criterio que
   // Tenant.status) sin borrar sus registros históricos - eje administrativo
@@ -1121,7 +1128,10 @@ model TeamInvitation {
   id              String    @id @default(uuid())
   tenantId        String
   email           String
-  role            UserRole
+  // Los roles que va a tener al aceptar (ver User.roles).
+  roles           UserRole[]
+  // Respaldo, igual que User.legacyRole: se borra en el deploy siguiente.
+  legacyRole      UserRole? @map("role")
   tokenHash       String
   expiresAt       DateTime
   usedAt          DateTime?

@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { AuthenticatedUser } from '@plexo/types';
+import { isOwnerOrAdmin, type AuthenticatedUser } from '@plexo/types';
 import type { FastifyRequest } from 'fastify';
 import {
   MODULE_ACCESS_KEY,
@@ -33,7 +33,7 @@ export class ModuleAccessGuard implements CanActivate {
       throw new ForbiddenException('No authenticated user on request');
     }
 
-    if (user.role === 'OWNER' || user.role === 'ADMIN') {
+    if (isOwnerOrAdmin(user.roles)) {
       return true;
     }
 

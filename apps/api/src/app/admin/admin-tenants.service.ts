@@ -16,7 +16,7 @@ export interface TenantUserSummary {
   id: string;
   email: string;
   name: string | null;
-  role: string;
+  roles: string[];
 }
 
 /**
@@ -52,7 +52,7 @@ export class AdminTenantsService {
   async listTenantUsers(tenantId: string): Promise<TenantUserSummary[]> {
     return withTenantContext(this.prisma, tenantId, async () => {
       const users = await getTenantDb().user.findMany({
-        select: { id: true, email: true, name: true, role: true },
+        select: { id: true, email: true, name: true, roles: true },
         orderBy: { email: 'asc' },
       });
       return users;

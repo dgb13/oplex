@@ -29,7 +29,7 @@ export class MembershipsController {
   @Roles(...ACTIVATE_ROLES)
   async listMine(@CurrentUser() user: AuthenticatedUser) {
     const rows = await this.membershipsService.listMine(user.tenantId);
-    return filterVisibleForCaller(rows, user.role, user.sub);
+    return filterVisibleForCaller(rows, user.roles, user.sub);
   }
 
   /** Relaciones donde el que llama es el CLIENTE (invitaciones que mandó,
@@ -45,13 +45,13 @@ export class MembershipsController {
   @Get('portfolio')
   @Roles(...ACTIVATE_ROLES)
   getPortfolio(@CurrentUser() user: AuthenticatedUser) {
-    return this.membershipsService.getPortfolio(user.tenantId, user.sub, user.role);
+    return this.membershipsService.getPortfolio(user.tenantId, user.sub, user.roles);
   }
 
   @Post(':id/activate')
   @Roles(...ACTIVATE_ROLES)
   activate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.membershipsService.activate(id, user.sub, user.tenantId, user.role);
+    return this.membershipsService.activate(id, user.sub, user.tenantId, user.roles);
   }
 
   /** Reparto de cartera (Fase 2 punto 4) - reemplaza el conjunto completo de

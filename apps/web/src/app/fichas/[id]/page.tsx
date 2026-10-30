@@ -17,6 +17,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { hasAnyRole } from '@/lib/team';
 
 /** Ficha de un vehículo / equipo / mascota (maqueta aprobada, pantalla 4),
  * con su historial de órdenes de trabajo. */
@@ -35,7 +36,7 @@ export default function FichaPage() {
   const [showOwner, setShowOwner] = useState(false);
   const [editingOwner, setEditingOwner] = useState(false);
   const [error, setError] = useState('');
-  const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
+  const canWrite = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
 
   const customersQuery = useQuery({
     queryKey: ['companies', 'CUSTOMER'],

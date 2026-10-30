@@ -11,6 +11,7 @@ import type { AxiosError } from 'axios';
 import { Check, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import RegisterQrModal from './RegisterQrModal';
+import { isOwnerOrAdmin } from '@/lib/team';
 
 // Misma extracción que TeamPage/CompanyFormModal - sin esto, un PATCH
 // fallido no deja ningún rastro de qué salió mal.
@@ -28,7 +29,7 @@ export default function PosSettingsPage() {
   });
   const [creating, setCreating] = useState(false);
 
-  const canManage = profile?.role === 'OWNER' || profile?.role === 'ADMIN';
+  const canManage = isOwnerOrAdmin(profile?.roles);
 
   if (profile && !canManage) {
     return (

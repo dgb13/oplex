@@ -9,8 +9,8 @@ import { useQuery } from '@tanstack/react-query';
  * react-query lo reusa, no hace otra consulta. Mientras carga, nada. */
 export function useCompanyPermissions() {
   const { data: profile } = useQuery({ queryKey: ['profile-me'], queryFn: profileApi.getMe });
-  const role = profile?.role;
-  const can = (companyRole: CompanyRoleType) => canManageCompanyRole(role, companyRole);
+  const roles = profile?.roles;
+  const can = (companyRole: CompanyRoleType) => canManageCompanyRole(roles, companyRole);
   return {
     loaded: !!profile,
     can,

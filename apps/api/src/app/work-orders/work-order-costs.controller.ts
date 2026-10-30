@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, Roles } from '@plexo/auth';
-import type { AuthenticatedUser } from '@plexo/types';
+import { hasAnyRole, type AuthenticatedUser } from '@plexo/types';
 import { IsBoolean, IsDateString, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { BusinessModule, ModuleEnabledGuard } from '../business-templates/module-enabled.guard.js';
 import { WorkOrderCostsService } from './work-order-costs.service.js';
@@ -110,10 +110,10 @@ type Costs = Awaited<ReturnType<WorkOrderCostsService['costs']>>;
 
 /** Dueño, admin y contador ven todo; Compras, las horas y las compras que
  * vincula (las facturas de compra ya las ve); el resto, sólo las horas. */
-export function forRole(costs: Costs, user: Pick<AuthenticatedUser, 'role'>) {
-  if ((VIEW_ROLES as readonly string[]).includes(user.role)) return costs;
+export function forRole(costs: Costs, user: Pick<AuthenticatedUser, 'roles'>) {
+  if (hasAnyRole(user.roles, VIEW_ROLES)) return costs;
   const limited = { ...withoutMoney(costs), labor: costs.labor.map((l) => ({ ...l, costPerHour: null })) };
-  if (user.role === 'PURCHASES') return { ...limited, purchases: costs.purchases, purchasesTotal: costs.purchasesTotal };
+  if (user.roles.includes('PURCHASES')) return { ...limited, purchases: costs.purchases, purchasesTotal: costs.purchasesTotal };
   return limited;
 }
 

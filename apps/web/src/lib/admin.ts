@@ -40,7 +40,7 @@ export interface TenantDetail extends TenantSummary {
     id: string;
     email: string;
     name: string | null;
-    role: string;
+    roles: string[];
     createdAt: string;
     lastLoginAt: string | null;
     whatsappPhone: string | null;
@@ -77,7 +77,7 @@ export interface TenantUserSummary {
   id: string;
   email: string;
   name: string | null;
-  role: string;
+  roles: string[];
 }
 
 export interface ImpersonateResult {
@@ -729,7 +729,7 @@ export interface SupportAttachmentInfo {
 
 export interface AdminSupportTicketDetail extends AdminSupportTicketRow {
   userId: string;
-  userRole: string | null;
+  userRoles: string[];
   userExists: boolean;
   tenantTaxId: string | null;
   context: Record<string, string> | null;

@@ -17,18 +17,18 @@ const costs = {
 describe('forRole (costo de las órdenes)', () => {
   it('dueño, admin y contador ven todo', () => {
     for (const role of ['OWNER', 'ADMIN', 'ACCOUNTANT'] as const) {
-      expect(forRole(costs, { role })).toBe(costs);
+      expect(forRole(costs, { roles: [role] })).toBe(costs);
     }
   });
 
   it('ventas ve sólo las horas, sin importes', () => {
-    const r = forRole(costs, { role: 'SALES' });
+    const r = forRole(costs, { roles: ['SALES'] });
     expect(r).toMatchObject({ income: null, parts: null, purchases: [], purchasesTotal: 0, margin: null, hidden: true });
     expect(r.labor[0].costPerHour).toBeNull();
   });
 
   it('compras ve las compras de la orden pero no el ingreso ni el margen', () => {
-    const r = forRole(costs, { role: 'PURCHASES' });
+    const r = forRole(costs, { roles: ['PURCHASES'] });
     expect(r.purchases).toHaveLength(1);
     expect(r.purchasesTotal).toBe(20000);
     expect(r).toMatchObject({ income: null, parts: null, laborCost: 0, totalCost: 0, margin: null, marginPercent: null });

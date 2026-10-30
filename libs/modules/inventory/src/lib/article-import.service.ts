@@ -322,7 +322,7 @@ export class ArticleImportService {
     const job: Job = { status, tenantId: getTenantId(), errorRows: plan.rows.filter((r) => r.status === 'error') };
     this.jobs.set(importId, job);
 
-    const context = { tenantId: getTenantId(), userId: getUserId() ?? undefined, role: tenantContextStorage.getStore()?.role };
+    const context = { tenantId: getTenantId(), userId: getUserId() ?? undefined, roles: tenantContextStorage.getStore()?.roles };
     // Fuera del request: cada tanda corre en su propia transacción con el
     // contexto del tenant (RLS), así una tanda que falla no deshace las otras.
     void this.run(job, toProcess, options, refs, context);
@@ -435,7 +435,7 @@ export class ArticleImportService {
     rows: PlanRow[],
     options: ImportOptions,
     refs: Refs,
-    context: { tenantId: string; userId?: string; role?: Parameters<typeof withTenantContext>[4] },
+    context: { tenantId: string; userId?: string; roles?: Parameters<typeof withTenantContext>[4] },
   ): Promise<void> {
     // Variantes: filas nuevas con el mismo nombre y color/talle van juntas.
     const groups: PlanRow[][] = [];
@@ -486,7 +486,7 @@ export class ArticleImportService {
             }
           },
           context.userId,
-          context.role,
+          context.roles,
           120_000,
         );
       }

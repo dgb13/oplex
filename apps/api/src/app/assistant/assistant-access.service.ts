@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { getTenantDb, getTenantId, Prisma, type UserRole } from '@plexo/database';
-import type { AuthenticatedUser } from '@plexo/types';
+import { getTenantDb, getTenantId, Prisma } from '@plexo/database';
+import { hasAnyRole, type AuthenticatedUser } from '@plexo/types';
 import {
   ASSISTANT_ACTIONS,
   DEFAULT_ACTION_LEVELS,
@@ -259,19 +259,24 @@ export class AssistantAccessService {
   }
 }
 
-export function accessFromConfig(config: AssistantTenantConfigView, user: Pick<AuthenticatedUser, 'sub' | 'role'>): AssistantAccess {
-  const role = user.role as UserRole;
-  const fullAccess = FULL_ACCESS_ROLES.includes(role);
+/** Varios roles por usuario: un tema o una acción se habilita si lo habilita
+ * cualquiera de sus roles (la misma unión que RolesGuard). */
+export function accessFromConfig(config: AssistantTenantConfigView, user: Pick<AuthenticatedUser, 'sub' | 'roles'>): AssistantAccess {
+  const roles = user.roles;
+  const fullAccess = hasAnyRole(roles, FULL_ACCESS_ROLES);
   const allowedTopics = new Set<AssistantTopicId>(
     ASSISTANT_TOPICS.filter(
-      (topic) => fullAccess || config.topicsByRole[topic.id].includes(role as ConfigurableRole),
+      (topic) => fullAccess || roles.some((role) => config.topicsByRole[topic.id].includes(role as ConfigurableRole)),
     ).map((topic) => topic.id),
   );
   const allowedActions = new Map<AssistantActionId, Exclude<AssistantActionLevel, 'OFF'>>();
   for (const action of ASSISTANT_ACTIONS) {
     const level = config.actionLevels[action.id];
-    const canRequest = fullAccess || config.actionRoles[action.id].includes(role as ConfigurableRole);
-    if (level !== 'OFF' && canRequest && roleCanRequestAction(role, action)) {
+    const canRequest = roles.some(
+      (role) =>
+        (fullAccess || config.actionRoles[action.id].includes(role as ConfigurableRole)) && roleCanRequestAction(role, action),
+    );
+    if (level !== 'OFF' && canRequest) {
       allowedActions.set(action.id, level);
     }
   }
@@ -283,7 +288,9 @@ export function accessFromConfig(config: AssistantTenantConfigView, user: Pick<A
     allowedTopics,
     allowedTools,
     allowedActions,
-    scope: role === 'SALES' && config.salesOwnDataOnly ? { onlyIssuedBy: user.sub } : {},
+    // Ventas + otro rol (no Dueño/Admin) sigue viendo sólo lo suyo (decisión
+    // del plan de varios roles, 2026-10-30).
+    scope: !fullAccess && roles.includes('SALES') && config.salesOwnDataOnly ? { onlyIssuedBy: user.sub } : {},
     webEnabled: config.webEnabled,
     whatsappEnabled: config.whatsappEnabled,
     limits: {

@@ -5,11 +5,11 @@ import { AfipLookupError, AfipNotConfiguredError, type AfipPadronPort } from './
 import { CompaniesService } from './companies.service.js';
 
 function runInTenant<T>(db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role: 'OWNER', tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', roles: ['OWNER'], tx: db as never }, fn);
 }
 
 function runAs<T>(role: UserRole, db: Record<string, unknown>, fn: () => T): T {
-  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', role, tx: db as never }, fn);
+  return tenantContextStorage.run({ tenantId: 'tenant-1', userId: 'user-1', roles: [role], tx: db as never }, fn);
 }
 
 /** Empresa existente tal como la lee updateCompany (con sus tipos). */

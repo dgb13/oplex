@@ -100,7 +100,7 @@ describe('MembershipsService.activate', () => {
     const db = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-1', email: 'juan@estudio.com', name: 'Juan' }) } };
 
     await expect(
-      runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', 'ACCOUNTANT')),
+      runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', ['ACCOUNTANT'])),
     ).rejects.toThrow('Membership not found');
     expect(authService.buildAccessToken).not.toHaveBeenCalled();
   });
@@ -112,7 +112,7 @@ describe('MembershipsService.activate', () => {
     const db = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-1', email: 'juan@estudio.com', name: 'Juan' }) } };
 
     await expect(
-      runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', 'ACCOUNTANT')),
+      runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', ['ACCOUNTANT'])),
     ).rejects.toThrow('todavía no fue aceptada');
     expect(authService.buildAccessToken).not.toHaveBeenCalled();
   });
@@ -135,20 +135,20 @@ describe('MembershipsService.activate', () => {
       id: 'linked-user-1',
       email: 'juan@estudio.com',
       name: 'Juan',
-      role: 'ACCOUNTANT',
+      roles: ['ACCOUNTANT'],
     });
     const authService = makeAuthService();
     const service = new MembershipsService(prisma, authService, makeAuthEmailSender());
     const db = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-1', email: 'juan@estudio.com', name: 'Juan' }) } };
 
-    const result = await runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', 'ACCOUNTANT'));
+    const result = await runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', ['ACCOUNTANT']));
 
     expect(fakeTx.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         tenantId: 'client-1',
         email: 'juan@estudio.com',
         name: 'Juan',
-        role: 'ACCOUNTANT',
+        roles: ['ACCOUNTANT'],
         isExternalAccountant: true,
       }),
     });
@@ -188,7 +188,7 @@ describe('MembershipsService.activate', () => {
     const service = new MembershipsService(prisma, authService, makeAuthEmailSender());
     const db = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-1', email: 'juan@estudio.com', name: 'Juan' }) } };
 
-    await runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', 'ACCOUNTANT'));
+    await runInStudioTenant(db, () => service.activate('membership-1', 'studio-user-1', 'studio-1', ['ACCOUNTANT']));
 
     expect(fakeTx.user.create).not.toHaveBeenCalled();
     expect(fakeTx.tenantMembershipLink.create).not.toHaveBeenCalled();
@@ -208,8 +208,8 @@ describe('MembershipsService.activate', () => {
     const dbJuan = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-1', email: 'juan@estudio.com', name: 'Juan' }) } };
     const dbAna = { user: { findUnique: jest.fn().mockResolvedValue({ id: 'studio-user-2', email: 'ana@estudio.com', name: 'Ana' }) } };
 
-    await runInStudioTenant(dbJuan, () => service.activate('membership-1', 'studio-user-1', 'studio-1', 'ACCOUNTANT'));
-    await runInStudioTenant(dbAna, () => service.activate('membership-1', 'studio-user-2', 'studio-1', 'ACCOUNTANT'));
+    await runInStudioTenant(dbJuan, () => service.activate('membership-1', 'studio-user-1', 'studio-1', ['ACCOUNTANT']));
+    await runInStudioTenant(dbAna, () => service.activate('membership-1', 'studio-user-2', 'studio-1', ['ACCOUNTANT']));
 
     expect(fakeTx.user.create).toHaveBeenCalledTimes(2);
     const [firstCallArgs, secondCallArgs] = (fakeTx.user.create as jest.Mock).mock.calls;
@@ -247,7 +247,7 @@ describe('MembershipsService.getPortfolio', () => {
     } as unknown as PrismaService;
     const service = new MembershipsService(prisma, makeAuthService(), makeAuthEmailSender());
 
-    const result = await service.getPortfolio('studio-1', 'owner-1', 'OWNER');
+    const result = await service.getPortfolio('studio-1', 'owner-1', ['OWNER']);
 
     expect(result).toEqual([
       {
@@ -294,7 +294,7 @@ describe('MembershipsService.getPortfolio', () => {
     } as unknown as PrismaService;
     const service = new MembershipsService(prisma, makeAuthService(), makeAuthEmailSender());
 
-    const result = await service.getPortfolio('studio-1', 'owner-1', 'OWNER');
+    const result = await service.getPortfolio('studio-1', 'owner-1', ['OWNER']);
 
     expect(result).toHaveLength(1);
     expect(result[0].clientTenantId).toBe('client-2');
@@ -462,7 +462,7 @@ describe('MembershipsService.inviteFromClient', () => {
 
     await runInClientTenant(db, () => service.inviteFromClient('contador@estudio.com', 'client-1', 'client-user-1'));
 
-    expect(fakeStudioTx.user.findMany).toHaveBeenCalledWith({ where: { role: { in: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } });
+    expect(fakeStudioTx.user.findMany).toHaveBeenCalledWith({ where: { roles: { hasSome: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } });
     expect(authEmailSender.sendMembershipNotice).toHaveBeenCalledTimes(2);
     expect(authEmailSender.sendMembershipNotice).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'owner@estudio.com', tenantName: 'Estudio Contable SRL', counterpartName: 'Cliente Demo SA', kind: 'invited' }),
@@ -639,7 +639,7 @@ describe('MembershipsService.respond', () => {
     // hace falta un segundo lookup de nombre, reusa clientTenantName.
     await runInClientTenant(dbClient, () => service.respond('membership-1', 'client-1', 'ACCEPTED'));
 
-    expect(fakeTx.user.findMany).toHaveBeenCalledWith({ where: { role: { in: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } });
+    expect(fakeTx.user.findMany).toHaveBeenCalledWith({ where: { roles: { hasSome: ['OWNER', 'ADMIN'] }, status: 'ACTIVE' } });
     expect(authEmailSender.sendMembershipNotice).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'owner@estudio.com', counterpartName: 'Cliente Demo SA', kind: 'accepted' }),
     );
@@ -924,23 +924,23 @@ describe('filterVisibleForCaller', () => {
   ];
 
   it('OWNER/ADMIN ven todo sin importar la asignacion', () => {
-    expect(filterVisibleForCaller(rows, 'OWNER', 'user-juan').map((r) => r.id)).toEqual([
+    expect(filterVisibleForCaller(rows, ['OWNER'], 'user-juan').map((r) => r.id)).toEqual([
       'unassigned',
       'assigned-to-juan',
       'assigned-to-others',
     ]);
-    expect(filterVisibleForCaller(rows, 'ADMIN', 'user-juan').map((r) => r.id)).toHaveLength(3);
+    expect(filterVisibleForCaller(rows, ['ADMIN'], 'user-juan').map((r) => r.id)).toHaveLength(3);
   });
 
   it('un ACCOUNTANT solo ve lo sin asignar o asignado a el mismo', () => {
-    expect(filterVisibleForCaller(rows, 'ACCOUNTANT', 'user-juan').map((r) => r.id)).toEqual([
+    expect(filterVisibleForCaller(rows, ['ACCOUNTANT'], 'user-juan').map((r) => r.id)).toEqual([
       'unassigned',
       'assigned-to-juan',
     ]);
   });
 
   it('un ACCOUNTANT sin ninguna asignacion propia solo ve lo sin asignar', () => {
-    expect(filterVisibleForCaller(rows, 'ACCOUNTANT', 'user-nadie').map((r) => r.id)).toEqual(['unassigned']);
+    expect(filterVisibleForCaller(rows, ['ACCOUNTANT'], 'user-nadie').map((r) => r.id)).toEqual(['unassigned']);
   });
 });
 

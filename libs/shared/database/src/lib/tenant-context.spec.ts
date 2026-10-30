@@ -1,4 +1,4 @@
-import { beforeCommit, getTenantDb, getTenantId, getUserRole, onCommit, tenantContextStorage, withTenantContext } from './tenant-context.js';
+import { beforeCommit, getTenantDb, getTenantId, getUserRoles, onCommit, tenantContextStorage, withTenantContext } from './tenant-context.js';
 import type { PrismaClient } from '../generated/client.js';
 
 describe('tenant-context', () => {
@@ -15,13 +15,13 @@ describe('tenant-context', () => {
     });
   });
 
-  it('resolves the acting user role when present, undefined otherwise', () => {
+  it('resolves the acting user roles when present, empty otherwise', () => {
     const fakeTx = {} as never;
-    tenantContextStorage.run({ tenantId: 'tenant-123', role: 'ACCOUNTANT', tx: fakeTx }, () => {
-      expect(getUserRole()).toBe('ACCOUNTANT');
+    tenantContextStorage.run({ tenantId: 'tenant-123', roles: ['ACCOUNTANT'], tx: fakeTx }, () => {
+      expect(getUserRoles()).toEqual(['ACCOUNTANT']);
     });
     tenantContextStorage.run({ tenantId: 'tenant-123', tx: fakeTx }, () => {
-      expect(getUserRole()).toBeUndefined();
+      expect(getUserRoles()).toEqual([]);
     });
   });
 });

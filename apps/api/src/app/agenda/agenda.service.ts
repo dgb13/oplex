@@ -7,7 +7,7 @@ import { ProductionOrderService } from '@plexo/production';
 import { ReceivablesService } from '@plexo/receivables';
 import { SubscriptionService } from '@plexo/subscriptions';
 import { TaxDeadlineService } from '@plexo/taxes';
-import type { AuthenticatedUser, CalendarEntry, CalendarEntrySource, UserRole } from '@plexo/types';
+import { hasAnyRole, isOwnerOrAdmin, type AuthenticatedUser, type CalendarEntry, type CalendarEntrySource, type UserRole } from '@plexo/types';
 
 const RECEIVABLES_READ_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'SALES'];
 const PAYABLES_READ_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'INVENTORY'];
@@ -84,20 +84,20 @@ export class AgendaService {
   }
 
   private canSeeTax(user: AuthenticatedUser): boolean {
-    if (user.role === 'OWNER' || user.role === 'ADMIN') return true;
+    if (isOwnerOrAdmin(user.roles)) return true;
     return user.moduleAccess.some((m) => m.module === 'taxes' && m.canRead);
   }
 
   private canSeeReceivables(user: AuthenticatedUser): boolean {
-    return RECEIVABLES_READ_ROLES.includes(user.role);
+    return hasAnyRole(user.roles, RECEIVABLES_READ_ROLES);
   }
 
   private canSeePayables(user: AuthenticatedUser): boolean {
-    return PAYABLES_READ_ROLES.includes(user.role);
+    return hasAnyRole(user.roles, PAYABLES_READ_ROLES);
   }
 
   private canSeeCash(user: AuthenticatedUser): boolean {
-    return CASH_READ_ROLES.includes(user.role);
+    return hasAnyRole(user.roles, CASH_READ_ROLES);
   }
 
   /** Gate por TENANT (plan de suscripción), no por usuario - mismo chequeo

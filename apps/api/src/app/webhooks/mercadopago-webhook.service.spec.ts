@@ -247,7 +247,7 @@ describe('MercadoPagoWebhookService.handleNotification - reconciliation happy pa
     await service.handleNotification(baseInput());
 
     expect((deps.tx.user as { findFirst: jest.Mock }).findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { role: 'OWNER' } }),
+      expect.objectContaining({ where: { roles: { has: 'OWNER' } } }),
     );
     expect(actingUser).toBe('user-owner');
   });

@@ -1,3 +1,4 @@
+import { CurrentUserRolesModule } from './auth/current-user-roles.service.js';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -69,6 +70,7 @@ import { WhatsAppWebhookModule } from './webhooks/whatsapp-webhook.module.js';
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    CurrentUserRolesModule,
     EncryptionModule,
     AuthModule,
     CompaniesModule,

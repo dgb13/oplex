@@ -41,7 +41,7 @@ describe('MercadoPagoStateService', () => {
     // A session-shaped token, signed with the SAME secret the state service
     // uses (JWT_SECRET is shared app-wide) - purpose is what must keep it
     // from being replayed as OAuth state.
-    const sessionLikeToken = jwt.sign({ sub: 'user-1', tenantId: 'tenant-1', role: 'OWNER' });
+    const sessionLikeToken = jwt.sign({ sub: 'user-1', tenantId: 'tenant-1', roles: ['OWNER'] });
 
     expect(() => service.verify(sessionLikeToken)).toThrow(
       'El enlace de autorización de Mercado Pago venció o no es válido - probá conectar de nuevo',

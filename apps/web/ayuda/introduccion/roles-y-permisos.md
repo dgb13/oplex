@@ -1,11 +1,11 @@
 ---
 title: Roles y permisos
-summary: Qué rol tiene cada persona del equipo, qué ve en el menú y quién puede cambiarlo.
+summary: Qué roles tiene cada persona del equipo, cómo se combinan, qué ve en el menú y quién puede cambiarlos.
 minutes: 5
 roles: Todos
 ---
 
-En Oplex cada usuario tiene un **rol**. El rol decide qué pantallas aparecen en su menú y qué puede modificar. No es sólo esconder botones: aunque alguien escriba la dirección de una pantalla a mano, Oplex controla el permiso del lado del servidor.
+En Oplex cada usuario tiene uno o más **roles**. Los roles deciden qué pantallas aparecen en su menú y qué puede modificar. No es sólo esconder botones: aunque alguien escriba la dirección de una pantalla a mano, Oplex controla el permiso del lado del servidor.
 
 ## Los roles
 
@@ -18,6 +18,15 @@ En Oplex cada usuario tiene un **rol**. El rol decide qué pantallas aparecen en
 | **Inventario** | Inventario | Depósito y producción: stock, recepciones, compras y Producción. |
 | **Contador** | Contador/a | Alguien de administración que mira facturación, cobros, pagos y cheques. |
 | **Solo lectura** | Solo lectura | Quien sólo necesita consultar, sin cargar nada. |
+
+## Varios roles a la vez
+
+Una persona puede tener más de un rol y puede todo lo que permita **cualquiera** de ellos. Por ejemplo, un vendedor que además da de alta artículos nuevos va con **Ventas + Inventario**: vende y cobra como Ventas, y carga artículos y stock como Inventario.
+
+- **Ventas**, **Compras**, **Inventario** y **Contador** se pueden combinar como quieras.
+- **Dueño**, **Administrador** y **Solo lectura** van solos: los dos primeros ya pueden todo, y Solo lectura dejaría de ser sólo lectura si se le suma otro rol.
+
+En la tabla de abajo, alguien con dos roles ve todas las pantallas que tengan ✓ en cualquiera de sus dos columnas.
 
 > [!NOTA]
 > En tu **Perfil** el rol aparece con el nombre largo (Dueño, Administrador, Contador). En **Equipo** aparece abreviado (Dueño/a, Admin, Contador/a). Es el mismo rol.
@@ -73,8 +82,9 @@ Si trabajás con un estudio contable, no hace falta crearle un usuario con rol C
 
 ## Quién cambia los roles
 
-Sólo el Dueño y los Administradores, desde **Equipo**. Se explica en [Invitar a tu equipo](/documentacion/primeros-pasos/invitar-a-tu-equipo).
+Sólo el Dueño y los Administradores, desde **Equipo**, con el botón **Editar** de cada persona. Se explica en [Invitar a tu equipo](/documentacion/primeros-pasos/invitar-a-tu-equipo).
 
+- El cambio se aplica en el momento: la persona no necesita volver a iniciar sesión.
 - Se puede asignar cualquier rol menos **Dueño**: el Dueño es quien creó la cuenta y su rol no se cambia desde la pantalla.
 - Nadie puede suspender su propia cuenta.
 

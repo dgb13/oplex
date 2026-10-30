@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import NewWorkOrderModal from './NewWorkOrderModal';
+import { hasAnyRole } from '@/lib/team';
 
 /** Historial de un vehículo / equipo en su ficha: sus órdenes de trabajo,
  * con los datos del día que entró (los km). */
@@ -32,7 +33,7 @@ export default function AssetWorkOrderHistory({
     enabled,
   });
   const [creating, setCreating] = useState(false);
-  const canWrite = profile?.role === 'OWNER' || profile?.role === 'ADMIN' || profile?.role === 'SALES';
+  const canWrite = hasAnyRole(profile?.roles, ['OWNER', 'ADMIN', 'SALES']);
   const numberFields = (type?.fields ?? []).filter((f) => f.type === 'NUMBER' && !f.hidden);
 
   return (

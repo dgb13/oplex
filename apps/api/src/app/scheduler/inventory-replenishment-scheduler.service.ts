@@ -87,7 +87,7 @@ export class InventoryReplenishmentSchedulerService {
   private async runAutoReplenishmentForTenant(tenantId: string): Promise<AutoReplenishmentResult> {
     const owner = await withTenantContext(this.prisma, tenantId, () =>
       getTenantDb().user.findFirst({
-        where: { role: 'OWNER', status: 'ACTIVE' },
+        where: { roles: { has: 'OWNER' }, status: 'ACTIVE' },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       }),
