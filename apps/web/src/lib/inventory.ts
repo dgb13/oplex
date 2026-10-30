@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { TeamRole } from '@/lib/team';
 
 export interface Warehouse {
   id: string;
@@ -341,6 +342,11 @@ export function resolveUploadUrl(path: string | null): string | null {
   const origin = (api.defaults.baseURL ?? '').replace(/\/api\/?$/, '');
   return `${origin}${path}`;
 }
+
+/** Quién puede cargar/editar artículos, depósitos y stock: la misma lista
+ * que WRITE_ROLES en inventory.controller.ts (la API la exige igual). El
+ * resto ve el inventario pero los botones de carga quedan con candado. */
+export const INVENTORY_WRITE_ROLES: readonly TeamRole[] = ['OWNER', 'ADMIN', 'INVENTORY'];
 
 export const UNIT_OF_MEASURE_OPTIONS = [
   { value: 'UNIT', label: 'Unidad' },

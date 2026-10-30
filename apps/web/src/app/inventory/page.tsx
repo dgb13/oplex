@@ -1,9 +1,10 @@
 'use client';
 
-import { ReadOnlyLock } from '@/components/ReadOnlyLock';
+import { ReadOnlyLock, roleLockTitle, useRoleAllowed } from '@/components/ReadOnlyLock';
 import {
   buildVariantLabel,
   formatStock,
+  INVENTORY_WRITE_ROLES,
   inventoryApi,
   resolveUploadUrl,
   type Article,
@@ -154,6 +155,7 @@ function flattenVariants(articles: Article[]): VariantRow[] {
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
+  const writeAccess = useRoleAllowed(INVENTORY_WRITE_ROLES);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [onlyServices, setOnlyServices] = useState(false);
@@ -298,26 +300,32 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <ReadOnlyLock>
+          <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="importar artículos">
             <Link href="/inventory/import" className={buttonVariants({ variant: 'outline' })}>
               Importar artículos
             </Link>
           </ReadOnlyLock>
-          <ReadOnlyLock>
+          <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="crear depósitos">
             <Button variant="outline" onClick={() => setCreatingWarehouse(true)}>
               + Nuevo depósito
             </Button>
           </ReadOnlyLock>
-          <ReadOnlyLock>
+          <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="cargar artículos">
             <Button variant="outline" onClick={() => setCreatingArticle(true)}>
               + Nuevo artículo
             </Button>
           </ReadOnlyLock>
-          <ReadOnlyLock>
+          <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="cargar movimientos de stock">
             <Button onClick={() => setModalOpen(true)}>+ Nuevo movimiento</Button>
           </ReadOnlyLock>
         </div>
       </div>
+
+      {!writeAccess.allowed && (
+        <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          {roleLockTitle(writeAccess.role, 'cargar ni editar artículos, depósitos o stock (sí podés consultarlos)')}
+        </p>
+      )}
 
       {(missingTaxCount > 0 || onlyMissingTax) && (
         <MissingTaxBanner
@@ -752,9 +760,11 @@ function MissingTaxBanner({
           </option>
         ))}
       </select>
-      <Button size="sm" onClick={() => assign.mutate()} disabled={!effectiveTaxId || assign.isPending}>
-        {assign.isPending ? 'Asignando...' : `Asignar a ${count === 1 ? 'ese artículo' : `los ${count}`}`}
-      </Button>
+      <ReadOnlyLock roles={INVENTORY_WRITE_ROLES} action="asignar el IVA de los artículos">
+        <Button size="sm" onClick={() => assign.mutate()} disabled={!effectiveTaxId || assign.isPending}>
+          {assign.isPending ? 'Asignando...' : `Asignar a ${count === 1 ? 'ese artículo' : `los ${count}`}`}
+        </Button>
+      </ReadOnlyLock>
       <button type="button" onClick={onToggleFilter} className="text-xs text-primary underline">
         {onlyMissing ? 'Ver todos' : 'Ver cuáles son'}
       </button>
